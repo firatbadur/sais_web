@@ -21,13 +21,12 @@ class CustomUser(AbstractUser):
     created_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        if self.rol == 1:  # Check if rol is Sistem Yöneticisi
+        # Sadece "Sistem Yöneticisi" rolü verildiğinde staff/superuser bayraklarını
+        # otomatik aç. Admin'den farklı değerler atansın diye diğer rollerde
+        # bayrakları ellemiyoruz (aksi halde createsuperuser sonrası demote oluyordu).
+        if self.rol == 1:
             self.is_staff = True
             self.is_superuser = True
-        else:
-            self.is_staff = False
-            self.is_superuser = False
-
         super().save(*args, **kwargs)
 
 
