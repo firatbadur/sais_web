@@ -230,6 +230,8 @@ DEBUG_TOOLBAR_CONFIG = {
 
 # Production security
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# Admin popup'ları (change related) SAMEORIGIN iframe'e izin vermeli.
+X_FRAME_OPTIONS = "SAMEORIGIN"
 if not DEBUG:
     SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
@@ -350,7 +352,9 @@ JAZZMIN_SETTINGS = {
     "default_icon_children": "fas fa-circle",
 
     # UI behavior
-    "related_modal_active": True,
+    # Jazzmin 3.x modal iframe popup'ı bozuk (related field edit bozuk görünüyor);
+    # native Django popup (yeni pencere) daha stabil.
+    "related_modal_active": False,
     "custom_js": None,
     "show_ui_builder": False,
     "changeform_format": "horizontal_tabs",
