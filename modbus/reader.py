@@ -1,9 +1,10 @@
 import logging
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pymodbus.client import ModbusTcpClient, ModbusSerialClient
+
 from django.utils import timezone
-from api.models import Connections, Sensors, Reads, Status_Codes
+from pymodbus.client import ModbusSerialClient, ModbusTcpClient
+
+from api.models import Connection, Reading, Sensor, StatusCode
 
 logger = logging.getLogger(__name__)
 
@@ -19,18 +20,15 @@ class ModbusReader:
         TCP bağlantılar paralel okunur.
         Serial bağlantılar seri okunur.
         """
-        connections = Connections.objects.filter(status=True)
+        connections = Connection.objects.filter(status=True)
 
         futures = []
         for con in connections:
             if con.con_type == "tcp":
-                # TCP paralel işlenebilir
                 futures.append(self.executor.submit(self._read_tcp_connection, con))
             elif con.con_type == "serial":
-                # Serial tek tek okunmalı
                 self._read_serial_connection(con)
 
-        # TCP için tüm futures bitene kadar bekle
         for f in as_completed(futures):
             try:
                 f.result()
@@ -44,9 +42,8 @@ class ModbusReader:
             logger.error(f"TCP bağlantısı başarısız: {connection.con_address}:{connection.port}")
             return
 
-        sensors = Sensors.objects.filter(con=connection, is_active=True)
+        sensors = Sensor.objects.filter(connection=connection, is_active=True)
 
-        # Her sensörü paralel oku
         futures = []
         with ThreadPoolExecutor(max_workers=5) as sensor_pool:
             for sensor in sensors:
@@ -69,14 +66,14 @@ class ModbusReader:
             parity=self._map_parity(connection.parity),
             stopbits=connection.stop_bits + 1,
             bytesize=connection.byte_size,
-            timeout=2
+            timeout=2,
         )
 
         if not client.connect():
             logger.error(f"Serial bağlantısı başarısız: {connection.con_address}")
             return
 
-        sensors = Sensors.objects.filter(con=connection, is_active=True)
+        sensors = Sensor.objects.filter(connection=connection, is_active=True)
         for sensor in sensors:
             try:
                 self._read_sensor(client, sensor)
@@ -88,13 +85,13 @@ class ModbusReader:
     def _read_sensor(self, client, sensor):
         """ Tek sensör okuma işlemi """
         try:
-            if sensor.function == 3:  # Holding register
+            if sensor.function == 3:
                 rr = client.read_holding_registers(sensor.address, sensor.quantity, unit=sensor.slave_id)
-            elif sensor.function == 4:  # Input register
+            elif sensor.function == 4:
                 rr = client.read_input_registers(sensor.address, sensor.quantity, unit=sensor.slave_id)
-            elif sensor.function == 2:  # Discrete input
+            elif sensor.function == 2:
                 rr = client.read_discrete_inputs(sensor.address, sensor.quantity, unit=sensor.slave_id)
-            elif sensor.function == 1:  # Coils
+            elif sensor.function == 1:
                 rr = client.read_coils(sensor.address, sensor.quantity, unit=sensor.slave_id)
             else:
                 logger.warning(f"Desteklenmeyen fonksiyon kodu: {sensor.function}")
@@ -105,14 +102,13 @@ class ModbusReader:
                 return
 
             value = rr.registers[0] if hasattr(rr, "registers") else rr.bits[0]
-            status = Status_Codes.objects.filter(code=1).first()  # Örn: 1 = OK
+            status = StatusCode.objects.filter(code=1).first()  # 1 = Veri Geçerli
 
-            # Veritabanına kaydet
-            Reads.objects.create(
-                channel=sensor,
+            Reading.objects.create(
+                sensor=sensor,
                 value=value,
                 status=status,
-                time_iso=timezone.now()
+                time_iso=timezone.now(),
             )
 
             logger.info(f"Sensor {sensor.id} okundu: {value}")

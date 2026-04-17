@@ -18,7 +18,7 @@ class CustomUser(AbstractUser):
     device_id = models.CharField(max_length=250, blank=True, null=True)
     added_by = models.IntegerField(verbose_name="Ekleyen Kullanıcı", help_text="Ekleyen Kullanıcı", blank=False,
                                      null=True,default=1)
-    created_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
         # Sadece "Sistem Yöneticisi" rolü verildiğinde staff/superuser bayraklarını

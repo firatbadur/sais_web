@@ -12,19 +12,19 @@ class ApiConfig(AppConfig):
     #     # sadece ana process'te çalışsın
     #     if os.environ.get("RUN_MAIN") == "true":
     #         from django.db.utils import OperationalError, ProgrammingError
-    #         from .models import Poweroff, StationInfo
+    #         from .models import PowerOff, Station
     #         from .signals import register_shutdown_handler
     #
     #         # Shutdown sinyallerini yakala
     #         register_shutdown_handler()
     #
     #         try:
-    #             station = StationInfo.objects.first()
+    #             station = Station.objects.first()
     #             if not station:
     #                 return
     #
     #             # Açık kayıt varsa → muhtemelen elektrik kesintisi olmuştur, kapat
-    #             open_record = Poweroff.objects.filter(
+    #             open_record = PowerOff.objects.filter(
     #                 station=station, end_date__isnull=True
     #             ).first()
     #             if open_record:
@@ -32,7 +32,7 @@ class ApiConfig(AppConfig):
     #                 open_record.save()
     #
     #             # Yeni kayıt başlat (servis açılışı)
-    #             Poweroff.objects.create(
+    #             PowerOff.objects.create(
     #                 station=station,
     #                 start_date=timezone.now(),
     #                 end_date=None

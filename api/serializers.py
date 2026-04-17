@@ -1,96 +1,70 @@
 from rest_framework import serializers
-from users.models import CustomUser
-from datetime import datetime
-from datetime import date
-from django.utils.timesince import timesince
-from django.shortcuts import get_object_or_404
-import logging
-from .models import *
 
+from .models import (
+    Calibration,
+    PowerOff,
+    Reading,
+    RemoteDevice,
+    Sensor,
+    SystemLog,
+)
 
-logger = logging.getLogger(__name__)
-
-
-# class SimDataSerializer(serializers.ModelSerializer):
-#
-#     # 'ph_s' alanını 'phStatus' olarak yeniden adlandırıyoruz
-#     ph = serializers.FloatField(source='ph_v')
-#     ph_Status = serializers.IntegerField(source='ph_s')
-#     Iletkenlik = serializers.FloatField(source='il_v')
-#     Iletkenlik_Status = serializers.IntegerField(source='il_s')
-#     CozunmusOksijen = serializers.FloatField(source='coz_v')
-#     CozunmusOksijen_Status = serializers.IntegerField(source='coz_s')
-#     Debi = serializers.FloatField(source='debi_v')
-#     Debi_Status = serializers.IntegerField(source='debi_s')
-#     Sicaklik = serializers.FloatField(source='sic_v')
-#     Sicaklik_Status = serializers.IntegerField(source='sic_s')
-#     AkisHizi = serializers.FloatField(source='akis_v')
-#     AkisHizi_Status = serializers.IntegerField(source='akis_s')
-#     KOi = serializers.FloatField(source='koi_v')
-#     KOi_Status = serializers.IntegerField(source='koi_s')
-#     AKM = serializers.FloatField(source='akm_v')
-#     AKM_Status = serializers.IntegerField(source='akm_s')
-#     ReadTime = serializers.DateTimeField(source='time_iso')
-#
-#     class Meta:
-#         model = Sim_Data
-#         fields = ['ph','ph_Status','Iletkenlik','Iletkenlik_Status','CozunmusOksijen','CozunmusOksijen_Status',
-#                   'Debi','Debi_Status','Sicaklik','Sicaklik_Status',
-#                   'AkisHizi','AkisHizi_Status','KOi','KOi_Status','AKM','AKM_Status','ReadTime']
 
 class ReadsDataSerializer(serializers.ModelSerializer):
-    # channel üzerinden parameter_name alıyoruz
-    ParameterName = serializers.CharField(source="channel.parameters.parameter_name", read_only=True)
+    # Reading üzerinden parameter_name alıyoruz.
+    ParameterName = serializers.CharField(source="sensor.parameter.parameter_name", read_only=True)
     ReadTime = serializers.DateTimeField(source="time_iso", read_only=True)
     Value = serializers.FloatField(source="value", read_only=True)
     Status = serializers.IntegerField(source="status.id", read_only=True)
 
     class Meta:
-        model = Reads
+        model = Reading
         fields = ["ParameterName", "ReadTime", "Value", "Status"]
 
-class ChannelInfoSerializer(serializers.ModelSerializer):
 
+class ChannelInfoSerializer(serializers.ModelSerializer):
     Brand = serializers.CharField(source="brand", allow_null=True)
     BrandModel = serializers.CharField(source="model", allow_null=True)
     FullName = serializers.SerializerMethodField()
-    Parameter = serializers.CharField(source="parameters.parameter_name", allow_null=True)
-    ParameterText = serializers.CharField(source="parameters.parameter_txt", allow_null=True)
-    Unit = serializers.CharField(source="parameters.unit", allow_null=True)
-    UnitText = serializers.CharField(source="parameters.unit_txt", allow_null=True)
+    Parameter = serializers.CharField(source="parameter.parameter_name", allow_null=True)
+    ParameterText = serializers.CharField(source="parameter.parameter_txt", allow_null=True)
+    Unit = serializers.CharField(source="parameter.unit", allow_null=True)
+    UnitText = serializers.CharField(source="parameter.unit_txt", allow_null=True)
     IsActive = serializers.BooleanField(source="is_active")
-    ChannelMinValue = serializers.IntegerField(source="parameters.olcum_min", allow_null=True)
-    ChannelMaxValue = serializers.IntegerField(source="parameters.olcum_max", allow_null=True)
-    ChannelNumber = serializers.IntegerField(source="parameters.channel_number", allow_null=True)
-    CalibrationFormulaA = serializers.FloatField(source="sensorinstants.factorA", allow_null=True)
-    CalibrationFormulaB = serializers.FloatField(source="sensorinstants.factorB", allow_null=True)
+    ChannelMinValue = serializers.FloatField(source="parameter.olcum_min", allow_null=True)
+    ChannelMaxValue = serializers.FloatField(source="parameter.olcum_max", allow_null=True)
+    ChannelNumber = serializers.IntegerField(source="parameter.channel_number", allow_null=True)
+    CalibrationFormulaA = serializers.FloatField(source="latest.factorA", allow_null=True)
+    CalibrationFormulaB = serializers.FloatField(source="latest.factorB", allow_null=True)
     SerialNumber = serializers.CharField(source="serial_number", allow_null=True)
 
     class Meta:
-        model = Sensors
+        model = Sensor
         fields = [
             "id", "Brand", "BrandModel", "FullName", "Parameter", "ParameterText",
             "Unit", "UnitText", "IsActive",
             "ChannelMinValue", "ChannelMaxValue", "ChannelNumber",
             "CalibrationFormulaA", "CalibrationFormulaB",
-            "SerialNumber"
+            "SerialNumber",
         ]
 
     def get_FullName(self, obj):
-        param = obj.parameters.parameter_name if obj.parameters else ""
-        return f"{obj.parameters.sim_channel} | {param}" if obj.parameters else str(obj.id)
+        if not obj.parameter:
+            return str(obj.id)
+        param = obj.parameter.parameter_name or ""
+        return f"{obj.parameter.device_channel_id} | {param}"
+
 
 class StationInfoSerializer(serializers.ModelSerializer):
-
-    StationId = serializers.CharField(source="sim_id")
+    StationId = serializers.CharField(source="device_id")
     Code = serializers.CharField(source="code")
     Name = serializers.CharField(source="name")
     DataPeriodMinute = serializers.IntegerField(source="data_period")
     LastDataDate = serializers.SerializerMethodField()
     ConnectionDomainAddress = serializers.CharField(source="station.domain")
     ConnectionPort = serializers.IntegerField(source="station.port")
-    ConnectionUser = serializers.CharField(source="username")
-    ConnectionPassword = serializers.CharField(source="password")
+    ConnectionUser = serializers.CharField(source="auth_username")
+    ConnectionPassword = serializers.CharField(source="auth_secret")
     Company = serializers.CharField(source="station.company")
     BirtDate = serializers.SerializerMethodField()
     SetupDate = serializers.SerializerMethodField()
@@ -98,17 +72,15 @@ class StationInfoSerializer(serializers.ModelSerializer):
     Software = serializers.SerializerMethodField()
 
     class Meta:
-        model = SimInformation
+        model = RemoteDevice
         fields = [
             "StationId", "Code", "Name", "DataPeriodMinute",
             "LastDataDate", "ConnectionDomainAddress", "ConnectionPort",
             "ConnectionUser", "ConnectionPassword", "Company",
-            "BirtDate", "SetupDate", "Adress", "Software"
+            "BirtDate", "SetupDate", "Adress", "Software",
         ]
 
     def get_LastDataDate(self, obj):
-        # Burada Reads tablosundan son veri tarihi çekilebilir
-        # örnek: Reads.objects.filter(channel__sensor__sim_channel=obj.sim_id).order_by("-time_iso").first()
         return None
 
     def get_BirtDate(self, obj):
@@ -120,9 +92,10 @@ class StationInfoSerializer(serializers.ModelSerializer):
     def get_Software(self, obj):
         return None
 
+
 class CalibrationResultSerializer(serializers.ModelSerializer):
     StationId = serializers.SerializerMethodField()
-    DBColumnName = serializers.CharField(source="channel.sensor.parameter_name")
+    DBColumnName = serializers.CharField(source="sensor.parameter.parameter_name")
     CalibrationDate = serializers.DateTimeField(source="time_iso")
 
     ZeroRef = serializers.SerializerMethodField()
@@ -148,13 +121,17 @@ class CalibrationResultSerializer(serializers.ModelSerializer):
             "CalibrationDate",
             "ZeroRef", "ZeroMeas", "ZeroDiff", "ZeroSTD",
             "SpanRef", "SpanMeas", "SpanDiff", "SpanSTD",
-            "ResultFactor", "ResultZero", "ResultSpan", "Result"
+            "ResultFactor", "ResultZero", "ResultSpan", "Result",
         ]
 
     def get_StationId(self, obj):
-        # Calibration → channel → sensor → station_id üzerinden sim_id bul
-        sim_info = SimInformation.objects.filter(station_id=obj.channel.sensor.station_id).first()
-        return sim_info.sim_id if sim_info else None
+        if not obj.sensor or not obj.sensor.parameter:
+            return None
+        station_id = obj.sensor.parameter.station_id
+        if not station_id:
+            return None
+        device = RemoteDevice.objects.filter(station_id=station_id).first()
+        return device.device_id if device else None
 
     # ---- ZERO alanları ----
     def get_ZeroRef(self, obj):
@@ -201,19 +178,20 @@ class CalibrationResultSerializer(serializers.ModelSerializer):
     def get_Result(self, obj):
         return obj.is_valid
 
+
 class PoweroffResultSerializer(serializers.ModelSerializer):
     StationId = serializers.SerializerMethodField()
     StartDate = serializers.DateTimeField(source="start_date")
     EndDate = serializers.DateTimeField(source="end_date")
 
     class Meta:
-        model = Poweroff
+        model = PowerOff
         fields = ["StationId", "StartDate", "EndDate"]
 
     def get_StationId(self, obj):
-        # Poweroff → StationInfo → SimInformation.sim_id
-        sim_info = obj.station.siminformation_set.first()
-        return sim_info.sim_id if sim_info else None
+        device = obj.station.remote_devices.first() if obj.station_id else None
+        return device.device_id if device else None
+
 
 class LogResultSerializer(serializers.ModelSerializer):
     logTitle = serializers.CharField(source="type.name", read_only=True)
@@ -221,6 +199,5 @@ class LogResultSerializer(serializers.ModelSerializer):
     LogCreatedDate = serializers.DateTimeField(source="time_iso", read_only=True)
 
     class Meta:
-        model = Sys_Log
+        model = SystemLog
         fields = ["logTitle", "LogDescription", "LogCreatedDate"]
-

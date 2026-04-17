@@ -1,386 +1,502 @@
+"""
+SCADA çekirdek veri modelleri.
+
+Bu uygulama (`api`) her türlü endüstriyel izleme / SCADA senaryosunda
+kullanılmaya uygun, alan-özel kavramlardan arındırılmış temel modelleri
+içerir. Atıksu (SAIS), Envisoft gibi alan-özel uzantılar ayrı bir
+uygulamada (`sais_domain`) tanımlıdır.
+"""
 from django.db import models
-from users.models import *
-class StationInfo(models.Model):
 
-    STATION_TYPE_CHOICES = [
-        (1, 'Evsel Atıksu'),  # Yerleşimden kaynaklanan atıksu
-        (2, 'Endüstriyel Atıksu'),  # Sanayi ve ticari faaliyetlerden gelen atıksu
-        (3, 'Kentsel Atıksu'),  # Evsel, endüstriyel ve/veya yağmur suyunun karışımı
-    ]
-
-    name = models.CharField(max_length=100, verbose_name="İstasyon Adı", help_text="İstasyon Adı", blank=False,null=False)
-    station_type = models.IntegerField(choices=STATION_TYPE_CHOICES, default=1,blank=True,null=True)
-    address = models.CharField(max_length=250, verbose_name="İstasyon Adresi", help_text="İstasyon Adresi", blank=True,null=False)
-    domain = models.URLField(max_length=100, verbose_name="Domain", help_text="İstasyon Domain", blank=True,null=False,default="sais.onlinecevre.com.tr")
-    port = models.IntegerField(verbose_name="Port No", help_text="Port No", blank=True, null=True,default=443)
-    company = models.CharField(max_length=100, verbose_name="Kurum Adı", help_text="Kurum Adı", blank=True,null=False,default="Envisoft")
+from users.models import CustomUser
 
 
-    active = models.BooleanField(verbose_name="Aktif mi?", help_text="Aktif mi?", blank=False, null=True,default=True)
-    created_at = models.DateTimeField(auto_now=True)
-    user = models.ForeignKey(CustomUser,on_delete=models.SET_NULL,blank=False,null=True,default=1)
-    class Meta:
+class StationType(models.Model):
+    """İstasyon tipi lookup'u. Hardcoded enum yerine DB'de kayıt."""
 
-        db_table = 'station'
-        verbose_name_plural = "İstasyon Bilgileri" # admin sayfasında görünen tablo ismini gösterir.
-        ordering = ["created_at"] #admin panelinde id ye göre listeleme yapar.
-
-    def __str__(self):
-
-        return "%s" % self.name
-
-class SimInformation(models.Model):
-
-    station = models.ForeignKey(StationInfo,on_delete=models.CASCADE,blank=False,null=False)
-    sim_id = models.CharField(max_length=100, verbose_name="İstasyon ID", help_text="İstasyon ID", blank=False,null=False)
-    code = models.CharField(max_length=50, verbose_name="İstasyon Kodu", help_text="İstasyon Kodu", blank=False,null=False,default='30060001')
-    name = models.CharField(max_length=200, verbose_name="İstasyon Adı", help_text="İstasyon Adı", blank=False,null=False)
-    data_period = models.IntegerField(verbose_name="Veri Periyodu (dk)", help_text="Veri Periyodu (dk)", blank=True, null=True,default=1)
-    username = models.CharField(max_length=50, verbose_name="Sim Kullanıcı Adı", help_text="Sim Kullanıcı Adı", blank=False,null=False)
-    password = models.CharField(max_length=50, verbose_name="Sim Şifre", help_text="Sim Şifre",blank=False, null=False)
-    created_at = models.DateTimeField(auto_now=True)
-    user = models.ForeignKey(CustomUser,on_delete=models.SET_NULL,blank=False,null=True,default=1)
-
-    class Meta:
-
-        db_table = 'sim_info'
-        verbose_name_plural = "Sim Bilgileri" # admin sayfasında görünen tablo ismini gösterir.
-        ordering = ["created_at"] #admin panelinde id ye göre listeleme yapar.
-
-    def __str__(self):
-
-        return "%s" % self.station
-
-class Connections(models.Model):
-
-    CON_NAME_CHOICES = (("con_1", "Bağlantı-1"),
-        ("con_2", "Bağlantı-2"),
-        ("con_3", "Bağlantı-3"),)
-
-    COM_TYPE_CHOICES = (("modbus", "Modbus"),
-                        ("ascii", "Ascii"))
-
-    CON_TYPE_CHOICES = (("tcp", "TCP/IP"),
-                        ("serial", "SERIAL"))
-
-    CON_MODE_CHOICES = (("rtu", "RTU"),
-                        ("ascii", "ASCII"))
-
-    BAUDRATES = ((300,300),(600,600),(1200,1200),(2400,2400),(4800,4800),(9600,9600),(14400,14400),(19200,19200))
-
-    PARITY = ((0, "None Parity"),
-                        (1, "Odd Parity"),(2, "Even Parity"))
-
-    STOP_BITS = ((0, "1 Stop Bit"),
-              (1, "2 Stop Bit"))
-
-    BYTE_SIZE = ((8, "8 Data Bits"),
-                 (7, "7 Data Bits"))
-
-
-    con_name = models.CharField(max_length=10,verbose_name="Bağlantı Adı",help_text='Bağlantı Adı',blank=False,null=True,choices=CON_NAME_CHOICES,default='con_1')
-    communication_type = models.CharField(max_length=10,verbose_name='Haberleşme Tipi',help_text='Haberleşme Tipi',blank=False,null=True,choices=COM_TYPE_CHOICES,default='modbus')
-    con_type = models.CharField(max_length=10,verbose_name='Bağlantı Tipi',help_text='Bağlantı Tipi',blank=False,null=True,choices=CON_TYPE_CHOICES,default='tcp')
-    con_mode = models.CharField(max_length=10,verbose_name='Bağlantı Modu',help_text='Bağlantı Modu',blank=False,null=True,choices=CON_MODE_CHOICES,default='rtu')
-    con_address = models.CharField(max_length=15,verbose_name='Bağlantı Adresi',help_text='COM4 or 192.168.1.1',blank=False,null=True)
-    port = models.IntegerField(verbose_name='Port', help_text='Port Numarası',default=502,blank=False,null=True)
-    baudrate = models.IntegerField(verbose_name='Bant Genişliği',help_text='Bant Genişliği',choices=BAUDRATES,default=9600)
-    parity = models.IntegerField(verbose_name='Parity', help_text='Parity', choices=PARITY,default=0)
-    stop_bits = models.IntegerField(verbose_name='Stop Bits', help_text='Stop Bits', choices=STOP_BITS,default=0)
-    byte_size = models.IntegerField(verbose_name='Byte Size', help_text='Byte Size', choices=BYTE_SIZE,default=8)
-    xonxoff = models.BooleanField(verbose_name='Xonxoff',default=False)
-    rtscts = models.BooleanField(verbose_name='Rstcts', default=False)
-    dsrdtr = models.BooleanField(verbose_name='Dsrdtr', default=False)
-    created_date = models.DateTimeField(auto_now=True)
-    status = models.BooleanField(verbose_name="Aktif", help_text="Aktif", default=True)
-
-
-    class Meta:
-        verbose_name_plural = "Connections" # admin sayfasında görünen tablo ismini gösterir.
-        ordering = ["id"] #admin panelinde id ye göre listeleme yapar.
-
-    def __str__(self):
-
-        return "%s" % self.con_name # eklenen kayıtların ne ile görüntüeneceğini gösterir.
-
-class Status_Codes(models.Model):
-
-    code = models.IntegerField(verbose_name='Kod Numarası',blank=False,null=True)
-    name = models.CharField(max_length=200,verbose_name='Status Kod Adı',blank=False,null=True)
-
-    class Meta:
-        db_table = 'status_codes'
-        verbose_name_plural = "Status Kodları" # admin sayfasında görünen tablo ismini gösterir.
-        ordering = ["id"] #admin panelinde id ye göre listeleme yapar.
-
-    def __str__(self):
-
-        return "%s" % self.name # eklenen kayıtların ne ile görüntüeneceğini gösterir.
-
-class Parameters(models.Model):
-    station = models.ForeignKey(
-        StationInfo,
-        on_delete=models.CASCADE,
-        blank=False,
-        null=False,
-        default=1,
-        related_name="parameters"
+    code = models.CharField(
+        max_length=30, unique=True,
+        verbose_name="Kod", help_text="Makine-okur kod (örn. 'wastewater_domestic')",
     )
-    parameter_name = models.CharField(max_length=50,verbose_name='Parametre Adı',blank=False,null=True)
-    parameter_txt = models.CharField(max_length=50, verbose_name='Parametre Txt', blank=True, null=True)
-    unit = models.CharField(max_length=150, verbose_name='Parametre Birim', blank=True, null=True)
-    unit_txt = models.CharField(max_length=50, verbose_name='Parametre Txt', blank=True, null=True)
-    channel_number = models.IntegerField(verbose_name='Kanal No',blank=True,null=True)
-    sim_channel = models.CharField(max_length=250,verbose_name='Kanal ID',blank=False,null=True)
-    envi_channel = models.IntegerField(verbose_name='Envisoft Kanal ID', blank=False, null=True)
-    gec_min = models.IntegerField(verbose_name='Geçerli Veri Min',blank=True,null=True)
-    gec_max = models.IntegerField(verbose_name='Geçerli Veri Max', blank=True, null=True)
-    olcum_min = models.IntegerField(verbose_name='Ölçüm Altı', blank=True, null=True)
-    olcum_max = models.IntegerField(verbose_name='Ölçüm Üstü', blank=True, null=True)
-    min_range = models.IntegerField(verbose_name='Range Aralığı Min', blank=True, null=True)
-    max_range = models.IntegerField(verbose_name='Range Aralığı Min', blank=True, null=True)
+    name = models.CharField(
+        max_length=100,
+        verbose_name="Ad", help_text="İstasyon tipi adı",
+    )
+    description = models.CharField(
+        max_length=250, blank=True, default="",
+        verbose_name="Açıklama",
+    )
 
     class Meta:
-        db_table = 'parameters'
-        verbose_name_plural = "Parametreler" # admin sayfasında görünen tablo ismini gösterir.
-        ordering = ["id"] #admin panelinde id ye göre listeleme yapar.
+        db_table = "station_type"
+        verbose_name_plural = "İstasyon Tipleri"
+        ordering = ["code"]
 
     def __str__(self):
-
-        return "%s" % self.parameter_name # eklenen kayıtların ne ile görüntüeneceğini gösterir.
-
-class Sensors(models.Model):
-
-    SENSOR_TYPE = ((0, "Analog Input"),(1, "Analog Output"),(2, "Dijital Input"),(3, "Dijital Output"))
-
-    BYTE_ORDER = (("little", "Endian.Little"),
-                        ("big", "Endian.Big"))
-
-    SIGNAL_TYPE = ((0, "4-20mA"),(1, "0-20mA"),(2, "0-10mV"))
-
-    FUNCTION = ((1, "Read Coils"),(2, "Read Discrete Inputs"),(3, "Read Holding Registers"),(4, "Read Input Registers"),
-                (5, "Write Single Coil"),(6, "Write Single Register"),(15, "Write Multiple Coils"),(16, "Write Multiple Registers"))
-
-    DECODE_TYPES = (("float32", "32 Bit Float"),("float64", "64 Bit Float"),("hex", "Hex"),(None,"Raw Data"))
-
-    parameters = models.ForeignKey(Parameters,on_delete=models.CASCADE,blank=False,null=True)
-    sensor_type = models.IntegerField(verbose_name='Sensör Tipi',blank=False,null=True,choices=SENSOR_TYPE,default=0)
-    brand = models.CharField(max_length=100,verbose_name='Sensör Marka',blank=True,null=True)
-    model = models.CharField(max_length=100, verbose_name='Sensör Model', blank=True, null=True)
-    serial_number = models.CharField(max_length=150, verbose_name='Seri No', blank=True, null=True)
-    con = models.ForeignKey(Connections,on_delete=models.CASCADE,verbose_name='Bağlantı')
-    signal_type = models.IntegerField(verbose_name='Sinyal Tipi',blank=True,null=True,choices=SIGNAL_TYPE,default=0)
-    slave_id = models.IntegerField(verbose_name='Slave ID',default=1,blank=False,null=True)
-    byte_order = models.CharField(max_length=20,verbose_name='Byte Order',blank=False,null=True,choices=BYTE_ORDER,default='big')
-    word_order = models.CharField(max_length=20, verbose_name='Word Order', blank=False, null=True, choices=BYTE_ORDER,default='little')
-    ascii_code = models.CharField(max_length=20,verbose_name='Ascii Kod',blank=True,null=True)
-    address = models.IntegerField(verbose_name='Haberleşme Adresi',help_text='Modbus/Ascii Adresi/Sırası',blank=True,null=True)
-    quantity = models.IntegerField(verbose_name='Adres Aralığı', blank=True,null=True,default=2)
-    function = models.IntegerField(verbose_name='Fonksiyon', blank=True, null=True, choices=FUNCTION,default=3)
-    decode = models.CharField(max_length=20,verbose_name='Decode',blank=True,null=True,choices=DECODE_TYPES,default="float32")
-    digital_inverse = models.BooleanField(verbose_name='Dijital Ters mi ?',default=False)
-    is_active = models.BooleanField(verbose_name='Aktif', default=True)
-    class Meta:
-        db_table = 'sensors'
-        verbose_name_plural = "Sensors" # admin sayfasında görünen tablo ismini gösterir.
-        ordering = ["id"] #admin panelinde id ye göre listeleme yapar.
-
-    def __str__(self):
-
-        return "%s" % self.sensor # eklenen kayıtların ne ile görüntüeneceğini gösterir.
-
-class SensorInstants(models.Model):
+        return self.name
 
 
-    channel = models.OneToOneField(Sensors, on_delete=models.CASCADE, blank=False, null=True)
-    instant = models.FloatField(verbose_name='Anlık Değer',blank=True,null=True,default=0)
-    status = models.ForeignKey(Status_Codes,on_delete=models.CASCADE,blank=True,null=True)
-    readtime = models.DateTimeField(verbose_name='Okuma Zamanı', blank=True, null=True)
-    factorA = models.FloatField(verbose_name='Kalibrasyon Faktörü (A)', help_text='result = ax+b', blank=True,
-                                null=True, default=1)
-    factorB = models.FloatField(verbose_name='Kalibrasyon Faktörü (B)', help_text='result = ax+b', blank=True,
-                                null=True, default=0)
-    send_status = models.BooleanField(verbose_name='Status Gönderilsin mi ?', default=False)
-    is_random = models.BooleanField(verbose_name='Aktif', default=False)
-    class Meta:
-        db_table = 'sensor_instants'
-        verbose_name_plural = "Sensör Anlık Veriler" # admin sayfasında görünen tablo ismini gösterir.
-        ordering = ["channel"] #admin panelinde id ye göre listeleme yapar.
+class Station(models.Model):
+    """İzleme istasyonu (saha)."""
 
-    def __str__(self):
-
-        return "%s" % self.channel # eklenen kayıtların ne ile görüntüeneceğini gösterir.
-
-class Reads(models.Model):
-
-    channel = models.ForeignKey(Sensors,on_delete=models.CASCADE,verbose_name='Kanal',blank=False,null=True)
-    value = models.FloatField(verbose_name='Değer',blank=False,null=True)
-    status = models.ForeignKey(Status_Codes,on_delete=models.CASCADE,blank=False,null=True)
-    time_iso = models.DateTimeField(verbose_name='Kayıt Tarihi',blank=False,null=True)
+    name = models.CharField(
+        max_length=100, verbose_name="İstasyon Adı", help_text="İstasyon Adı",
+    )
+    station_type = models.ForeignKey(
+        StationType, on_delete=models.SET_NULL,
+        blank=True, null=True,
+        verbose_name="İstasyon Tipi",
+    )
+    address = models.CharField(
+        max_length=250, blank=True, default="",
+        verbose_name="İstasyon Adresi", help_text="İstasyon Adresi",
+    )
+    domain = models.URLField(
+        max_length=100, blank=True, default="",
+        verbose_name="Domain", help_text="İstasyonun bağlı olduğu uygulamanın domaini",
+    )
+    port = models.IntegerField(
+        blank=True, null=True, default=443,
+        verbose_name="Port No", help_text="Port No",
+    )
+    company = models.CharField(
+        max_length=100, blank=True, default="",
+        verbose_name="Kurum Adı", help_text="Kurum Adı",
+    )
+    active = models.BooleanField(
+        default=True, verbose_name="Aktif mi?", help_text="Aktif mi?",
+    )
+    sample_request_sensor = models.ForeignKey(
+        "Sensor", on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name="+",
+        verbose_name="Numune Alma Sensörü",
+        help_text="StartSample servisinin tetikleyeceği dijital-out sensörü",
+    )
+    user = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL,
+        blank=True, null=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'reads'
-        verbose_name_plural = "Reads" # admin sayfasında görünen tablo ismini gösterir.
-        ordering = ["-time_iso"] #admin panelinde id ye göre listeleme yapar.
+        db_table = "station"
+        verbose_name_plural = "İstasyon Bilgileri"
+        ordering = ["created_at"]
 
     def __str__(self):
+        return self.name
 
-        return "%s" % self.channel # eklenen kayıtların ne ile görüntüeneceğini gösterir.
 
-class Poweroff(models.Model):
+class RemoteDevice(models.Model):
+    """Uzak veri toplayıcı (SIM / datalogger / gateway) kimlik bilgileri."""
 
-    station = models.ForeignKey(StationInfo,on_delete=models.CASCADE)
-    start_date = models.DateTimeField(verbose_name='Başlangıç Tarihi',blank=False,null=True)
-    end_date = models.DateTimeField(verbose_name='Bitiş Tarihi', blank=False, null=True)
-    time_iso = models.DateTimeField(auto_now=True,verbose_name='Kayıt Tarihi')
+    station = models.ForeignKey(
+        Station, on_delete=models.CASCADE, related_name="remote_devices",
+    )
+    device_id = models.CharField(
+        max_length=100, verbose_name="Cihaz ID", help_text="Uzak cihazın benzersiz kimliği (SIM ID / datalogger seri)",
+    )
+    code = models.CharField(
+        max_length=50, verbose_name="İstasyon Kodu", help_text="İstasyon Kodu",
+    )
+    name = models.CharField(
+        max_length=200, verbose_name="Cihaz Adı", help_text="Cihaz Adı",
+    )
+    data_period = models.IntegerField(
+        blank=True, null=True, default=1,
+        verbose_name="Veri Periyodu (dk)", help_text="Veri Periyodu (dk)",
+    )
+    auth_username = models.CharField(
+        max_length=50, verbose_name="Kullanıcı Adı", help_text="Uzak cihaza erişim kullanıcı adı",
+    )
+    # TODO: auth_secret şu an plaintext tutuluyor; ileride django-fernet-fields
+    # veya bir KMS katmanı ile şifrelenmeli. Şimdilik API geriye uyumluluk için
+    # okunabilir kalıyor.
+    auth_secret = models.CharField(
+        max_length=255, verbose_name="Erişim Şifresi", help_text="Uzak cihaza erişim şifresi",
+    )
+    user = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'poweroff'
-        verbose_name_plural = "Poweroff Kayıtları" # admin sayfasında görünen tablo ismini gösterir.
-        ordering = ["-time_iso"] #admin panelinde id ye göre listeleme yapar.
+        db_table = "remote_device"
+        verbose_name_plural = "Uzak Cihazlar"
+        ordering = ["created_at"]
 
     def __str__(self):
+        return f"{self.station} / {self.device_id}"
 
-        return "%s" % self.time_iso # eklenen kayıtların ne ile görüntüeneceğini gösterir.
+
+class Connection(models.Model):
+    """Fiziksel haberleşme bağlantısı (TCP/IP veya Serial)."""
+
+    CON_NAME_CHOICES = (
+        ("con_1", "Bağlantı-1"),
+        ("con_2", "Bağlantı-2"),
+        ("con_3", "Bağlantı-3"),
+    )
+    COM_TYPE_CHOICES = (("modbus", "Modbus"), ("ascii", "Ascii"))
+    CON_TYPE_CHOICES = (("tcp", "TCP/IP"), ("serial", "SERIAL"))
+    CON_MODE_CHOICES = (("rtu", "RTU"), ("ascii", "ASCII"))
+    BAUDRATES = (
+        (300, 300), (600, 600), (1200, 1200), (2400, 2400),
+        (4800, 4800), (9600, 9600), (14400, 14400), (19200, 19200),
+    )
+    PARITY = ((0, "None Parity"), (1, "Odd Parity"), (2, "Even Parity"))
+    STOP_BITS = ((0, "1 Stop Bit"), (1, "2 Stop Bit"))
+    BYTE_SIZE = ((8, "8 Data Bits"), (7, "7 Data Bits"))
+
+    con_name = models.CharField(
+        max_length=10, choices=CON_NAME_CHOICES, default="con_1",
+        verbose_name="Bağlantı Adı", help_text="Bağlantı Adı",
+    )
+    communication_type = models.CharField(
+        max_length=10, choices=COM_TYPE_CHOICES, default="modbus",
+        verbose_name="Haberleşme Tipi", help_text="Haberleşme Tipi",
+    )
+    con_type = models.CharField(
+        max_length=10, choices=CON_TYPE_CHOICES, default="tcp",
+        verbose_name="Bağlantı Tipi", help_text="Bağlantı Tipi",
+    )
+    con_mode = models.CharField(
+        max_length=10, choices=CON_MODE_CHOICES, default="rtu",
+        verbose_name="Bağlantı Modu", help_text="Bağlantı Modu",
+    )
+    con_address = models.CharField(
+        max_length=15, blank=True, null=True,
+        verbose_name="Bağlantı Adresi", help_text="COM4 or 192.168.1.1",
+    )
+    port = models.IntegerField(
+        default=502, verbose_name="Port", help_text="Port Numarası",
+    )
+    baudrate = models.IntegerField(choices=BAUDRATES, default=9600, verbose_name="Bant Genişliği")
+    parity = models.IntegerField(choices=PARITY, default=0, verbose_name="Parity")
+    stop_bits = models.IntegerField(choices=STOP_BITS, default=0, verbose_name="Stop Bits")
+    byte_size = models.IntegerField(choices=BYTE_SIZE, default=8, verbose_name="Byte Size")
+    xonxoff = models.BooleanField(default=False, verbose_name="Xonxoff")
+    rtscts = models.BooleanField(default=False, verbose_name="Rstcts")
+    dsrdtr = models.BooleanField(default=False, verbose_name="Dsrdtr")
+    status = models.BooleanField(default=True, verbose_name="Aktif", help_text="Aktif")
+    created_date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "connection"
+        verbose_name_plural = "Bağlantılar"
+        ordering = ["id"]
+
+    def __str__(self):
+        return self.con_name
+
+
+class StatusCode(models.Model):
+    """Veri kalitesi / status kodları lookup'u."""
+
+    code = models.IntegerField(blank=True, null=True, verbose_name="Kod Numarası")
+    name = models.CharField(max_length=200, blank=True, null=True, verbose_name="Status Kod Adı")
+
+    class Meta:
+        db_table = "status_code"
+        verbose_name_plural = "Status Kodları"
+        ordering = ["id"]
+
+    def __str__(self):
+        return self.name or f"Code {self.code}"
+
+
+class Parameter(models.Model):
+    """Ölçülen büyüklük (pH, sıcaklık, debi vb.) tanımı."""
+
+    station = models.ForeignKey(
+        Station, on_delete=models.CASCADE,
+        blank=True, null=True,
+        related_name="parameters",
+    )
+    parameter_name = models.CharField(max_length=50, blank=True, null=True, verbose_name="Parametre Adı")
+    parameter_txt = models.CharField(max_length=50, blank=True, null=True, verbose_name="Parametre Txt")
+    unit = models.CharField(max_length=150, blank=True, null=True, verbose_name="Parametre Birim")
+    unit_txt = models.CharField(max_length=50, blank=True, null=True, verbose_name="Parametre Birim Txt")
+    channel_number = models.IntegerField(blank=True, null=True, verbose_name="Kanal No")
+    device_channel_id = models.CharField(
+        max_length=250, blank=True, null=True,
+        verbose_name="Cihaz Kanal ID",
+        help_text="Uzak cihaz tarafındaki kanal kimliği (UUID vb.)",
+    )
+    gec_min = models.FloatField(blank=True, null=True, verbose_name="Geçerli Veri Min")
+    gec_max = models.FloatField(blank=True, null=True, verbose_name="Geçerli Veri Max")
+    olcum_min = models.FloatField(blank=True, null=True, verbose_name="Ölçüm Altı")
+    olcum_max = models.FloatField(blank=True, null=True, verbose_name="Ölçüm Üstü")
+    min_range = models.FloatField(blank=True, null=True, verbose_name="Range Min")
+    max_range = models.FloatField(blank=True, null=True, verbose_name="Range Max")
+
+    class Meta:
+        db_table = "parameter"
+        verbose_name_plural = "Parametreler"
+        ordering = ["id"]
+
+    def __str__(self):
+        return self.parameter_name or f"Parameter {self.pk}"
+
+
+class Sensor(models.Model):
+    """Fiziksel / mantıksal sensör kanalı."""
+
+    SENSOR_TYPE = (
+        (0, "Analog Input"), (1, "Analog Output"),
+        (2, "Dijital Input"), (3, "Dijital Output"),
+    )
+    BYTE_ORDER = (("little", "Endian.Little"), ("big", "Endian.Big"))
+    SIGNAL_TYPE = ((0, "4-20mA"), (1, "0-20mA"), (2, "0-10mV"))
+    FUNCTION = (
+        (1, "Read Coils"), (2, "Read Discrete Inputs"),
+        (3, "Read Holding Registers"), (4, "Read Input Registers"),
+        (5, "Write Single Coil"), (6, "Write Single Register"),
+        (15, "Write Multiple Coils"), (16, "Write Multiple Registers"),
+    )
+    DECODE_TYPES = (
+        ("float32", "32 Bit Float"), ("float64", "64 Bit Float"),
+        ("hex", "Hex"), (None, "Raw Data"),
+    )
+
+    parameter = models.ForeignKey(
+        Parameter, on_delete=models.CASCADE,
+        blank=True, null=True, related_name="sensors",
+    )
+    sensor_type = models.IntegerField(
+        choices=SENSOR_TYPE, default=0, blank=True, null=True,
+        verbose_name="Sensör Tipi",
+    )
+    brand = models.CharField(max_length=100, blank=True, null=True, verbose_name="Sensör Marka")
+    model = models.CharField(max_length=100, blank=True, null=True, verbose_name="Sensör Model")
+    serial_number = models.CharField(max_length=150, blank=True, null=True, verbose_name="Seri No")
+    connection = models.ForeignKey(
+        Connection, on_delete=models.CASCADE,
+        related_name="sensors", verbose_name="Bağlantı",
+    )
+    signal_type = models.IntegerField(
+        choices=SIGNAL_TYPE, default=0, blank=True, null=True,
+        verbose_name="Sinyal Tipi",
+    )
+    slave_id = models.IntegerField(default=1, blank=True, null=True, verbose_name="Slave ID")
+    byte_order = models.CharField(
+        max_length=20, choices=BYTE_ORDER, default="big",
+        blank=True, null=True, verbose_name="Byte Order",
+    )
+    word_order = models.CharField(
+        max_length=20, choices=BYTE_ORDER, default="little",
+        blank=True, null=True, verbose_name="Word Order",
+    )
+    ascii_code = models.CharField(max_length=20, blank=True, null=True, verbose_name="Ascii Kod")
+    address = models.IntegerField(
+        blank=True, null=True,
+        verbose_name="Haberleşme Adresi",
+        help_text="Modbus/Ascii Adresi/Sırası",
+    )
+    quantity = models.IntegerField(blank=True, null=True, default=2, verbose_name="Adres Aralığı")
+    function = models.IntegerField(choices=FUNCTION, default=3, blank=True, null=True, verbose_name="Fonksiyon")
+    decode = models.CharField(
+        max_length=20, choices=DECODE_TYPES, default="float32",
+        blank=True, null=True, verbose_name="Decode",
+    )
+    digital_inverse = models.BooleanField(default=False, verbose_name="Dijital Ters mi ?")
+    is_active = models.BooleanField(default=True, verbose_name="Aktif")
+
+    class Meta:
+        db_table = "sensor"
+        verbose_name_plural = "Sensörler"
+        ordering = ["id"]
+
+    def __str__(self):
+        if self.parameter_id and self.parameter.parameter_name:
+            return self.parameter.parameter_name
+        return f"Sensor-{self.pk}"
+
+
+class SensorLatest(models.Model):
+    """Sensörün en son anlık değeri (per-sensor 1 kayıt)."""
+
+    sensor = models.OneToOneField(
+        Sensor, on_delete=models.CASCADE, related_name="latest",
+    )
+    instant = models.FloatField(default=0, blank=True, null=True, verbose_name="Anlık Değer")
+    status = models.ForeignKey(StatusCode, on_delete=models.SET_NULL, blank=True, null=True)
+    readtime = models.DateTimeField(blank=True, null=True, verbose_name="Okuma Zamanı")
+    factorA = models.FloatField(
+        default=1, blank=True, null=True,
+        verbose_name="Kalibrasyon Faktörü (A)", help_text="result = ax+b",
+    )
+    factorB = models.FloatField(
+        default=0, blank=True, null=True,
+        verbose_name="Kalibrasyon Faktörü (B)", help_text="result = ax+b",
+    )
+    send_status = models.BooleanField(default=False, verbose_name="Status Gönderilsin mi ?")
+    is_random = models.BooleanField(default=False, verbose_name="Rastgele üret")
+
+    class Meta:
+        db_table = "sensor_latest"
+        verbose_name_plural = "Sensör Anlık Veriler"
+        ordering = ["sensor"]
+
+    def __str__(self):
+        return str(self.sensor) if self.sensor_id else f"Latest-{self.pk}"
+
+
+class Reading(models.Model):
+    """Sensör ölçüm kaydı (tarihsel veri)."""
+
+    sensor = models.ForeignKey(
+        Sensor, on_delete=models.CASCADE, related_name="readings", verbose_name="Sensör",
+    )
+    value = models.FloatField(blank=True, null=True, verbose_name="Değer")
+    status = models.ForeignKey(StatusCode, on_delete=models.SET_NULL, blank=True, null=True)
+    time_iso = models.DateTimeField(blank=True, null=True, verbose_name="Kayıt Tarihi")
+
+    class Meta:
+        db_table = "reading"
+        verbose_name_plural = "Okumalar"
+        ordering = ["-time_iso"]
+
+    def __str__(self):
+        return f"{self.sensor} @ {self.time_iso}"
+
+
+class PowerOff(models.Model):
+    """İstasyonun elektrik/kapalı kalma aralıkları."""
+
+    station = models.ForeignKey(Station, on_delete=models.CASCADE, related_name="power_offs")
+    start_date = models.DateTimeField(blank=True, null=True, verbose_name="Başlangıç Tarihi")
+    end_date = models.DateTimeField(blank=True, null=True, verbose_name="Bitiş Tarihi")
+    time_iso = models.DateTimeField(auto_now_add=True, verbose_name="Kayıt Tarihi")
+
+    class Meta:
+        db_table = "power_off"
+        verbose_name_plural = "Kapalı Kalma Kayıtları"
+        ordering = ["-time_iso"]
+
+    def __str__(self):
+        return str(self.time_iso)
+
 
 class Calibration(models.Model):
+    """Sensör kalibrasyon kayıtları."""
 
     CAL_TYPE = ((0, "Zero"), (1, "Span"), (2, "Multi"))
 
-    channel = models.ForeignKey(Sensors,on_delete=models.CASCADE,blank=False,null=True)
-    type = models.IntegerField(verbose_name='Kalibrasyon Tipi',blank=False,null=True,choices=CAL_TYPE)
-    period = models.IntegerField(verbose_name='Kalibrasyon Periyodu',blank=False,null=True,default=60)
-    cal_ref = models.FloatField(verbose_name='Referans Değer',blank=False,null=True)
-    cal_average = models.FloatField(verbose_name='Ortalama Değer', blank=False, null=True)
-    cal_std = models.FloatField(verbose_name='Standart Sapma', blank=False, null=True)
-    user = models.ForeignKey(CustomUser,on_delete=models.CASCADE,blank=True,null=True)
-    is_valid = models.BooleanField(verbose_name='Geçerli mi ?',blank=False,null=True)
-    time_iso = models.DateTimeField(auto_now=True,verbose_name='Kayıt Tarihi')
+    sensor = models.ForeignKey(
+        Sensor, on_delete=models.CASCADE,
+        blank=True, null=True, related_name="calibrations",
+    )
+    type = models.IntegerField(choices=CAL_TYPE, blank=True, null=True, verbose_name="Kalibrasyon Tipi")
+    period = models.IntegerField(default=60, blank=True, null=True, verbose_name="Kalibrasyon Periyodu")
+    cal_ref = models.FloatField(blank=True, null=True, verbose_name="Referans Değer")
+    cal_average = models.FloatField(blank=True, null=True, verbose_name="Ortalama Değer")
+    cal_std = models.FloatField(blank=True, null=True, verbose_name="Standart Sapma")
+    user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, blank=True, null=True)
+    is_valid = models.BooleanField(blank=True, null=True, verbose_name="Geçerli mi ?")
+    time_iso = models.DateTimeField(auto_now_add=True, verbose_name="Kayıt Tarihi")
 
     class Meta:
-        db_table = 'calibration'
-        verbose_name_plural = "Kalibrasyon Kayıtları" # admin sayfasında görünen tablo ismini gösterir.
-        ordering = ["-time_iso"] #admin panelinde id ye göre listeleme yapar.
+        db_table = "calibration"
+        verbose_name_plural = "Kalibrasyon Kayıtları"
+        ordering = ["-time_iso"]
 
     def __str__(self):
+        return str(self.time_iso)
 
-        return "%s" % self.time_iso # eklenen kayıtların ne ile görüntüeneceğini gösterir.
 
-class Log_Types(models.Model):
+class LogType(models.Model):
+    """Log sınıflandırma lookup'u."""
 
-    name = models.CharField(max_length=200, verbose_name='Status Kod Adı', blank=False, null=True)
+    name = models.CharField(max_length=200, blank=True, null=True, verbose_name="Log Tipi Adı")
 
     class Meta:
-        db_table = 'log_types'
-        verbose_name_plural = "Log Tipleri" # admin sayfasında görünen tablo ismini gösterir.
-        # ordering = ["-time_iso"] #admin panelinde id ye göre listeleme yapar.
+        db_table = "log_type"
+        verbose_name_plural = "Log Tipleri"
 
     def __str__(self):
+        return self.name or f"LogType-{self.pk}"
 
-        return "%s" % self.name # eklenen kayıtların ne ile görüntüeneceğini gösterir.
 
-class Sys_Log(models.Model):
+class SystemLog(models.Model):
+    """Sistem olay kaydı."""
 
-    station = models.ForeignKey(StationInfo, on_delete=models.CASCADE, null=True, blank=True,default=1)
-    type = models.ForeignKey(Log_Types,on_delete=models.CASCADE)
-    description = models.CharField(max_length=1000,verbose_name='Açıklama',blank=False,null=True)
-    time_iso = models.DateTimeField(auto_now=True,verbose_name='Kayıt Tarihi')
+    station = models.ForeignKey(
+        Station, on_delete=models.CASCADE, null=True, blank=True, related_name="system_logs",
+    )
+    type = models.ForeignKey(LogType, on_delete=models.CASCADE)
+    description = models.CharField(max_length=1000, blank=True, null=True, verbose_name="Açıklama")
+    time_iso = models.DateTimeField(auto_now_add=True, verbose_name="Kayıt Tarihi")
 
     class Meta:
-        db_table = 'sys_log'
-        verbose_name_plural = "Sistem Log Kayıtları" # admin sayfasında görünen tablo ismini gösterir.
-        ordering = ["-time_iso"] #admin panelinde id ye göre listeleme yapar.
+        db_table = "system_log"
+        verbose_name_plural = "Sistem Log Kayıtları"
+        ordering = ["-time_iso"]
 
     def __str__(self):
+        return str(self.time_iso)
 
-        return "%s" % self.time_iso # eklenen kayıtların ne ile görüntüeneceğini gösterir.
 
-class Api_Log(models.Model):
+class ApiLog(models.Model):
+    """Dış API çağrıları için istek/yanıt kaydı."""
 
-    type = models.ForeignKey(Log_Types,on_delete=models.CASCADE)
-    url = models.CharField(max_length=250, verbose_name='Request Url', blank=True, null=True)
-    data = models.CharField(max_length=2000,verbose_name='Request Data',blank=True,null=True)
-    header = models.CharField(max_length=2000, verbose_name='Request Header', blank=True, null=True)
-    param = models.CharField(max_length=2000, verbose_name='Request Param', blank=True, null=True)
-    token = models.CharField(max_length=250, verbose_name='Token', blank=True, null=True)
-    response = models.CharField(max_length=2000, verbose_name='Response', blank=True, null=True)
-    status = models.IntegerField(verbose_name='Status Kod',blank=True,null=True)
-    time_iso = models.DateTimeField(auto_now=True,verbose_name='Kayıt Tarihi',blank=False,null=True)
+    type = models.ForeignKey(LogType, on_delete=models.CASCADE)
+    url = models.CharField(max_length=250, blank=True, null=True, verbose_name="Request Url")
+    data = models.CharField(max_length=2000, blank=True, null=True, verbose_name="Request Data")
+    header = models.CharField(max_length=2000, blank=True, null=True, verbose_name="Request Header")
+    param = models.CharField(max_length=2000, blank=True, null=True, verbose_name="Request Param")
+    token = models.CharField(max_length=250, blank=True, null=True, verbose_name="Token")
+    response = models.CharField(max_length=2000, blank=True, null=True, verbose_name="Response")
+    status = models.IntegerField(blank=True, null=True, verbose_name="Status Kod")
+    time_iso = models.DateTimeField(auto_now_add=True, verbose_name="Kayıt Tarihi")
 
     class Meta:
-        db_table = 'api_log'
-        verbose_name_plural = "Api Log Kayıtları" # admin sayfasında görünen tablo ismini gösterir.
-        ordering = ["-time_iso"] #admin panelinde id ye göre listeleme yapar.
+        db_table = "api_log"
+        verbose_name_plural = "Api Log Kayıtları"
+        ordering = ["-time_iso"]
 
     def __str__(self):
+        return str(self.type)
 
-        return "%s" % self.type # eklenen kayıtların ne ile görüntüeneceğini gösterir.
 
-# class Sim_Data(models.Model):
-#
-#     ph_v = models.FloatField(verbose_name='Ph Anlık',blank=True,null=True)
-#     ph_s = models.IntegerField(verbose_name='Ph Status', blank=True, null=True)
-#     il_v = models.FloatField(verbose_name='İletkenlik Anlık', blank=True, null=True)
-#     il_s = models.IntegerField(verbose_name='İletkenlik Status', blank=True, null=True)
-#     coz_v = models.FloatField(verbose_name='Çöz. Oks. Anlık', blank=True, null=True)
-#     coz_s = models.IntegerField(verbose_name='Çöz. Oks. Status', blank=True, null=True)
-#     debi_v = models.FloatField(verbose_name='Debi Anlık', blank=True, null=True)
-#     debi_s = models.IntegerField(verbose_name='Debi Status', blank=True, null=True)
-#     sic_v = models.FloatField(verbose_name='Sıcaklık Anlık', blank=True, null=True)
-#     sic_s = models.IntegerField(verbose_name='Sıcaklık Status', blank=True, null=True)
-#     akis_v = models.FloatField(verbose_name='Akış Hızı Anlık', blank=True, null=True)
-#     akis_s = models.IntegerField(verbose_name='Akış Hızı Status', blank=True, null=True)
-#     koi_v = models.FloatField(verbose_name='Koi Anlık', blank=True, null=True)
-#     koi_s = models.IntegerField(verbose_name='Koi Status', blank=True, null=True)
-#     akm_v = models.FloatField(verbose_name='Akm Anlık', blank=True, null=True)
-#     akm_s = models.IntegerField(verbose_name='Akm Status', blank=True, null=True)
-#     time_iso = models.DateTimeField(auto_now=True,verbose_name='Kayıt Tarihi',blank=False,null=True)
-#
-#     class Meta:
-#         db_table = 'sim_data'
-#         verbose_name_plural = "Sim Verileri" # admin sayfasında görünen tablo ismini gösterir.
-#         ordering = ["-time_iso"] #admin panelinde id ye göre listeleme yapar.
-#
-#     def __str__(self):
-#
-#         return "%s" % self.time_iso # eklenen kayıtların ne ile görüntüeneceğini gösterir.
+class RequestType(models.Model):
+    """Çıkış / numune / alarm talebinin sınıflandırması lookup'u."""
 
-# class Sample_Senario(models.Model):
-#
-#     ph_ort = models.FloatField(verbose_name='Ph Ort.',blank=False,null=True)
-#     akm_ort = models.FloatField(verbose_name='Akm Ort.', blank=False, null=True)
-#     koi_ort = models.FloatField(verbose_name='Koi Ort.', blank=False, null=True)
-#     alarm_adet = models.IntegerField(verbose_name='Alarm Adet', blank=True, null=True)
-#     alarm_durum = models.BooleanField(verbose_name='Alarm Durumu', blank=True, null=True,default=False)
-#     alarm_param = models.CharField(max_length=100,blank=True,null=True,verbose_name="Alarm Parametre")
-#     alarm_msg = models.CharField(max_length=250, blank=True, null=True, verbose_name="Alarm Mesajı")
-#     time_iso = models.DateTimeField(auto_now=True,verbose_name='Kayıt Tarihi',blank=False,null=True)
-#
-#     class Meta:
-#         db_table = 'sample_senaris'
-#         verbose_name_plural = "Numune Alma Canlı" # admin sayfasında görünen tablo ismini gösterir.
-#         ordering = ["-time_iso"] #admin panelinde id ye göre listeleme yapar.
-#
-#     def __str__(self):
-#
-#         return "%s" % self.time_iso # eklenen kayıtların ne ile görüntüeneceğini gösterir.
+    code = models.CharField(
+        max_length=30, unique=True,
+        verbose_name="Kod", help_text="Makine-okur kod (örn. 'operator', 'auto_scenario')",
+    )
+    name = models.CharField(
+        max_length=100, verbose_name="Ad", help_text="İnsan-okur ad",
+    )
 
-class Out_Requests(models.Model):
+    class Meta:
+        db_table = "request_type"
+        verbose_name_plural = "Talep Tipleri"
+        ordering = ["code"]
 
-    ALARM_LEVEL = ((1, "Bakanlık Numune Talebi"), (2, "Operatör Talebi"), (2, "Otomatik Numune Senaryosu"))
+    def __str__(self):
+        return self.name
 
-    sensor = models.ForeignKey(Sensors,on_delete=models.CASCADE,blank=False,null=False)
-    value = models.IntegerField(verbose_name='Değer',blank=False,null=False)
-    alarm_level = models.IntegerField(choices=ALARM_LEVEL,verbose_name='Alarm Level',blank=False,null=False)
-    is_completed = models.BooleanField(blank=False,null=False,default=False)
+
+class OutputRequest(models.Model):
+    """Sensöre yönelik dijital-out / aksiyon tetikleme talebi."""
+
+    sensor = models.ForeignKey(Sensor, on_delete=models.CASCADE, related_name="output_requests")
+    value = models.IntegerField(verbose_name="Değer")
+    request_type = models.ForeignKey(
+        RequestType, on_delete=models.SET_NULL,
+        blank=True, null=True, verbose_name="Talep Tipi",
+    )
+    is_completed = models.BooleanField(default=False)
     request_code = models.CharField(max_length=250, blank=True, null=True)
-    created_at = models.DateTimeField(auto_now=True,verbose_name='Kayıt Tarihi',blank=False,null=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Kayıt Tarihi")
 
     class Meta:
-        db_table = 'out_requests'
-        verbose_name_plural = "Dijital Out Talepleri" # admin sayfasında görünen tablo ismini gösterir.
-        ordering = ["-created_at"] #admin panelinde id ye göre listeleme yapar.
+        db_table = "output_request"
+        verbose_name_plural = "Dijital Out Talepleri"
+        ordering = ["-created_at"]
 
     def __str__(self):
-
-        return "%s" % self.created_at # eklenen kayıtların ne ile görüntüeneceğini gösterir.
+        return str(self.created_at)

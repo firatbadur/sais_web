@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "dj_rest_auth",
     "api",
+    "sais_domain",
 ]
 
 MIDDLEWARE = [
@@ -290,20 +291,24 @@ JAZZMIN_SETTINGS = {
     "hide_models": [],
     "order_with_respect_to": [
         "api",
-        "api.StationInfo",
-        "api.SimInformation",
-        "api.Connections",
-        "api.Parameters",
-        "api.Sensors",
-        "api.SensorInstants",
-        "api.Reads",
+        "api.Station",
+        "api.StationType",
+        "api.RemoteDevice",
+        "api.Connection",
+        "api.Parameter",
+        "api.Sensor",
+        "api.SensorLatest",
+        "api.Reading",
         "api.Calibration",
-        "api.Out_Requests",
-        "api.Poweroff",
-        "api.Status_Codes",
-        "api.Log_Types",
-        "api.Sys_Log",
-        "api.Api_Log",
+        "api.OutputRequest",
+        "api.RequestType",
+        "api.PowerOff",
+        "api.StatusCode",
+        "api.LogType",
+        "api.SystemLog",
+        "api.ApiLog",
+        "sais_domain",
+        "sais_domain.EnvisoftChannel",
         "users",
         "users.CustomUser",
         "auth",
@@ -324,26 +329,32 @@ JAZZMIN_SETTINGS = {
 
         # api - istasyon / bağlantı
         "api": "fas fa-industry",
-        "api.StationInfo": "fas fa-building",
-        "api.SimInformation": "fas fa-sim-card",
-        "api.Connections": "fas fa-network-wired",
+        "api.Station": "fas fa-building",
+        "api.StationType": "fas fa-tag",
+        "api.RemoteDevice": "fas fa-sim-card",
+        "api.Connection": "fas fa-network-wired",
 
         # api - parametre / sensör
-        "api.Parameters": "fas fa-sliders-h",
-        "api.Sensors": "fas fa-microchip",
-        "api.SensorInstants": "fas fa-tachometer-alt",
+        "api.Parameter": "fas fa-sliders-h",
+        "api.Sensor": "fas fa-microchip",
+        "api.SensorLatest": "fas fa-tachometer-alt",
 
         # api - veri
-        "api.Reads": "fas fa-chart-line",
+        "api.Reading": "fas fa-chart-line",
         "api.Calibration": "fas fa-balance-scale",
-        "api.Poweroff": "fas fa-power-off",
-        "api.Out_Requests": "fas fa-paper-plane",
+        "api.PowerOff": "fas fa-power-off",
+        "api.OutputRequest": "fas fa-paper-plane",
+        "api.RequestType": "fas fa-bell",
 
         # api - meta / log
-        "api.Status_Codes": "fas fa-list-alt",
-        "api.Log_Types": "fas fa-tags",
-        "api.Sys_Log": "fas fa-clipboard-list",
-        "api.Api_Log": "fas fa-exchange-alt",
+        "api.StatusCode": "fas fa-list-alt",
+        "api.LogType": "fas fa-tags",
+        "api.SystemLog": "fas fa-clipboard-list",
+        "api.ApiLog": "fas fa-exchange-alt",
+
+        # sais_domain
+        "sais_domain": "fas fa-water",
+        "sais_domain.EnvisoftChannel": "fas fa-link",
 
         # admin
         "admin.LogEntry": "fas fa-file-alt",
@@ -365,7 +376,7 @@ JAZZMIN_SETTINGS = {
     },
 
     # Search bar
-    "search_model": ["api.StationInfo", "api.Parameters", "api.Sensors", "users.CustomUser"],
+    "search_model": ["api.Station", "api.StationType", "api.Parameter", "api.Sensor", "users.CustomUser"],
 
     "custom_css": "css/admin-panel-dark.css",
 
