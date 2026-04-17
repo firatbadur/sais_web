@@ -390,7 +390,8 @@ JAZZMIN_UI_TWEAKS = {
     "sidebar_nav_legacy_style": False,
     "sidebar_nav_flat_style": False,
     "theme": "flatly",
-    "dark_mode_theme": "darkly",
+    # Jazzmin 3.x: dark_mode_theme kaldırıldı, yerine default_theme_mode.
+    "default_theme_mode": "auto",
     "button_classes": {
         "primary": "btn-primary",
         "secondary": "btn-secondary",

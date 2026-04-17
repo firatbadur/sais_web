@@ -4,8 +4,7 @@ djangorestframework>=3.16,<4.0
 dj-rest-auth>=7.0,<8.0
 django-filter>=25.1,<26.0
 django-session-timeout>=0.1,<0.2
-# Jazzmin 3.x major rewrite; 2.6.x stable ve tüm JAZZMIN_SETTINGS seçenekleri desteklenmiş
-django-jazzmin>=2.6,<3.0
+django-jazzmin>=3.0,<4.0
 django-debug-toolbar>=5.2,<6.0
 whitenoise[brotli]>=6.9,<7.0
 Markdown>=3.8,<4.0
