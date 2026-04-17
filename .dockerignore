@@ -1,0 +1,54 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Virtual environments
+venv/
+venv_*/
+env/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Secrets & env
+.env
+.env.*
+!.env.example
+
+# Media / static collected output (in container these come from volume / collectstatic)
+media/
+staticfiles_root/
+
+# Local dbs
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs / Claude
+CLAUDE.md
+.claude/
+.claudeignore
+
+# Backup old venv
+venv_old_py310/
