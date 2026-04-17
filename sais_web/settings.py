@@ -263,40 +263,111 @@ LOGGING = {
 
 
 JAZZMIN_SETTINGS = {
-    "site_title": "Envisoft",
-    "site_header": "Yönetici Paneli",
-    "site_brand": "Yönetici Paneli",
+    # Branding
+    "site_title": "SAIS Yönetim",
+    "site_header": "SAIS Yönetim Paneli",
+    "site_brand": "SAIS",
     "site_icon": "images/logo/icon.png",
     "site_logo": "images/logo/icon.png",
     "login_logo": "images/logo/logo-v1.png",
     "site_logo_classes": "img-circle",
-    "welcome_sign": "Envisoft Web Api",
+    "welcome_sign": "SAIS Web SCADA — Yönetim Paneli",
     "copyright": "Envisoft",
     "user_avatar": None,
+
+    # Top menu
     "topmenu_links": [
-        {"name": "touchnshare", "url": "home", "permissions": ["auth.view_user"]},
-        {"model": "auth.User"},
+        {"name": "Panel", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"app": "api"},
+        {"app": "users"},
     ],
+
+    # Side menu
     "show_sidebar": True,
     "navigation_expanded": True,
+    "hide_apps": [],
+    "hide_models": [],
+    "order_with_respect_to": [
+        "api",
+        "api.StationInfo",
+        "api.SimInformation",
+        "api.Connections",
+        "api.Parameters",
+        "api.Sensors",
+        "api.SensorInstants",
+        "api.Reads",
+        "api.Calibration",
+        "api.Out_Requests",
+        "api.Poweroff",
+        "api.Status_Codes",
+        "api.Log_Types",
+        "api.Sys_Log",
+        "api.Api_Log",
+        "users",
+        "users.CustomUser",
+        "auth",
+        "authtoken",
+    ],
+
+    # Icons (FontAwesome 6 free)
     "icons": {
-        "auth": "fas fa-users-cog",
-        "auth.user": "fas fa-user",
-        "users.User": "fas fa-user",
-        "auth.Group": "fas fa-users",
-        "admin.LogEntry": "fas fa-file",
+        # auth
+        "auth": "fas fa-shield-alt",
+        "auth.Group": "fas fa-users-cog",
+        "authtoken": "fas fa-key",
+        "authtoken.TokenProxy": "fas fa-key",
+
+        # users
+        "users": "fas fa-user-friends",
+        "users.CustomUser": "fas fa-user",
+
+        # api - istasyon / bağlantı
+        "api": "fas fa-industry",
+        "api.StationInfo": "fas fa-building",
+        "api.SimInformation": "fas fa-sim-card",
+        "api.Connections": "fas fa-network-wired",
+
+        # api - parametre / sensör
+        "api.Parameters": "fas fa-sliders-h",
+        "api.Sensors": "fas fa-microchip",
+        "api.SensorInstants": "fas fa-tachometer-alt",
+
+        # api - veri
+        "api.Reads": "fas fa-chart-line",
+        "api.Calibration": "fas fa-balance-scale",
+        "api.Poweroff": "fas fa-power-off",
+        "api.Out_Requests": "fas fa-paper-plane",
+
+        # api - meta / log
+        "api.Status_Codes": "fas fa-list-alt",
+        "api.Log_Types": "fas fa-tags",
+        "api.Sys_Log": "fas fa-clipboard-list",
+        "api.Api_Log": "fas fa-exchange-alt",
+
+        # admin
+        "admin.LogEntry": "fas fa-file-alt",
     },
     "default_icon_parents": "fas fa-chevron-circle-right",
-    "default_icon_children": "fas fa-arrow-circle-right",
+    "default_icon_children": "fas fa-circle",
+
+    # UI behavior
     "related_modal_active": True,
     "custom_js": None,
-    "show_ui_builder": True,
+    "show_ui_builder": False,
     "changeform_format": "horizontal_tabs",
     "changeform_format_overrides": {
         "auth.user": "collapsible",
         "auth.group": "vertical_tabs",
+        "users.customuser": "collapsible",
     },
+
+    # Search bar
+    "search_model": ["api.StationInfo", "api.Parameters", "api.Sensors", "users.CustomUser"],
+
     "custom_css": "css/admin-panel-dark.css",
+
+    # Language switcher disable
+    "language_chooser": False,
 }
 
 JAZZMIN_UI_TWEAKS = {
@@ -304,23 +375,23 @@ JAZZMIN_UI_TWEAKS = {
     "footer_small_text": False,
     "body_small_text": False,
     "brand_small_text": False,
-    "brand_colour": "navbar-gray",
+    "brand_colour": "navbar-primary",
     "accent": "accent-teal",
-    "navbar": "navbar-dark",
+    "navbar": "navbar-dark navbar-primary",
     "no_navbar_border": True,
     "navbar_fixed": True,
     "layout_boxed": False,
     "footer_fixed": False,
-    "sidebar_fixed": False,
-    "sidebar": "sidebar-dark-info",
+    "sidebar_fixed": True,
+    "sidebar": "sidebar-dark-primary",
     "sidebar_nav_small_text": False,
     "sidebar_disable_expand": False,
-    "sidebar_nav_child_indent": False,
+    "sidebar_nav_child_indent": True,
     "sidebar_nav_compact_style": False,
     "sidebar_nav_legacy_style": False,
     "sidebar_nav_flat_style": False,
-    "theme": "simplex",
-    "dark_mode_theme": None,
+    "theme": "flatly",
+    "default_theme_mode": "auto",
     "button_classes": {
         "primary": "btn-primary",
         "secondary": "btn-secondary",
@@ -329,4 +400,5 @@ JAZZMIN_UI_TWEAKS = {
         "danger": "btn-danger",
         "success": "btn-success",
     },
+    "actions_sticky_top": True,
 }

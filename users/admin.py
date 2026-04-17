@@ -1,54 +1,34 @@
 from django.contrib import admin
-from pip._vendor.rich.status import Status
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.utils.translation import gettext_lazy as _
 
-from api.models import *
-from .models import *
-# Register your models here.
-
-admin.site.register(CustomUser)
-admin.site.register(StationInfo)
-admin.site.register(SimInformation)
-admin.site.register(Connections)
-admin.site.register(Sensors)
-admin.site.register(Parameters)
-admin.site.register(SensorInstants)
-admin.site.register(Status_Codes)
-admin.site.register(Reads)
-admin.site.register(Calibration)
-admin.site.register(Poweroff)
-admin.site.register(Sys_Log)
-admin.site.register(Log_Types)
+from .models import CustomUser
 
 
+@admin.register(CustomUser)
+class CustomUserAdmin(BaseUserAdmin):
+    list_display = (
+        "username",
+        "email",
+        "first_name",
+        "last_name",
+        "rol",
+        "is_staff",
+        "is_active",
+        "created_at",
+    )
+    list_filter = ("rol", "is_staff", "is_superuser", "is_active", "isDark")
+    search_fields = ("username", "email", "first_name", "last_name", "device_id")
+    ordering = ("-created_at",)
+    readonly_fields = ("last_login", "date_joined", "created_at")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    fieldsets = BaseUserAdmin.fieldsets + (
+        (_("SAIS"), {
+            "fields": ("rol", "isDark", "device_id", "added_by", "created_at"),
+        }),
+    )
+    add_fieldsets = BaseUserAdmin.add_fieldsets + (
+        (_("SAIS"), {
+            "fields": ("rol", "isDark", "device_id"),
+        }),
+    )
