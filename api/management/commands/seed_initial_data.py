@@ -6,7 +6,7 @@ Kullanım:
 """
 from django.core.management.base import BaseCommand
 
-from api.models import Parameters, Status_Codes
+from api.models import Parameters, StationInfo, Status_Codes
 
 
 DEFAULT_PARAMETERS = [
@@ -93,6 +93,19 @@ class Command(BaseCommand):
     help = "Varsayılan parametre ve status kayıtlarını oluşturur (idempotent)."
 
     def handle(self, *args, **options):
+        # Parameters.station default=1 bekliyor; yoksa oluştur.
+        default_station, station_created = StationInfo.objects.get_or_create(
+            id=1,
+            defaults={
+                "name": "Varsayılan İstasyon",
+                "station_type": 1,
+                "active": True,
+                "user": None,
+            },
+        )
+        if station_created:
+            self.stdout.write(self.style.SUCCESS("Varsayılan istasyon (id=1) oluşturuldu."))
+
         created_params = 0
         for row in DEFAULT_PARAMETERS:
             (
@@ -101,6 +114,7 @@ class Command(BaseCommand):
             ) = row
             _, created = Parameters.objects.get_or_create(
                 parameter_name=parameter_name,
+                station=default_station,
                 defaults=dict(
                     parameter_txt=parameter_txt,
                     unit=unit,
@@ -120,6 +134,7 @@ class Command(BaseCommand):
         for envi_channel, parameter_name, parameter_txt, unit_txt in CHANNEL_ONLY:
             _, created = Parameters.objects.get_or_create(
                 parameter_name=parameter_name,
+                station=default_station,
                 defaults=dict(
                     parameter_txt=parameter_txt,
                     unit_txt=unit_txt,

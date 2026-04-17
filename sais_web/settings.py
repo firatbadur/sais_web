@@ -7,7 +7,6 @@ Yapılandırma `.env` dosyası üzerinden okunur (python-dotenv).
 import os
 from pathlib import Path
 
-import dj_database_url
 from django.contrib.messages import constants as messages
 from dotenv import load_dotenv
 
@@ -94,27 +93,27 @@ WSGI_APPLICATION = "sais_web.wsgi.application"
 ASGI_APPLICATION = "sais_web.asgi.application"
 
 
-# Database
-DATABASE_URL = os.getenv("DATABASE_URL")
-if DATABASE_URL:
-    DATABASES = {
-        "default": dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=int(os.getenv("DB_CONN_MAX_AGE", "60")),
-        )
+# Database — Microsoft SQL Server (mssql-django)
+_mssql_options = {
+    "driver": os.getenv("MSSQL_DRIVER", "ODBC Driver 17 for SQL Server"),
+}
+if env_bool("MSSQL_TRUSTED_CONNECTION", default=False):
+    _mssql_options["trusted_connection"] = "yes"
+if env_bool("MSSQL_TRUST_SERVER_CERTIFICATE", default=True):
+    _mssql_options["extra_params"] = "TrustServerCertificate=yes"
+
+DATABASES = {
+    "default": {
+        "ENGINE": "mssql",
+        "NAME": os.getenv("MSSQL_DB", "envisoft"),
+        "USER": os.getenv("MSSQL_USER", "sa"),
+        "PASSWORD": os.getenv("MSSQL_PASSWORD", ""),
+        "HOST": os.getenv("MSSQL_HOST", "localhost"),
+        "PORT": os.getenv("MSSQL_PORT", "1433"),
+        "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+        "OPTIONS": _mssql_options,
     }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("POSTGRES_DB", "envisoft"),
-            "USER": os.getenv("POSTGRES_USER", "postgres"),
-            "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
-            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
-            "PORT": os.getenv("POSTGRES_PORT", "5432"),
-            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
-        }
-    }
+}
 
 
 # Cache (Redis)

@@ -10,8 +10,11 @@ whitenoise[brotli]>=6.9,<7.0
 Markdown>=3.8,<4.0
 jsonify==0.5
 
-# Database drivers
-psycopg[binary]>=3.2,<4.0
+# Database drivers — Microsoft SQL Server
+# "ODBC Driver 18 for SQL Server" sistemde kurulu olmalı
+# (Windows: Microsoft ODBC Driver 18; Docker imajı kendi setup'ını yapıyor)
+mssql-django>=1.5,<2.0
+pyodbc>=5.2,<6.0
 
 # Modbus / SCADA
 pymodbus>=3.11,<4.0
@@ -23,7 +26,6 @@ numpy>=2.2,<3.0
 
 # Env & config
 python-dotenv>=1.1,<2.0
-dj-database-url>=3.0,<4.0
 
 # Caching / Queue
 redis>=5.2,<6.0

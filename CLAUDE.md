@@ -23,7 +23,7 @@ Proje atıksu odaklı olmakla birlikte, mimari **her türlü endüstriyel izleme
 | Web framework | Django 5.2 LTS |
 | API | Django REST Framework + dj-rest-auth |
 | Admin tema | django-jazzmin |
-| Veritabanı | PostgreSQL 16 (psycopg 3) |
+| Veritabanı | Microsoft SQL Server 2022 (mssql-django + pyodbc, ODBC Driver 17/18) |
 | Cache | Redis 7 (django-redis) |
 | Statik | whitenoise (brotli) |
 | Endüstriyel IO | pymodbus 3.x, pyserial |
@@ -88,11 +88,13 @@ docker compose exec web python manage.py seed_initial_data
 docker compose exec web python manage.py createsuperuser
 ```
 
-Servisler: `web` (Django), `db` (Postgres 16), `redis` (Redis 7).
+Servisler: `web` (Django), `db` (MSSQL Server 2022), `redis` (Redis 7).
+
+> **Yerel geliştirme ön koşulu:** Host Windows'da **Microsoft ODBC Driver 17 veya 18 for SQL Server** kurulu olmalı. Kontrol: `python -c "import pyodbc; print(pyodbc.drivers())"`. Kurulu değilse [Microsoft indirme sayfasından](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server) yüklenir.
 
 ## Önemli çalıştırma davranışları
 
-- **Yapılandırma:** Tüm ayarlar `.env` üzerinden okunur (`python-dotenv` + `dj-database-url`). Sırları asla koda commitlemeyin.
+- **Yapılandırma:** Tüm ayarlar `.env` üzerinden okunur (`python-dotenv`). Sırları asla koda commitlemeyin.
 - **DEBUG=False** modunda HSTS, güvenli çerez ve Whitenoise manifest storage aktiftir.
 - **Seed komutu idempotenttir** — birden çok kez çalıştırmak güvenlidir (`get_or_create`).
 - **Modbus okuma:** `modbus.reader.ModbusReader` TCP bağlantıları ThreadPool ile paralel, serial bağlantıları sırayla okur. Periyodik çalıştırma için bir management command veya scheduler (ör. Celery/APScheduler) önerilir — mevcut repo bunu içermiyor.
