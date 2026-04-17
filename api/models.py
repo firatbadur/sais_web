@@ -241,7 +241,14 @@ class Parameter(models.Model):
 
 
 class Sensor(models.Model):
-    """Fiziksel / mantıksal sensör kanalı."""
+    """Fiziksel / mantıksal sensör kanalı.
+
+    Modbus TCP, Modbus RTU/ASCII ve özel ASCII protokollü (istek-yanıt veya
+    streaming) cihazları aynı şemada temsil eder. Protokolün kendisi
+    `connection.communication_type` / `connection.con_type` üzerinden
+    belirlenir; bu modeldeki alanlar protokole göre anlamlı olanlar
+    doldurulur, kalanları null bırakılır.
+    """
 
     SENSOR_TYPE = (
         (0, "Analog Input"), (1, "Analog Output"),
@@ -255,9 +262,24 @@ class Sensor(models.Model):
         (5, "Write Single Coil"), (6, "Write Single Register"),
         (15, "Write Multiple Coils"), (16, "Write Multiple Registers"),
     )
-    DECODE_TYPES = (
-        ("float32", "32 Bit Float"), ("float64", "64 Bit Float"),
-        ("hex", "Hex"), (None, "Raw Data"),
+    DATA_TYPES = (
+        ("int16", "Int16 (signed)"),
+        ("uint16", "UInt16 (unsigned)"),
+        ("int32", "Int32 (signed)"),
+        ("uint32", "UInt32 (unsigned)"),
+        ("int64", "Int64 (signed)"),
+        ("uint64", "UInt64 (unsigned)"),
+        ("float32", "Float32 (IEEE-754)"),
+        ("float64", "Float64 (IEEE-754)"),
+        ("bool", "Bool (coil / 1-bit)"),
+        ("bit", "Bit (register içinden bit_position)"),
+        ("string", "String (ASCII metin)"),
+        ("raw", "Raw bytes"),
+    )
+    LINE_TERMINATORS = (
+        ("\r\n", "CRLF"),
+        ("\n", "LF"),
+        ("\r", "CR"),
     )
 
     parameter = models.ForeignKey(
@@ -279,6 +301,8 @@ class Sensor(models.Model):
         choices=SIGNAL_TYPE, default=0, blank=True, null=True,
         verbose_name="Sinyal Tipi",
     )
+
+    # ---- Modbus alanları ----
     slave_id = models.IntegerField(default=1, blank=True, null=True, verbose_name="Slave ID")
     byte_order = models.CharField(
         max_length=20, choices=BYTE_ORDER, default="big",
@@ -288,18 +312,76 @@ class Sensor(models.Model):
         max_length=20, choices=BYTE_ORDER, default="little",
         blank=True, null=True, verbose_name="Word Order",
     )
-    ascii_code = models.CharField(max_length=20, blank=True, null=True, verbose_name="Ascii Kod")
     address = models.IntegerField(
         blank=True, null=True,
         verbose_name="Haberleşme Adresi",
-        help_text="Modbus/Ascii Adresi/Sırası",
+        help_text="Modbus register adresi / ASCII kayıt sırası",
     )
-    quantity = models.IntegerField(blank=True, null=True, default=2, verbose_name="Adres Aralığı")
-    function = models.IntegerField(choices=FUNCTION, default=3, blank=True, null=True, verbose_name="Fonksiyon")
-    decode = models.CharField(
-        max_length=20, choices=DECODE_TYPES, default="float32",
-        blank=True, null=True, verbose_name="Decode",
+    quantity = models.IntegerField(
+        blank=True, null=True, default=2,
+        verbose_name="Adres Aralığı", help_text="Okunacak register sayısı",
     )
+    function = models.IntegerField(
+        choices=FUNCTION, default=3, blank=True, null=True, verbose_name="Fonksiyon",
+    )
+    bit_position = models.IntegerField(
+        blank=True, null=True,
+        verbose_name="Bit Pozisyonu",
+        help_text="data_type='bit' için register içindeki bit indeksi (0-15)",
+    )
+
+    # ---- Veri tipi & mühendislik dönüşümü (protokol seviyesi) ----
+    data_type = models.CharField(
+        max_length=20, choices=DATA_TYPES, default="float32",
+        blank=True, null=True,
+        verbose_name="Veri Tipi",
+        help_text="Raw byte/register'ların nasıl yorumlanacağı",
+    )
+    scale = models.FloatField(
+        default=1.0, verbose_name="Ölçek (scale)",
+        help_text="engineering_value = raw * scale + offset",
+    )
+    offset = models.FloatField(
+        default=0.0, verbose_name="Ofset (offset)",
+        help_text="engineering_value = raw * scale + offset",
+    )
+
+    # ---- Özel ASCII protokolü (NMEA, custom request-response vb.) ----
+    ascii_code = models.CharField(
+        max_length=20, blank=True, null=True,
+        verbose_name="ASCII Cihaz Adresi",
+        help_text="Multi-drop ASCII bus'larda cihaz/node adresi",
+    )
+    ascii_request = models.CharField(
+        max_length=100, blank=True, null=True,
+        verbose_name="ASCII İstek Komutu",
+        help_text="Request-response ASCII için cihaza gönderilecek komut",
+    )
+    ascii_response_regex = models.CharField(
+        max_length=250, blank=True, null=True,
+        verbose_name="ASCII Yanıt Regex'i",
+        help_text="Değeri ayıklamak için regex; ilk capture group değer olarak alınır",
+    )
+    ascii_line_terminator = models.CharField(
+        max_length=4, choices=LINE_TERMINATORS, blank=True, null=True,
+        verbose_name="Satır Sonu",
+    )
+
+    # ---- Polling / zamanlama ----
+    poll_interval_sec = models.IntegerField(
+        blank=True, null=True,
+        verbose_name="Okuma Periyodu (sn)",
+        help_text="Null ise bağlantı seviyesi varsayılanı kullanılır",
+    )
+    timeout_ms = models.IntegerField(
+        default=2000, verbose_name="Timeout (ms)",
+        help_text="Tek okuma için maksimum bekleme süresi",
+    )
+    retry_count = models.IntegerField(
+        default=1, verbose_name="Retry Sayısı",
+        help_text="Hatalı okumada tekrar deneme sayısı",
+    )
+
     digital_inverse = models.BooleanField(default=False, verbose_name="Dijital Ters mi ?")
     is_active = models.BooleanField(default=True, verbose_name="Aktif")
 

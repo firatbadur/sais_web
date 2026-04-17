@@ -84,12 +84,41 @@ class ParameterAdmin(admin.ModelAdmin):
 class SensorAdmin(admin.ModelAdmin):
     list_display = (
         "id", "parameter", "connection", "sensor_type", "brand", "model",
-        "slave_id", "address", "function", "decode", "is_active",
+        "slave_id", "address", "function", "data_type", "scale", "offset",
+        "is_active",
     )
-    list_filter = ("sensor_type", "signal_type", "function", "is_active", "connection")
-    search_fields = ("brand", "model", "serial_number", "ascii_code")
+    list_filter = ("sensor_type", "signal_type", "function", "data_type", "is_active", "connection")
+    search_fields = ("brand", "model", "serial_number", "ascii_code", "ascii_request")
     list_editable = ("is_active",)
     autocomplete_fields = ("parameter", "connection")
+    fieldsets = (
+        ("Kimlik", {
+            "fields": ("parameter", "brand", "model", "serial_number", "sensor_type", "signal_type", "is_active"),
+        }),
+        ("Bağlantı", {
+            "fields": ("connection",),
+        }),
+        ("Modbus", {
+            "fields": (
+                "slave_id", "function", "address", "quantity",
+                "byte_order", "word_order", "bit_position",
+            ),
+        }),
+        ("Veri Tipi & Ölçekleme", {
+            "fields": ("data_type", "scale", "offset", "digital_inverse"),
+        }),
+        ("ASCII Protokolü", {
+            "classes": ("collapse",),
+            "fields": (
+                "ascii_code", "ascii_request", "ascii_response_regex",
+                "ascii_line_terminator",
+            ),
+        }),
+        ("Polling / Zamanlama", {
+            "classes": ("collapse",),
+            "fields": ("poll_interval_sec", "timeout_ms", "retry_count"),
+        }),
+    )
 
 
 @admin.register(SensorLatest)
