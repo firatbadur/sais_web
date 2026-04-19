@@ -131,64 +131,146 @@ class RemoteDevice(models.Model):
 
 
 class Connection(models.Model):
-    """Fiziksel haberleşme bağlantısı (TCP/IP veya Serial)."""
+    """SCADA haberleşme bağlantısı (Modbus + ASCII).
 
-    CON_NAME_CHOICES = (
-        ("con_1", "Bağlantı-1"),
-        ("con_2", "Bağlantı-2"),
-        ("con_3", "Bağlantı-3"),
+    Bir `Station`'a bağlıdır ve tek bir protokol + taşıma katmanı tanımlar.
+    Desteklenen protokoller:
+
+    - Modbus TCP (network)
+    - Modbus RTU / Modbus ASCII (serial)
+    - Özel ASCII (serial veya TCP üzerinden request-response)
+
+    Network protokolleri için `host` + `port`, serial için `serial_port` +
+    baudrate/parity alanları kullanılır. Diğer alanlar protokole göre
+    anlamlı olanlar doldurulur.
+    """
+
+    PROTOCOL_CHOICES = (
+        ("modbus_tcp", "Modbus TCP"),
+        ("modbus_rtu", "Modbus RTU (Serial)"),
+        ("modbus_ascii", "Modbus ASCII (Serial)"),
+        ("ascii_custom", "Özel ASCII (Request-Response)"),
     )
-    COM_TYPE_CHOICES = (("modbus", "Modbus"), ("ascii", "Ascii"))
-    CON_TYPE_CHOICES = (("tcp", "TCP/IP"), ("serial", "SERIAL"))
-    CON_MODE_CHOICES = (("rtu", "RTU"), ("ascii", "ASCII"))
+    TRANSPORT_CHOICES = (
+        ("tcp", "TCP/IP"),
+        ("serial", "Serial (RS-232/RS-485)"),
+    )
     BAUDRATES = (
-        (300, 300), (600, 600), (1200, 1200), (2400, 2400),
-        (4800, 4800), (9600, 9600), (14400, 14400), (19200, 19200),
+        (300, "300"), (600, "600"), (1200, "1200"), (2400, "2400"),
+        (4800, "4800"), (9600, "9600"), (14400, "14400"), (19200, "19200"),
+        (38400, "38400"), (57600, "57600"), (115200, "115200"),
+        (230400, "230400"), (460800, "460800"),
     )
-    PARITY = ((0, "None Parity"), (1, "Odd Parity"), (2, "Even Parity"))
-    STOP_BITS = ((0, "1 Stop Bit"), (1, "2 Stop Bit"))
-    BYTE_SIZE = ((8, "8 Data Bits"), (7, "7 Data Bits"))
+    PARITY = ((0, "None"), (1, "Odd"), (2, "Even"))
+    STOP_BITS = ((1, "1"), (2, "2"))
+    BYTE_SIZE = ((7, "7"), (8, "8"))
 
-    con_name = models.CharField(
-        max_length=10, choices=CON_NAME_CHOICES, default="con_1",
-        verbose_name="Bağlantı Adı", help_text="Bağlantı Adı",
+    # ---- Kimlik ----
+    station = models.ForeignKey(
+        Station, on_delete=models.CASCADE,
+        blank=True, null=True, related_name="connections",
+        verbose_name="İstasyon",
     )
-    communication_type = models.CharField(
-        max_length=10, choices=COM_TYPE_CHOICES, default="modbus",
-        verbose_name="Haberleşme Tipi", help_text="Haberleşme Tipi",
+    name = models.CharField(
+        max_length=100, default="",
+        verbose_name="Bağlantı Adı",
+        help_text="Bu istasyondaki bağlantının özgün adı",
     )
-    con_type = models.CharField(
-        max_length=10, choices=CON_TYPE_CHOICES, default="tcp",
-        verbose_name="Bağlantı Tipi", help_text="Bağlantı Tipi",
+    description = models.CharField(
+        max_length=500, blank=True, default="",
+        verbose_name="Açıklama",
     )
-    con_mode = models.CharField(
-        max_length=10, choices=CON_MODE_CHOICES, default="rtu",
-        verbose_name="Bağlantı Modu", help_text="Bağlantı Modu",
+
+    # ---- Protokol & taşıma ----
+    protocol = models.CharField(
+        max_length=20, choices=PROTOCOL_CHOICES, default="modbus_tcp",
+        verbose_name="Protokol",
     )
-    con_address = models.CharField(
-        max_length=15, blank=True, null=True,
-        verbose_name="Bağlantı Adresi", help_text="COM4 or 192.168.1.1",
+    transport = models.CharField(
+        max_length=10, choices=TRANSPORT_CHOICES, default="tcp",
+        verbose_name="Taşıma Katmanı",
+    )
+
+    # ---- Network (TCP) ----
+    host = models.CharField(
+        max_length=255, blank=True, default="",
+        verbose_name="Host / IP",
+        help_text="Hostname veya IP (IPv4/IPv6); serial için boş",
     )
     port = models.IntegerField(
-        default=502, verbose_name="Port", help_text="Port Numarası",
+        blank=True, null=True, default=502,
+        verbose_name="Port", help_text="Ağ portu (Modbus TCP: 502)",
     )
-    baudrate = models.IntegerField(choices=BAUDRATES, default=9600, verbose_name="Bant Genişliği")
-    parity = models.IntegerField(choices=PARITY, default=0, verbose_name="Parity")
-    stop_bits = models.IntegerField(choices=STOP_BITS, default=0, verbose_name="Stop Bits")
-    byte_size = models.IntegerField(choices=BYTE_SIZE, default=8, verbose_name="Byte Size")
-    xonxoff = models.BooleanField(default=False, verbose_name="Xonxoff")
-    rtscts = models.BooleanField(default=False, verbose_name="Rstcts")
-    dsrdtr = models.BooleanField(default=False, verbose_name="Dsrdtr")
-    status = models.BooleanField(default=True, verbose_name="Aktif", help_text="Aktif")
+
+    # ---- Serial ----
+    serial_port = models.CharField(
+        max_length=50, blank=True, default="",
+        verbose_name="Serial Port",
+        help_text="COM4 (Windows) veya /dev/ttyUSB0 (Linux); TCP için boş",
+    )
+    baudrate = models.IntegerField(choices=BAUDRATES, default=9600, blank=True, null=True, verbose_name="Baudrate")
+    parity = models.IntegerField(choices=PARITY, default=0, blank=True, null=True, verbose_name="Parity")
+    stop_bits = models.IntegerField(choices=STOP_BITS, default=1, blank=True, null=True, verbose_name="Stop Bits")
+    byte_size = models.IntegerField(choices=BYTE_SIZE, default=8, blank=True, null=True, verbose_name="Data Bits")
+    xonxoff = models.BooleanField(default=False, verbose_name="XON/XOFF")
+    rtscts = models.BooleanField(default=False, verbose_name="RTS/CTS")
+    dsrdtr = models.BooleanField(default=False, verbose_name="DSR/DTR")
+
+    # ---- Polling / güvenilirlik ----
+    poll_interval_sec = models.IntegerField(
+        default=10, verbose_name="Varsayılan Okuma Periyodu (sn)",
+        help_text="Bu bağlantıdaki sensörlerin varsayılan okuma aralığı",
+    )
+    timeout_ms = models.IntegerField(
+        default=2000, verbose_name="Bağlantı Timeout (ms)",
+    )
+    retry_count = models.IntegerField(
+        default=1, verbose_name="Retry Sayısı",
+    )
+    auto_reconnect = models.BooleanField(
+        default=True, verbose_name="Otomatik Yeniden Bağlan",
+    )
+    reconnect_delay_sec = models.IntegerField(
+        default=5, verbose_name="Yeniden Bağlanma Gecikmesi (sn)",
+    )
+
+    # ---- Config durumu ----
+    is_enabled = models.BooleanField(
+        default=True, verbose_name="Aktif",
+        help_text="Reader bu bağlantıyı tarasın mı?",
+    )
+
+    # ---- Runtime durumu (reader tarafından güncellenir) ----
+    last_connected_at = models.DateTimeField(
+        blank=True, null=True,
+        verbose_name="Son Bağlantı Zamanı",
+    )
+    last_error_at = models.DateTimeField(
+        blank=True, null=True,
+        verbose_name="Son Hata Zamanı",
+    )
+    last_error_message = models.CharField(
+        max_length=500, blank=True, default="",
+        verbose_name="Son Hata Mesajı",
+    )
+
     created_date = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "connection"
         verbose_name_plural = "Bağlantılar"
-        ordering = ["id"]
+        ordering = ["station", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["station", "name"],
+                name="connection_unique_station_name",
+            ),
+        ]
 
     def __str__(self):
-        return self.con_name
+        if self.station_id:
+            return f"{self.station} / {self.name}"
+        return self.name or f"Connection-{self.pk}"
 
 
 class StatusCode(models.Model):

@@ -51,13 +51,48 @@ class RemoteDeviceAdmin(admin.ModelAdmin):
 @admin.register(Connection)
 class ConnectionAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "con_name", "communication_type", "con_type", "con_mode",
-        "con_address", "port", "baudrate", "status", "created_date",
+        "id", "station", "name", "protocol", "transport",
+        "host", "port", "serial_port", "baudrate",
+        "is_enabled", "last_connected_at", "created_date",
     )
-    list_filter = ("communication_type", "con_type", "con_mode", "status")
-    search_fields = ("con_name", "con_address")
-    list_editable = ("status",)
-    readonly_fields = ("created_date",)
+    list_filter = ("station", "protocol", "transport", "is_enabled")
+    search_fields = ("name", "description", "host", "serial_port")
+    list_editable = ("is_enabled",)
+    readonly_fields = ("created_date", "last_connected_at", "last_error_at", "last_error_message")
+    autocomplete_fields = ("station",)
+    ordering = ("station", "name")
+    fieldsets = (
+        ("Kimlik", {
+            "fields": ("station", "name", "description", "is_enabled"),
+        }),
+        ("Protokol", {
+            "fields": ("protocol", "transport"),
+        }),
+        ("Network (TCP)", {
+            "fields": ("host", "port"),
+        }),
+        ("Serial", {
+            "classes": ("collapse",),
+            "fields": (
+                "serial_port", "baudrate", "parity", "stop_bits", "byte_size",
+                "xonxoff", "rtscts", "dsrdtr",
+            ),
+        }),
+        ("Polling / Güvenilirlik", {
+            "fields": (
+                "poll_interval_sec", "timeout_ms", "retry_count",
+                "auto_reconnect", "reconnect_delay_sec",
+            ),
+        }),
+        ("Runtime Durumu", {
+            "classes": ("collapse",),
+            "fields": ("last_connected_at", "last_error_at", "last_error_message"),
+        }),
+        ("Meta", {
+            "classes": ("collapse",),
+            "fields": ("created_date",),
+        }),
+    )
 
 
 @admin.register(StatusCode)

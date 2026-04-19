@@ -9,6 +9,11 @@ from api.models import Connection, Reading, Sensor, StatusCode
 logger = logging.getLogger(__name__)
 
 
+# Hangi Connection.protocol değerleri bu reader tarafından desteklenir.
+SUPPORTED_TCP_PROTOCOLS = {"modbus_tcp"}
+SUPPORTED_SERIAL_PROTOCOLS = {"modbus_rtu", "modbus_ascii"}
+
+
 class ModbusReader:
     def __init__(self, max_workers=10):
         # TCP bağlantılar için thread pool
@@ -16,17 +21,18 @@ class ModbusReader:
 
     def read_all_connections(self):
         """
-        Bütün bağlantıları sırayla tara.
-        TCP bağlantılar paralel okunur.
-        Serial bağlantılar seri okunur.
+        Aktif Modbus bağlantılarını tara.
+        TCP bağlantılar paralel, serial bağlantılar sırayla okunur.
         """
-        connections = Connection.objects.filter(status=True)
+        connections = Connection.objects.filter(is_enabled=True).filter(
+            protocol__in=list(SUPPORTED_TCP_PROTOCOLS | SUPPORTED_SERIAL_PROTOCOLS)
+        )
 
         futures = []
         for con in connections:
-            if con.con_type == "tcp":
+            if con.protocol in SUPPORTED_TCP_PROTOCOLS:
                 futures.append(self.executor.submit(self._read_tcp_connection, con))
-            elif con.con_type == "serial":
+            elif con.protocol in SUPPORTED_SERIAL_PROTOCOLS:
                 self._read_serial_connection(con)
 
         for f in as_completed(futures):
@@ -36,11 +42,14 @@ class ModbusReader:
                 logger.error(f"TCP bağlantı hatası: {e}")
 
     def _read_tcp_connection(self, connection):
-        """ TCP bağlantısındaki sensörleri paralel oku """
-        client = ModbusTcpClient(connection.con_address, port=connection.port)
+        """ Modbus TCP bağlantısındaki sensörleri paralel oku. """
+        timeout_sec = max(0.1, connection.timeout_ms / 1000.0)
+        client = ModbusTcpClient(connection.host, port=connection.port, timeout=timeout_sec)
         if not client.connect():
-            logger.error(f"TCP bağlantısı başarısız: {connection.con_address}:{connection.port}")
+            self._mark_error(connection, f"TCP bağlantısı başarısız: {connection.host}:{connection.port}")
             return
+
+        self._mark_connected(connection)
 
         sensors = Sensor.objects.filter(connection=connection, is_active=True)
 
@@ -58,20 +67,25 @@ class ModbusReader:
         client.close()
 
     def _read_serial_connection(self, connection):
-        """ Serial (RS485) bağlantısındaki sensörleri sırayla oku """
+        """ Modbus RTU/ASCII (RS-232/485) bağlantısındaki sensörleri sırayla oku. """
+        mode = "rtu" if connection.protocol == "modbus_rtu" else "ascii"
+        timeout_sec = max(0.1, connection.timeout_ms / 1000.0)
+
         client = ModbusSerialClient(
-            method=connection.con_mode,
-            port=connection.con_address,
+            method=mode,
+            port=connection.serial_port,
             baudrate=connection.baudrate,
             parity=self._map_parity(connection.parity),
-            stopbits=connection.stop_bits + 1,
+            stopbits=connection.stop_bits,
             bytesize=connection.byte_size,
-            timeout=2,
+            timeout=timeout_sec,
         )
 
         if not client.connect():
-            logger.error(f"Serial bağlantısı başarısız: {connection.con_address}")
+            self._mark_error(connection, f"Serial bağlantısı başarısız: {connection.serial_port}")
             return
+
+        self._mark_connected(connection)
 
         sensors = Sensor.objects.filter(connection=connection, is_active=True)
         for sensor in sensors:
@@ -83,7 +97,7 @@ class ModbusReader:
         client.close()
 
     def _read_sensor(self, client, sensor):
-        """ Tek sensör okuma işlemi """
+        """ Tek sensör okuma işlemi. """
         try:
             if sensor.function == 3:
                 rr = client.read_holding_registers(sensor.address, sensor.quantity, unit=sensor.slave_id)
@@ -101,7 +115,8 @@ class ModbusReader:
                 logger.error(f"Slave {sensor.slave_id} hata: {rr}")
                 return
 
-            value = rr.registers[0] if hasattr(rr, "registers") else rr.bits[0]
+            raw = rr.registers[0] if hasattr(rr, "registers") else rr.bits[0]
+            value = raw * (sensor.scale or 1.0) + (sensor.offset or 0.0)
             status = StatusCode.objects.filter(code=1).first()  # 1 = Veri Geçerli
 
             Reading.objects.create(
@@ -115,6 +130,21 @@ class ModbusReader:
 
         except Exception as e:
             logger.error(f"Sensor {sensor.id} okuma hatası: {e}")
+
+    @staticmethod
+    def _mark_connected(connection):
+        Connection.objects.filter(pk=connection.pk).update(
+            last_connected_at=timezone.now(),
+            last_error_message="",
+        )
+
+    @staticmethod
+    def _mark_error(connection, message):
+        logger.error(message)
+        Connection.objects.filter(pk=connection.pk).update(
+            last_error_at=timezone.now(),
+            last_error_message=message[:500],
+        )
 
     @staticmethod
     def _map_parity(parity_code):
