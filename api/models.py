@@ -602,23 +602,145 @@ class RequestType(models.Model):
         return self.name
 
 
-class OutputRequest(models.Model):
-    """Sensöre yönelik dijital-out / aksiyon tetikleme talebi."""
+class Command(models.Model):
+    """Bir sensöre (genellikle analog/dijital output) yazma / aksiyon tetikleme komutu.
 
-    sensor = models.ForeignKey(Sensor, on_delete=models.CASCADE, related_name="output_requests")
-    value = models.IntegerField(verbose_name="Değer")
+    Dış API, operatör, zamanlayıcı veya kural motorundan tetiklenebilir.
+    Tam bir durum makinesi yaşar: pending → queued → executing →
+    completed / failed / timeout / expired / cancelled. Bir command
+    executor worker'ı (bu repo dışında) pending komutları sırayla alır,
+    sensör+bağlantı protokolüne göre Modbus/ASCII write uygular,
+    sonucu günceller.
+    """
+
+    STATUS_CHOICES = (
+        ("pending", "Beklemede"),
+        ("queued", "Kuyruğa alındı"),
+        ("executing", "Yürütülüyor"),
+        ("completed", "Tamamlandı"),
+        ("failed", "Başarısız"),
+        ("timeout", "Timeout"),
+        ("expired", "Süresi doldu"),
+        ("cancelled", "İptal"),
+    )
+
+    VALUE_TYPE_CHOICES = (
+        ("bool", "Bool (coil on/off)"),
+        ("int", "Integer"),
+        ("float", "Float"),
+        ("string", "ASCII metin"),
+    )
+
+    SOURCE_CHOICES = (
+        ("api", "Dış API"),
+        ("operator", "Operatör"),
+        ("scheduler", "Zamanlayıcı"),
+        ("rule", "Kural Motoru"),
+        ("system", "Sistem"),
+    )
+
+    # ---- Hedef ----
+    sensor = models.ForeignKey(
+        Sensor, on_delete=models.CASCADE, related_name="commands",
+        verbose_name="Hedef Sensör",
+    )
+
+    # ---- Değer (tipli; ya value ya value_text doldurulur) ----
+    value_type = models.CharField(
+        max_length=10, choices=VALUE_TYPE_CHOICES, default="int",
+        verbose_name="Değer Tipi",
+    )
+    value = models.FloatField(
+        blank=True, null=True,
+        verbose_name="Sayısal Değer",
+        help_text="bool/int/float tipleri için (bool: 0/1)",
+    )
+    value_text = models.CharField(
+        max_length=500, blank=True, null=True,
+        verbose_name="Metin Değeri",
+        help_text="value_type='string' için gönderilecek ASCII komut",
+    )
+
+    # ---- Durum makinesi ----
+    status = models.CharField(
+        max_length=15, choices=STATUS_CHOICES, default="pending",
+        verbose_name="Durum",
+    )
+    attempt_count = models.IntegerField(default=0, verbose_name="Deneme Sayısı")
+    max_attempts = models.IntegerField(default=3, verbose_name="Max Deneme")
+    priority = models.IntegerField(
+        default=100,
+        verbose_name="Öncelik",
+        help_text="Düşük sayı = yüksek öncelik (Unix nice stili). Örn: acil=10, normal=100, düşük=1000",
+    )
+
+    # ---- Yaşam döngüsü ----
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Oluşturulma")
+    scheduled_at = models.DateTimeField(
+        blank=True, null=True,
+        verbose_name="Planlı Zaman",
+        help_text="Null → hemen çalıştırılır; değer → bu zamandan önce çalıştırılmaz",
+    )
+    expires_at = models.DateTimeField(
+        blank=True, null=True,
+        verbose_name="Geçerlilik Süresi",
+        help_text="Bu zamandan sonra çalıştırılmamışsa 'expired' olarak işaretlenir",
+    )
+    executed_at = models.DateTimeField(
+        blank=True, null=True,
+        verbose_name="Yürütme Zamanı",
+        help_text="Yazma komutunun cihaza gönderildiği zaman",
+    )
+    completed_at = models.DateTimeField(
+        blank=True, null=True,
+        verbose_name="Tamamlanma Zamanı",
+        help_text="Başarı/başarısızlığın kesinleştiği zaman",
+    )
+
+    # ---- Denetim izi / ilişkilendirme ----
+    source = models.CharField(
+        max_length=15, choices=SOURCE_CHOICES, default="api",
+        verbose_name="Kaynak",
+    )
     request_type = models.ForeignKey(
         RequestType, on_delete=models.SET_NULL,
         blank=True, null=True, verbose_name="Talep Tipi",
+        help_text="Alan-özel sınıflandırma (opsiyonel; örn. ministry_sample)",
     )
-    is_completed = models.BooleanField(default=False)
-    request_code = models.CharField(max_length=250, blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Kayıt Tarihi")
+    requested_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL,
+        blank=True, null=True, related_name="commands",
+        verbose_name="Talep Eden Kullanıcı",
+    )
+    correlation_id = models.CharField(
+        max_length=100, blank=True, null=True,
+        verbose_name="Correlation ID",
+        help_text="Dış sistem trace / log ilişkilendirme kimliği",
+    )
+    idempotency_key = models.CharField(
+        max_length=100, blank=True, null=True, unique=True,
+        verbose_name="Idempotency Key",
+        help_text="Aynı key ile gelen ikinci istek yeni komut oluşturmaz",
+    )
+
+    # ---- Sonuç ----
+    error_message = models.CharField(
+        max_length=500, blank=True, default="",
+        verbose_name="Hata Mesajı",
+    )
+    response_data = models.JSONField(
+        blank=True, null=True,
+        verbose_name="Cihaz Yanıtı",
+        help_text="Cihaz yazma sonrası döndürdüğü değer/metadata (varsa)",
+    )
 
     class Meta:
-        db_table = "output_request"
-        verbose_name_plural = "Dijital Out Talepleri"
-        ordering = ["-created_at"]
+        db_table = "command"
+        verbose_name_plural = "Komutlar"
+        ordering = ["-priority", "created_at"]
+        indexes = [
+            models.Index(fields=["status", "priority", "created_at"], name="cmd_queue_idx"),
+        ]
 
     def __str__(self):
-        return str(self.created_at)
+        return f"{self.sensor} ← {self.value if self.value_type != 'string' else self.value_text} [{self.status}]"

@@ -3,9 +3,9 @@ from django.contrib import admin
 from .models import (
     ApiLog,
     Calibration,
+    Command,
     Connection,
     LogType,
-    OutputRequest,
     Parameter,
     PowerOff,
     Reading,
@@ -226,13 +226,40 @@ class RequestTypeAdmin(admin.ModelAdmin):
     ordering = ("code",)
 
 
-@admin.register(OutputRequest)
-class OutputRequestAdmin(admin.ModelAdmin):
-    list_display = ("id", "sensor", "value", "request_type", "is_completed", "request_code", "created_at")
-    list_filter = ("request_type", "is_completed")
-    search_fields = ("request_code",)
+@admin.register(Command)
+class CommandAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "sensor", "value_type", "value", "value_text",
+        "status", "priority", "source", "request_type",
+        "attempt_count", "scheduled_at", "expires_at", "created_at",
+    )
+    list_filter = ("status", "source", "value_type", "request_type", "priority")
+    search_fields = ("correlation_id", "idempotency_key", "error_message", "value_text")
     date_hierarchy = "created_at"
-    readonly_fields = ("created_at",)
-    autocomplete_fields = ("sensor", "request_type")
-    list_editable = ("is_completed",)
-    ordering = ("-created_at",)
+    readonly_fields = (
+        "created_at", "executed_at", "completed_at", "attempt_count",
+        "error_message", "response_data",
+    )
+    autocomplete_fields = ("sensor", "request_type", "requested_by")
+    ordering = ("-priority", "-created_at")
+    fieldsets = (
+        ("Hedef", {
+            "fields": ("sensor",),
+        }),
+        ("Değer", {
+            "fields": ("value_type", "value", "value_text"),
+        }),
+        ("Durum", {
+            "fields": ("status", "priority", "attempt_count", "max_attempts"),
+        }),
+        ("Yaşam Döngüsü", {
+            "fields": ("scheduled_at", "expires_at", "executed_at", "completed_at", "created_at"),
+        }),
+        ("Denetim", {
+            "fields": ("source", "request_type", "requested_by", "correlation_id", "idempotency_key"),
+        }),
+        ("Sonuç", {
+            "classes": ("collapse",),
+            "fields": ("error_message", "response_data"),
+        }),
+    )

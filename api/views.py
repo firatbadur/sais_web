@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import timedelta
 
 import pandas as pd
 from django.utils import timezone
@@ -13,7 +13,7 @@ from sais_domain.models import SaisCabinet
 from .helpers import df_to_json_records
 from .models import (
     Calibration,
-    OutputRequest,
+    Command,
     PowerOff,
     Reading,
     RequestType,
@@ -502,19 +502,28 @@ class StartSampleView(APIView):
             # Bakanlık Numune Talebi tipi SAIS seed'iyle birlikte yaratılır.
             request_type = RequestType.objects.filter(code="ministry_sample").first()
 
-            OutputRequest.objects.create(
-                sensor=sensor,
-                value=1,
-                request_type=request_type,
-                request_code=code,
-                is_completed=False,
-            )
+            # Aynı Bakanlık talep kodu iki kez gelirse duplicate komut oluşmasın.
+            idempotency_key = f"ministry_sample:{station_id}:{code}"
 
-            # TODO: Cihazın gerçekten tetiklenmesi için PLC/RTU'ya komut gönderimi eklenecek.
+            _, created = Command.objects.get_or_create(
+                idempotency_key=idempotency_key,
+                defaults=dict(
+                    sensor=sensor,
+                    value_type="bool",
+                    value=1,
+                    status="pending",
+                    priority=10,  # numune alma yüksek öncelikli
+                    source="api",
+                    request_type=request_type,
+                    correlation_id=code,
+                    expires_at=timezone.now() + timedelta(minutes=5),
+                    max_attempts=3,
+                ),
+            )
 
             return Response({
                 "result": True,
-                "message": None,
+                "message": None if created else "Aynı talep zaten kuyrukta.",
                 "objects": True,
             })
 

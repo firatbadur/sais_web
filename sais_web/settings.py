@@ -299,7 +299,7 @@ JAZZMIN_SETTINGS = {
         "api.SensorLatest",
         "api.Reading",
         "api.Calibration",
-        "api.OutputRequest",
+        "api.Command",
         "api.RequestType",
         "api.PowerOff",
         "api.StatusCode",
@@ -342,7 +342,7 @@ JAZZMIN_SETTINGS = {
         "api.Reading": "fas fa-chart-line",
         "api.Calibration": "fas fa-balance-scale",
         "api.PowerOff": "fas fa-power-off",
-        "api.OutputRequest": "fas fa-paper-plane",
+        "api.Command": "fas fa-terminal",
         "api.RequestType": "fas fa-bell",
 
         # api - meta / log
