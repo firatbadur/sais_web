@@ -233,6 +233,10 @@ CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1   # I/O-bound: bir task biten worker hemen yenisini alsın
 CELERY_TASK_ACKS_LATE = True            # task crash'inde başka worker tekrar denesin
 
+# USE_TZ=False olduğunda django-celery-beat'in naive datetime kullanması
+# zorunlu — yoksa beat scheduler "due" hesabını yapamaz, hiç task tetiklenmez.
+DJANGO_CELERY_BEAT_TZ_AWARE = False
+
 INTERNAL_IPS = ["127.0.0.1"]
 
 
