@@ -9,6 +9,8 @@ _WRITERS = {
     "modbus_tcp": ModbusTcpWriter,
     "modbus_rtu": ModbusSerialWriter,
     "modbus_ascii": ModbusSerialWriter,
+    "modbus_rtu_over_tcp": ModbusTcpWriter,
+    "modbus_ascii_over_tcp": ModbusTcpWriter,
     "ascii_custom": AsciiCustomWriter,
 }
 

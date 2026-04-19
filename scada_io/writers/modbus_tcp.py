@@ -1,10 +1,15 @@
-"""Modbus TCP writer (pymodbus 3.x)."""
+"""Modbus TCP writer (pymodbus 3.x).
+
+Reader ile aynı protokol varyantlarını destekler:
+modbus_tcp / modbus_rtu_over_tcp / modbus_ascii_over_tcp.
+"""
 from __future__ import annotations
 
 import logging
 from typing import Any
 
 from ..decoders import REGISTER_COUNT, encode_value
+from ..readers.modbus_tcp import _framer_for_protocol
 from .base import ProtocolWriter, WriteResult
 
 
@@ -20,11 +25,16 @@ class ModbusTcpWriter(ProtocolWriter):
         from pymodbus.client import ModbusTcpClient
 
         timeout_sec = max(0.1, (self.connection.timeout_ms or 2000) / 1000.0)
-        self._client = ModbusTcpClient(
+        kwargs = dict(
             host=self.connection.host,
             port=self.connection.port or 502,
             timeout=timeout_sec,
         )
+        framer = _framer_for_protocol(self.connection.protocol)
+        if framer is not None:
+            kwargs["framer"] = framer
+
+        self._client = ModbusTcpClient(**kwargs)
         try:
             self.connected = bool(self._client.connect())
         except Exception as exc:  # noqa: BLE001

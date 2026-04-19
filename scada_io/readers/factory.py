@@ -9,6 +9,9 @@ _READERS = {
     "modbus_tcp": ModbusTcpReader,
     "modbus_rtu": ModbusSerialReader,
     "modbus_ascii": ModbusSerialReader,
+    # RTU/ASCII frame TCP socket üzerinden — gateway transparent mode
+    "modbus_rtu_over_tcp": ModbusTcpReader,
+    "modbus_ascii_over_tcp": ModbusTcpReader,
     "ascii_custom": AsciiCustomReader,
 }
 

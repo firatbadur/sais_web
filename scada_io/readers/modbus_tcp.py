@@ -1,4 +1,10 @@
-"""Modbus TCP reader (pymodbus 3.x — slave= API)."""
+"""Modbus TCP reader (pymodbus 3.x — slave= API).
+
+Protokol varyantları aynı sınıfta:
+  - modbus_tcp           → MBAP framer (default, pymodbus auto-select)
+  - modbus_rtu_over_tcp  → RTU framer TCP socket üzerinde (gateway transparent)
+  - modbus_ascii_over_tcp → ASCII framer TCP socket üzerinde
+"""
 from __future__ import annotations
 
 import logging
@@ -9,6 +15,17 @@ from .base import ProtocolReader, ReadResult
 
 
 logger = logging.getLogger(__name__)
+
+
+def _framer_for_protocol(protocol: str):
+    """Connection.protocol → pymodbus FramerType (None = default MBAP)."""
+    from pymodbus.framer import FramerType
+
+    return {
+        "modbus_tcp": None,
+        "modbus_rtu_over_tcp": FramerType.RTU,
+        "modbus_ascii_over_tcp": FramerType.ASCII,
+    }.get(protocol)
 
 
 class ModbusTcpReader(ProtocolReader):
@@ -22,11 +39,16 @@ class ModbusTcpReader(ProtocolReader):
         from pymodbus.client import ModbusTcpClient
 
         timeout_sec = max(0.1, (self.connection.timeout_ms or 2000) / 1000.0)
-        self._client = ModbusTcpClient(
+        kwargs = dict(
             host=self.connection.host,
             port=self.connection.port or 502,
             timeout=timeout_sec,
         )
+        framer = _framer_for_protocol(self.connection.protocol)
+        if framer is not None:
+            kwargs["framer"] = framer
+
+        self._client = ModbusTcpClient(**kwargs)
         try:
             self.connected = bool(self._client.connect())
         except Exception as exc:  # noqa: BLE001

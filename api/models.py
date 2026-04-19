@@ -107,6 +107,8 @@ class Connection(models.Model):
         ("modbus_tcp", "Modbus TCP"),
         ("modbus_rtu", "Modbus RTU (Serial)"),
         ("modbus_ascii", "Modbus ASCII (Serial)"),
+        ("modbus_rtu_over_tcp", "Modbus RTU over TCP (Gateway)"),
+        ("modbus_ascii_over_tcp", "Modbus ASCII over TCP (Gateway)"),
         ("ascii_custom", "Özel ASCII (Request-Response)"),
     )
     TRANSPORT_CHOICES = (
@@ -141,7 +143,7 @@ class Connection(models.Model):
 
     # ---- Protokol & taşıma ----
     protocol = models.CharField(
-        max_length=20, choices=PROTOCOL_CHOICES, default="modbus_tcp",
+        max_length=30, choices=PROTOCOL_CHOICES, default="modbus_tcp",
         verbose_name="Protokol",
     )
     transport = models.CharField(
