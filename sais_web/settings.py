@@ -66,6 +66,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "api.middleware.ApiLoggingMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -205,6 +206,16 @@ REST_FRAMEWORK = {
 
 
 APPEND_SLASH = False
+
+
+# API request logging (gelen + giden)
+API_LOG_ENABLED = env_bool("API_LOG_ENABLED", default=True)
+API_LOG_RETENTION_DAYS = int(os.getenv("API_LOG_RETENTION_DAYS", "90"))
+API_LOG_MAX_BODY_CHARS = int(os.getenv("API_LOG_MAX_BODY_CHARS", "10000"))
+API_LOG_SKIP_PATHS = env_list(
+    "API_LOG_SKIP_PATHS",
+    "/static/,/media/,/__debug__/,/admin/jsi18n/,/favicon.ico",
+)
 
 INTERNAL_IPS = ["127.0.0.1"]
 

@@ -211,12 +211,53 @@ class SystemLogAdmin(admin.ModelAdmin):
 
 @admin.register(ApiLog)
 class ApiLogAdmin(admin.ModelAdmin):
-    list_display = ("id", "type", "url", "status", "time_iso")
-    list_filter = ("type", "status")
-    search_fields = ("url", "token", "data", "response")
-    date_hierarchy = "time_iso"
-    readonly_fields = ("time_iso",)
-    ordering = ("-time_iso",)
+    list_display = (
+        "id", "created_at", "direction", "method", "url",
+        "response_status", "duration_ms", "remote_ip", "target_host", "user",
+    )
+    list_filter = ("direction", "method", "response_status", "source_component")
+    search_fields = (
+        "url", "query_string", "remote_ip", "target_host",
+        "source_component", "user__username", "error_message",
+    )
+    date_hierarchy = "created_at"
+    autocomplete_fields = ("user",)
+    ordering = ("-created_at",)
+    # Tüm alanlar middleware/helper tarafından doldurulur; manuel girilmez.
+    readonly_fields = (
+        "direction", "method", "url", "query_string",
+        "request_headers", "request_body",
+        "response_status", "response_body", "duration_ms", "error_message",
+        "remote_ip", "user", "user_agent",
+        "target_host", "source_component", "retry_count",
+        "created_at",
+    )
+    fieldsets = (
+        ("Özet", {
+            "fields": ("created_at", "direction", "method", "url",
+                       "response_status", "duration_ms", "error_message"),
+        }),
+        ("İstek", {
+            "fields": ("query_string", "request_headers", "request_body"),
+        }),
+        ("Yanıt", {
+            "fields": ("response_body",),
+        }),
+        ("Inbound Meta", {
+            "classes": ("collapse",),
+            "fields": ("remote_ip", "user", "user_agent"),
+        }),
+        ("Outbound Meta", {
+            "classes": ("collapse",),
+            "fields": ("target_host", "source_component", "retry_count"),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return False  # log kayıtları manuel oluşturulmaz
+
+    def has_change_permission(self, request, obj=None):
+        return False  # readonly
 
 
 @admin.register(RequestType)

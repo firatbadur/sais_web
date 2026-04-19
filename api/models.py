@@ -561,25 +561,95 @@ class SystemLog(models.Model):
 
 
 class ApiLog(models.Model):
-    """Dış API çağrıları için istek/yanıt kaydı."""
+    """Gelen ve giden API isteklerinin tek tablodaki birleşik kaydı.
 
-    type = models.ForeignKey(LogType, on_delete=models.CASCADE)
-    url = models.CharField(max_length=250, blank=True, null=True, verbose_name="Request Url")
-    data = models.CharField(max_length=2000, blank=True, null=True, verbose_name="Request Data")
-    header = models.CharField(max_length=2000, blank=True, null=True, verbose_name="Request Header")
-    param = models.CharField(max_length=2000, blank=True, null=True, verbose_name="Request Param")
-    token = models.CharField(max_length=250, blank=True, null=True, verbose_name="Token")
-    response = models.CharField(max_length=2000, blank=True, null=True, verbose_name="Response")
-    status = models.IntegerField(blank=True, null=True, verbose_name="Status Kod")
-    time_iso = models.DateTimeField(auto_now_add=True, verbose_name="Kayıt Tarihi")
+    `direction='in'`: dış client'tan bizim server'a gelen istek (middleware
+    tarafından otomatik doldurulur).
+    `direction='out'`: bizim kodumuzdan dış servise yapılan çağrı
+    (`api.api_logging.log_outbound_call` veya `record_outbound_call` ile
+    manuel doldurulur).
+
+    Body alanları truncate ve hassas veri (Authorization header, password
+    gibi key'ler) maskelenmiş olarak tutulur.
+    """
+
+    DIRECTION_CHOICES = (
+        ("in", "Gelen (Inbound)"),
+        ("out", "Giden (Outbound)"),
+    )
+
+    # ---- Ortak alanlar ----
+    direction = models.CharField(
+        max_length=3, choices=DIRECTION_CHOICES, db_index=True,
+        verbose_name="Yön",
+    )
+    method = models.CharField(max_length=10, db_index=True, verbose_name="HTTP Method")
+    url = models.CharField(
+        max_length=2048, db_index=True,
+        verbose_name="URL",
+        help_text="Inbound: request.path; Outbound: tam URL",
+    )
+    query_string = models.TextField(blank=True, default="", verbose_name="Query String")
+    request_headers = models.TextField(
+        blank=True, default="",
+        verbose_name="Request Headers",
+        help_text="JSON-serialized; Authorization/Cookie/X-API-Key maskeli",
+    )
+    request_body = models.TextField(blank=True, default="", verbose_name="Request Body")
+    response_status = models.IntegerField(
+        blank=True, null=True, db_index=True, verbose_name="Response Status",
+    )
+    response_body = models.TextField(blank=True, default="", verbose_name="Response Body")
+    duration_ms = models.IntegerField(blank=True, null=True, verbose_name="Süre (ms)")
+    error_message = models.CharField(
+        max_length=1000, blank=True, default="", verbose_name="Hata Mesajı",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True, db_index=True, verbose_name="Kayıt Zamanı",
+    )
+
+    # ---- Inbound-özel alanlar (giden için boş) ----
+    remote_ip = models.GenericIPAddressField(
+        blank=True, null=True, verbose_name="Client IP",
+    )
+    user = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL,
+        blank=True, null=True, related_name="api_logs",
+        verbose_name="Kullanıcı",
+    )
+    user_agent = models.CharField(
+        max_length=500, blank=True, default="", verbose_name="User-Agent",
+    )
+
+    # ---- Outbound-özel alanlar (gelen için boş) ----
+    target_host = models.CharField(
+        max_length=255, blank=True, default="",
+        verbose_name="Hedef Host",
+        help_text="Giden çağrıda hedef hostname (filtre için)",
+    )
+    source_component = models.CharField(
+        max_length=100, blank=True, default="",
+        verbose_name="Kaynak Modül",
+        help_text="Çağrıyı yapan iç bileşen (örn. bakanlik_uploader)",
+    )
+    retry_count = models.IntegerField(
+        blank=True, null=True,
+        verbose_name="Deneme No",
+        help_text="0 = ilk deneme, >0 = retry",
+    )
 
     class Meta:
         db_table = "api_log"
-        verbose_name_plural = "Api Log Kayıtları"
-        ordering = ["-time_iso"]
+        verbose_name_plural = "API Log Kayıtları"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["-created_at"], name="apilog_created_idx"),
+            models.Index(fields=["direction", "-created_at"], name="apilog_dir_created_idx"),
+            models.Index(fields=["url", "response_status"], name="apilog_url_status_idx"),
+        ]
 
     def __str__(self):
-        return str(self.type)
+        return f"[{self.direction}] {self.method} {self.url} → {self.response_status}"
 
 
 class RequestType(models.Model):
