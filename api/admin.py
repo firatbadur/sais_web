@@ -9,6 +9,9 @@ from .models import (
     Parameter,
     PowerOff,
     Reading,
+    ReadingDaily,
+    ReadingFifteenMin,
+    ReadingHourly,
     RequestType,
     Sensor,
     SensorLatest,
@@ -109,15 +112,17 @@ class SensorAdmin(admin.ModelAdmin):
     list_display = (
         "id", "parameter", "connection", "sensor_type", "brand", "model",
         "slave_id", "address", "function", "data_type", "scale", "offset",
-        "is_active",
+        "is_active", "is_simulated", "report_status",
     )
-    list_filter = ("sensor_type", "signal_type", "function", "data_type", "is_active", "connection")
+    list_filter = ("sensor_type", "signal_type", "function", "data_type", "is_active",
+                   "is_simulated", "report_status", "connection")
     search_fields = ("brand", "model", "serial_number", "ascii_code", "ascii_request")
     list_editable = ("is_active",)
     autocomplete_fields = ("parameter", "connection")
     fieldsets = (
         ("Kimlik", {
-            "fields": ("parameter", "brand", "model", "serial_number", "sensor_type", "signal_type", "is_active"),
+            "fields": ("parameter", "brand", "model", "serial_number", "sensor_type",
+                       "signal_type", "is_active", "is_simulated", "report_status"),
         }),
         ("Bağlantı", {
             "fields": ("connection",),
@@ -147,16 +152,18 @@ class SensorAdmin(admin.ModelAdmin):
 
 @admin.register(SensorLatest)
 class SensorLatestAdmin(admin.ModelAdmin):
-    list_display = ("id", "sensor", "instant", "status", "readtime", "factorA", "factorB", "send_status", "is_random")
-    list_filter = ("status", "send_status", "is_random")
+    list_display = ("id", "sensor", "value", "status", "quality", "readtime",
+                    "last_change_at", "update_count")
+    list_filter = ("status", "quality")
     search_fields = ("sensor__parameter__parameter_name",)
-    readonly_fields = ("readtime",)
+    readonly_fields = ("readtime", "last_change_at", "update_count")
+    autocomplete_fields = ("sensor",)
 
 
 @admin.register(Reading)
 class ReadingAdmin(admin.ModelAdmin):
-    list_display = ("id", "sensor", "value", "status", "time_iso")
-    list_filter = ("status", "sensor__connection")
+    list_display = ("id", "sensor", "value", "status", "quality", "origin", "time_iso")
+    list_filter = ("status", "quality", "origin", "sensor__connection")
     search_fields = ("sensor__parameter__parameter_name",)
     date_hierarchy = "time_iso"
     readonly_fields = ("time_iso",)
@@ -164,6 +171,36 @@ class ReadingAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("sensor__parameter", "status")
+
+
+class _ReadingAggregateAdminMixin(admin.ModelAdmin):
+    """Üç aggregate admin'i için ortak ayar."""
+    list_display = ("id", "sensor", "bucket_start", "avg_value", "min_value",
+                    "max_value", "count", "bad_count", "computed_at")
+    list_filter = ("sensor__connection",)
+    search_fields = ("sensor__parameter__parameter_name",)
+    date_hierarchy = "bucket_start"
+    readonly_fields = ("computed_at",)
+    autocomplete_fields = ("sensor",)
+    ordering = ("-bucket_start",)
+
+    def has_add_permission(self, request):
+        return False  # aggregate'ler komutla doldurulur
+
+
+@admin.register(ReadingFifteenMin)
+class ReadingFifteenMinAdmin(_ReadingAggregateAdminMixin):
+    pass
+
+
+@admin.register(ReadingHourly)
+class ReadingHourlyAdmin(_ReadingAggregateAdminMixin):
+    pass
+
+
+@admin.register(ReadingDaily)
+class ReadingDailyAdmin(_ReadingAggregateAdminMixin):
+    pass
 
 
 @admin.register(PowerOff)

@@ -309,6 +309,9 @@ JAZZMIN_SETTINGS = {
         "api.Sensor",
         "api.SensorLatest",
         "api.Reading",
+        "api.ReadingFifteenMin",
+        "api.ReadingHourly",
+        "api.ReadingDaily",
         "api.Calibration",
         "api.Command",
         "api.RequestType",
@@ -351,6 +354,9 @@ JAZZMIN_SETTINGS = {
 
         # api - veri
         "api.Reading": "fas fa-chart-line",
+        "api.ReadingFifteenMin": "fas fa-stopwatch",
+        "api.ReadingHourly": "fas fa-clock",
+        "api.ReadingDaily": "fas fa-calendar-day",
         "api.Calibration": "fas fa-balance-scale",
         "api.PowerOff": "fas fa-power-off",
         "api.Command": "fas fa-terminal",

@@ -35,8 +35,11 @@ class ChannelInfoSerializer(serializers.ModelSerializer):
     ChannelMinValue = serializers.FloatField(source="parameter.olcum_min", allow_null=True)
     ChannelMaxValue = serializers.FloatField(source="parameter.olcum_max", allow_null=True)
     ChannelNumber = serializers.IntegerField(source="parameter.channel_number", allow_null=True)
-    CalibrationFormulaA = serializers.FloatField(source="latest.factorA", allow_null=True)
-    CalibrationFormulaB = serializers.FloatField(source="latest.factorB", allow_null=True)
+    # Eski SensorLatest.factorA/B kaldırıldı; mühendislik dönüşümü artık
+    # Sensor.scale/offset üzerinden yapılır (saha kalibrasyonu Calibration
+    # tablosuna ayrı katman olarak tutulur).
+    CalibrationFormulaA = serializers.FloatField(source="scale", allow_null=True)
+    CalibrationFormulaB = serializers.FloatField(source="offset", allow_null=True)
     SerialNumber = serializers.CharField(source="serial_number", allow_null=True)
 
     class Meta:

@@ -424,6 +424,14 @@ class Sensor(models.Model):
 
     digital_inverse = models.BooleanField(default=False, verbose_name="Dijital Ters mi ?")
     is_active = models.BooleanField(default=True, verbose_name="Aktif")
+    is_simulated = models.BooleanField(
+        default=False, verbose_name="Simülasyon Modu",
+        help_text="True ise reader cihazdan değer okumak yerine rastgele üretir (test/demo için)",
+    )
+    report_status = models.BooleanField(
+        default=False, verbose_name="Status Raporla",
+        help_text="True ise bu sensörün status'ü dış sisteme (Bakanlık) gönderilir",
+    )
 
     class Meta:
         db_table = "sensor"
@@ -436,29 +444,58 @@ class Sensor(models.Model):
         return f"Sensor-{self.pk}"
 
 
+QUALITY_CHOICES = (
+    ("good", "Good"),
+    ("bad", "Bad"),
+    ("uncertain", "Uncertain"),
+    ("stale", "Stale"),
+    ("substituted", "Substituted"),
+    ("manual", "Manual"),
+)
+
+
 class SensorLatest(models.Model):
-    """Sensörün en son anlık değeri (per-sensor 1 kayıt)."""
+    """Sensörün en son anlık snapshot'ı — HMI/dashboard hızlı okuma için.
+
+    Sensör başına 1 satır. Reader her başarılı okumada günceller.
+    Tarihsel history için bkz. `Reading`.
+    """
 
     sensor = models.OneToOneField(
         Sensor, on_delete=models.CASCADE, related_name="latest",
+        verbose_name="Sensör",
     )
-    instant = models.FloatField(default=0, blank=True, null=True, verbose_name="Anlık Değer")
-    status = models.ForeignKey(StatusCode, on_delete=models.SET_NULL, blank=True, null=True)
-    readtime = models.DateTimeField(blank=True, null=True, verbose_name="Okuma Zamanı")
-    factorA = models.FloatField(
-        default=1, blank=True, null=True,
-        verbose_name="Kalibrasyon Faktörü (A)", help_text="result = ax+b",
+    value = models.FloatField(
+        blank=True, null=True, default=0,
+        verbose_name="Anlık Değer",
+        help_text="scale/offset uygulanmış mühendislik değeri",
     )
-    factorB = models.FloatField(
-        default=0, blank=True, null=True,
-        verbose_name="Kalibrasyon Faktörü (B)", help_text="result = ax+b",
+    status = models.ForeignKey(
+        StatusCode, on_delete=models.SET_NULL, blank=True, null=True,
+        verbose_name="Status Kodu",
     )
-    send_status = models.BooleanField(default=False, verbose_name="Status Gönderilsin mi ?")
-    is_random = models.BooleanField(default=False, verbose_name="Rastgele üret")
+    quality = models.CharField(
+        max_length=15, choices=QUALITY_CHOICES, default="good",
+        verbose_name="Kalite",
+        help_text="Anlık değerin güvenilirlik düzeyi",
+    )
+    readtime = models.DateTimeField(
+        blank=True, null=True, db_index=True,
+        verbose_name="Okuma Zamanı",
+    )
+    last_change_at = models.DateTimeField(
+        blank=True, null=True,
+        verbose_name="Son Değişim Zamanı",
+        help_text="Değer en son ne zaman bir önceki okumadan farklıydı (deadband/COV için)",
+    )
+    update_count = models.BigIntegerField(
+        default=0, verbose_name="Güncelleme Sayısı",
+        help_text="Bu sensör için kaç okuma yapıldı (debug/health monitor)",
+    )
 
     class Meta:
         db_table = "sensor_latest"
-        verbose_name_plural = "Sensör Anlık Veriler"
+        verbose_name_plural = "Sensör Anlık Snapshot"
         ordering = ["sensor"]
 
     def __str__(self):
@@ -466,22 +503,124 @@ class SensorLatest(models.Model):
 
 
 class Reading(models.Model):
-    """Sensör ölçüm kaydı (tarihsel veri)."""
+    """Sensör ölçüm kaydı (tarihsel time-series).
+
+    Her başarılı poll için bir satır. Aggregate sorgular için
+    `ReadingFifteenMin` / `ReadingHourly` / `ReadingDaily` tablolarını
+    kullan; raw Reading'i taramaktan kaçın.
+    """
+
+    ORIGIN_CHOICES = (
+        ("polled", "Polled (cihazdan okundu)"),
+        ("manual", "Manual (operatör girişi)"),
+        ("calculated", "Calculated (hesaplanmış)"),
+        ("simulated", "Simulated (rastgele/test)"),
+        ("interpolated", "Interpolated (eksik veri dolduruldu)"),
+    )
 
     sensor = models.ForeignKey(
         Sensor, on_delete=models.CASCADE, related_name="readings", verbose_name="Sensör",
     )
     value = models.FloatField(blank=True, null=True, verbose_name="Değer")
     status = models.ForeignKey(StatusCode, on_delete=models.SET_NULL, blank=True, null=True)
+    quality = models.CharField(
+        max_length=15, choices=QUALITY_CHOICES, default="good",
+        verbose_name="Kalite",
+    )
+    origin = models.CharField(
+        max_length=15, choices=ORIGIN_CHOICES, default="polled",
+        verbose_name="Veri Kaynağı",
+    )
     time_iso = models.DateTimeField(blank=True, null=True, verbose_name="Kayıt Tarihi")
 
     class Meta:
         db_table = "reading"
         verbose_name_plural = "Okumalar"
         ordering = ["-time_iso"]
+        indexes = [
+            # Sensör başına son N okuma (HMI/grafik en sık sorgu)
+            models.Index(fields=["sensor", "-time_iso"], name="reading_sensor_time_idx"),
+            # Global zaman penceresi (tüm sensörlerin belirli aralıkta)
+            models.Index(fields=["time_iso", "sensor"], name="reading_time_sensor_idx"),
+        ]
 
     def __str__(self):
         return f"{self.sensor} @ {self.time_iso}"
+
+
+class ReadingAggregateBase(models.Model):
+    """Reading aggregation tabloları için ortak şema.
+
+    Her bucket (15dk / saat / gün) için sensör başına 1 satır:
+    avg/min/max/count + bad_count (kalite "bad" olan okuma adedi).
+    `aggregate_readings` management komutu doldurur.
+    """
+
+    sensor = models.ForeignKey(
+        Sensor, on_delete=models.CASCADE, related_name="+", verbose_name="Sensör",
+    )
+    bucket_start = models.DateTimeField(
+        db_index=True, verbose_name="Bucket Başlangıcı",
+        help_text="Aggregate periyodunun başlangıç zamanı (bucket'a yuvarlanmış)",
+    )
+    avg_value = models.FloatField(blank=True, null=True, verbose_name="Ortalama")
+    min_value = models.FloatField(blank=True, null=True, verbose_name="Min")
+    max_value = models.FloatField(blank=True, null=True, verbose_name="Max")
+    count = models.IntegerField(default=0, verbose_name="Toplam Okuma")
+    bad_count = models.IntegerField(default=0, verbose_name="Bad Kalite Sayısı")
+    computed_at = models.DateTimeField(auto_now=True, verbose_name="Hesaplanma Zamanı")
+
+    class Meta:
+        abstract = True
+        ordering = ["-bucket_start", "sensor"]
+
+
+class ReadingFifteenMin(ReadingAggregateBase):
+    """Sensör başına 15 dakikalık aggregate."""
+
+    class Meta(ReadingAggregateBase.Meta):
+        db_table = "reading_15m"
+        verbose_name_plural = "15 Dakikalık Aggregate"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sensor", "bucket_start"], name="reading_15m_unique_bucket",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["sensor", "-bucket_start"], name="r15m_sensor_bucket_idx"),
+        ]
+
+
+class ReadingHourly(ReadingAggregateBase):
+    """Sensör başına saatlik aggregate."""
+
+    class Meta(ReadingAggregateBase.Meta):
+        db_table = "reading_hourly"
+        verbose_name_plural = "Saatlik Aggregate"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sensor", "bucket_start"], name="reading_hourly_unique_bucket",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["sensor", "-bucket_start"], name="rhourly_sensor_bucket_idx"),
+        ]
+
+
+class ReadingDaily(ReadingAggregateBase):
+    """Sensör başına günlük aggregate."""
+
+    class Meta(ReadingAggregateBase.Meta):
+        db_table = "reading_daily"
+        verbose_name_plural = "Günlük Aggregate"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sensor", "bucket_start"], name="reading_daily_unique_bucket",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["sensor", "-bucket_start"], name="rdaily_sensor_bucket_idx"),
+        ]
 
 
 class PowerOff(models.Model):

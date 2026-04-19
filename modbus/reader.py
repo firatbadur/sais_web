@@ -1,10 +1,11 @@
 import logging
+import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from django.utils import timezone
 from pymodbus.client import ModbusSerialClient, ModbusTcpClient
 
-from api.models import Connection, Reading, Sensor, StatusCode
+from api.models import Connection, Reading, Sensor, SensorLatest, StatusCode
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,11 @@ class ModbusReader:
 
     def _read_sensor(self, client, sensor):
         """ Tek sensör okuma işlemi. """
+        # Simülasyon modu — gerçek cihaza dokunma, rastgele değer üret.
+        if sensor.is_simulated:
+            self._record_simulated(sensor)
+            return
+
         try:
             if sensor.function == 3:
                 rr = client.read_holding_registers(sensor.address, sensor.quantity, unit=sensor.slave_id)
@@ -113,23 +119,56 @@ class ModbusReader:
 
             if rr.isError():
                 logger.error(f"Slave {sensor.slave_id} hata: {rr}")
+                self._persist_reading(sensor, value=None, status_code=8, quality="bad", origin="polled")
                 return
 
             raw = rr.registers[0] if hasattr(rr, "registers") else rr.bits[0]
             value = raw * (sensor.scale or 1.0) + (sensor.offset or 0.0)
-            status = StatusCode.objects.filter(code=1).first()  # 1 = Veri Geçerli
-
-            Reading.objects.create(
-                sensor=sensor,
-                value=value,
-                status=status,
-                time_iso=timezone.now(),
-            )
-
+            self._persist_reading(sensor, value=value, status_code=1, quality="good", origin="polled")
             logger.info(f"Sensor {sensor.id} okundu: {value}")
 
         except Exception as e:
             logger.error(f"Sensor {sensor.id} okuma hatası: {e}")
+            self._persist_reading(sensor, value=None, status_code=8, quality="bad", origin="polled")
+
+    def _record_simulated(self, sensor):
+        """is_simulated=True sensörler için rastgele değer üret + kaydet."""
+        param = sensor.parameter
+        lo = (param.min_range if param and param.min_range is not None else 0.0)
+        hi = (param.max_range if param and param.max_range is not None else 100.0)
+        if hi <= lo:
+            hi = lo + 1.0
+        value = random.uniform(lo, hi)
+        self._persist_reading(sensor, value=value, status_code=1, quality="good", origin="simulated")
+
+    @staticmethod
+    def _persist_reading(sensor, *, value, status_code, quality, origin):
+        """Reading satırı yarat ve SensorLatest snapshot'ını upsert et."""
+        now = timezone.now()
+        status = StatusCode.objects.filter(code=status_code).first()
+
+        Reading.objects.create(
+            sensor=sensor,
+            value=value,
+            status=status,
+            quality=quality,
+            origin=origin,
+            time_iso=now,
+        )
+
+        # Snapshot upsert: değer değiştiyse last_change_at güncellensin.
+        latest = SensorLatest.objects.filter(sensor=sensor).first()
+        changed = (latest is None) or (latest.value != value)
+        defaults = {
+            "value": value,
+            "status": status,
+            "quality": quality,
+            "readtime": now,
+            "update_count": (latest.update_count + 1) if latest else 1,
+        }
+        if changed:
+            defaults["last_change_at"] = now
+        SensorLatest.objects.update_or_create(sensor=sensor, defaults=defaults)
 
     @staticmethod
     def _mark_connected(connection):
