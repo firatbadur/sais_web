@@ -54,7 +54,10 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework.authtoken",
     "dj_rest_auth",
+    "django_celery_beat",
+    "django_celery_results",
     "api",
+    "scada_io",
     "sais_domain",
 ]
 
@@ -216,6 +219,19 @@ API_LOG_SKIP_PATHS = env_list(
     "API_LOG_SKIP_PATHS",
     "/static/,/media/,/__debug__/,/admin/jsi18n/,/favicon.ico",
 )
+
+
+# Celery — periyodik polling ve Command executor
+# Broker (Redis DB 2) ve result backend (django-db) cache'den ayrı tutuluyor.
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/2")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "django-db")
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 300       # 5 dk hard limit (long bus polls için marj)
+CELERY_TASK_SOFT_TIME_LIMIT = 240
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1   # I/O-bound: bir task biten worker hemen yenisini alsın
+CELERY_TASK_ACKS_LATE = True            # task crash'inde başka worker tekrar denesin
 
 INTERNAL_IPS = ["127.0.0.1"]
 

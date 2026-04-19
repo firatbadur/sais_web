@@ -45,12 +45,13 @@ class ConnectionAdmin(admin.ModelAdmin):
     list_display = (
         "id", "station", "name", "protocol", "transport",
         "host", "port", "serial_port", "baudrate",
-        "is_enabled", "last_connected_at", "created_date",
+        "is_enabled", "last_polled_at", "last_connected_at", "created_date",
     )
     list_filter = ("station", "protocol", "transport", "is_enabled")
     search_fields = ("name", "description", "host", "serial_port")
     list_editable = ("is_enabled",)
-    readonly_fields = ("created_date", "last_connected_at", "last_error_at", "last_error_message")
+    readonly_fields = ("created_date", "last_polled_at", "last_connected_at",
+                       "last_error_at", "last_error_message")
     autocomplete_fields = ("station",)
     ordering = ("station", "name")
     fieldsets = (
@@ -78,7 +79,7 @@ class ConnectionAdmin(admin.ModelAdmin):
         }),
         ("Runtime Durumu", {
             "classes": ("collapse",),
-            "fields": ("last_connected_at", "last_error_at", "last_error_message"),
+            "fields": ("last_polled_at", "last_connected_at", "last_error_at", "last_error_message"),
         }),
         ("Meta", {
             "classes": ("collapse",),

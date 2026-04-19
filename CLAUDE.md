@@ -32,9 +32,12 @@ Mimari iki katmana ayrıldı:
 | Cache | Redis 7 (django-redis) |
 | Statik | whitenoise (brotli) |
 | Endüstriyel IO | pymodbus 3.x, pyserial |
+| Async kuyruk | Celery 5.x + Redis broker |
+| Periyodik task | django-celery-beat (DatabaseScheduler) |
+| Task sonuç backend | django-celery-results (django-db) |
 | Veri işleme | pandas, numpy |
 | Prod sunucu | gunicorn |
-| Container | Docker + docker-compose |
+| Container | Docker + docker-compose (web + celery_worker + celery_beat + db + redis) |
 
 ## Proje yapısı
 
@@ -61,7 +64,18 @@ sais_web/
 │   ├── management/commands/seed_sais_data.py  # Atıksu StationType + ministry_sample + Envisoft eşlemeleri
 │   └── migrations/
 ├── users/                 # CustomUser (rol tabanlı)
-├── modbus/                # pymodbus reader (TCP + serial, Connection.protocol bazlı)
+├── scada_io/              # SCADA reader/writer çekirdeği (Modbus + ASCII)
+│   ├── decoders.py        # decode_registers / encode_value (int16/uint32/float32/bool/bit/string)
+│   ├── persistence.py     # persist_reading — Reading insert + SensorLatest upsert (atomik)
+│   ├── readers/           # ProtocolReader: base / modbus_tcp / modbus_serial / ascii_custom + factory
+│   ├── writers/           # ProtocolWriter: base / modbus_tcp / modbus_serial / ascii_custom + factory
+│   ├── tasks.py           # Celery: dispatch_polls / poll_connection / dispatch_commands / execute_command / expire_commands
+│   ├── tests.py           # Decoder unit tests (12 data_type × byte/word combos)
+│   └── management/commands/
+│       ├── seed_periodic_tasks.py   # django_celery_beat PeriodicTask kayıtları
+│       ├── poll_once.py             # debug: tek bağlantıyı sync polla
+│       └── execute_command_now.py   # debug: tek komutu sync yürüt
+├── sais_web/celery.py     # Celery app instance — autodiscover_tasks
 ├── templates/             # error-404.html
 ├── static/                # images/logo + css
 ├── manage.py
@@ -92,60 +106,68 @@ copy .env.example .env
 python manage.py migrate
 python manage.py seed_initial_data    # çekirdek: Station, Parameter, StatusCode, jenerik RequestType
 python manage.py seed_sais_data       # SAIS: atıksu StationType, ministry_sample, EnvisoftChannel
+python manage.py seed_periodic_tasks  # 7 Celery beat periodic task (idempotent)
 python manage.py createsuperuser
 python manage.py runserver
+
+# Lokal Celery (worker + beat tek process — sadece dev)
+celery -A sais_web worker -B -l info
+# Windows'ta `-P solo` ekle: celery -A sais_web worker -B -l info -P solo
 ```
 
 ### Docker ile
 
 ```bash
 docker compose up -d --build
-docker compose exec web python manage.py migrate
+# web servisi otomatik migrate + seed_periodic_tasks yapar
 docker compose exec web python manage.py seed_initial_data
 docker compose exec web python manage.py seed_sais_data
 docker compose exec web python manage.py createsuperuser
 ```
 
-Servisler: `web` (Django), `db` (MSSQL Server 2022), `redis` (Redis 7).
+Servisler: `web` (Django), `celery_worker`, `celery_beat`, `db` (MSSQL Server 2022), `redis` (Redis 7).
 
 > **Yerel geliştirme ön koşulu:** Host Windows'da **Microsoft ODBC Driver 17 veya 18 for SQL Server** kurulu olmalı. Kontrol: `python -c "import pyodbc; print(pyodbc.drivers())"`. Kurulu değilse [Microsoft indirme sayfasından](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server) yüklenir.
 
 ## Önemli çalıştırma davranışları
 
-- **Yapılandırma:** Tüm ayarlar `.env` üzerinden okunur (`python-dotenv`). Sırları asla koda commitlemeyin. Ek env'ler: `API_LOG_ENABLED`, `API_LOG_RETENTION_DAYS` (default 90), `API_LOG_MAX_BODY_CHARS` (default 10000), `API_LOG_SKIP_PATHS`.
+- **Yapılandırma:** Tüm ayarlar `.env` üzerinden okunur (`python-dotenv`). Sırları asla koda commitlemeyin. Ek env'ler: `API_LOG_*`, `CELERY_BROKER_URL` (default `redis://localhost:6379/2`), `CELERY_RESULT_BACKEND` (default `django-db`).
 - **DEBUG=False** modunda HSTS, güvenli çerez ve Whitenoise manifest storage aktiftir.
 - **Seed komutları idempotenttir** — `seed_initial_data` ve `seed_sais_data` birden çok kez çalıştırmak güvenlidir (`get_or_create`).
-- **Modbus okuma:** `modbus.reader.ModbusReader` `Connection.protocol` bazlı dallanır (`modbus_tcp` paralel, `modbus_rtu`/`modbus_ascii` serial). Başarılı/başarısız bağlantı `Connection.last_connected_at` / `last_error_at` / `last_error_message`'a yazar. **Periyodik çalıştırma için scheduler yok** (Celery beat / APScheduler eklenebilir).
-- **Sensör decode** mevcut reader'da basit: register'dan ilk değeri okuyup `scale*raw + offset` uygular. `data_type` (int16/uint16/float32/float64/bool/bit), `bit_position`, `byte_order`/`word_order` doğru decode'u **henüz uygulanmadı** — TODO. Özel ASCII protokol reader'ı **yok** — TODO.
-- **Sensör simülasyonu**: `Sensor.is_simulated=True` ise reader cihaza dokunmaz, `parameter.min_range`/`max_range` arası rastgele değer üretir (`Reading.origin='simulated'`). Test/demo için.
-- **Reading vs SensorLatest:** `SensorLatest` per-sensor snapshot (HMI hızlı okuma); `Reading` time-series historian. Reader her okumada ikisini de günceller (Reading insert + SensorLatest upsert; değer değiştiyse `last_change_at` güncellenir).
-- **Aggregate tabloları:** `ReadingFifteenMin` / `ReadingHourly` / `ReadingDaily` — sensör başına bucket avg/min/max/count/bad_count. Dashboard'lar bunları sorgulasın, raw `Reading`'i taramasın. `aggregate_readings` komutuyla doldurulur.
-- **Komut tetikleme:** `StartSampleView` → `Command` tablosuna `idempotency_key='ministry_sample:{station}:{code}'` ile kayıt; `priority=10`, `expires_at=+5dk`. Pending Command'ları alıp Modbus/ASCII write yapan **executor worker yok** — TODO. State makinesi: pending → queued → executing → completed/failed/timeout/expired/cancelled.
+- **SCADA polling:** `scada_io.tasks.dispatch_polls` Celery beat ile her 5 sn'de tetiklenir; `Connection.last_polled_at + poll_interval_sec` due olan bağlantılar için `poll_connection.delay(conn_id)` enqueue eder. Worker reader'ı açar, **per-connection** mantığında o bus'taki tüm aktif sensörleri sırayla okur, kapatır. Reader factory `Connection.protocol` bazlı: `modbus_tcp` (pymodbus TCP), `modbus_rtu`/`modbus_ascii` (pymodbus serial, framer parametresiyle), `ascii_custom` (pyserial request-response).
+- **Sensör decode:** `scada_io.decoders.decode_registers` 12 data_type (int16/uint16/int32/uint32/int64/uint64/float32/float64/bool/bit/string/raw) × byte_order × word_order kombinasyonlarını destekler. `Sensor.scale * raw + Sensor.offset` mühendislik dönüşümü uygulanır. Bit-okuma: register içindeki `bit_position`. ASCII: `ascii_request` gönder + `ascii_response_regex` ile değer çıkar.
+- **Sensör simülasyonu:** `Sensor.is_simulated=True` ise reader cihaza dokunmaz; `scada_io.tasks._record_simulated` `parameter.min_range`/`max_range` arası rastgele değer üretir (`Reading.origin='simulated'`).
+- **Reading vs SensorLatest:** `SensorLatest` per-sensor snapshot (HMI hızlı okuma); `Reading` time-series historian. `scada_io.persistence.persist_reading` ikisini atomik olarak günceller (Reading insert + SensorLatest upsert; değer değiştiyse `last_change_at` güncellenir, `update_count` artırılır).
+- **Aggregate tabloları:** `ReadingFifteenMin` / `ReadingHourly` / `ReadingDaily` — sensör başına bucket avg/min/max/count/bad_count. Dashboard'lar bunları sorgulasın, raw `Reading`'i taramasın. `aggregate_readings` komutu (manuel) veya `api.tasks.aggregate_readings_*` Celery task'larıyla (otomatik) doldurulur.
+- **Komut tetikleme:** `StartSampleView` → `Command` tablosuna `idempotency_key='ministry_sample:{station}:{code}'` ile kayıt; `priority=10`, `expires_at=+5dk`. `scada_io.tasks.dispatch_commands` her 3 sn'de pending komutları atomik `pending → queued` yapıp `execute_command.delay(cmd_id)` enqueue eder. Worker writer açar, yazar, status `executing → completed/failed`. Başarısızsa `attempt_count < max_attempts` iken `pending`'e geri döner (otomatik retry); `expire_commands` her 60 sn'de süresi dolanları `expired` yapar.
 - **API request logging:** `api.middleware.ApiLoggingMiddleware` her gelen isteği `ApiLog(direction='in')` olarak kaydeder; süre ölçer, `request.user`/IP/user-agent yakalar, hassas header (`Authorization`/`Cookie`/`X-API-Key`) ve body key'leri (`password`/`secret`/`token`/`api_key`) maskeli. Skip path'ler: `/static/`, `/media/`, `/__debug__/`, `/admin/jsi18n/`, `/favicon.ico`. Giden HTTP çağrıları için `api.api_logging.log_outbound_call` decorator veya `record_outbound_call(...)` helper kullanılır.
 - **API log retention:** `python manage.py prune_api_logs` günlük cron ile çağrılmalı (`--days=N`, `--direction=in|out|all`, `--dry-run`).
 
-## Periyodik komutlar (cron / Task Scheduler)
+## Periyodik task'lar (Celery beat)
 
-Bu komutlar manuel çalıştırılabilir ama production'da zamanlayıcıya bağlanmalı. Linux cron örnekleri (Windows'ta Task Scheduler ile aynı komutlar):
+Tüm periyodik iş Celery beat'in DB'de tuttuğu `PeriodicTask` kayıtlarıyla yönetilir — `seed_periodic_tasks` komutu idempotent olarak yazar:
 
-```cron
-# Reading aggregation — her 5 dakikada 15dk bucket
-*/5 * * * *  cd /app && python manage.py aggregate_readings --bucket=15m  --hours=2
+| Task | Periyot | Amaç |
+|---|---|---|
+| `scada_io.tasks.dispatch_polls` | her 5 sn | Due olan Connection'lara `poll_connection` enqueue |
+| `scada_io.tasks.dispatch_commands` | her 3 sn | Pending Command'lara `execute_command` enqueue |
+| `scada_io.tasks.expire_commands` | her 60 sn | `expires_at` geçmiş komutları `expired` yap |
+| `api.tasks.aggregate_readings_15m` | `*/5 * * * *` | Son 2 saatlik 15dk bucket aggregate |
+| `api.tasks.aggregate_readings_hourly` | `5 * * * *` | Son 6 saatlik saatlik aggregate |
+| `api.tasks.aggregate_readings_daily` | `0 1 * * *` | Son 48 saatlik günlük aggregate |
+| `api.tasks.prune_api_logs_task` | `0 3 * * *` | `API_LOG_RETENTION_DAYS`'den eski kayıtları sil |
 
-# Saatlik bucket — her saatin 5. dakikasında, son 6 saat
-5   * * * *  cd /app && python manage.py aggregate_readings --bucket=hour --hours=6
+Yönetim:
+- Admin panelinden (`/admin/django_celery_beat/periodictask/`) bireysel task'lar enable/disable edilebilir veya periyot değiştirilebilir.
+- Yeni task eklenirse `seed_periodic_tasks` listesine ekle ve yeniden çalıştır (idempotent).
 
-# Günlük bucket — her gece 01:00, son 48 saat (gün başı kayması için biraz fazla)
-0   1 * * *  cd /app && python manage.py aggregate_readings --bucket=day  --hours=48
-
-# API log retention — her gece 03:00, settings.API_LOG_RETENTION_DAYS (default 90)
-0   3 * * *  cd /app && python manage.py prune_api_logs >> /var/log/sais_prune.log 2>&1
+Manuel çalıştırma (debug):
+```bash
+python manage.py poll_once <connection_id>             # tek bağlantıyı sync polla
+python manage.py execute_command_now <command_id>      # tek komutu sync yürüt
+python manage.py aggregate_readings --bucket=15m       # aggregate'i manuel tetikle
+python manage.py prune_api_logs --dry-run              # retention sayımı
 ```
-
-Notlar:
-- `aggregate_readings` idempotenttir; `--hours` aralığı bucket'ları yeniden hesaplar (delete + insert). Üst üste binen aralıklar zararsız.
-- `prune_api_logs` `--dry-run` ile önce sayım yapılabilir; `--direction=in|out` ile yön bazlı silme mümkün.
-- Modbus reader'ı tetikleyen periyodik komut **yok** (TODO — bkz. sınırlamalar). Eklenirse cron yerine kendi event loop'u tercih edilebilir.
 
 ## Kod düzenleme kuralları
 
@@ -174,11 +196,12 @@ python manage.py test
 
 ## Bilinen sınırlamalar / yol haritası
 
-- **Scheduler yok** — Modbus reader'ı tetikleyen ve eski `Command`'ları "expired" yapan zamanlayıcı (Celery beat / APScheduler) yok.
-- **Command executor yok** — `Command(status='pending')` satırlarını alıp `Sensor.connection.protocol`'e göre Modbus/ASCII write yapan worker eklenmedi. State machine ve idempotency_key altyapısı hazır, sadece executor eksik.
-- **Reader decode eksik** — `modbus/reader.py` register'ın ilk değerini alıyor; `Sensor.data_type` (int16/uint16/float32/...), `bit_position`, `byte_order`/`word_order` doğru decode'u yok. ASCII protokol reader'ı yok (`Connection.protocol='ascii_custom'` desteklenmiyor).
 - **`api/urls.py` boş** — tüm endpoint'ler `sais_web/urls.py` içinde tanımlı. Genişlerken `api/urls.py`'ye taşımak temiz olur.
 - **API view-app sınır ihlali** — `api/views.py` `sais_domain.SaisCabinet`'i import ediyor (stationId = Bakanlık SIM ID üzerinden filtrelediği için). Bu endpoint'ler (`GetData`, `GetStationInformation`, `StartSample` vb.) aslında SAIS-flavor; ileride `sais_domain`'e (veya yeni bir `sais_api` app'ine) taşımak `api/`'yı tamamen jenerik bırakır.
 - **`users` uygulamasının `views.py`'si minimal** — rol bazlı ön yüz akışı ileride eklenecek.
-- **`pymodbus 3.x` API drift** — reader hala `method=`/`unit=` parametrelerini kullanıyor; pymodbus 3.x'te `slave=` ve serial mode'da `framer=` kullanılmalı (TODO).
-- **Plaintext credentials** — `SaisCabinet.auth_secret` ve `Connection.auth_secret` yok artık (Connection'dan kaldırıldı, scope dışı tutuldu); SaisCabinet'teki şifre `django-fernet-fields` veya bir KMS ile şifrelenmeli (TODO).
+- **Plaintext credentials** — `SaisCabinet.auth_secret` plaintext; `django-fernet-fields` veya bir KMS ile şifrelenmeli (TODO).
+- **Per-sensor poll override yok** — `Sensor.poll_interval_sec` alanı modelde var ama dispatcher kullanmıyor; tüm sensörler bağlı oldukları connection'ın periyoduyla okunur. İleride hibrit dispatch eklenebilir.
+- **Deadband / change-of-value yok** — `SensorLatest.last_change_at` izlenir ama Reading insert her zaman yapılır; `Sensor.deadband` ile compression ileride.
+- **Celery worker monitoring** — Flower kurulu değil; isteğe göre `pip install flower` + `celery -A sais_web flower` ile eklenebilir.
+- **Windows'ta lokal Celery** — varsayılan prefork pool Windows'ta sorunlu; `celery -A sais_web worker -P solo -B -l info` veya `eventlet`/`gevent` pool tercih edilmeli.
+- **TLS Modbus** — pymodbus 3.x henüz native desteklemiyor; out of scope.

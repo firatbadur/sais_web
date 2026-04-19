@@ -46,6 +46,8 @@ services:
       MSSQL_HOST: db
       MSSQL_PORT: 1433
       REDIS_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: django-db
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,web}
       MSSQL_DRIVER: "ODBC Driver 18 for SQL Server"
     depends_on:
@@ -61,7 +63,52 @@ services:
     command: >
       sh -c "python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
+             python manage.py seed_periodic_tasks &&
              gunicorn sais_web.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile - --error-logfile -"
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MSSQL_HOST: db
+      MSSQL_PORT: 1433
+      REDIS_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: django-db
+      MSSQL_DRIVER: "ODBC Driver 18 for SQL Server"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    command: celery -A sais_web worker -l info --concurrency=4
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MSSQL_HOST: db
+      MSSQL_PORT: 1433
+      REDIS_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: django-db
+      MSSQL_DRIVER: "ODBC Driver 18 for SQL Server"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    command: celery -A sais_web beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
 
 volumes:
   mssql_data:

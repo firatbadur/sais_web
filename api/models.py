@@ -198,10 +198,16 @@ class Connection(models.Model):
         help_text="Reader bu bağlantıyı tarasın mı?",
     )
 
-    # ---- Runtime durumu (reader tarafından güncellenir) ----
+    # ---- Runtime durumu (reader/worker tarafından güncellenir) ----
+    last_polled_at = models.DateTimeField(
+        blank=True, null=True, db_index=True,
+        verbose_name="Son Polling Zamanı",
+        help_text="Bu bağlantı için son polling girişiminin zamanı (başarı/başarısızlık fark etmez). dispatch_polls due-check için kullanır.",
+    )
     last_connected_at = models.DateTimeField(
         blank=True, null=True,
         verbose_name="Son Bağlantı Zamanı",
+        help_text="Son başarılı bağlantı zamanı.",
     )
     last_error_at = models.DateTimeField(
         blank=True, null=True,
