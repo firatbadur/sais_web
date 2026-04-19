@@ -117,9 +117,35 @@ Servisler: `web` (Django), `db` (MSSQL Server 2022), `redis` (Redis 7).
 - **Seed komutları idempotenttir** — `seed_initial_data` ve `seed_sais_data` birden çok kez çalıştırmak güvenlidir (`get_or_create`).
 - **Modbus okuma:** `modbus.reader.ModbusReader` `Connection.protocol` bazlı dallanır (`modbus_tcp` paralel, `modbus_rtu`/`modbus_ascii` serial). Başarılı/başarısız bağlantı `Connection.last_connected_at` / `last_error_at` / `last_error_message`'a yazar. **Periyodik çalıştırma için scheduler yok** (Celery beat / APScheduler eklenebilir).
 - **Sensör decode** mevcut reader'da basit: register'dan ilk değeri okuyup `scale*raw + offset` uygular. `data_type` (int16/uint16/float32/float64/bool/bit), `bit_position`, `byte_order`/`word_order` doğru decode'u **henüz uygulanmadı** — TODO. Özel ASCII protokol reader'ı **yok** — TODO.
+- **Sensör simülasyonu**: `Sensor.is_simulated=True` ise reader cihaza dokunmaz, `parameter.min_range`/`max_range` arası rastgele değer üretir (`Reading.origin='simulated'`). Test/demo için.
+- **Reading vs SensorLatest:** `SensorLatest` per-sensor snapshot (HMI hızlı okuma); `Reading` time-series historian. Reader her okumada ikisini de günceller (Reading insert + SensorLatest upsert; değer değiştiyse `last_change_at` güncellenir).
+- **Aggregate tabloları:** `ReadingFifteenMin` / `ReadingHourly` / `ReadingDaily` — sensör başına bucket avg/min/max/count/bad_count. Dashboard'lar bunları sorgulasın, raw `Reading`'i taramasın. `aggregate_readings` komutuyla doldurulur.
 - **Komut tetikleme:** `StartSampleView` → `Command` tablosuna `idempotency_key='ministry_sample:{station}:{code}'` ile kayıt; `priority=10`, `expires_at=+5dk`. Pending Command'ları alıp Modbus/ASCII write yapan **executor worker yok** — TODO. State makinesi: pending → queued → executing → completed/failed/timeout/expired/cancelled.
 - **API request logging:** `api.middleware.ApiLoggingMiddleware` her gelen isteği `ApiLog(direction='in')` olarak kaydeder; süre ölçer, `request.user`/IP/user-agent yakalar, hassas header (`Authorization`/`Cookie`/`X-API-Key`) ve body key'leri (`password`/`secret`/`token`/`api_key`) maskeli. Skip path'ler: `/static/`, `/media/`, `/__debug__/`, `/admin/jsi18n/`, `/favicon.ico`. Giden HTTP çağrıları için `api.api_logging.log_outbound_call` decorator veya `record_outbound_call(...)` helper kullanılır.
 - **API log retention:** `python manage.py prune_api_logs` günlük cron ile çağrılmalı (`--days=N`, `--direction=in|out|all`, `--dry-run`).
+
+## Periyodik komutlar (cron / Task Scheduler)
+
+Bu komutlar manuel çalıştırılabilir ama production'da zamanlayıcıya bağlanmalı. Linux cron örnekleri (Windows'ta Task Scheduler ile aynı komutlar):
+
+```cron
+# Reading aggregation — her 5 dakikada 15dk bucket
+*/5 * * * *  cd /app && python manage.py aggregate_readings --bucket=15m  --hours=2
+
+# Saatlik bucket — her saatin 5. dakikasında, son 6 saat
+5   * * * *  cd /app && python manage.py aggregate_readings --bucket=hour --hours=6
+
+# Günlük bucket — her gece 01:00, son 48 saat (gün başı kayması için biraz fazla)
+0   1 * * *  cd /app && python manage.py aggregate_readings --bucket=day  --hours=48
+
+# API log retention — her gece 03:00, settings.API_LOG_RETENTION_DAYS (default 90)
+0   3 * * *  cd /app && python manage.py prune_api_logs >> /var/log/sais_prune.log 2>&1
+```
+
+Notlar:
+- `aggregate_readings` idempotenttir; `--hours` aralığı bucket'ları yeniden hesaplar (delete + insert). Üst üste binen aralıklar zararsız.
+- `prune_api_logs` `--dry-run` ile önce sayım yapılabilir; `--direction=in|out` ile yön bazlı silme mümkün.
+- Modbus reader'ı tetikleyen periyodik komut **yok** (TODO — bkz. sınırlamalar). Eklenirse cron yerine kendi event loop'u tercih edilebilir.
 
 ## Kod düzenleme kuralları
 
@@ -156,4 +182,3 @@ python manage.py test
 - **`users` uygulamasının `views.py`'si minimal** — rol bazlı ön yüz akışı ileride eklenecek.
 - **`pymodbus 3.x` API drift** — reader hala `method=`/`unit=` parametrelerini kullanıyor; pymodbus 3.x'te `slave=` ve serial mode'da `framer=` kullanılmalı (TODO).
 - **Plaintext credentials** — `SaisCabinet.auth_secret` ve `Connection.auth_secret` yok artık (Connection'dan kaldırıldı, scope dışı tutuldu); SaisCabinet'teki şifre `django-fernet-fields` veya bir KMS ile şifrelenmeli (TODO).
-- **API log retention cron** — `prune_api_logs` günlük tetiklenmeli. Linux örnek: `0 3 * * * cd /app && python manage.py prune_api_logs`. Windows'ta Task Scheduler ile aynı komut.
