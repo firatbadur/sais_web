@@ -144,7 +144,7 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = os.getenv("DJANGO_LANGUAGE_CODE", "tr")
 TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "Europe/Istanbul")
 USE_I18N = True
-USE_TZ = env_bool("DJANGO_USE_TZ", default=False)
+USE_TZ = env_bool("DJANGO_USE_TZ", default=True)
 
 
 # Static & media files
@@ -232,14 +232,9 @@ CELERY_TASK_SOFT_TIME_LIMIT = 240
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1   # I/O-bound: bir task biten worker hemen yenisini alsın
 CELERY_TASK_ACKS_LATE = True            # task crash'inde başka worker tekrar denesin
-
-# USE_TZ=False olduğunda django-celery-beat ve Celery'nin naive datetime
-# kullanması zorunlu — yoksa beat scheduler "due" hesabını yapamaz, hiç task
-# tetiklenmez. ENABLE_UTC=False Celery'nin internal UTC çevrimini kapatır;
-# DJANGO_CELERY_BEAT_TZ_AWARE=False scheduler'ın naive datetime kullanmasını
-# söyler.
-CELERY_ENABLE_UTC = False
-DJANGO_CELERY_BEAT_TZ_AWARE = False
+# Celery + django-celery-beat USE_TZ=True ile timezone-aware datetime bekler.
+# USE_TZ=False denenirse beat is_due() naive vs aware tzinfo karşılaştırmasında
+# sessizce False döner ve hiç task tetiklenmez (gözlemlenmiş bug).
 
 INTERNAL_IPS = ["127.0.0.1"]
 
