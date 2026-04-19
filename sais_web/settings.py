@@ -293,7 +293,6 @@ JAZZMIN_SETTINGS = {
         "api",
         "api.Station",
         "api.StationType",
-        "api.RemoteDevice",
         "api.Connection",
         "api.Parameter",
         "api.Sensor",
@@ -308,6 +307,7 @@ JAZZMIN_SETTINGS = {
         "api.SystemLog",
         "api.ApiLog",
         "sais_domain",
+        "sais_domain.SaisCabinet",
         "sais_domain.EnvisoftChannel",
         "users",
         "users.CustomUser",
@@ -331,7 +331,6 @@ JAZZMIN_SETTINGS = {
         "api": "fas fa-industry",
         "api.Station": "fas fa-building",
         "api.StationType": "fas fa-tag",
-        "api.RemoteDevice": "fas fa-sim-card",
         "api.Connection": "fas fa-network-wired",
 
         # api - parametre / sensör
@@ -354,6 +353,7 @@ JAZZMIN_SETTINGS = {
 
         # sais_domain
         "sais_domain": "fas fa-water",
+        "sais_domain.SaisCabinet": "fas fa-sim-card",
         "sais_domain.EnvisoftChannel": "fas fa-link",
 
         # admin

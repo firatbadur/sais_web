@@ -88,48 +88,6 @@ class Station(models.Model):
         return self.name
 
 
-class RemoteDevice(models.Model):
-    """Uzak veri toplayıcı (SIM / datalogger / gateway) kimlik bilgileri."""
-
-    station = models.ForeignKey(
-        Station, on_delete=models.CASCADE, related_name="remote_devices",
-    )
-    device_id = models.CharField(
-        max_length=100, verbose_name="Cihaz ID", help_text="Uzak cihazın benzersiz kimliği (SIM ID / datalogger seri)",
-    )
-    code = models.CharField(
-        max_length=50, verbose_name="İstasyon Kodu", help_text="İstasyon Kodu",
-    )
-    name = models.CharField(
-        max_length=200, verbose_name="Cihaz Adı", help_text="Cihaz Adı",
-    )
-    data_period = models.IntegerField(
-        blank=True, null=True, default=1,
-        verbose_name="Veri Periyodu (dk)", help_text="Veri Periyodu (dk)",
-    )
-    auth_username = models.CharField(
-        max_length=50, verbose_name="Kullanıcı Adı", help_text="Uzak cihaza erişim kullanıcı adı",
-    )
-    # TODO: auth_secret şu an plaintext tutuluyor; ileride django-fernet-fields
-    # veya bir KMS katmanı ile şifrelenmeli. Şimdilik API geriye uyumluluk için
-    # okunabilir kalıyor.
-    auth_secret = models.CharField(
-        max_length=255, verbose_name="Erişim Şifresi", help_text="Uzak cihaza erişim şifresi",
-    )
-    user = models.ForeignKey(
-        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "remote_device"
-        verbose_name_plural = "Uzak Cihazlar"
-        ordering = ["created_at"]
-
-    def __str__(self):
-        return f"{self.station} / {self.device_id}"
-
-
 class Connection(models.Model):
     """SCADA haberleşme bağlantısı (Modbus + ASCII).
 

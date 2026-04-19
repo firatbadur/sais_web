@@ -1,10 +1,11 @@
 from rest_framework import serializers
 
+from sais_domain.models import SaisCabinet
+
 from .models import (
     Calibration,
     PowerOff,
     Reading,
-    RemoteDevice,
     Sensor,
     SystemLog,
 )
@@ -72,7 +73,7 @@ class StationInfoSerializer(serializers.ModelSerializer):
     Software = serializers.SerializerMethodField()
 
     class Meta:
-        model = RemoteDevice
+        model = SaisCabinet
         fields = [
             "StationId", "Code", "Name", "DataPeriodMinute",
             "LastDataDate", "ConnectionDomainAddress", "ConnectionPort",
@@ -130,7 +131,7 @@ class CalibrationResultSerializer(serializers.ModelSerializer):
         station_id = obj.sensor.parameter.station_id
         if not station_id:
             return None
-        device = RemoteDevice.objects.filter(station_id=station_id).first()
+        device = SaisCabinet.objects.filter(station_id=station_id).first()
         return device.device_id if device else None
 
     # ---- ZERO alanları ----
@@ -189,7 +190,7 @@ class PoweroffResultSerializer(serializers.ModelSerializer):
         fields = ["StationId", "StartDate", "EndDate"]
 
     def get_StationId(self, obj):
-        device = obj.station.remote_devices.first() if obj.station_id else None
+        device = obj.station.sais_cabinets.first() if obj.station_id else None
         return device.device_id if device else None
 
 

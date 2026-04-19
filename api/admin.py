@@ -9,7 +9,6 @@ from .models import (
     Parameter,
     PowerOff,
     Reading,
-    RemoteDevice,
     RequestType,
     Sensor,
     SensorLatest,
@@ -35,16 +34,6 @@ class StationAdmin(admin.ModelAdmin):
     list_editable = ("active",)
     readonly_fields = ("created_at",)
     autocomplete_fields = ("station_type", "sample_request_sensor", "user")
-    ordering = ("-created_at",)
-
-
-@admin.register(RemoteDevice)
-class RemoteDeviceAdmin(admin.ModelAdmin):
-    list_display = ("id", "station", "device_id", "code", "name", "data_period", "auth_username", "created_at")
-    list_filter = ("station", "data_period")
-    search_fields = ("device_id", "code", "name", "auth_username", "station__name")
-    readonly_fields = ("created_at",)
-    autocomplete_fields = ("station",)
     ordering = ("-created_at",)
 
 

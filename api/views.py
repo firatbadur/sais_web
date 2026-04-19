@@ -8,13 +8,14 @@ from rest_framework.authentication import BasicAuthentication
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from sais_domain.models import SaisCabinet
+
 from .helpers import df_to_json_records
 from .models import (
     Calibration,
     OutputRequest,
     PowerOff,
     Reading,
-    RemoteDevice,
     RequestType,
     Sensor,
     SystemLog,
@@ -91,7 +92,7 @@ class GetReadsDataView(generics.ListAPIView):
             qs = (
                 Reading.objects
                 .filter(
-                    sensor__parameter__station__remote_devices__device_id=station_id,
+                    sensor__parameter__station__sais_cabinets__device_id=station_id,
                     time_iso__range=[startDate, endDate],
                 )
                 .select_related("sensor", "sensor__parameter", "status")
@@ -161,7 +162,7 @@ class GetLatestReadsView(generics.ListAPIView):
 
             last_record = (
                 Reading.objects
-                .filter(sensor__parameter__station__remote_devices__device_id=station_id)
+                .filter(sensor__parameter__station__sais_cabinets__device_id=station_id)
                 .order_by("-time_iso")
                 .first()
             )
@@ -173,7 +174,7 @@ class GetLatestReadsView(generics.ListAPIView):
             qs = (
                 Reading.objects
                 .filter(
-                    sensor__parameter__station__remote_devices__device_id=station_id,
+                    sensor__parameter__station__sais_cabinets__device_id=station_id,
                     time_iso=last_time,
                 )
                 .select_related("sensor", "sensor__parameter", "status")
@@ -231,7 +232,7 @@ class GetLastReadTimeView(generics.ListAPIView):
 
             last_record = (
                 Reading.objects
-                .filter(sensor__parameter__station__remote_devices__device_id=station_id)
+                .filter(sensor__parameter__station__sais_cabinets__device_id=station_id)
                 .order_by("-time_iso")
                 .first()
             )
@@ -271,7 +272,7 @@ class GetChannelInfoView(generics.ListAPIView):
                 })
 
             qs = self.get_queryset().filter(
-                parameter__station__remote_devices__device_id=station_id,
+                parameter__station__sais_cabinets__device_id=station_id,
             )
 
             if not qs.exists():
@@ -296,7 +297,7 @@ class GetStationInformationView(generics.ListAPIView):
     serializer_class = StationInfoSerializer
 
     def get_queryset(self):
-        return RemoteDevice.objects.select_related("station").all()
+        return SaisCabinet.objects.select_related("station").all()
 
     def list(self, request, *args, **kwargs):
         try:
@@ -335,7 +336,7 @@ class GetCalibrationView(generics.ListAPIView):
                     "objects": None,
                 })
 
-            device = RemoteDevice.objects.filter(device_id=station_id).select_related("station").first()
+            device = SaisCabinet.objects.filter(device_id=station_id).select_related("station").first()
             if not device:
                 return Response({
                     "result": False,
@@ -388,7 +389,7 @@ class GetPoweroffView(generics.ListAPIView):
                     "objects": None,
                 })
 
-            device = RemoteDevice.objects.filter(device_id=station_id).select_related("station").first()
+            device = SaisCabinet.objects.filter(device_id=station_id).select_related("station").first()
             if not device:
                 return Response({
                     "result": False,
@@ -438,7 +439,7 @@ class GetLogView(generics.ListAPIView):
                     "objects": None,
                 })
 
-            device = RemoteDevice.objects.filter(device_id=station_id).select_related("station").first()
+            device = SaisCabinet.objects.filter(device_id=station_id).select_related("station").first()
             if not device:
                 return Response({
                     "result": False,
@@ -482,7 +483,7 @@ class StartSampleView(APIView):
                     "objects": None,
                 })
 
-            device = RemoteDevice.objects.filter(device_id=station_id).select_related("station").first()
+            device = SaisCabinet.objects.filter(device_id=station_id).select_related("station").first()
             if not device:
                 return Response({
                     "result": False,
