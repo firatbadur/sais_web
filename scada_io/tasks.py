@@ -117,13 +117,24 @@ def poll_connection(self, conn_id: int):
     )
 
     try:
+        # Bir cycle içinde son sensör hatasını Connection'a işaretle — debug için
+        last_sensor_error = ""
+        any_success = False
+
         for sensor in real_sensors:
             try:
                 result = reader.read(sensor)
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Sensor %s okuma hatası", sensor.id)
+                last_sensor_error = f"sensor {sensor.id}: {type(exc).__name__}: {exc}"
                 persist_reading(sensor, value=None, quality="bad", origin="polled", status_code=8)
                 continue
+
+            if result.ok:
+                any_success = True
+            else:
+                # result.error zaten reader'dan geliyor; connection seviyesine taşıyalım
+                last_sensor_error = f"sensor {sensor.id}: {result.error or 'unknown read error'}"
 
             persist_reading(
                 sensor,
@@ -131,6 +142,13 @@ def poll_connection(self, conn_id: int):
                 quality=result.quality,
                 origin="polled",
                 status_code=1 if result.ok else 8,
+            )
+
+        # Hiç başarılı okuma yoksa Connection.last_error'a sebebi yaz
+        if not any_success and last_sensor_error:
+            Connection.objects.filter(pk=conn_id).update(
+                last_error_at=timezone.now(),
+                last_error_message=last_sensor_error[:500],
             )
     finally:
         try:

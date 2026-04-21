@@ -83,20 +83,20 @@ def _modbus_write(client, sensor, value: Any, value_type: str) -> WriteResult:
 
     # Coil yazımı (function=5 → single, function=15 → multiple)
     if value_type == "bool" and data_type == "bool":
-        rr = client.write_coil(address=addr, value=bool(value), slave=slave)
+        rr = client.write_coil(address=addr, value=bool(value), device_id=slave)
         if rr is None or (hasattr(rr, "isError") and rr.isError()):
             return WriteResult(success=False, error=f"write_coil hata: {rr}")
         return WriteResult(success=True, response=str(rr))
 
     # Bit-in-register: önce mevcut register'ı oku, ilgili bit'i değiştir, geri yaz
     if data_type == "bit":
-        rr = client.read_holding_registers(address=addr, count=1, slave=slave)
+        rr = client.read_holding_registers(address=addr, count=1, device_id=slave)
         if rr is None or (hasattr(rr, "isError") and rr.isError()):
             return WriteResult(success=False, error=f"bit-write için read_holding hata: {rr}")
         current = rr.registers[0]
         regs = encode_value(value, "bit", byte_order=byte_order, word_order=word_order,
                             bit_position=sensor.bit_position, current_register=current)
-        wr = client.write_register(address=addr, value=regs[0], slave=slave)
+        wr = client.write_register(address=addr, value=regs[0], device_id=slave)
         if wr is None or (hasattr(wr, "isError") and wr.isError()):
             return WriteResult(success=False, error=f"write_register hata: {wr}")
         return WriteResult(success=True, response=str(wr))
@@ -117,9 +117,9 @@ def _modbus_write(client, sensor, value: Any, value_type: str) -> WriteResult:
         encoded = encode_value(value, data_type, byte_order=byte_order, word_order=word_order)
 
     if len(encoded) == 1:
-        wr = client.write_register(address=addr, value=encoded[0], slave=slave)
+        wr = client.write_register(address=addr, value=encoded[0], device_id=slave)
     else:
-        wr = client.write_registers(address=addr, values=encoded, slave=slave)
+        wr = client.write_registers(address=addr, values=encoded, device_id=slave)
 
     if wr is None or (hasattr(wr, "isError") and wr.isError()):
         return WriteResult(success=False, error=f"Modbus write hata: {wr}")

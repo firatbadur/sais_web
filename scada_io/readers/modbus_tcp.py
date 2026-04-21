@@ -1,9 +1,12 @@
-"""Modbus TCP reader (pymodbus 3.x — slave= API).
+"""Modbus TCP reader (pymodbus 3.11+ — device_id= API).
 
 Protokol varyantları aynı sınıfta:
   - modbus_tcp           → MBAP framer (default, pymodbus auto-select)
   - modbus_rtu_over_tcp  → RTU framer TCP socket üzerinde (gateway transparent)
   - modbus_ascii_over_tcp → ASCII framer TCP socket üzerinde
+
+Not: pymodbus 3.13+ `slave=` parametresini `device_id=` olarak yeniden
+adlandırdı — reader/writer helper'ları bu yeni isimlendirmeyi kullanır.
 """
 from __future__ import annotations
 
@@ -93,13 +96,13 @@ def _modbus_read(client, sensor) -> ReadResult:
     slave = sensor.slave_id or 1
 
     if fn == 3:
-        rr = client.read_holding_registers(address=addr, count=qty, slave=slave)
+        rr = client.read_holding_registers(address=addr, count=qty, device_id=slave)
     elif fn == 4:
-        rr = client.read_input_registers(address=addr, count=qty, slave=slave)
+        rr = client.read_input_registers(address=addr, count=qty, device_id=slave)
     elif fn == 2:
-        rr = client.read_discrete_inputs(address=addr, count=qty, slave=slave)
+        rr = client.read_discrete_inputs(address=addr, count=qty, device_id=slave)
     elif fn == 1:
-        rr = client.read_coils(address=addr, count=qty, slave=slave)
+        rr = client.read_coils(address=addr, count=qty, device_id=slave)
     else:
         return ReadResult(quality="bad", error=f"Desteklenmeyen function code: {fn}")
 
