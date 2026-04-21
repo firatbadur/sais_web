@@ -45,6 +45,7 @@ class ConnectionAdmin(admin.ModelAdmin):
     list_display = (
         "id", "station", "name", "protocol", "transport",
         "host", "port", "serial_port", "baudrate",
+        "poll_interval_sec", "save_interval_sec",
         "is_enabled", "last_polled_at", "last_connected_at", "created_date",
     )
     list_filter = ("station", "protocol", "transport", "is_enabled")
@@ -71,9 +72,10 @@ class ConnectionAdmin(admin.ModelAdmin):
                 "xonxoff", "rtscts", "dsrdtr",
             ),
         }),
-        ("Polling / Güvenilirlik", {
+        ("Polling / Kayıt / Güvenilirlik", {
             "fields": (
-                "poll_interval_sec", "timeout_ms", "retry_count",
+                "poll_interval_sec", "save_interval_sec",
+                "timeout_ms", "retry_count",
                 "auto_reconnect", "reconnect_delay_sec",
             ),
         }),
@@ -112,7 +114,7 @@ class ParameterAdmin(admin.ModelAdmin):
 class SensorAdmin(admin.ModelAdmin):
     list_display = (
         "id", "parameter", "connection", "sensor_type", "brand", "model",
-        "slave_id", "address", "function", "data_type", "scale", "offset",
+        "slave_id", "address", "function", "data_type", "scale", "offset", "decimals",
         "is_active", "is_simulated", "report_status",
     )
     list_filter = ("sensor_type", "signal_type", "function", "data_type", "is_active",
@@ -135,7 +137,7 @@ class SensorAdmin(admin.ModelAdmin):
             ),
         }),
         ("Veri Tipi & Ölçekleme", {
-            "fields": ("data_type", "scale", "offset", "digital_inverse"),
+            "fields": ("data_type", "scale", "offset", "decimals", "digital_inverse"),
         }),
         ("ASCII Protokolü", {
             "classes": ("collapse",),
@@ -154,10 +156,10 @@ class SensorAdmin(admin.ModelAdmin):
 @admin.register(SensorLatest)
 class SensorLatestAdmin(admin.ModelAdmin):
     list_display = ("id", "sensor", "value", "status", "quality", "readtime",
-                    "last_change_at", "update_count")
+                    "last_change_at", "last_saved_at", "update_count")
     list_filter = ("status", "quality")
     search_fields = ("sensor__parameter__parameter_name",)
-    readonly_fields = ("readtime", "last_change_at", "update_count")
+    readonly_fields = ("readtime", "last_change_at", "last_saved_at", "update_count")
     autocomplete_fields = ("sensor",)
 
 

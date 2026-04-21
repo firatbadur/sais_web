@@ -178,8 +178,17 @@ class Connection(models.Model):
 
     # ---- Polling / güvenilirlik ----
     poll_interval_sec = models.IntegerField(
-        default=10, verbose_name="Varsayılan Okuma Periyodu (sn)",
-        help_text="Bu bağlantıdaki sensörlerin varsayılan okuma aralığı",
+        default=10, verbose_name="Okuma Periyodu (sn)",
+        help_text="Cihaza ne sıklıkta bağlanıp okuma yapılacak. "
+                  "Snapshot (SensorLatest) her okumada güncellenir.",
+    )
+    save_interval_sec = models.IntegerField(
+        blank=True, null=True,
+        verbose_name="Kayıt Periyodu (sn)",
+        help_text="Reading tablosuna ne sıklıkta yazılacak. "
+                  "Null = her okumada Reading insert. "
+                  "Örn: poll=5sn, save=60sn ise anlık değer 5 sn'de bir güncellenir "
+                  "ama tarihsel veri dakikada 1 yazılır (DB tasarrufu).",
     )
     timeout_ms = models.IntegerField(
         default=2000, verbose_name="Bağlantı Timeout (ms)",
@@ -393,6 +402,12 @@ class Sensor(models.Model):
         default=0.0, verbose_name="Ofset (offset)",
         help_text="engineering_value = raw * scale + offset",
     )
+    decimals = models.IntegerField(
+        blank=True, null=True,
+        verbose_name="Ondalık Hassasiyet",
+        help_text="Kayıt öncesi kaç basamağa yuvarlanacak. None = yuvarlama yok. "
+                  "Örn: 2 → 12.3456 → 12.35. Sadece sayısal (float/int) değerlere uygulanır.",
+    )
 
     # ---- Özel ASCII protokolü (NMEA, custom request-response vb.) ----
     ascii_code = models.CharField(
@@ -495,6 +510,12 @@ class SensorLatest(models.Model):
         blank=True, null=True,
         verbose_name="Son Değişim Zamanı",
         help_text="Değer en son ne zaman bir önceki okumadan farklıydı (deadband/COV için)",
+    )
+    last_saved_at = models.DateTimeField(
+        blank=True, null=True,
+        verbose_name="Son Reading Kayıt Zamanı",
+        help_text="Reading tablosuna son insert zamanı. "
+                  "Connection.save_interval_sec için kullanılır.",
     )
     update_count = models.BigIntegerField(
         default=0, verbose_name="Güncelleme Sayısı",
