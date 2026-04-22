@@ -2,33 +2,107 @@
 <!DOCTYPE html>
 <html lang="{{ LANGUAGE_CODE|default:'tr' }}">
 <head>
+    <base href="/">
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no">
-    <title>{% block title %}{% trans "SAIS Dashboard" %}{% endblock %}</title>
-    <meta name="description" content="SAIS Web SCADA">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>{% block title %}{% trans "SAIS Dashboard" %}{% endblock %} · SAIS</title>
+    <meta name="description" content="SAIS Web SCADA — Dashboard">
+
+    <link rel="shortcut icon" href="{% static 'dashboard/media/logos/default-small.svg' %}">
+
+    <!-- Fonts -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700">
+
+    <!-- Vendor stylesheets (page-spesifik; şimdilik hepsi dahil) -->
+    <link href="{% static 'dashboard/plugins/custom/datatables/datatables.bundle.css' %}" rel="stylesheet">
+
+    <!-- Global stylesheets -->
+    <link href="{% static 'dashboard/plugins/global/plugins.bundle.css' %}" rel="stylesheet">
+    <link href="{% static 'dashboard/css/style.bundle.css' %}" rel="stylesheet">
+
     {% block extra_head %}{% endblock %}
 </head>
-<body>
-    <!-- Metronic layout Commit B'de entegre edilecek. Şu an iskelet. -->
-    {% if user.is_authenticated %}
-        <nav style="border-bottom:1px solid #ddd; padding:8px 16px;">
-            <a href="{% url 'dashboard:home' %}">{% trans "Anasayfa" %}</a> |
-            <span style="float:right;">
-                {{ user.username }}
-                <a href="{% url 'dashboard:logout' %}">{% trans "Çıkış" %}</a>
-            </span>
-        </nav>
-    {% endif %}
-    <main style="padding:16px;">
-        {% if messages %}
-            <ul class="messages">
-                {% for message in messages %}
-                    <li class="{{ message.tags }}">{{ message }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-        {% block content %}{% endblock %}
-    </main>
+<body id="kt_app_body"
+      data-kt-app-layout="light-sidebar"
+      data-kt-app-header-fixed="true"
+      data-kt-app-sidebar-enabled="true"
+      data-kt-app-sidebar-fixed="true"
+      data-kt-app-sidebar-hoverable="true"
+      data-kt-app-sidebar-push-header="true"
+      data-kt-app-sidebar-push-toolbar="true"
+      data-kt-app-sidebar-push-footer="true"
+      data-kt-app-toolbar-enabled="true"
+      class="app-default">
+
+    <!-- Theme mode setup -->
+    <script>
+    var defaultThemeMode = "light";
+    var themeMode;
+    if (document.documentElement) {
+      if (document.documentElement.hasAttribute("data-bs-theme-mode")) {
+        themeMode = document.documentElement.getAttribute("data-bs-theme-mode");
+      } else {
+        themeMode = localStorage.getItem("data-bs-theme") || defaultThemeMode;
+      }
+      if (themeMode === "system") {
+        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      document.documentElement.setAttribute("data-bs-theme", themeMode);
+    }
+    </script>
+
+    {% block body_main %}
+    <div class="d-flex flex-column flex-root app-root" id="kt_app_root">
+        <div class="app-page flex-column flex-column-fluid" id="kt_app_page">
+
+            {% include "dashboard/partials/header.html" %}
+
+            <div class="app-wrapper flex-column flex-row-fluid" id="kt_app_wrapper">
+                {% include "dashboard/partials/sidebar.html" %}
+
+                <div class="app-main flex-column flex-row-fluid" id="kt_app_main">
+                    <div class="d-flex flex-column flex-column-fluid">
+                        <!-- Toolbar -->
+                        <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
+                            <div id="kt_app_toolbar_container" class="app-container container-xxl d-flex flex-stack">
+                                <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
+                                    <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">
+                                        {% block page_title %}{% trans "Dashboard" %}{% endblock %}
+                                    </h1>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Content -->
+                        <div id="kt_app_content" class="app-content flex-column-fluid">
+                            <div id="kt_app_content_container" class="app-container container-xxl">
+                                {% if messages %}
+                                    {% for message in messages %}
+                                        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+                                            {{ message }}
+                                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                        </div>
+                                    {% endfor %}
+                                {% endif %}
+
+                                {% block content %}{% endblock %}
+                            </div>
+                        </div>
+                    </div>
+
+                    {% include "dashboard/partials/footer.html" %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endblock %}
+
+    <!-- Global JS -->
+    <script>var hostUrl = "/static/dashboard/";</script>
+    <script src="{% static 'dashboard/plugins/global/plugins.bundle.js' %}"></script>
+    <script src="{% static 'dashboard/js/scripts.bundle.js' %}"></script>
+    <script src="{% static 'dashboard/plugins/custom/datatables/datatables.bundle.js' %}"></script>
+
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>

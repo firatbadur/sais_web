@@ -1,0 +1,55 @@
+{% load static i18n dashboard_extras %}
+<div id="kt_app_sidebar" class="app-sidebar flex-column" data-kt-drawer="true" data-kt-drawer-name="app-sidebar" data-kt-drawer-activate="{default: true, lg: false}" data-kt-drawer-overlay="true" data-kt-drawer-width="225px" data-kt-drawer-direction="start" data-kt-drawer-toggle="#kt_app_sidebar_mobile_toggle">
+
+    <!-- Logo -->
+    <div class="app-sidebar-logo px-6" id="kt_app_sidebar_logo">
+        <a href="{% url 'dashboard:home' %}">
+            <img alt="SAIS" src="{% static 'dashboard/media/logos/default.svg' %}" class="h-25px app-sidebar-logo-default">
+            <img alt="SAIS" src="{% static 'dashboard/media/logos/default-small.svg' %}" class="h-20px app-sidebar-logo-minimize">
+        </a>
+    </div>
+
+    <!-- Menu -->
+    <div class="app-sidebar-menu overflow-hidden flex-column-fluid">
+        <div id="kt_app_sidebar_menu_wrapper" class="app-sidebar-wrapper hover-scroll-overlay-y my-5" data-kt-scroll="true" data-kt-scroll-activate="true" data-kt-scroll-height="auto" data-kt-scroll-dependencies="#kt_app_sidebar_logo, #kt_app_sidebar_footer" data-kt-scroll-wrappers="#kt_app_sidebar_menu" data-kt-scroll-offset="5px" data-kt-scroll-save-state="true">
+            <div class="menu menu-column menu-rounded menu-sub-indention px-3" id="#kt_app_sidebar_menu" data-kt-menu="true" data-kt-menu-expand="false">
+
+                {% for item in dashboard_menu %}
+                    {% if item.children %}
+                        {# Grup menü — accordion #}
+                        <div data-kt-menu-trigger="click" class="menu-item menu-accordion">
+                            <span class="menu-link">
+                                <span class="menu-icon">
+                                    <i class="ki-outline ki-element-plus fs-2"></i>
+                                </span>
+                                <span class="menu-title">{{ item.label }}</span>
+                                <span class="menu-arrow"></span>
+                            </span>
+                            <div class="menu-sub menu-sub-accordion">
+                                {% for child in item.children %}
+                                    <div class="menu-item">
+                                        <a class="menu-link {% menu_active child.url_name %}" href="{{ child.url }}">
+                                            <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
+                                            <span class="menu-title">{{ child.label }}</span>
+                                        </a>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% else %}
+                        {# Tek seviye menü item #}
+                        <div class="menu-item">
+                            <a class="menu-link {% menu_active item.url_name %}" href="{{ item.url }}">
+                                <span class="menu-icon">
+                                    <i class="ki-outline ki-home-2 fs-2"></i>
+                                </span>
+                                <span class="menu-title">{{ item.label }}</span>
+                            </a>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+
+            </div>
+        </div>
+    </div>
+</div>
