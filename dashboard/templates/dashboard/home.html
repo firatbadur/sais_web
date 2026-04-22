@@ -1,10 +1,285 @@
 {% extends "dashboard/base.html" %}
-{% load i18n %}
+{% load static i18n dashboard_extras %}
 
 {% block title %}{% trans "Anasayfa" %}{% endblock %}
+{% block page_title %}{% trans "Anasayfa" %}{% endblock %}
 
 {% block content %}
-<h1>{% trans "Anasayfa" %}</h1>
-<p>{% trans "Ana izleme sayfası — KPI, anlık veri grid, trend grafiği, olay akışı." %}</p>
-<p style="color:#888;font-size:.9em;">{% trans "Bu sayfa iskelet halinde — tam içerik eklenecek." %}</p>
+
+<!-- ============ KPI CARDS ============ -->
+<div class="row g-5 g-xl-10 mb-5 mb-xl-10">
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body py-5">
+                <span class="fs-6 fw-semibold text-gray-500">{% trans "Aktif İstasyon" %}</span>
+                <div class="d-flex align-items-center mt-2">
+                    <i class="ki-outline ki-home-2 fs-2hx text-primary me-3"></i>
+                    <span class="fs-2hx fw-bolder text-gray-900" id="kpi-stations">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body py-5">
+                <span class="fs-6 fw-semibold text-gray-500">{% trans "Aktif Sensör" %}</span>
+                <div class="d-flex align-items-center mt-2">
+                    <i class="ki-outline ki-chart-line-star fs-2hx text-success me-3"></i>
+                    <span class="fs-2hx fw-bolder text-gray-900" id="kpi-sensors">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body py-5">
+                <span class="fs-6 fw-semibold text-gray-500">{% trans "Açık Bağlantı" %}</span>
+                <div class="d-flex align-items-center mt-2">
+                    <i class="ki-outline ki-wifi fs-2hx text-info me-3"></i>
+                    <span class="fs-2hx fw-bolder text-gray-900" id="kpi-connections">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body py-5">
+                <span class="fs-6 fw-semibold text-gray-500">{% trans "Son 1 Saat Okuma" %}</span>
+                <div class="d-flex align-items-center mt-2">
+                    <i class="ki-outline ki-pulse fs-2hx text-warning me-3"></i>
+                    <span class="fs-2hx fw-bolder text-gray-900" id="kpi-readings">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-5 g-xl-10 mb-5 mb-xl-10">
+    <!-- ============ LIVE SENSOR GRID ============ -->
+    <div class="col-xl-8">
+        <div class="card card-flush h-100">
+            <div class="card-header pt-5">
+                <h3 class="card-title fw-bold text-gray-800">{% trans "Anlık Sensör Değerleri" %}</h3>
+                <div class="card-toolbar">
+                    <span class="text-muted fs-7">
+                        <i class="ki-outline ki-time fs-6 me-1"></i>
+                        <span id="snapshot-updated">-</span>
+                    </span>
+                </div>
+            </div>
+            <div class="card-body pt-4">
+                <div class="table-responsive">
+                    <table class="table table-row-dashed align-middle gs-0 gy-3">
+                        <thead>
+                            <tr class="fs-7 fw-bold text-gray-500 text-uppercase">
+                                <th>{% trans "Parametre" %}</th>
+                                <th class="text-end">{% trans "Değer" %}</th>
+                                <th>{% trans "Birim" %}</th>
+                                <th>{% trans "Kalite" %}</th>
+                                <th class="text-end">{% trans "Son Okuma" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="snapshot-body">
+                            <tr><td colspan="5" class="text-center text-muted">{% trans "Yükleniyor..." %}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ EVENTS FEED ============ -->
+    <div class="col-xl-4">
+        <div class="card card-flush h-100">
+            <div class="card-header pt-5">
+                <h3 class="card-title fw-bold text-gray-800">{% trans "Son Olaylar" %}</h3>
+            </div>
+            <div class="card-body pt-4" style="max-height:500px; overflow-y:auto;">
+                <div class="timeline timeline-border-dashed" id="events-list">
+                    <div class="text-muted">{% trans "Yükleniyor..." %}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ TREND CHART ============ -->
+<div class="row g-5 g-xl-10">
+    <div class="col-12">
+        <div class="card card-flush">
+            <div class="card-header pt-5">
+                <h3 class="card-title fw-bold text-gray-800">{% trans "24 Saatlik Sensör Trendi" %}</h3>
+                <div class="card-toolbar">
+                    <span class="text-muted fs-7">{% trans "Saatlik ortalama (ReadingHourly)" %}</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="trend-chart" style="height:360px;"></div>
+                <div id="trend-empty" class="text-center text-muted py-5" style="display:none;">
+                    {% trans "Henüz 24 saatlik saatlik aggregate verisi yok. Celery beat aggregate_readings_hourly task'ını bekleyin." %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+    const URLS = {
+        kpis:     "{% url 'dashboard:api_home_kpis' %}",
+        snapshot: "{% url 'dashboard:api_home_snapshot' %}",
+        trend:    "{% url 'dashboard:api_home_trend' %}",
+        events:   "{% url 'dashboard:api_home_events' %}"
+    };
+
+    const QUALITY_BADGE = {
+        good:        'badge-light-success',
+        bad:         'badge-light-danger',
+        uncertain:   'badge-light-warning',
+        stale:       'badge-light-secondary',
+        substituted: 'badge-light-info',
+        manual:      'badge-light-primary'
+    };
+
+    function formatTime(iso) {
+        if (!iso) return '-';
+        try { return new Date(iso).toLocaleTimeString({{ LANGUAGE_CODE|yesno:"'en-US','tr-TR'" }}); }
+        catch(e) { return iso; }
+    }
+    function formatDateTime(iso) {
+        if (!iso) return '-';
+        try { return new Date(iso).toLocaleString(); }
+        catch(e) { return iso; }
+    }
+
+    async function fetchJson(url) {
+        const r = await fetch(url, { credentials: 'same-origin' });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+    }
+
+    // --- KPIs (every 30s) ---
+    async function refreshKpis() {
+        try {
+            const data = await fetchJson(URLS.kpis);
+            document.getElementById('kpi-stations').textContent = data.station_count ?? '-';
+            document.getElementById('kpi-sensors').textContent = data.sensor_count ?? '-';
+            document.getElementById('kpi-connections').textContent = data.connection_count ?? '-';
+            document.getElementById('kpi-readings').textContent = data.readings_last_hour ?? '-';
+        } catch(e) { console.warn('KPI refresh fail:', e); }
+    }
+
+    // --- Snapshot grid (every 5s) ---
+    async function refreshSnapshot() {
+        try {
+            const data = await fetchJson(URLS.snapshot);
+            const tbody = document.getElementById('snapshot-body');
+            if (!data.rows || data.rows.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">{% trans "Henüz sensör verisi yok." %}</td></tr>`;
+            } else {
+                tbody.innerHTML = data.rows.map(r => {
+                    const badge = QUALITY_BADGE[r.quality] || 'badge-light-secondary';
+                    const value = (r.value === null || r.value === undefined) ? '—' : Number(r.value).toLocaleString();
+                    return `<tr>
+                        <td class="fw-semibold text-gray-800">${r.parameter_name || '-'}</td>
+                        <td class="text-end fw-bolder fs-5">${value}</td>
+                        <td class="text-muted">${r.unit || '-'}</td>
+                        <td><span class="badge ${badge}">${r.quality || '-'}</span></td>
+                        <td class="text-end text-muted">${formatTime(r.readtime)}</td>
+                    </tr>`;
+                }).join('');
+            }
+            document.getElementById('snapshot-updated').textContent = new Date().toLocaleTimeString();
+        } catch(e) { console.warn('Snapshot fail:', e); }
+    }
+
+    // --- Events feed (every 30s) ---
+    async function refreshEvents() {
+        try {
+            const data = await fetchJson(URLS.events);
+            const list = document.getElementById('events-list');
+            if (!data.events || data.events.length === 0) {
+                list.innerHTML = `<div class="text-muted">{% trans "Henüz olay yok." %}</div>`;
+            } else {
+                list.innerHTML = data.events.map(ev => {
+                    const iconByKind = {
+                        system_log: 'ki-information-5 text-info',
+                        power_off: 'ki-power text-warning',
+                        bad_reading: 'ki-shield-cross text-danger'
+                    };
+                    const iconClass = iconByKind[ev.kind] || 'ki-information-5 text-muted';
+                    return `<div class="timeline-item">
+                        <div class="timeline-line w-40px"></div>
+                        <div class="timeline-icon symbol symbol-circle symbol-40px">
+                            <div class="symbol-label bg-light">
+                                <i class="ki-outline ${iconClass} fs-2"></i>
+                            </div>
+                        </div>
+                        <div class="timeline-content mb-10 mt-n1">
+                            <div class="pe-3 mb-1">
+                                <div class="fs-6 fw-semibold text-gray-800">${ev.title || '-'}</div>
+                                <div class="d-flex align-items-center mt-1 fs-8 text-muted">
+                                    <i class="ki-outline ki-time fs-7 me-1"></i>${formatDateTime(ev.time)}
+                                </div>
+                            </div>
+                            <div class="overflow-auto pb-1">
+                                <div class="fs-7 text-muted">${ev.detail || ''}</div>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+        } catch(e) { console.warn('Events fail:', e); }
+    }
+
+    // --- Trend chart (every 5 min) ---
+    let trendChart = null;
+    async function refreshTrend() {
+        try {
+            const data = await fetchJson(URLS.trend);
+            const empty = document.getElementById('trend-empty');
+            const container = document.getElementById('trend-chart');
+            if (!data.series || data.series.length === 0) {
+                empty.style.display = 'block';
+                container.style.display = 'none';
+                return;
+            }
+            empty.style.display = 'none';
+            container.style.display = 'block';
+
+            const series = data.series.map(s => ({
+                name: s.label,
+                data: s.points.map(p => [new Date(p.t).getTime(), p.avg])
+            }));
+
+            const options = {
+                chart: { type: 'line', height: 360, toolbar: { show: true }, animations: { enabled: true } },
+                series: series,
+                stroke: { curve: 'smooth', width: 2 },
+                xaxis: { type: 'datetime' },
+                yaxis: { labels: { formatter: v => Number(v).toFixed(2) } },
+                legend: { position: 'top' },
+                tooltip: { x: { format: 'dd/MM HH:mm' } },
+                colors: ['#009ef7', '#50cd89', '#f1416c', '#ffc700', '#7239ea']
+            };
+
+            if (trendChart) {
+                trendChart.updateOptions(options);
+            } else {
+                trendChart = new ApexCharts(container, options);
+                trendChart.render();
+            }
+        } catch(e) { console.warn('Trend fail:', e); }
+    }
+
+    // Initial load + intervals
+    refreshKpis(); setInterval(refreshKpis, 30000);
+    refreshSnapshot(); setInterval(refreshSnapshot, 5000);
+    refreshEvents(); setInterval(refreshEvents, 30000);
+    refreshTrend(); setInterval(refreshTrend, 300000);
+})();
+</script>
 {% endblock %}
