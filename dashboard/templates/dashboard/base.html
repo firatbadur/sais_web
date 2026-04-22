@@ -1,0 +1,34 @@
+{% load static i18n dashboard_extras %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'tr' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no">
+    <title>{% block title %}{% trans "SAIS Dashboard" %}{% endblock %}</title>
+    <meta name="description" content="SAIS Web SCADA">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Metronic layout Commit B'de entegre edilecek. Şu an iskelet. -->
+    {% if user.is_authenticated %}
+        <nav style="border-bottom:1px solid #ddd; padding:8px 16px;">
+            <a href="{% url 'dashboard:home' %}">{% trans "Anasayfa" %}</a> |
+            <span style="float:right;">
+                {{ user.username }}
+                <a href="{% url 'dashboard:logout' %}">{% trans "Çıkış" %}</a>
+            </span>
+        </nav>
+    {% endif %}
+    <main style="padding:16px;">
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li class="{{ message.tags }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

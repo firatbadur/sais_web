@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     "api",
     "scada_io",
     "sais_domain",
+    "dashboard",
 ]
 
 MIDDLEWARE = [
@@ -66,6 +67,7 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django_session_timeout.middleware.SessionTimeoutMiddleware",
+    "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -86,8 +88,11 @@ TEMPLATES = [
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.request",
+                "django.template.context_processors.i18n",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "dashboard.context_processors.menu",
+                "dashboard.context_processors.available_languages",
             ],
         },
     },
@@ -144,7 +149,16 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = os.getenv("DJANGO_LANGUAGE_CODE", "tr")
 TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "Europe/Istanbul")
 USE_I18N = True
+USE_L10N = True
 USE_TZ = env_bool("DJANGO_USE_TZ", default=True)
+
+# Dashboard için çoklu dil
+from django.utils.translation import gettext_lazy as _gettext_lazy  # noqa: E402
+LANGUAGES = [
+    ("tr", _gettext_lazy("Türkçe")),
+    ("en", _gettext_lazy("English")),
+]
+LOCALE_PATHS = [BASE_DIR / "dashboard" / "locale"]
 
 
 # Static & media files
@@ -182,9 +196,19 @@ AUTH_USER_MODEL = "users.CustomUser"
 AUTHENTICATION_BACKENDS = ("django.contrib.auth.backends.ModelBackend",)
 
 
+# Dashboard auth akışı
+LOGIN_URL = "/dashboard/login/"
+LOGIN_REDIRECT_URL = "/dashboard/"
+LOGOUT_REDIRECT_URL = "/dashboard/login/"
+
+# Email backend (dashboard ForgotPassword için placeholder; admin manuel sıfırlar)
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@sais.local")
+
+
 # Sessions
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-SESSION_COOKIE_AGE = int(os.getenv("SESSION_COOKIE_AGE", str(60 * 600)))
+SESSION_COOKIE_AGE = int(os.getenv("SESSION_COOKIE_AGE", str(60 * 60 * 24)))  # 24 saat
 SESSION_TIMEOUT_REDIRECT = "logout/"
 
 
