@@ -154,14 +154,16 @@
     // 5 dakikadan eski okumayı "stale" say.
     const STALE_AGE_MS = 5 * 60 * 1000;
 
+    const LOCALE = "{{ LANGUAGE_CODE|default:'tr' }}" === "en" ? "en-US" : "tr-TR";
+
     function formatTime(iso) {
         if (!iso) return '-';
-        try { return new Date(iso).toLocaleTimeString({{ LANGUAGE_CODE|yesno:"'en-US','tr-TR'" }}); }
+        try { return new Date(iso).toLocaleTimeString(LOCALE); }
         catch(e) { return iso; }
     }
     function formatDateTime(iso) {
         if (!iso) return '-';
-        try { return new Date(iso).toLocaleString(); }
+        try { return new Date(iso).toLocaleString(LOCALE); }
         catch(e) { return iso; }
     }
     function formatValue(v, decimals) {
