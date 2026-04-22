@@ -83,39 +83,57 @@ class ModbusTcpReader(ProtocolReader):
         except Exception as exc:  # noqa: BLE001
             return ReadResult(quality="bad", error=f"{type(exc).__name__}: {exc}")
 
+    def read_raw(self, *, slave_id, function, address, count):
+        if not self.connected or self._client is None:
+            return None, "bağlantı yok"
+        return _modbus_read_raw(self._client, slave_id, function, address, count)
+
+
+def _modbus_read_raw(client, slave_id: int, function: int,
+                     address: int, count: int) -> tuple[list[int] | None, str]:
+    """pymodbus client üzerinden ham register/bit listesi oku.
+
+    Scan group batch read için ortak helper. Dönen değer:
+      (regs, error)  →  regs=list[int], error="" (başarı)
+      (None, error)  →  başarısızlık sebebi
+    """
+    try:
+        if function == 3:
+            rr = client.read_holding_registers(address=address, count=count, device_id=slave_id)
+        elif function == 4:
+            rr = client.read_input_registers(address=address, count=count, device_id=slave_id)
+        elif function == 2:
+            rr = client.read_discrete_inputs(address=address, count=count, device_id=slave_id)
+        elif function == 1:
+            rr = client.read_coils(address=address, count=count, device_id=slave_id)
+        else:
+            return None, f"Desteklenmeyen function code: {function}"
+    except Exception as exc:  # noqa: BLE001
+        return None, f"{type(exc).__name__}: {exc}"
+
+    if rr is None or (hasattr(rr, "isError") and rr.isError()):
+        return None, f"Modbus hata: {rr}"
+
+    if hasattr(rr, "registers"):
+        return list(rr.registers), ""
+    if hasattr(rr, "bits"):
+        return [int(b) for b in rr.bits[:count]], ""
+    return None, f"Anlaşılmaz response: {rr}"
+
 
 def _modbus_read(client, sensor) -> ReadResult:
-    """Modbus TCP/RTU/ASCII için ortak okuma yardımcısı.
+    """Tek sensör için Modbus okuma — ham okur + decode + engineering dönüşümü.
 
-    `Sensor.function`'a göre register tipini seçer; `Sensor.data_type`'a göre
-    decoder'ı uygular; `Sensor.scale`/`offset` mühendislik dönüşümü yapar.
+    Scan group kullanmayan legacy mod için. `_modbus_read_raw` üzerine kurulu.
     """
     fn = sensor.function or 3
     addr = sensor.address or 0
     qty = sensor.quantity or 2
     slave = sensor.slave_id or 1
 
-    if fn == 3:
-        rr = client.read_holding_registers(address=addr, count=qty, device_id=slave)
-    elif fn == 4:
-        rr = client.read_input_registers(address=addr, count=qty, device_id=slave)
-    elif fn == 2:
-        rr = client.read_discrete_inputs(address=addr, count=qty, device_id=slave)
-    elif fn == 1:
-        rr = client.read_coils(address=addr, count=qty, device_id=slave)
-    else:
-        return ReadResult(quality="bad", error=f"Desteklenmeyen function code: {fn}")
-
-    if rr is None or (hasattr(rr, "isError") and rr.isError()):
-        return ReadResult(quality="bad", error=f"Modbus hata: {rr}")
-
-    raw_words: list[int]
-    if hasattr(rr, "registers"):
-        raw_words = list(rr.registers)
-    elif hasattr(rr, "bits"):
-        raw_words = [int(b) for b in rr.bits[:qty]]
-    else:
-        return ReadResult(quality="bad", error=f"Anlaşılmaz response: {rr}")
+    raw_words, err = _modbus_read_raw(client, slave, fn, addr, qty)
+    if err or raw_words is None:
+        return ReadResult(quality="bad", error=err or "raw read failed")
 
     decoded = decode_registers(
         raw_words,
@@ -125,12 +143,11 @@ def _modbus_read(client, sensor) -> ReadResult:
         bit_position=sensor.bit_position,
     )
 
-    # Mühendislik dönüşümü — sayısal tipler için scale/offset uygula.
+    value: Any
     if isinstance(decoded, (int, float)) and not isinstance(decoded, bool):
         scale = sensor.scale if sensor.scale is not None else 1.0
         offset = sensor.offset if sensor.offset is not None else 0.0
-        value: Any = decoded * scale + offset
-        # Dijital ters
+        value = decoded * scale + offset
         if sensor.digital_inverse and sensor.data_type in ("bool", "bit"):
             value = not bool(value)
     else:

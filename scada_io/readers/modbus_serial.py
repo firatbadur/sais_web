@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 
 from .base import ProtocolReader, ReadResult
-from .modbus_tcp import _modbus_read
+from .modbus_tcp import _modbus_read, _modbus_read_raw
 
 
 logger = logging.getLogger(__name__)
@@ -77,3 +77,8 @@ class ModbusSerialReader(ProtocolReader):
             return _modbus_read(self._client, sensor)
         except Exception as exc:  # noqa: BLE001
             return ReadResult(quality="bad", error=f"{type(exc).__name__}: {exc}")
+
+    def read_raw(self, *, slave_id, function, address, count):
+        if not self.connected or self._client is None:
+            return None, "bağlantı yok"
+        return _modbus_read_raw(self._client, slave_id, function, address, count)

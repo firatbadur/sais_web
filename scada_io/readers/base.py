@@ -34,6 +34,10 @@ class ProtocolReader(ABC):
               # result.value, result.quality, result.error
       reader.close()
 
+    Scan group (batch) okuma:
+      regs, err = reader.read_raw(slave_id=1, function=3, address=0, count=100)
+      # regs → [int, int, ...] veya None; err → "" ya da hata mesajı
+
     Veya context manager olarak:
       with build_reader(connection) as reader:
           if not reader.connected: return
@@ -55,6 +59,18 @@ class ProtocolReader(ABC):
     def read(self, sensor) -> ReadResult:
         """Tek sensörü oku."""
         raise NotImplementedError
+
+    def read_raw(self, *, slave_id: int, function: int,
+                 address: int, count: int) -> tuple[list[int] | None, str]:
+        """Scan group batch okuma için ham register/bit listesi döner.
+
+        Dönen değer: (regs, error_message). Başarılıysa regs=list[int], error="".
+        Başarısızsa regs=None, error=açıklama.
+
+        Default implementation: "desteklenmiyor" hatası (ASCII custom vb. için).
+        Modbus reader'ları bu metodu override eder.
+        """
+        return None, f"read_raw {type(self).__name__} tarafından desteklenmiyor"
 
     @abstractmethod
     def close(self) -> None:

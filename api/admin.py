@@ -13,6 +13,7 @@ from .models import (
     ReadingFifteenMin,
     ReadingHourly,
     RequestType,
+    ScanGroup,
     Sensor,
     SensorLatest,
     Station,
@@ -110,30 +111,72 @@ class ParameterAdmin(admin.ModelAdmin):
     ordering = ("station", "id")
 
 
+class _ScanGroupSensorInline(admin.TabularInline):
+    """ScanGroup detay sayfasında o grubun sensörlerini inline göster."""
+    model = Sensor
+    fk_name = "scan_group"
+    extra = 0
+    fields = (
+        "parameter", "address", "data_type",
+        "byte_order", "word_order", "bit_position",
+        "scale", "offset", "decimals", "is_active",
+    )
+    autocomplete_fields = ("parameter",)
+    show_change_link = True
+
+
+@admin.register(ScanGroup)
+class ScanGroupAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "connection", "name", "slave_id", "function",
+        "start_address", "quantity", "end_address_display",
+        "sensor_count", "is_active",
+    )
+    list_filter = ("connection", "function", "is_active")
+    search_fields = ("name", "connection__name")
+    list_editable = ("is_active",)
+    autocomplete_fields = ("connection",)
+    ordering = ("connection", "slave_id", "start_address")
+    inlines = [_ScanGroupSensorInline]
+
+    @admin.display(description="Bitiş adresi", ordering="start_address")
+    def end_address_display(self, obj):
+        return obj.end_address
+
+    @admin.display(description="Sensör sayısı")
+    def sensor_count(self, obj):
+        return obj.sensors.count()
+
+
 @admin.register(Sensor)
 class SensorAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "parameter", "connection", "sensor_type", "brand", "model",
+        "id", "parameter", "connection", "scan_group", "sensor_type", "brand", "model",
         "slave_id", "address", "function", "data_type", "scale", "offset", "decimals",
         "is_active", "is_simulated", "report_status",
     )
     list_filter = ("sensor_type", "signal_type", "function", "data_type", "is_active",
-                   "is_simulated", "report_status", "connection")
+                   "is_simulated", "report_status", "connection", "scan_group")
     search_fields = ("brand", "model", "serial_number", "ascii_code", "ascii_request")
     list_editable = ("is_active",)
-    autocomplete_fields = ("parameter", "connection")
+    autocomplete_fields = ("parameter", "connection", "scan_group")
     fieldsets = (
         ("Kimlik", {
             "fields": ("parameter", "brand", "model", "serial_number", "sensor_type",
                        "signal_type", "is_active", "is_simulated", "report_status"),
         }),
         ("Bağlantı", {
-            "fields": ("connection",),
+            "fields": ("connection", "scan_group"),
         }),
         ("Modbus", {
             "fields": (
                 "slave_id", "function", "address", "quantity",
                 "byte_order", "word_order", "bit_position",
+            ),
+            "description": (
+                "Bir scan_group seçildiyse slave_id ve function o gruba uymalı; "
+                "address grubun aralığı içinde olmalı. Grubun dışındaki sensörler "
+                "(scan_group=None) her polling'de tek tek okunur (legacy)."
             ),
         }),
         ("Veri Tipi & Ölçekleme", {

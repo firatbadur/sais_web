@@ -6,9 +6,20 @@ kullanılmaya uygun, alan-özel kavramlardan arındırılmış temel modelleri
 içerir. Atıksu (SAIS), Envisoft gibi alan-özel uzantılar ayrı bir
 uygulamada (`sais_domain`) tanımlıdır.
 """
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from users.models import CustomUser
+
+
+# Modbus data_type → register sayısı (ScanGroup validation'da kullanılır).
+# scada_io.decoders'daki REGISTER_COUNT ile senkron tutulmalı; circular import
+# önlemek için burada kopyalandı.
+_REGISTERS_PER_DATA_TYPE = {
+    "int16": 1, "uint16": 1, "bool": 1, "bit": 1,
+    "int32": 2, "uint32": 2, "float32": 2,
+    "int64": 4, "uint64": 4, "float64": 4,
+}
 
 
 class StationType(models.Model):
@@ -297,6 +308,97 @@ class Parameter(models.Model):
         return self.parameter_name or f"Parameter {self.pk}"
 
 
+class ScanGroup(models.Model):
+    """Modbus batch register okuma bloğu (Geo SCADA 'scanner' pattern).
+
+    Tek Connection üzerinde; slave_id + function + start_address + quantity
+    tanımlayarak bir register bloğu oluşturulur. Polling cycle'da tek bir
+    Modbus request ile tüm blok okunur; bu grupdaki sensörler `sensor.address`
+    (absolute Modbus adresi) üzerinden offset hesaplayıp decode ederler.
+
+    Avantaj: 100 sensörlük bir blok tek request'te okunur — 100× hızlanma.
+    1000+ tag'lık sahalarda tek connection üstünde çalışmanın tek yolu budur.
+    """
+
+    # Modbus okuma fonksiyonları — write fonksiyonları (5/6/15/16) scan group
+    # kavramına uymaz.
+    READ_FUNCTIONS = (
+        (1, "Read Coils"),
+        (2, "Read Discrete Inputs"),
+        (3, "Read Holding Registers"),
+        (4, "Read Input Registers"),
+    )
+
+    connection = models.ForeignKey(
+        "Connection", on_delete=models.CASCADE,
+        related_name="scan_groups",
+        verbose_name="Bağlantı",
+    )
+    name = models.CharField(
+        max_length=100, verbose_name="Grup Adı",
+        help_text="Açıklayıcı isim (örn. 'Analog girişler 0-20', 'Status bitleri 100-150')",
+    )
+    slave_id = models.IntegerField(
+        default=1, verbose_name="Slave ID",
+    )
+    function = models.IntegerField(
+        choices=READ_FUNCTIONS, default=3,
+        verbose_name="Fonksiyon",
+    )
+    start_address = models.IntegerField(
+        verbose_name="Başlangıç Adresi",
+        help_text="Modbus register başlangıç adresi (0-tabanlı)",
+    )
+    quantity = models.IntegerField(
+        verbose_name="Register Sayısı",
+        help_text="Okunacak register/coil sayısı. Max: function 3/4 → 125, function 1/2 → 2000",
+    )
+    is_active = models.BooleanField(
+        default=True, verbose_name="Aktif",
+        help_text="False ise bu grup polling'de atlanır",
+    )
+
+    class Meta:
+        db_table = "scan_group"
+        verbose_name_plural = "Scan Grupları"
+        ordering = ["connection", "slave_id", "start_address"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["connection", "name"],
+                name="scan_group_unique_connection_name",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.name} (slave={self.slave_id} fn={self.function} [{self.start_address}..{self.end_address}))"
+
+    @property
+    def end_address(self) -> int:
+        """Grup'un kapsadığı son adresin bir fazlası (exclusive)."""
+        return (self.start_address or 0) + (self.quantity or 0)
+
+    def clean(self):
+        errors = {}
+        if self.start_address is not None and self.start_address < 0:
+            errors["start_address"] = "Negatif olamaz."
+        if self.quantity is None or self.quantity <= 0:
+            errors["quantity"] = "1 veya daha büyük olmalı."
+        else:
+            # Modbus protokol limitleri (hard enforce)
+            if self.function in (3, 4) and self.quantity > 125:
+                errors["quantity"] = (
+                    f"Function {self.function} (Holding/Input Register) için maksimum 125 register okunabilir."
+                )
+            elif self.function in (1, 2) and self.quantity > 2000:
+                errors["quantity"] = (
+                    f"Function {self.function} (Coil/Discrete) için maksimum 2000 bit okunabilir."
+                )
+        if self.function not in (1, 2, 3, 4):
+            errors["function"] = "Sadece okuma fonksiyonları (1, 2, 3, 4) desteklenir."
+        if errors:
+            raise ValidationError(errors)
+
+
 class Sensor(models.Model):
     """Fiziksel / mantıksal sensör kanalı.
 
@@ -353,6 +455,17 @@ class Sensor(models.Model):
     connection = models.ForeignKey(
         Connection, on_delete=models.CASCADE,
         related_name="sensors", verbose_name="Bağlantı",
+    )
+    scan_group = models.ForeignKey(
+        ScanGroup, on_delete=models.SET_NULL,
+        blank=True, null=True, related_name="sensors",
+        verbose_name="Scan Grubu",
+        help_text=(
+            "Set edilirse bu sensör, grup'un batch Modbus okumasından "
+            "decode edilir (tek request, 100× hızlı). slave_id, function "
+            "ve address grup ile uyumlu olmalı. Null ise sensör başına "
+            "ayrı Modbus request atılır (legacy mod)."
+        ),
     )
     signal_type = models.IntegerField(
         choices=SIGNAL_TYPE, default=0, blank=True, null=True,
@@ -465,6 +578,46 @@ class Sensor(models.Model):
         if self.parameter_id and self.parameter.parameter_name:
             return self.parameter.parameter_name
         return f"Sensor-{self.pk}"
+
+    def registers_used(self) -> int:
+        """data_type'a göre sensörün kaç register tükettiğini döner.
+
+        Bit/coil/bool → 1, int/uint/float32 → 2 veya 4 ...
+        data_type bilinmiyorsa `quantity` alanına düşer.
+        """
+        from_dt = _REGISTERS_PER_DATA_TYPE.get(self.data_type or "")
+        if from_dt is not None:
+            return from_dt
+        return int(self.quantity or 1)
+
+    def clean(self):
+        """scan_group set ise slave/function/address uyumunu doğrula."""
+        if not self.scan_group_id:
+            return
+        sg = self.scan_group
+        errors = {}
+        if sg.connection_id != self.connection_id:
+            errors["scan_group"] = "Scan group bu sensörün connection'ına ait değil."
+        if self.slave_id is not None and self.slave_id != sg.slave_id:
+            errors["slave_id"] = f"Scan group slave_id={sg.slave_id} ile eşleşmeli."
+        if self.function is not None and self.function != sg.function:
+            errors["function"] = f"Scan group function={sg.function} ile eşleşmeli."
+        if self.address is None:
+            errors["address"] = "Scan group modunda address zorunlu."
+        else:
+            if self.address < sg.start_address:
+                errors["address"] = (
+                    f"Scan group start_address={sg.start_address} değerinden küçük olamaz."
+                )
+            else:
+                count = self.registers_used()
+                if self.address + count > sg.end_address:
+                    errors["address"] = (
+                        f"Sensör aralığı ({self.address}..{self.address + count}) "
+                        f"scan group sınırlarını ({sg.start_address}..{sg.end_address}) aşıyor."
+                    )
+        if errors:
+            raise ValidationError(errors)
 
 
 QUALITY_CHOICES = (

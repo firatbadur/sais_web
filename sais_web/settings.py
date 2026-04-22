@@ -324,6 +324,7 @@ JAZZMIN_SETTINGS = {
         "api.Station",
         "api.StationType",
         "api.Connection",
+        "api.ScanGroup",
         "api.Parameter",
         "api.Sensor",
         "api.SensorLatest",
@@ -365,6 +366,7 @@ JAZZMIN_SETTINGS = {
         "api.Station": "fas fa-building",
         "api.StationType": "fas fa-tag",
         "api.Connection": "fas fa-network-wired",
+        "api.ScanGroup": "fas fa-layer-group",
 
         # api - parametre / sensör
         "api.Parameter": "fas fa-sliders-h",

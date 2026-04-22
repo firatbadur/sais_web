@@ -23,8 +23,9 @@ from django.utils import timezone
 from api.models import Command, Connection, Sensor
 
 from . import connection_pool
+from .decoders import decode_sensor_from_batch
 from .persistence import persist_reading
-from .readers import build_reader
+from .readers import ReadResult, build_reader
 from .writers import build_writer
 
 
@@ -78,7 +79,10 @@ def poll_connection(self, conn_id: int):
     now = timezone.now()
     Connection.objects.filter(pk=conn_id).update(last_polled_at=now)
 
-    sensors = list(Sensor.objects.filter(connection=conn, is_active=True).select_related("parameter"))
+    sensors = list(
+        Sensor.objects.filter(connection=conn, is_active=True)
+        .select_related("parameter", "scan_group")
+    )
     if not sensors:
         return
 
@@ -121,16 +125,37 @@ def poll_connection(self, conn_id: int):
     any_success = False
     connection_level_error = False
 
+    # --- Adım 1: Scan group batch okumaları ---
+    # Aynı Connection üzerindeki aktif scan group'lar tek Modbus request ile
+    # okunur; sonuç bellekte tutulup bu grubu kullanan sensörler decode edilir.
+    # `None` anahtarı scan_group'suz (legacy) sensörler için kullanılır.
+    group_data: dict[int | None, tuple[list[int] | None, str]] = {}
+    for sg in conn.scan_groups.filter(is_active=True):
+        regs, err = reader.read_raw(
+            slave_id=sg.slave_id,
+            function=sg.function,
+            address=sg.start_address,
+            count=sg.quantity,
+        )
+        group_data[sg.pk] = (regs, err)
+        if err:
+            last_sensor_error = f"scan_group {sg.name}: {err}"
+            err_lower = err.lower()
+            if any(kw in err_lower for kw in (
+                "connection lost", "broken", "reset", "no route",
+                "bağlantı yok", "socket", "disconnected",
+            )):
+                connection_level_error = True
+
+    # --- Adım 2: Sensörleri decode et + persist ---
     try:
         for sensor in real_sensors:
-            result = reader.read(sensor)
+            result = _read_sensor_with_groups(reader, sensor, group_data)
 
             if result.ok:
                 any_success = True
             else:
                 last_sensor_error = f"sensor {sensor.id}: {result.error or 'unknown read error'}"
-                # Transport seviyesinde ölü mü? Pool'u invalidate edip sonraki
-                # cycle'da yeniden bağlan.
                 err_lower = (result.error or "").lower()
                 if any(kw in err_lower for kw in (
                     "connection lost", "broken", "reset", "no route",
@@ -171,6 +196,31 @@ def poll_connection(self, conn_id: int):
             last_error_at=timezone.now(),
             last_error_message=last_sensor_error[:500],
         )
+
+
+def _read_sensor_with_groups(reader, sensor, group_data):
+    """Sensörü oku — scan_group varsa batch verisinden decode, yoksa per-sensor.
+
+    `group_data`: dict[scan_group_id -> (regs | None, error)].
+    Scan group'lu sensör için batch cache'inden offset hesaplayıp decode eder.
+    Scan group'suz sensör için legacy `reader.read(sensor)` yoluna düşer.
+    """
+    if sensor.scan_group_id and sensor.scan_group_id in group_data:
+        regs, err = group_data[sensor.scan_group_id]
+        if err or regs is None:
+            return ReadResult(quality="bad", error=err or "scan group read failed")
+        try:
+            value = decode_sensor_from_batch(
+                regs,
+                sensor.scan_group.start_address,
+                sensor,
+            )
+            return ReadResult(value=value, quality="good")
+        except ValueError as exc:
+            return ReadResult(quality="bad", error=f"decode: {exc}")
+
+    # Legacy path — scan_group kullanmayan sensörler
+    return reader.read(sensor)
 
 
 def _record_simulated(sensor):

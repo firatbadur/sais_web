@@ -99,6 +99,60 @@ def decode_registers(
     return struct.unpack(endian + _STRUCT_FMT[dt], packed)[0]
 
 
+def decode_sensor_from_batch(
+    batch_regs: list[int],
+    batch_start_address: int,
+    sensor,
+) -> Any:
+    """Bir scan group batch okumasından tek sensörün mühendislik değerini çıkar.
+
+    Sensör `batch_start_address` ofsetindeki `sensor.address` pozisyonundan
+    başlayan register'ları kullanır. data_type'a göre kaç register gerektiği
+    `REGISTER_COUNT`'tan belirlenir. Decode sonrası `scale` * x + `offset`
+    ve `digital_inverse` uygulanır.
+
+    Raises:
+        ValueError — aralık sınırları aşıldıysa veya data_type desteklenmiyorsa.
+    """
+    offset = (sensor.address or 0) - batch_start_address
+    if offset < 0:
+        raise ValueError(
+            f"sensor.address ({sensor.address}) batch start_address ({batch_start_address})'ten küçük"
+        )
+
+    dt = (sensor.data_type or "uint16").lower()
+    # String/raw için sensör `quantity` kullan; diğerleri REGISTER_COUNT'a göre.
+    if dt in ("string", "raw"):
+        needed = int(sensor.quantity or 1)
+    else:
+        needed = REGISTER_COUNT.get(dt, int(sensor.quantity or 1))
+
+    if offset + needed > len(batch_regs):
+        raise ValueError(
+            f"sensor aralığı ({offset}..{offset + needed}) batch boyutunu ({len(batch_regs)}) aşıyor"
+        )
+
+    slice_regs = batch_regs[offset : offset + needed]
+    decoded = decode_registers(
+        slice_regs,
+        data_type=dt,
+        byte_order=sensor.byte_order or "big",
+        word_order=sensor.word_order or "big",
+        bit_position=sensor.bit_position,
+    )
+
+    if isinstance(decoded, (int, float)) and not isinstance(decoded, bool):
+        scale = sensor.scale if sensor.scale is not None else 1.0
+        offset_val = sensor.offset if sensor.offset is not None else 0.0
+        value = decoded * scale + offset_val
+        if sensor.digital_inverse and dt in ("bool", "bit"):
+            value = not bool(value)
+        return value
+    if sensor.digital_inverse and isinstance(decoded, bool):
+        return not decoded
+    return decoded
+
+
 def encode_value(
     value: Any,
     data_type: str,
