@@ -1,0 +1,554 @@
+# SAIS Dashboard English translations.
+msgid ""
+msgstr ""
+"Project-Id-Version: sais-dashboard 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-22 10:00+0000\n"
+"PO-Revision-Date: 2026-04-22 10:00+0000\n"
+"Last-Translator: \n"
+"Language-Team: English\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+# ---- Auth ----
+msgid "Giriş"
+msgstr "Sign In"
+
+msgid "Giriş Yap"
+msgstr "Sign In"
+
+msgid "Çıkış"
+msgstr "Logout"
+
+msgid "Kullanıcı adı"
+msgstr "Username"
+
+msgid "Kullanıcı Adı"
+msgstr "Username"
+
+msgid "Şifre"
+msgstr "Password"
+
+msgid "Beni Hatırla"
+msgstr "Remember me"
+
+msgid "Şifremi Unuttum"
+msgstr "Forgot password?"
+
+msgid "Şifremi unuttum"
+msgstr "Forgot password?"
+
+msgid "SAIS Dashboard'a hoş geldiniz"
+msgstr "Welcome to SAIS Dashboard"
+
+msgid "Giriş başarısız"
+msgstr "Login failed"
+
+msgid "Giriş bilgileri hatalı."
+msgstr "Invalid login credentials."
+
+msgid "Hesabınıza tekrar erişmek için"
+msgstr "To regain access to your account"
+
+msgid "Yöneticinize başvurun"
+msgstr "Contact your administrator"
+
+msgid "Şifre sıfırlama için otomatik e-posta sistemi şu an aktif değil. Sistem yöneticiniz, hesabınıza yeni bir geçici şifre atayıp size iletecektir. İlk girişte şifrenizi değiştirmeniz önerilir."
+msgstr "Automated email password reset is not currently enabled. Your system administrator will assign a new temporary password to your account and deliver it to you. Changing your password on first login is recommended."
+
+msgid "Yönetici e-posta:"
+msgstr "Admin e-mail:"
+
+msgid "Giriş sayfasına dön"
+msgstr "Return to login"
+
+msgid "Girişe dön"
+msgstr "Back to login"
+
+msgid "Menüyü aç"
+msgstr "Open menu"
+
+# ---- Main menu ----
+msgid "Anasayfa"
+msgstr "Home"
+
+msgid "Raporlama"
+msgstr "Reports"
+
+msgid "Sensör Okumaları"
+msgstr "Sensor Readings"
+
+msgid "Aggregate (15dk/Saat/Gün)"
+msgstr "Aggregates (15m/Hour/Day)"
+
+msgid "Aggregate Raporu"
+msgstr "Aggregate Report"
+
+msgid "Kalibrasyon Geçmişi"
+msgstr "Calibration History"
+
+msgid "Kapanma Geçmişi"
+msgstr "Power Off History"
+
+msgid "Komut Geçmişi"
+msgstr "Command History"
+
+msgid "Sistem Logları"
+msgstr "System Logs"
+
+msgid "Operatör"
+msgstr "Operator"
+
+msgid "Numune Başlat"
+msgstr "Trigger Sample"
+
+msgid "Alarmlar"
+msgstr "Alarms"
+
+msgid "Yönetim"
+msgstr "Management"
+
+msgid "İstasyonlar"
+msgstr "Stations"
+
+msgid "Bağlantılar"
+msgstr "Connections"
+
+msgid "Sensörler"
+msgstr "Sensors"
+
+msgid "Yönetici"
+msgstr "Admin"
+
+msgid "Kullanıcılar"
+msgstr "Users"
+
+msgid "API Logları"
+msgstr "API Logs"
+
+msgid "Ayarlar"
+msgstr "Settings"
+
+msgid "Profilim"
+msgstr "My Profile"
+
+msgid "Şifre Değiştir"
+msgstr "Change Password"
+
+msgid "Tercihler"
+msgstr "Preferences"
+
+# ---- Home dashboard ----
+msgid "SAIS Dashboard"
+msgstr "SAIS Dashboard"
+
+msgid "SAIS Web SCADA"
+msgstr "SAIS Web SCADA"
+
+msgid "Dashboard"
+msgstr "Dashboard"
+
+msgid "Aktif İstasyon"
+msgstr "Active Stations"
+
+msgid "Aktif Sensör"
+msgstr "Active Sensors"
+
+msgid "Açık Bağlantı"
+msgstr "Open Connections"
+
+msgid "Son 1 Saat Okuma"
+msgstr "Readings (Last Hour)"
+
+msgid "Anlık Sensör Değerleri"
+msgstr "Live Sensor Values"
+
+msgid "24 Saatlik Sensör Trendi"
+msgstr "24-Hour Sensor Trend"
+
+msgid "Saatlik ortalama (ReadingHourly)"
+msgstr "Hourly average (ReadingHourly)"
+
+msgid "Son Olaylar"
+msgstr "Recent Events"
+
+msgid "Parametre"
+msgstr "Parameter"
+
+msgid "Değer"
+msgstr "Value"
+
+msgid "Birim"
+msgstr "Unit"
+
+msgid "Kalite"
+msgstr "Quality"
+
+msgid "Son Okuma"
+msgstr "Last Reading"
+
+msgid "Yükleniyor..."
+msgstr "Loading..."
+
+msgid "Henüz sensör verisi yok."
+msgstr "No sensor data yet."
+
+msgid "Henüz olay yok."
+msgstr "No events yet."
+
+msgid "Henüz 24 saatlik saatlik aggregate verisi yok. Celery beat aggregate_readings_hourly task'ını bekleyin."
+msgstr "24-hour hourly aggregate data not yet available. Wait for Celery beat's aggregate_readings_hourly task."
+
+# ---- Reports / tables ----
+msgid "15 Dakikalık Aggregate"
+msgstr "15-Minute Aggregate"
+
+msgid "Raw Reading yerine 15dk bucket (performans)"
+msgstr "15-minute bucket instead of raw Reading (performance)"
+
+msgid "Bucket"
+msgstr "Bucket"
+
+msgid "Sensör"
+msgstr "Sensor"
+
+msgid "Ortalama"
+msgstr "Average"
+
+msgid "Min"
+msgstr "Min"
+
+msgid "Max"
+msgstr "Max"
+
+msgid "Adet"
+msgstr "Count"
+
+msgid "Bad"
+msgstr "Bad"
+
+msgid "Henüz aggregate verisi yok. aggregate_readings task'ının çalışmasını bekleyin."
+msgstr "No aggregate data yet. Wait for aggregate_readings task to run."
+
+msgid "15 Dakika / Saatlik / Günlük Bucket"
+msgstr "15-Minute / Hourly / Daily Bucket"
+
+msgid "Bu sayfa yapım aşamasında. Sensör ve bucket periyodu seçerek karşılaştırmalı grafik + tablo görünümü buraya gelecek."
+msgstr "This page is under construction. Comparative chart + table view by sensor and bucket period will be here."
+
+msgid "Tarih Aralığı"
+msgstr "Date Range"
+
+msgid "Göster"
+msgstr "Show"
+
+msgid "Kalibrasyon Kayıtları"
+msgstr "Calibration Records"
+
+msgid "Tarih"
+msgstr "Date"
+
+msgid "Tip"
+msgstr "Type"
+
+msgid "Referans"
+msgstr "Reference"
+
+msgid "Std. Sapma"
+msgstr "Std. Dev"
+
+msgid "Geçerli"
+msgstr "Valid"
+
+msgid "Geçersiz"
+msgstr "Invalid"
+
+msgid "Kullanıcı"
+msgstr "User"
+
+msgid "Kalibrasyon kaydı yok."
+msgstr "No calibration records."
+
+msgid "İstasyon Kapanma Kayıtları"
+msgstr "Station Power Off Records"
+
+msgid "Kayıt Tarihi"
+msgstr "Record Date"
+
+msgid "İstasyon"
+msgstr "Station"
+
+msgid "Başlangıç"
+msgstr "Start"
+
+msgid "Bitiş"
+msgstr "End"
+
+msgid "Devam ediyor"
+msgstr "Ongoing"
+
+msgid "Süre"
+msgstr "Duration"
+
+msgid "Kapanma kaydı yok."
+msgstr "No power off records."
+
+msgid "Command History"
+msgstr "Command History"
+
+msgid "Oluşturulma"
+msgstr "Created"
+
+msgid "Durum"
+msgstr "Status"
+
+msgid "Öncelik"
+msgstr "Priority"
+
+msgid "Deneme"
+msgstr "Attempt"
+
+msgid "Kaynak"
+msgstr "Source"
+
+msgid "Talep Eden"
+msgstr "Requested By"
+
+msgid "Komut geçmişi yok."
+msgstr "No command history."
+
+msgid "Sistem Olayları"
+msgstr "System Events"
+
+msgid "Açıklama"
+msgstr "Description"
+
+msgid "Log kaydı yok."
+msgstr "No log records."
+
+# ---- Management ----
+msgid "Tüm İstasyonlar"
+msgstr "All Stations"
+
+msgid "ID"
+msgstr "ID"
+
+msgid "Ad"
+msgstr "Name"
+
+msgid "Host"
+msgstr "Host"
+
+msgid "Aktif"
+msgstr "Active"
+
+msgid "Pasif"
+msgstr "Inactive"
+
+msgid "İstasyon yok."
+msgstr "No stations."
+
+msgid "Tüm Bağlantılar"
+msgstr "All Connections"
+
+msgid "Protokol"
+msgstr "Protocol"
+
+msgid "Host / Port"
+msgstr "Host / Port"
+
+msgid "Poll / Save (sn)"
+msgstr "Poll / Save (sec)"
+
+msgid "Son Bağlantı"
+msgstr "Last Connected"
+
+msgid "Son Hata"
+msgstr "Last Error"
+
+msgid "Bağlantı yok."
+msgstr "No connections."
+
+msgid "Tüm Sensörler"
+msgstr "All Sensors"
+
+msgid "Scan Grubu"
+msgstr "Scan Group"
+
+msgid "Slave"
+msgstr "Slave"
+
+msgid "Fn"
+msgstr "Fn"
+
+msgid "Adres"
+msgstr "Address"
+
+msgid "Data Type"
+msgstr "Data Type"
+
+msgid "Sim"
+msgstr "Sim"
+
+msgid "Sensör yok."
+msgstr "No sensors."
+
+# ---- Operator ----
+msgid "Manuel Numune Tetikleme"
+msgstr "Manual Sample Trigger"
+
+msgid "Seçilen istasyon için numune alma komutu kuyruğa atılır. Komut Bakanlık Numune Talebi olarak sınıflandırılır, 5 dakika içinde yürütülmezse iptal olur. Bu sayfa yapım aşamasında — backend endpoint'i /StartSample üzerinden tetiklenebilir."
+msgstr "A sample trigger command is enqueued for the selected station. The command is classified as Ministry Sample Request; it expires if not executed within 5 minutes. This page is under construction — backend endpoint /StartSample can be triggered."
+
+msgid "Talep Kodu"
+msgstr "Request Code"
+
+msgid "Bu buton henüz aktif değil — taslak."
+msgstr "This button is not yet active — draft."
+
+msgid "Aktif Alarmlar"
+msgstr "Active Alarms"
+
+msgid "Yapım aşamasında"
+msgstr "Under construction"
+
+msgid "Alarm motoru ve acknowledge akışı sonraki fazda eklenecek."
+msgstr "Alarm engine and acknowledge flow will be added in the next phase."
+
+# ---- Admin pages ----
+msgid "Kullanıcı Yönetimi"
+msgstr "User Management"
+
+msgid "Tüm Kullanıcılar"
+msgstr "All Users"
+
+msgid "Yeni Kullanıcı"
+msgstr "New User"
+
+msgid "Ad Soyad"
+msgstr "Full Name"
+
+msgid "E-posta"
+msgstr "Email"
+
+msgid "Rol"
+msgstr "Role"
+
+msgid "Son Giriş"
+msgstr "Last Login"
+
+msgid "İşlem"
+msgstr "Action"
+
+msgid "Düzenle"
+msgstr "Edit"
+
+msgid "Kullanıcı yok."
+msgstr "No users."
+
+msgid "Kullanıcı Düzenle"
+msgstr "Edit User"
+
+msgid "İptal"
+msgstr "Cancel"
+
+msgid "Kaydet"
+msgstr "Save"
+
+msgid "Şifre Sıfırla"
+msgstr "Reset Password"
+
+msgid "Geçici şifre atanacak — devam?"
+msgstr "A temporary password will be assigned — continue?"
+
+msgid "Rastgele geçici şifre üretilir; ekranda gösterilir, kullanıcıya elden iletin."
+msgstr "A random temporary password will be generated and shown on screen; deliver it to the user in person."
+
+msgid "Gelen + Giden HTTP Trafiği"
+msgstr "Inbound + Outbound HTTP Traffic"
+
+msgid "Zaman"
+msgstr "Time"
+
+msgid "Yön"
+msgstr "Direction"
+
+msgid "Method"
+msgstr "Method"
+
+msgid "URL"
+msgstr "URL"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "ms"
+msgstr "ms"
+
+msgid "IP / Host"
+msgstr "IP / Host"
+
+msgid "API log kaydı yok."
+msgstr "No API log records."
+
+# ---- Settings ----
+msgid "Kişisel Bilgiler"
+msgstr "Personal Information"
+
+msgid "Şifre Değişikliği"
+msgstr "Password Change"
+
+msgid "Şifreyi Güncelle"
+msgstr "Update Password"
+
+msgid "Mevcut Şifre"
+msgstr "Current Password"
+
+msgid "Yeni Şifre"
+msgstr "New Password"
+
+msgid "Yeni Şifre (Tekrar)"
+msgstr "New Password (Confirm)"
+
+msgid "Mevcut şifre yanlış."
+msgstr "Current password is incorrect."
+
+msgid "Yeni şifreler eşleşmiyor."
+msgstr "New passwords do not match."
+
+msgid "Şifreniz güncellendi."
+msgstr "Your password has been updated."
+
+msgid "Profil güncellendi."
+msgstr "Profile updated."
+
+msgid "Kullanıcı oluşturuldu."
+msgstr "User created."
+
+msgid "Kullanıcı güncellendi."
+msgstr "User updated."
+
+msgid "Kullanıcı Tercihleri"
+msgstr "User Preferences"
+
+msgid "Arayüz Dili"
+msgstr "Interface Language"
+
+msgid "Tema"
+msgstr "Theme"
+
+msgid "Tema tercihi tarayıcınızda saklanır."
+msgstr "Theme preference is stored in your browser."
+
+# ---- Pagination ----
+msgid "Sürekli Atıksu İzleme Sistemi — gerçek zamanlı sensör verileri, aggregate raporlar ve yönetim paneli."
+msgstr "Continuous Wastewater Monitoring System — real-time sensor data, aggregate reports, and management dashboard."
+
+msgid "Türkçe"
+msgstr "Turkish"
+
+msgid "English"
+msgstr "English"

@@ -6,10 +6,11 @@ Bu dosya Claude Code için proje rehberidir. Geliştirmeye başlamadan önce oku
 
 `sais_web`, **atıksu sürekli izleme** istasyonlarından (SAIS) gelen ölçüm verilerini toplayan, saklayan ve REST API ile sunan bir **web SCADA uygulamasıdır**. Django 5.2 + Django REST Framework üzerine kuruludur.
 
-Mimari iki katmana ayrıldı:
+Mimari üç katmana ayrıldı:
 
 - **`api/`** — jenerik SCADA çekirdeği. Sektör-özel hiçbir kavram içermez. Modeller: `Station`, `StationType`, `Connection`, `ScanGroup`, `Parameter`, `Sensor`, `SensorLatest`, `Reading`, `ReadingFifteenMin`, `ReadingHourly`, `ReadingDaily`, `Calibration`, `PowerOff`, `Command`, `RequestType`, `StatusCode`, `LogType`, `SystemLog`, `ApiLog`.
 - **`sais_domain/`** — SAIS'e (Çevre ve Şehircilik Bakanlığı atıksu izleme rejimi) özgü uzantılar. Modeller: `SaisCabinet` (Bakanlık SIM ID + erişim bilgileri), `EnvisoftChannel` (Parameter ↔ Envisoft kanal eşlemesi). Atıksu istasyon tipleri ve "Bakanlık Numune Talebi" gibi alan-özel lookup kayıtları `seed_sais_data` ile yüklenir.
+- **`dashboard/`** — Metronic tabanlı rol-bazlı izleme arayüzü. `/dashboard/` URL prefix'i; `/` otomatik oraya yönlendirir. Admin panelinden (Jazzmin) ayrıdır — konfigürasyonu yine admin yapar, dashboard izleme + kısıtlı yönetim içindir. Çoklu dil (TR/EN) Django i18n ile. Ana sayfa 4 canlı widget (KPI + sensör grid + 24s trend + olay akışı), AJAX polling (5-30sn) ile dinamik. Home dışında: 6 rapor + 3 yönetim + 2 operatör + 2 admin sayfası + 3 ayar. Rol mapping: `CustomUser.rol` 1=Sistem Yöneticisi (tam erişim), 2=Operatör (rapor+operatör+yönetim okuma), 3=Normal Kullanıcı (salt-izleme).
 
 Çekirdek özellikler:
 
@@ -72,6 +73,29 @@ sais_web/
 │   ├── management/commands/seed_sais_data.py  # Atıksu StationType + ministry_sample + Envisoft eşlemeleri
 │   └── migrations/
 ├── users/                 # CustomUser (rol tabanlı)
+├── dashboard/             # Metronic tabanlı rol-bazlı izleme arayüzü
+│   ├── apps.py
+│   ├── urls.py            # /dashboard/... URL pattern'leri (namespace="dashboard")
+│   ├── views.py           # DashboardLoginView, HomeView, rapor/operatör/admin view'ları
+│   ├── api_views.py       # AJAX endpoint'leri — home_kpis/snapshot/trend/events
+│   ├── forms.py           # DashboardLoginForm, AdminUserCreate/Update, Profile, ChangePassword
+│   ├── permissions.py     # RoleRequiredMixin + AdminRequiredMixin + OperatorRequiredMixin
+│   ├── context_processors.py   # MENU dict (rol-filtreli); available_languages
+│   ├── templatetags/dashboard_extras.py  # menu_active, has_role, quality_badge filter'ları
+│   ├── locale/{tr,en}/LC_MESSAGES/django.{po,mo}    # 178 EN çeviri
+│   ├── static/dashboard/  # Metronic asset'leri (~17 MB) — css/js/plugins/fonts/logos/icons
+│   ├── templates/dashboard/
+│   │   ├── base.html      # light-sidebar iskeleti (auth + header/sidebar/footer ile)
+│   │   ├── partials/      # header.html, sidebar.html, footer.html, pagination.html
+│   │   ├── auth/          # auth_base.html + login.html + forgot_password.html (corporate layout)
+│   │   ├── home.html      # 4 widget + embedded AJAX JS
+│   │   ├── reports/       # sensor_readings/aggregates/calibrations/power_offs/commands/system_logs
+│   │   ├── operator/      # sample_trigger, alarms
+│   │   ├── management/    # stations, connections, sensors (readonly)
+│   │   ├── admin_pages/   # user_list, user_form, api_logs (rol=1 only)
+│   │   ├── settings/      # profile, change_password, preferences
+│   │   └── errors/        # 403, 404 (placeholder)
+│   └── migrations/
 ├── scada_io/              # SCADA reader/writer çekirdeği (Modbus + ASCII)
 │   ├── decoders.py        # decode_registers / decode_sensor_from_batch / encode_value (12 data_type × byte/word combos)
 │   ├── persistence.py     # persist_reading — Reading insert + SensorLatest upsert (save_interval_sec gate + decimals)
@@ -162,6 +186,8 @@ Servisler: `web` (Django), `celery_worker`, `celery_beat`, `db` (MSSQL Server 20
 - **Retention:**
   - `prune_api_logs` (`API_LOG_RETENTION_DAYS`, default 90gün) — günlük cron.
   - `prune_readings` 4 seviye (`READING_RETENTION_RAW_DAYS=90`, `..._15M_DAYS=365`, `..._HOURLY_DAYS=1825`, `..._DAILY_DAYS=99999`) — günlük cron. Batch delete (10K/transaction) ile MSSQL tek büyük transaction'dan kaçınır.
+- **Dashboard arayüz** (`/dashboard/`): Metronic 8.2 tabanlı light-sidebar layout. Giriş `/dashboard/login/` (Metronic corporate template, sosyal login/signup yok); "şifremi unuttum" admin'e yönlendiren info sayfası. Ana sayfa 4 widget'lı (KPI/grid/trend/events) AJAX polling ile canlı. Role mapping: rol=1 (admin) her menüyü görür, rol=2 (operatör) admin dışı, rol=3 (user) salt-izleme (komut/sistem log yok). Session cookie 24h (`SESSION_COOKIE_AGE=86400`); "Beni hatırla" işaretlenirse 30 gün.
+- **Dil desteği (i18n):** `USE_I18N=True`, `LANGUAGES=[("tr","Türkçe"),("en","English")]`, `LOCALE_PATHS=[dashboard/locale]`. TR default, EN çevirisi `dashboard/locale/en/LC_MESSAGES/django.po` (178 entry). `django.mo` dosyası commit'te; gettext binary olmadan Python script ile compile edildi. Yeni string eklendiğinde ya Linux/Docker'da `python manage.py compilemessages` ya da `_compile_po.py` benzeri bir script kullanılmalı (Windows gettext eksik).
 
 ## Periyodik task'lar (Celery beat)
 
