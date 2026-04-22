@@ -220,6 +220,15 @@ API_LOG_SKIP_PATHS = env_list(
     "/static/,/media/,/__debug__/,/admin/jsi18n/,/favicon.ico",
 )
 
+# Reading historian retention (her seviye için ayrı — prune_readings kullanır)
+#   raw      = Reading tablosu (en kritik, hızlı büyür)
+#   15m/hour = aggregate bucket'lar (orta ölçek)
+#   day      = günlük rollup (küçük, pratikte sonsuz tutulur)
+READING_RETENTION_RAW_DAYS = int(os.getenv("READING_RETENTION_RAW_DAYS", "90"))
+READING_RETENTION_15M_DAYS = int(os.getenv("READING_RETENTION_15M_DAYS", "365"))
+READING_RETENTION_HOURLY_DAYS = int(os.getenv("READING_RETENTION_HOURLY_DAYS", "1825"))   # 5 yıl
+READING_RETENTION_DAILY_DAYS = int(os.getenv("READING_RETENTION_DAILY_DAYS", "99999"))    # pratikte sonsuz
+
 
 # Celery — periyodik polling ve Command executor
 # Broker (Redis DB 2) ve result backend (django-db) cache'den ayrı tutuluyor.

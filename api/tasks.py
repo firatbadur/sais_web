@@ -37,3 +37,13 @@ def aggregate_readings_daily():
 def prune_api_logs_task():
     """settings.API_LOG_RETENTION_DAYS'den eski ApiLog satırlarını siler."""
     call_command("prune_api_logs")
+
+
+@shared_task(name="api.tasks.prune_readings_task")
+def prune_readings_task():
+    """Reading + aggregate tablolarından retention'ı geçenleri siler.
+
+    Her level (raw/15m/hour/day) kendi settings değişkenini kullanır:
+    READING_RETENTION_{RAW,15M,HOURLY,DAILY}_DAYS.
+    """
+    call_command("prune_readings")
