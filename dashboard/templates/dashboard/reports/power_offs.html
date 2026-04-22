@@ -2,9 +2,39 @@
 {% load i18n %}
 
 {% block title %}{% trans "Kapanma Geçmişi" %}{% endblock %}
+{% block page_title %}{% trans "Kapanma Geçmişi" %}{% endblock %}
 
 {% block content %}
-<h1>{% trans "Kapanma Geçmişi" %}</h1>
-<p>{% trans "PowerOff raporu (taslak)." %}</p>
-<p style="color:#888;font-size:.9em;">{% trans "Bu sayfa iskelet halinde — tam içerik eklenecek." %}</p>
+<div class="card">
+    <div class="card-header"><h3 class="card-title">{% trans "İstasyon Kapanma Kayıtları" %}</h3></div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-row-dashed align-middle gs-0 gy-3">
+                <thead class="fs-7 fw-bold text-uppercase text-gray-500">
+                    <tr>
+                        <th>{% trans "Kayıt Tarihi" %}</th>
+                        <th>{% trans "İstasyon" %}</th>
+                        <th>{% trans "Başlangıç" %}</th>
+                        <th>{% trans "Bitiş" %}</th>
+                        <th>{% trans "Süre" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in power_offs %}
+                        <tr>
+                            <td class="text-muted">{{ p.time_iso|date:"Y-m-d H:i" }}</td>
+                            <td>{{ p.station.name|default:"—" }}</td>
+                            <td>{{ p.start_date|date:"Y-m-d H:i"|default:"—" }}</td>
+                            <td>{% if p.end_date %}{{ p.end_date|date:"Y-m-d H:i" }}{% else %}<span class="badge badge-light-warning">{% trans "Devam ediyor" %}</span>{% endif %}</td>
+                            <td>{% if p.start_date and p.end_date %}{{ p.end_date|timeuntil:p.start_date }}{% else %}—{% endif %}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted py-5">{% trans "Kapanma kaydı yok." %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "dashboard/partials/pagination.html" %}
+    </div>
+</div>
 {% endblock %}

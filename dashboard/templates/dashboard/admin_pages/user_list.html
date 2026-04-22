@@ -2,9 +2,52 @@
 {% load i18n %}
 
 {% block title %}{% trans "Kullanıcılar" %}{% endblock %}
+{% block page_title %}{% trans "Kullanıcı Yönetimi" %}{% endblock %}
 
 {% block content %}
-<h1>{% trans "Kullanıcılar" %}</h1>
-<p>{% trans "Kullanıcı listesi (admin)." %}</p>
-<p style="color:#888;font-size:.9em;">{% trans "Bu sayfa iskelet halinde — tam içerik eklenecek." %}</p>
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">{% trans "Tüm Kullanıcılar" %}</h3>
+        <div class="card-toolbar">
+            <a href="{% url 'dashboard:admin_user_create' %}" class="btn btn-sm btn-primary">
+                <i class="ki-outline ki-plus fs-5 me-1"></i>{% trans "Yeni Kullanıcı" %}
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-row-dashed align-middle gs-0 gy-3">
+                <thead class="fs-7 fw-bold text-uppercase text-gray-500">
+                    <tr>
+                        <th>{% trans "Kullanıcı Adı" %}</th>
+                        <th>{% trans "Ad Soyad" %}</th>
+                        <th>{% trans "E-posta" %}</th>
+                        <th>{% trans "Rol" %}</th>
+                        <th>{% trans "Aktif" %}</th>
+                        <th>{% trans "Son Giriş" %}</th>
+                        <th class="text-end">{% trans "İşlem" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                        <tr>
+                            <td class="fw-bold">{{ u.username }}</td>
+                            <td>{{ u.get_full_name|default:"—" }}</td>
+                            <td class="text-muted">{{ u.email|default:"—" }}</td>
+                            <td>{{ u.get_rol_display|default:"—" }}</td>
+                            <td>{% if u.is_active %}<span class="badge badge-light-success">{% trans "Aktif" %}</span>{% else %}<span class="badge badge-light-secondary">{% trans "Pasif" %}</span>{% endif %}</td>
+                            <td class="text-muted">{{ u.last_login|date:"Y-m-d H:i"|default:"—" }}</td>
+                            <td class="text-end">
+                                <a href="{% url 'dashboard:admin_user_edit' u.pk %}" class="btn btn-sm btn-light">{% trans "Düzenle" %}</a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-5">{% trans "Kullanıcı yok." %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "dashboard/partials/pagination.html" %}
+    </div>
+</div>
 {% endblock %}

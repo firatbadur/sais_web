@@ -2,9 +2,51 @@
 {% load i18n %}
 
 {% block title %}{% trans "Komut Geçmişi" %}{% endblock %}
+{% block page_title %}{% trans "Komut Geçmişi" %}{% endblock %}
 
 {% block content %}
-<h1>{% trans "Komut Geçmişi" %}</h1>
-<p>{% trans "Command history raporu (taslak)." %}</p>
-<p style="color:#888;font-size:.9em;">{% trans "Bu sayfa iskelet halinde — tam içerik eklenecek." %}</p>
+<div class="card">
+    <div class="card-header"><h3 class="card-title">{% trans "Command History" %}</h3></div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-row-dashed align-middle gs-0 gy-3">
+                <thead class="fs-7 fw-bold text-uppercase text-gray-500">
+                    <tr>
+                        <th>{% trans "Oluşturulma" %}</th>
+                        <th>{% trans "Sensör" %}</th>
+                        <th>{% trans "Değer" %}</th>
+                        <th>{% trans "Durum" %}</th>
+                        <th>{% trans "Öncelik" %}</th>
+                        <th>{% trans "Deneme" %}</th>
+                        <th>{% trans "Kaynak" %}</th>
+                        <th>{% trans "Talep Eden" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in commands %}
+                        <tr>
+                            <td class="text-muted">{{ c.created_at|date:"Y-m-d H:i:s" }}</td>
+                            <td>{{ c.sensor.parameter.parameter_name|default:c.sensor_id }}</td>
+                            <td class="fw-semibold">{{ c.value|default:c.value_text|default:"—" }} <small class="text-muted">({{ c.value_type }})</small></td>
+                            <td>
+                                {% if c.status == 'completed' %}<span class="badge badge-light-success">{{ c.get_status_display }}</span>
+                                {% elif c.status == 'failed' %}<span class="badge badge-light-danger">{{ c.get_status_display }}</span>
+                                {% elif c.status == 'expired' %}<span class="badge badge-light-secondary">{{ c.get_status_display }}</span>
+                                {% elif c.status == 'executing' %}<span class="badge badge-light-info">{{ c.get_status_display }}</span>
+                                {% else %}<span class="badge badge-light-warning">{{ c.get_status_display }}</span>{% endif %}
+                            </td>
+                            <td class="text-end">{{ c.priority }}</td>
+                            <td class="text-end">{{ c.attempt_count }}/{{ c.max_attempts }}</td>
+                            <td>{{ c.get_source_display }}</td>
+                            <td class="text-muted">{{ c.requested_by.username|default:"—" }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="8" class="text-center text-muted py-5">{% trans "Komut geçmişi yok." %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "dashboard/partials/pagination.html" %}
+    </div>
+</div>
 {% endblock %}

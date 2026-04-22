@@ -2,9 +2,49 @@
 {% load i18n %}
 
 {% block title %}{% trans "Bağlantılar" %}{% endblock %}
+{% block page_title %}{% trans "Bağlantılar" %}{% endblock %}
 
 {% block content %}
-<h1>{% trans "Bağlantılar" %}</h1>
-<p>{% trans "Bağlantı durumu (salt-okunur)." %}</p>
-<p style="color:#888;font-size:.9em;">{% trans "Bu sayfa iskelet halinde — tam içerik eklenecek." %}</p>
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">{% trans "Tüm Bağlantılar" %}</h3>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-row-dashed align-middle gs-0 gy-4">
+                <thead class="fs-7 fw-bold text-uppercase text-gray-500">
+                    <tr>
+                        <th>{% trans "ID" %}</th>
+                        <th>{% trans "İstasyon" %}</th>
+                        <th>{% trans "Ad" %}</th>
+                        <th>{% trans "Protokol" %}</th>
+                        <th>{% trans "Host / Port" %}</th>
+                        <th>{% trans "Poll / Save (sn)" %}</th>
+                        <th>{% trans "Son Bağlantı" %}</th>
+                        <th>{% trans "Son Hata" %}</th>
+                        <th>{% trans "Aktif" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in connections %}
+                        <tr>
+                            <td>{{ c.pk }}</td>
+                            <td>{{ c.station.name|default:"-" }}</td>
+                            <td class="fw-semibold">{{ c.name }}</td>
+                            <td><span class="badge badge-light-info">{{ c.protocol }}</span></td>
+                            <td class="text-muted">{{ c.host|default:c.serial_port|default:"-" }}{% if c.port %}:{{ c.port }}{% endif %}</td>
+                            <td class="text-end">{{ c.poll_interval_sec }} / {{ c.save_interval_sec|default:"—" }}</td>
+                            <td class="text-muted">{{ c.last_connected_at|default:"—"|date:"Y-m-d H:i:s" }}</td>
+                            <td class="text-danger small">{{ c.last_error_message|truncatechars:50|default:"—" }}</td>
+                            <td>{% if c.is_enabled %}<span class="badge badge-light-success">{% trans "Aktif" %}</span>{% else %}<span class="badge badge-light-secondary">{% trans "Pasif" %}</span>{% endif %}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="9" class="text-center text-muted py-5">{% trans "Bağlantı yok." %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "dashboard/partials/pagination.html" %}
+    </div>
+</div>
 {% endblock %}

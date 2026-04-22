@@ -2,9 +2,35 @@
 {% load i18n %}
 
 {% block title %}{% trans "Numune Başlat" %}{% endblock %}
+{% block page_title %}{% trans "Numune Başlat" %}{% endblock %}
 
 {% block content %}
-<h1>{% trans "Numune Başlat" %}</h1>
-<p>{% trans "Numune alma komutu tetikleme (taslak)." %}</p>
-<p style="color:#888;font-size:.9em;">{% trans "Bu sayfa iskelet halinde — tam içerik eklenecek." %}</p>
+<div class="row">
+<div class="col-md-8">
+<div class="card">
+    <div class="card-header"><h3 class="card-title">{% trans "Manuel Numune Tetikleme" %}</h3></div>
+    <div class="card-body">
+        <p class="text-muted">{% blocktrans %}
+        Seçilen istasyon için numune alma komutu kuyruğa atılır. Komut Bakanlık
+        Numune Talebi olarak sınıflandırılır, 5 dakika içinde yürütülmezse iptal
+        olur. Bu sayfa yapım aşamasında — backend endpoint'i /StartSample
+        üzerinden tetiklenebilir.
+        {% endblocktrans %}</p>
+        <form class="mt-5" onsubmit="alert('{% trans "Bu buton henüz aktif değil — taslak." %}'); return false;">
+            <div class="mb-5">
+                <label class="form-label">{% trans "İstasyon" %}</label>
+                <select class="form-select form-select-solid"><option>—</option></select>
+            </div>
+            <div class="mb-5">
+                <label class="form-label">{% trans "Talep Kodu" %}</label>
+                <input type="text" class="form-control form-control-solid" placeholder="örn. SAMPLE-2026-04-22-01">
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="ki-outline ki-play fs-5 me-1"></i>{% trans "Numune Başlat" %}
+            </button>
+        </form>
+    </div>
+</div>
+</div>
+</div>
 {% endblock %}

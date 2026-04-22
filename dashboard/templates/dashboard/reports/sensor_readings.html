@@ -2,9 +2,46 @@
 {% load i18n %}
 
 {% block title %}{% trans "Sensör Okumaları" %}{% endblock %}
+{% block page_title %}{% trans "Sensör Okumaları" %}{% endblock %}
 
 {% block content %}
-<h1>{% trans "Sensör Okumaları" %}</h1>
-<p>{% trans "Tarihsel okuma raporu (taslak)." %}</p>
-<p style="color:#888;font-size:.9em;">{% trans "Bu sayfa iskelet halinde — tam içerik eklenecek." %}</p>
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">{% trans "15 Dakikalık Aggregate" %}</h3>
+        <div class="card-toolbar"><span class="text-muted fs-7">{% trans "Raw Reading yerine 15dk bucket (performans)" %}</span></div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-row-dashed align-middle gs-0 gy-3">
+                <thead class="fs-7 fw-bold text-uppercase text-gray-500">
+                    <tr>
+                        <th>{% trans "Bucket" %}</th>
+                        <th>{% trans "Sensör" %}</th>
+                        <th class="text-end">{% trans "Ortalama" %}</th>
+                        <th class="text-end">{% trans "Min" %}</th>
+                        <th class="text-end">{% trans "Max" %}</th>
+                        <th class="text-end">{% trans "Adet" %}</th>
+                        <th class="text-end">{% trans "Bad" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                        <tr>
+                            <td class="text-muted">{{ r.bucket_start|date:"Y-m-d H:i" }}</td>
+                            <td>{{ r.sensor.parameter.parameter_name|default:r.sensor_id }}</td>
+                            <td class="text-end fw-semibold">{{ r.avg_value|default:"—" }}</td>
+                            <td class="text-end text-muted">{{ r.min_value|default:"—" }}</td>
+                            <td class="text-end text-muted">{{ r.max_value|default:"—" }}</td>
+                            <td class="text-end">{{ r.count }}</td>
+                            <td class="text-end">{% if r.bad_count %}<span class="text-danger">{{ r.bad_count }}</span>{% else %}0{% endif %}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-5">{% trans "Henüz aggregate verisi yok. aggregate_readings task'ının çalışmasını bekleyin." %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "dashboard/partials/pagination.html" %}
+    </div>
+</div>
 {% endblock %}

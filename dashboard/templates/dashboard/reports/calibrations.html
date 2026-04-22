@@ -2,9 +2,45 @@
 {% load i18n %}
 
 {% block title %}{% trans "Kalibrasyon Geçmişi" %}{% endblock %}
+{% block page_title %}{% trans "Kalibrasyon Geçmişi" %}{% endblock %}
 
 {% block content %}
-<h1>{% trans "Kalibrasyon Geçmişi" %}</h1>
-<p>{% trans "Kalibrasyon raporu (taslak)." %}</p>
-<p style="color:#888;font-size:.9em;">{% trans "Bu sayfa iskelet halinde — tam içerik eklenecek." %}</p>
+<div class="card">
+    <div class="card-header"><h3 class="card-title">{% trans "Kalibrasyon Kayıtları" %}</h3></div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-row-dashed align-middle gs-0 gy-3">
+                <thead class="fs-7 fw-bold text-uppercase text-gray-500">
+                    <tr>
+                        <th>{% trans "Tarih" %}</th>
+                        <th>{% trans "Sensör" %}</th>
+                        <th>{% trans "Tip" %}</th>
+                        <th class="text-end">{% trans "Referans" %}</th>
+                        <th class="text-end">{% trans "Ortalama" %}</th>
+                        <th class="text-end">{% trans "Std. Sapma" %}</th>
+                        <th>{% trans "Geçerli" %}</th>
+                        <th>{% trans "Kullanıcı" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in calibrations %}
+                        <tr>
+                            <td class="text-muted">{{ c.time_iso|date:"Y-m-d H:i" }}</td>
+                            <td>{{ c.sensor.parameter.parameter_name|default:c.sensor_id }}</td>
+                            <td>{{ c.get_type_display }}</td>
+                            <td class="text-end">{{ c.cal_ref|default:"—" }}</td>
+                            <td class="text-end">{{ c.cal_average|default:"—" }}</td>
+                            <td class="text-end text-muted">{{ c.cal_std|default:"—" }}</td>
+                            <td>{% if c.is_valid %}<span class="badge badge-light-success">{% trans "Geçerli" %}</span>{% else %}<span class="badge badge-light-danger">{% trans "Geçersiz" %}</span>{% endif %}</td>
+                            <td class="text-muted">{{ c.user.username|default:"—" }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="8" class="text-center text-muted py-5">{% trans "Kalibrasyon kaydı yok." %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "dashboard/partials/pagination.html" %}
+    </div>
+</div>
 {% endblock %}

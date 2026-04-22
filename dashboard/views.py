@@ -91,28 +91,66 @@ class HomeView(RoleRequiredMixin, TemplateView):
 # Reports (rol: herkes, bir kısmı sadece admin+operatör)
 # --------------------------------------------------------------------------- #
 
-class ReadingsReportView(RoleRequiredMixin, TemplateView):
+class ReadingsReportView(RoleRequiredMixin, ListView):
+    """Sensör okumaları — 15 dakikalık aggregate'ten."""
     template_name = "dashboard/reports/sensor_readings.html"
+    context_object_name = "rows"
+    paginate_by = 50
+
+    def get_queryset(self):
+        from api.models import ReadingFifteenMin
+        return (ReadingFifteenMin.objects
+                .select_related("sensor", "sensor__parameter")
+                .order_by("-bucket_start"))
 
 
 class AggregatesReportView(RoleRequiredMixin, TemplateView):
+    """15dk/saatlik/günlük bucket kıyaslama — chart + tablo (taslak)."""
     template_name = "dashboard/reports/aggregates.html"
 
 
-class CalibrationsReportView(RoleRequiredMixin, TemplateView):
+class CalibrationsReportView(RoleRequiredMixin, ListView):
+    model = Calibration
     template_name = "dashboard/reports/calibrations.html"
+    context_object_name = "calibrations"
+    paginate_by = 50
+    ordering = ["-time_iso"]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("sensor", "sensor__parameter", "user")
 
 
-class PowerOffsReportView(RoleRequiredMixin, TemplateView):
+class PowerOffsReportView(RoleRequiredMixin, ListView):
+    model = PowerOff
     template_name = "dashboard/reports/power_offs.html"
+    context_object_name = "power_offs"
+    paginate_by = 50
+    ordering = ["-time_iso"]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("station")
 
 
-class CommandsReportView(OperatorRequiredMixin, TemplateView):
+class CommandsReportView(OperatorRequiredMixin, ListView):
+    model = Command
     template_name = "dashboard/reports/commands.html"
+    context_object_name = "commands"
+    paginate_by = 50
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("sensor", "sensor__parameter", "request_type", "requested_by")
 
 
-class SystemLogsReportView(OperatorRequiredMixin, TemplateView):
+class SystemLogsReportView(OperatorRequiredMixin, ListView):
+    model = SystemLog
     template_name = "dashboard/reports/system_logs.html"
+    context_object_name = "logs"
+    paginate_by = 50
+    ordering = ["-time_iso"]
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("type", "station")
 
 
 # --------------------------------------------------------------------------- #

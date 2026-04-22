@@ -2,9 +2,52 @@
 {% load i18n %}
 
 {% block title %}{% trans "Sensörler" %}{% endblock %}
+{% block page_title %}{% trans "Sensörler" %}{% endblock %}
 
 {% block content %}
-<h1>{% trans "Sensörler" %}</h1>
-<p>{% trans "Sensör listesi (salt-okunur)." %}</p>
-<p style="color:#888;font-size:.9em;">{% trans "Bu sayfa iskelet halinde — tam içerik eklenecek." %}</p>
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">{% trans "Tüm Sensörler" %}</h3>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-row-dashed align-middle gs-0 gy-4">
+                <thead class="fs-7 fw-bold text-uppercase text-gray-500">
+                    <tr>
+                        <th>{% trans "ID" %}</th>
+                        <th>{% trans "Parametre" %}</th>
+                        <th>{% trans "Bağlantı" %}</th>
+                        <th>{% trans "Scan Grubu" %}</th>
+                        <th>{% trans "Slave" %}</th>
+                        <th>{% trans "Fn" %}</th>
+                        <th>{% trans "Adres" %}</th>
+                        <th>{% trans "Data Type" %}</th>
+                        <th>{% trans "Aktif" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in sensors %}
+                        <tr>
+                            <td>{{ s.pk }}</td>
+                            <td class="fw-semibold">{{ s.parameter.parameter_name|default:"-" }}</td>
+                            <td>{{ s.connection.name|default:"-" }}</td>
+                            <td>{{ s.scan_group.name|default:"—" }}</td>
+                            <td class="text-end">{{ s.slave_id|default:"—" }}</td>
+                            <td class="text-end">{{ s.function|default:"—" }}</td>
+                            <td class="text-end">{{ s.address|default:"—" }}</td>
+                            <td>{{ s.data_type|default:"—" }}</td>
+                            <td>
+                                {% if s.is_active %}<span class="badge badge-light-success">{% trans "Aktif" %}</span>{% else %}<span class="badge badge-light-secondary">{% trans "Pasif" %}</span>{% endif %}
+                                {% if s.is_simulated %}<span class="badge badge-light-warning ms-1">{% trans "Sim" %}</span>{% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="9" class="text-center text-muted py-5">{% trans "Sensör yok." %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "dashboard/partials/pagination.html" %}
+    </div>
+</div>
 {% endblock %}

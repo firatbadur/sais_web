@@ -1,10 +1,43 @@
 {% extends "dashboard/base.html" %}
 {% load i18n %}
 
-{% block title %}{% trans "Kullanıcı Formu" %}{% endblock %}
+{% block title %}{% if object %}{% trans "Kullanıcı Düzenle" %}{% else %}{% trans "Yeni Kullanıcı" %}{% endif %}{% endblock %}
+{% block page_title %}{% if object %}{% trans "Kullanıcı Düzenle" %}{% else %}{% trans "Yeni Kullanıcı" %}{% endif %}{% endblock %}
 
 {% block content %}
-<h1>{% trans "Kullanıcı Formu" %}</h1>
-<p>{% trans "Kullanıcı ekle/düzenle." %}</p>
-<p style="color:#888;font-size:.9em;">{% trans "Bu sayfa iskelet halinde — tam içerik eklenecek." %}</p>
+<div class="row">
+<div class="col-md-8">
+<div class="card">
+    <div class="card-header"><h3 class="card-title">{% if object %}{{ object.username }}{% else %}{% trans "Yeni Kullanıcı" %}{% endif %}</h3></div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            {% for field in form %}
+                <div class="mb-5">
+                    <label class="form-label">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                    {% if field.errors %}<div class="text-danger small">{{ field.errors.0 }}</div>{% endif %}
+                </div>
+            {% endfor %}
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{% url 'dashboard:admin_users' %}" class="btn btn-light">{% trans "İptal" %}</a>
+                <button type="submit" class="btn btn-primary">{% trans "Kaydet" %}</button>
+            </div>
+        </form>
+
+        {% if object %}
+        <hr class="my-7">
+        <form method="post" action="{% url 'dashboard:admin_user_reset_pw' object.pk %}" onsubmit="return confirm('{% trans "Geçici şifre atanacak — devam?" %}');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-warning">
+                <i class="ki-outline ki-key fs-5 me-1"></i>{% trans "Şifre Sıfırla" %}
+            </button>
+            <span class="text-muted ms-3 fs-7">{% trans "Rastgele geçici şifre üretilir; ekranda gösterilir, kullanıcıya elden iletin." %}</span>
+        </form>
+        {% endif %}
+    </div>
+</div>
+</div>
+</div>
 {% endblock %}

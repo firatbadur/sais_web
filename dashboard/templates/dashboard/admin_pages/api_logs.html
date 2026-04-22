@@ -2,9 +2,53 @@
 {% load i18n %}
 
 {% block title %}{% trans "API Logları" %}{% endblock %}
+{% block page_title %}{% trans "API Logları" %}{% endblock %}
 
 {% block content %}
-<h1>{% trans "API Logları" %}</h1>
-<p>{% trans "ApiLog görüntüleme (admin)." %}</p>
-<p style="color:#888;font-size:.9em;">{% trans "Bu sayfa iskelet halinde — tam içerik eklenecek." %}</p>
+<div class="card">
+    <div class="card-header"><h3 class="card-title">{% trans "Gelen + Giden HTTP Trafiği" %}</h3></div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-row-dashed align-middle gs-0 gy-3">
+                <thead class="fs-7 fw-bold text-uppercase text-gray-500">
+                    <tr>
+                        <th>{% trans "Zaman" %}</th>
+                        <th>{% trans "Yön" %}</th>
+                        <th>{% trans "Method" %}</th>
+                        <th>{% trans "URL" %}</th>
+                        <th class="text-end">{% trans "Status" %}</th>
+                        <th class="text-end">{% trans "ms" %}</th>
+                        <th>{% trans "IP / Host" %}</th>
+                        <th>{% trans "Kullanıcı" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in logs %}
+                        <tr>
+                            <td class="text-muted" style="white-space:nowrap;">{{ l.created_at|date:"Y-m-d H:i:s" }}</td>
+                            <td>
+                                {% if l.direction == 'in' %}<span class="badge badge-light-info">IN</span>
+                                {% else %}<span class="badge badge-light-warning">OUT</span>{% endif %}
+                            </td>
+                            <td class="fw-bold">{{ l.method }}</td>
+                            <td class="text-truncate" style="max-width:350px;" title="{{ l.url }}">{{ l.url }}</td>
+                            <td class="text-end">
+                                {% if l.response_status >= 500 %}<span class="text-danger fw-bold">{{ l.response_status }}</span>
+                                {% elif l.response_status >= 400 %}<span class="text-warning fw-bold">{{ l.response_status }}</span>
+                                {% elif l.response_status %}<span class="text-success">{{ l.response_status }}</span>
+                                {% else %}—{% endif %}
+                            </td>
+                            <td class="text-end text-muted">{{ l.duration_ms|default:"—" }}</td>
+                            <td class="text-muted">{{ l.remote_ip|default:l.target_host|default:"—" }}</td>
+                            <td class="text-muted">{{ l.user.username|default:"—" }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="8" class="text-center text-muted py-5">{% trans "API log kaydı yok." %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "dashboard/partials/pagination.html" %}
+    </div>
+</div>
 {% endblock %}
