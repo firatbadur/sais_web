@@ -590,6 +590,24 @@ class Sensor(models.Model):
             return from_dt
         return int(self.quantity or 1)
 
+    def save(self, *args, **kwargs):
+        """Scan group'a bağlı sensörlerde connection_id'yi otomatik senkronize et.
+
+        `_ScanGroupSensorInline` admin inline formu connection alanını içermiyor
+        (tekrar olmaması için); Django inline `scan_group_id` değerini otomatik
+        dolduruyor ama FK olarak gerekli olan `connection_id`'yi doldurmuyor.
+        Bu override, scan_group mevcutken connection'ı gruptan miras alıyor.
+        Doğrudan Sensor form'unda da (scan_group seçilip connection boş
+        bırakıldıysa) aynı UX kolaylığını sağlar.
+        """
+        if self.scan_group_id and self.connection_id is None:
+            # Tek sorgu — ScanGroup.connection_id'yi al, sensör nesnesini yükleme
+            conn_id = ScanGroup.objects.values_list(
+                "connection_id", flat=True,
+            ).get(pk=self.scan_group_id)
+            self.connection_id = conn_id
+        super().save(*args, **kwargs)
+
     def clean(self):
         """scan_group set ise slave/function/address uyumunu doğrula."""
         if not self.scan_group_id:
