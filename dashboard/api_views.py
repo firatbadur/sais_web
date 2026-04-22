@@ -8,7 +8,6 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count
 from django.http import JsonResponse
 from django.utils import timezone
 
@@ -16,6 +15,7 @@ from api.models import (
     Connection,
     PowerOff,
     Reading,
+    ReadingFifteenMin,
     ReadingHourly,
     Sensor,
     SensorLatest,
@@ -44,62 +44,107 @@ def home_snapshot(request):
     """Anlık sensör grid'i — SensorLatest snapshot'ları."""
     qs = (
         SensorLatest.objects
-        .select_related("sensor", "sensor__parameter", "sensor__connection", "status")
-        .order_by("sensor__connection_id", "sensor__parameter__parameter_name")
+        .select_related(
+            "sensor",
+            "sensor__parameter",
+            "sensor__connection",
+            "sensor__connection__station",
+            "status",
+        )
+        .order_by(
+            "sensor__connection__station__name",
+            "sensor__connection_id",
+            "sensor__parameter__parameter_name",
+        )
     )
     rows = []
     for latest in qs[:200]:   # şimdilik 200 ile sınırla; ileride filtre eklenir
         sensor = latest.sensor
         parameter = getattr(sensor, "parameter", None)
+        connection = getattr(sensor, "connection", None) if sensor else None
+        station = getattr(connection, "station", None) if connection else None
         rows.append({
             "sensor_id": sensor.pk if sensor else None,
+            "station_name": station.name if station else None,
+            "connection": connection.name if connection else None,
             "parameter_name": (parameter.parameter_name if parameter else None) or "-",
-            "unit": (parameter.unit_txt if parameter else "") or "",
+            "unit": (parameter.unit_txt if parameter else "") or (parameter.unit if parameter else "") or "",
             "value": latest.value,
             "quality": latest.quality,
             "status_code": latest.status.code if latest.status else None,
             "readtime": latest.readtime.isoformat() if latest.readtime else None,
-            "connection": sensor.connection.name if sensor and sensor.connection_id else None,
         })
     return JsonResponse({"count": len(rows), "rows": rows})
 
 
 @login_required
 def home_trend(request):
-    """24 saat trend grafiği — ReadingHourly'den seçili sensörlerin saatlik ortalaması."""
+    """24 saat trend grafiği — sensör başına seri.
+
+    Granularity cascade: ReadingHourly (24 nokta) → ReadingFifteenMin (96 nokta)
+    → raw Reading (son 500 satır). Aggregate task'ları henüz dönmediyse de
+    chart boş kalmasın diye.
+    """
     now = timezone.now()
     since = now - timedelta(hours=24)
 
     # Öne çıkan aktif sensörlerden ilk 5 tanesini al (MVP — ileride filtre)
-    top_sensor_ids = list(
+    top_sensors = list(
         Sensor.objects.filter(is_active=True)
-        .order_by("id")
-        .values_list("id", flat=True)[:5]
+        .select_related("parameter")
+        .order_by("id")[:5]
     )
 
-    series = []
-    for sid in top_sensor_ids:
-        buckets = (
-            ReadingHourly.objects
-            .filter(sensor_id=sid, bucket_start__gte=since)
-            .order_by("bucket_start")
-            .values("bucket_start", "avg_value", "min_value", "max_value")
-        )
-        points = [
-            {
-                "t": b["bucket_start"].isoformat() if b["bucket_start"] else None,
-                "avg": b["avg_value"],
-                "min": b["min_value"],
-                "max": b["max_value"],
-            }
-            for b in buckets
-        ]
-        if points:
-            sensor = Sensor.objects.select_related("parameter").filter(pk=sid).first()
-            label = sensor.parameter.parameter_name if sensor and sensor.parameter else f"Sensor-{sid}"
-            series.append({"sensor_id": sid, "label": label, "points": points})
+    # Tek sorgu ile hangi granularity'de veri var, tespit et.
+    top_ids = [s.id for s in top_sensors]
+    if ReadingHourly.objects.filter(sensor_id__in=top_ids, bucket_start__gte=since).exists():
+        bucket_level = "hourly"
+    elif ReadingFifteenMin.objects.filter(sensor_id__in=top_ids, bucket_start__gte=since).exists():
+        bucket_level = "15min"
+    else:
+        bucket_level = "raw"
 
-    return JsonResponse({"since": since.isoformat(), "series": series})
+    series = []
+    for sensor in top_sensors:
+        label = sensor.parameter.parameter_name if sensor.parameter else f"Sensor-{sensor.id}"
+
+        if bucket_level == "raw":
+            readings = (
+                Reading.objects
+                .filter(sensor_id=sensor.id, time_iso__gte=since, value__isnull=False)
+                .order_by("time_iso")
+                .values("time_iso", "value")[:500]
+            )
+            points = [
+                {"t": r["time_iso"].isoformat(), "avg": r["value"], "min": r["value"], "max": r["value"]}
+                for r in readings if r["time_iso"] is not None
+            ]
+        else:
+            model = ReadingHourly if bucket_level == "hourly" else ReadingFifteenMin
+            buckets = (
+                model.objects
+                .filter(sensor_id=sensor.id, bucket_start__gte=since)
+                .order_by("bucket_start")
+                .values("bucket_start", "avg_value", "min_value", "max_value")
+            )
+            points = [
+                {
+                    "t": b["bucket_start"].isoformat() if b["bucket_start"] else None,
+                    "avg": b["avg_value"],
+                    "min": b["min_value"],
+                    "max": b["max_value"],
+                }
+                for b in buckets if b["bucket_start"] is not None
+            ]
+
+        if points:
+            series.append({"sensor_id": sensor.id, "label": label, "points": points})
+
+    return JsonResponse({
+        "since": since.isoformat(),
+        "bucket_level": bucket_level,
+        "series": series,
+    })
 
 
 @login_required

@@ -72,6 +72,7 @@
                     <table class="table table-row-dashed align-middle gs-0 gy-3">
                         <thead>
                             <tr class="fs-7 fw-bold text-gray-500 text-uppercase">
+                                <th>{% trans "İstasyon" %}</th>
                                 <th>{% trans "Parametre" %}</th>
                                 <th class="text-end">{% trans "Değer" %}</th>
                                 <th>{% trans "Birim" %}</th>
@@ -80,7 +81,7 @@
                             </tr>
                         </thead>
                         <tbody id="snapshot-body">
-                            <tr><td colspan="5" class="text-center text-muted">{% trans "Yükleniyor..." %}</td></tr>
+                            <tr><td colspan="6" class="text-center text-muted">{% trans "Yükleniyor..." %}</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -110,13 +111,13 @@
             <div class="card-header pt-5">
                 <h3 class="card-title fw-bold text-gray-800">{% trans "24 Saatlik Sensör Trendi" %}</h3>
                 <div class="card-toolbar">
-                    <span class="text-muted fs-7">{% trans "Saatlik ortalama (ReadingHourly)" %}</span>
+                    <span class="text-muted fs-7" id="trend-subtitle">—</span>
                 </div>
             </div>
             <div class="card-body">
                 <div id="trend-chart" style="height:360px;"></div>
                 <div id="trend-empty" class="text-center text-muted py-5" style="display:none;">
-                    {% trans "Henüz 24 saatlik saatlik aggregate verisi yok. Celery beat aggregate_readings_hourly task'ını bekleyin." %}
+                    {% trans "Henüz trend verisi yok. Sensörlerin okumaya başlaması veya aggregate task'larının çalışması bekleniyor." %}
                 </div>
             </div>
         </div>
@@ -144,6 +145,15 @@
         manual:      'badge-light-primary'
     };
 
+    const BUCKET_LABEL = {
+        hourly: "{% trans 'Saatlik ortalama (ReadingHourly)' %}",
+        '15min': "{% trans '15-dakikalık ortalama (ReadingFifteenMin)' %}",
+        raw:    "{% trans 'Ham okuma (Reading) — aggregate henüz dönmedi' %}"
+    };
+
+    // 5 dakikadan eski okumayı "stale" say.
+    const STALE_AGE_MS = 5 * 60 * 1000;
+
     function formatTime(iso) {
         if (!iso) return '-';
         try { return new Date(iso).toLocaleTimeString({{ LANGUAGE_CODE|yesno:"'en-US','tr-TR'" }}); }
@@ -153,6 +163,25 @@
         if (!iso) return '-';
         try { return new Date(iso).toLocaleString(); }
         catch(e) { return iso; }
+    }
+    function formatValue(v, decimals) {
+        if (v === null || v === undefined) return '—';
+        const n = Number(v);
+        if (!isFinite(n)) return '—';
+        const opts = (decimals != null) ? { minimumFractionDigits: decimals, maximumFractionDigits: decimals } : {};
+        return n.toLocaleString(undefined, opts);
+    }
+    function isStale(iso) {
+        if (!iso) return true;
+        const t = new Date(iso).getTime();
+        if (isNaN(t)) return false;
+        return (Date.now() - t) > STALE_AGE_MS;
+    }
+    function escapeHtml(s) {
+        if (s == null) return '';
+        return String(s).replace(/[&<>"']/g, c => (
+            {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+        ));
     }
 
     async function fetchJson(url) {
@@ -178,17 +207,24 @@
             const data = await fetchJson(URLS.snapshot);
             const tbody = document.getElementById('snapshot-body');
             if (!data.rows || data.rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">{% trans "Henüz sensör verisi yok." %}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">{% trans "Henüz sensör verisi yok." %}</td></tr>`;
             } else {
                 tbody.innerHTML = data.rows.map(r => {
                     const badge = QUALITY_BADGE[r.quality] || 'badge-light-secondary';
-                    const value = (r.value === null || r.value === undefined) ? '—' : Number(r.value).toLocaleString();
-                    return `<tr>
-                        <td class="fw-semibold text-gray-800">${r.parameter_name || '-'}</td>
-                        <td class="text-end fw-bolder fs-5">${value}</td>
-                        <td class="text-muted">${r.unit || '-'}</td>
-                        <td><span class="badge ${badge}">${r.quality || '-'}</span></td>
-                        <td class="text-end text-muted">${formatTime(r.readtime)}</td>
+                    const stale = isStale(r.readtime);
+                    const valueTxt = formatValue(r.value, 2);
+                    const timeTxt = formatTime(r.readtime);
+                    const stationTxt = r.station_name ? escapeHtml(r.station_name) : '<span class="text-muted">-</span>';
+                    const staleBadge = stale
+                        ? ` <i class="ki-outline ki-time fs-7 text-warning ms-1" title="{% trans 'Okuma 5 dakikadan eski' %}"></i>`
+                        : '';
+                    return `<tr${stale ? ' class="opacity-75"' : ''}>
+                        <td class="text-gray-700">${stationTxt}</td>
+                        <td class="fw-semibold text-gray-800">${escapeHtml(r.parameter_name || '-')}</td>
+                        <td class="text-end fw-bolder fs-5 text-gray-900">${valueTxt}</td>
+                        <td class="text-muted">${escapeHtml(r.unit || '-')}</td>
+                        <td><span class="badge ${badge}">${escapeHtml(r.quality || '-')}</span></td>
+                        <td class="text-end text-muted">${timeTxt}${staleBadge}</td>
                     </tr>`;
                 }).join('');
             }
@@ -242,6 +278,10 @@
             const data = await fetchJson(URLS.trend);
             const empty = document.getElementById('trend-empty');
             const container = document.getElementById('trend-chart');
+            const subtitle = document.getElementById('trend-subtitle');
+            if (subtitle) {
+                subtitle.textContent = BUCKET_LABEL[data.bucket_level] || '—';
+            }
             if (!data.series || data.series.length === 0) {
                 empty.style.display = 'block';
                 container.style.display = 'none';
@@ -252,7 +292,9 @@
 
             const series = data.series.map(s => ({
                 name: s.label,
-                data: s.points.map(p => [new Date(p.t).getTime(), p.avg])
+                data: s.points
+                    .filter(p => p.t && p.avg !== null && p.avg !== undefined)
+                    .map(p => [new Date(p.t).getTime(), p.avg])
             }));
 
             const options = {
