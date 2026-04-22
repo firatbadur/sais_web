@@ -11,6 +11,7 @@ Kullanım:
 from django.core.management.base import BaseCommand, CommandError
 
 from api.models import Connection
+from scada_io import connection_pool
 from scada_io.tasks import poll_connection
 
 
@@ -32,11 +33,16 @@ class Command(BaseCommand):
             raise CommandError("Connection bulunamadı (id veya --name verin).")
 
         self.stdout.write(f"Polling {conn} (id={conn.pk}, protocol={conn.protocol})...")
-        # Sync çağrı: Celery'ye enqueue etmek yerine direkt çalıştır.
-        poll_connection(conn.pk)
-        conn.refresh_from_db()
-        self.stdout.write(self.style.SUCCESS(
-            f"Tamamlandı. last_polled_at={conn.last_polled_at}, "
-            f"last_connected_at={conn.last_connected_at}, "
-            f"last_error_message={conn.last_error_message or '-'}"
-        ))
+        try:
+            # Sync çağrı: Celery'ye enqueue etmek yerine direkt çalıştır.
+            poll_connection(conn.pk)
+            conn.refresh_from_db()
+            self.stdout.write(self.style.SUCCESS(
+                f"Tamamlandı. last_polled_at={conn.last_polled_at}, "
+                f"last_connected_at={conn.last_connected_at}, "
+                f"last_error_message={conn.last_error_message or '-'}"
+            ))
+        finally:
+            # Debug komutu çıkarken persistent pool'u temiz kapat (process exit'te
+            # OS zaten kapatır ama explicit clean teardown daha sağlıklı).
+            connection_pool.close_all()

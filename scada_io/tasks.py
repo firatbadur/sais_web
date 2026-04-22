@@ -22,6 +22,7 @@ from django.utils import timezone
 
 from api.models import Command, Connection, Sensor
 
+from . import connection_pool
 from .persistence import persist_reading
 from .readers import build_reader
 from .writers import build_writer
@@ -91,9 +92,14 @@ def poll_connection(self, conn_id: int):
     if not real_sensors:
         return
 
+    # --- Persistent connection pool ---
+    # Aynı worker process'indeki önceki polling cycle'dan kalan açık socket'i
+    # tekrar kullan; yoksa yeni aç. RUT906 vs. gateway'lerde rapid connect/close
+    # pattern'i socket pool'unu kilitlediği için persistent connection kritik.
     try:
-        reader = build_reader(conn)
+        reader = connection_pool.get_reader(conn)
     except ValueError as exc:
+        # Desteklenmeyen protokol vb.
         Connection.objects.filter(pk=conn_id).update(
             last_error_at=now,
             last_error_message=str(exc)[:500],
@@ -101,40 +107,36 @@ def poll_connection(self, conn_id: int):
         logger.warning("poll_connection: %s — %s", conn, exc)
         return
 
-    if not reader.open():
+    if reader is None:
+        # Bağlantı açılamadı (pool içinde build + open başarısız)
         Connection.objects.filter(pk=conn_id).update(
             last_error_at=now,
-            last_error_message=(reader.last_error or "open failed")[:500],
+            last_error_message="bağlantı açılamadı"[:500],
         )
-        # Bağlantı açılmadı; tüm sensörler için 'bad' kalite kayıt at
         for sensor in real_sensors:
             persist_reading(sensor, value=None, quality="bad", origin="polled", status_code=8)
         return
 
-    Connection.objects.filter(pk=conn_id).update(
-        last_connected_at=now,
-        last_error_message="",
-    )
+    last_sensor_error = ""
+    any_success = False
+    connection_level_error = False
 
     try:
-        # Bir cycle içinde son sensör hatasını Connection'a işaretle — debug için
-        last_sensor_error = ""
-        any_success = False
-
         for sensor in real_sensors:
-            try:
-                result = reader.read(sensor)
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("Sensor %s okuma hatası", sensor.id)
-                last_sensor_error = f"sensor {sensor.id}: {type(exc).__name__}: {exc}"
-                persist_reading(sensor, value=None, quality="bad", origin="polled", status_code=8)
-                continue
+            result = reader.read(sensor)
 
             if result.ok:
                 any_success = True
             else:
-                # result.error zaten reader'dan geliyor; connection seviyesine taşıyalım
                 last_sensor_error = f"sensor {sensor.id}: {result.error or 'unknown read error'}"
+                # Transport seviyesinde ölü mü? Pool'u invalidate edip sonraki
+                # cycle'da yeniden bağlan.
+                err_lower = (result.error or "").lower()
+                if any(kw in err_lower for kw in (
+                    "connection lost", "broken", "reset", "no route",
+                    "bağlantı yok", "socket", "disconnected",
+                )):
+                    connection_level_error = True
 
             persist_reading(
                 sensor,
@@ -143,18 +145,32 @@ def poll_connection(self, conn_id: int):
                 origin="polled",
                 status_code=1 if result.ok else 8,
             )
+    except Exception as exc:  # noqa: BLE001
+        # Reader.read kendi içinde yakalar; buraya düşüyorsa beklenmedik bir hata
+        logger.exception("poll_connection: beklenmedik exception conn=%s", conn_id)
+        last_sensor_error = f"{type(exc).__name__}: {exc}"
+        connection_level_error = True
 
-        # Hiç başarılı okuma yoksa Connection.last_error'a sebebi yaz
-        if not any_success and last_sensor_error:
-            Connection.objects.filter(pk=conn_id).update(
-                last_error_at=timezone.now(),
-                last_error_message=last_sensor_error[:500],
+    # --- Pool state yönetimi ---
+    if connection_level_error:
+        connection_pool.invalidate(conn_id, reason=last_sensor_error)
+    elif any_success:
+        connection_pool.record_success(conn_id)
+        Connection.objects.filter(pk=conn_id).update(
+            last_connected_at=timezone.now(),
+            last_error_message="",
+        )
+    else:
+        # Tüm sensörler fail (muhtemelen gateway veya cihaz timeout). Failure
+        # sayacını artır; threshold'a ulaşırsa pool'u sıfırla.
+        if connection_pool.record_failure(conn_id):
+            connection_pool.invalidate(
+                conn_id, reason=f"consecutive failures: {last_sensor_error}"
             )
-    finally:
-        try:
-            reader.close()
-        except Exception:  # noqa: BLE001
-            logger.exception("Reader close hatası")
+        Connection.objects.filter(pk=conn_id).update(
+            last_error_at=timezone.now(),
+            last_error_message=last_sensor_error[:500],
+        )
 
 
 def _record_simulated(sensor):
