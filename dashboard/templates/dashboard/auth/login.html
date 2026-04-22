@@ -1,15 +1,67 @@
-{% extends "dashboard/base.html" %}
+{% extends "dashboard/auth/auth_base.html" %}
 {% load i18n %}
 
 {% block title %}{% trans "Giriş" %}{% endblock %}
 
-{% block content %}
-<h1>{% trans "SAIS Dashboard Girişi" %}</h1>
-{% if form.errors %}<p style="color:red;">{% trans "Giriş bilgileri hatalı." %}</p>{% endif %}
-<form method="post">
+{% block auth_content %}
+<form class="form w-100" method="post" novalidate>
     {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">{% trans "Giriş Yap" %}</button>
+
+    <div class="text-center mb-11">
+        <h1 class="text-gray-900 fw-bolder mb-3">{% trans "Giriş Yap" %}</h1>
+        <div class="text-gray-500 fw-semibold fs-6">{% trans "SAIS Dashboard'a hoş geldiniz" %}</div>
+    </div>
+
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger d-flex align-items-center p-5 mb-10">
+            <span class="svg-icon svg-icon-2hx svg-icon-danger me-4">
+                <i class="ki-outline ki-shield-cross fs-2"></i>
+            </span>
+            <div class="d-flex flex-column">
+                <h4 class="mb-1 text-danger">{% trans "Giriş başarısız" %}</h4>
+                <span>{{ form.non_field_errors.0 }}</span>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="fv-row mb-8">
+        <label class="form-label fs-6 fw-bolder text-dark">{% trans "Kullanıcı Adı" %}</label>
+        <input type="text" name="{{ form.username.name }}"
+               autocomplete="username"
+               placeholder="{% trans 'Kullanıcı adı' %}"
+               class="form-control bg-transparent"
+               value="{{ form.username.value|default:'' }}" autofocus required>
+        {% if form.username.errors %}<div class="text-danger small mt-1">{{ form.username.errors.0 }}</div>{% endif %}
+    </div>
+
+    <div class="fv-row mb-3">
+        <label class="form-label fs-6 fw-bolder text-dark">{% trans "Şifre" %}</label>
+        <input type="password" name="{{ form.password.name }}"
+               autocomplete="current-password"
+               placeholder="{% trans 'Şifre' %}"
+               class="form-control bg-transparent" required>
+        {% if form.password.errors %}<div class="text-danger small mt-1">{{ form.password.errors.0 }}</div>{% endif %}
+    </div>
+
+    <div class="d-flex flex-stack flex-wrap gap-3 fs-base fw-semibold mb-8 mt-5">
+        <label class="form-check form-check-custom form-check-solid">
+            <input class="form-check-input" type="checkbox" name="{{ form.remember_me.name }}"
+                   {% if form.remember_me.value %}checked{% endif %}>
+            <span class="form-check-label fw-semibold text-gray-700 fs-base ms-1">
+                {% trans "Beni Hatırla" %}
+            </span>
+        </label>
+        <a href="{% url 'dashboard:forgot_password' %}" class="link-primary">
+            {% trans "Şifremi Unuttum" %}
+        </a>
+    </div>
+
+    <div class="d-grid mb-10">
+        <button type="submit" class="btn btn-primary">
+            <span class="indicator-label">{% trans "Giriş Yap" %}</span>
+        </button>
+    </div>
+
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
 </form>
-<p><a href="{% url 'dashboard:forgot_password' %}">{% trans "Şifremi unuttum" %}</a></p>
 {% endblock %}
