@@ -106,40 +106,77 @@
    navbar class'ı AdminLTE 4'teki `app-header navbar` — eski `main-header`
    değil. */
 
-/* Default (tema bilinmiyor / light): açık arka plan → koyu ikon + tam opak */
-.app-header.navbar .navbar-nav > .nav-item > .nav-link,
-.app-header.navbar .navbar-nav > .nav-item > .nav-link i {
+/* Default: navbar beyaz/bg-body arka plana sahipse de içerik görünür olsun.
+   Kapsanan elemanlar: sidebar toggle (fa-bars), "Panel" linki, "Api"/"Users"
+   dropdown-toggle'ları, sağ üst user menu (fa-user), dil dropdown'u (fa-globe),
+   arama form butonları (btn-navbar). */
+
+nav.app-header.navbar a,
+nav.app-header.navbar .nav-link,
+nav.app-header.navbar .nav-link i,
+nav.app-header.navbar .dropdown-toggle,
+nav.app-header.navbar .btn,
+nav.app-header.navbar .btn i {
     opacity: 1 !important;
-    color: rgba(0, 0, 0, 0.75) !important;
-}
-.app-header.navbar .navbar-nav > .nav-item > .nav-link:hover,
-.app-header.navbar .navbar-nav > .nav-item > .nav-link:focus,
-.app-header.navbar .navbar-nav > .nav-item > .nav-link:hover i {
-    color: rgba(0, 0, 0, 0.95) !important;
+    color: rgba(33, 37, 41, 0.85) !important;
 }
 
-/* Görünürlük için ince bir çerçeve + hover arka planı. */
-.app-header.navbar .navbar-nav > .nav-item > .nav-link {
+nav.app-header.navbar a:hover,
+nav.app-header.navbar .nav-link:hover,
+nav.app-header.navbar .nav-link:focus,
+nav.app-header.navbar .nav-link:hover i,
+nav.app-header.navbar .btn:hover,
+nav.app-header.navbar .btn:hover i {
+    color: rgba(0, 0, 0, 1) !important;
+}
+
+/* Nav-link'lere ince bir çerçeve + hover arka planı — buton konumları
+   belirginleşsin. */
+nav.app-header.navbar .navbar-nav > .nav-item > .nav-link {
     border: 1px solid transparent;
     border-radius: 0.25rem;
     padding: 0.35rem 0.6rem;
+    transition: background-color 0.15s ease;
 }
-.app-header.navbar .navbar-nav > .nav-item > .nav-link:hover {
+nav.app-header.navbar .navbar-nav > .nav-item > .nav-link:hover {
     background-color: rgba(0, 0, 0, 0.06);
 }
 
-/* Dark mod override — data-bs-theme="dark" veya prefers-color-scheme: dark */
-[data-bs-theme="dark"] .app-header.navbar .navbar-nav > .nav-item > .nav-link,
-[data-bs-theme="dark"] .app-header.navbar .navbar-nav > .nav-item > .nav-link i {
+/* Arama form placeholder'ı da görünür olsun. */
+nav.app-header.navbar .form-control-navbar {
+    color: rgba(33, 37, 41, 0.9) !important;
+    background-color: rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+nav.app-header.navbar .form-control-navbar::placeholder {
+    color: rgba(33, 37, 41, 0.5) !important;
+    opacity: 1 !important;
+}
+
+/* Dark mod override — data-bs-theme="dark" aktifse */
+[data-bs-theme="dark"] nav.app-header.navbar a,
+[data-bs-theme="dark"] nav.app-header.navbar .nav-link,
+[data-bs-theme="dark"] nav.app-header.navbar .nav-link i,
+[data-bs-theme="dark"] nav.app-header.navbar .dropdown-toggle,
+[data-bs-theme="dark"] nav.app-header.navbar .btn,
+[data-bs-theme="dark"] nav.app-header.navbar .btn i {
     color: rgba(255, 255, 255, 0.9) !important;
 }
-[data-bs-theme="dark"] .app-header.navbar .navbar-nav > .nav-item > .nav-link:hover,
-[data-bs-theme="dark"] .app-header.navbar .navbar-nav > .nav-item > .nav-link:focus,
-[data-bs-theme="dark"] .app-header.navbar .navbar-nav > .nav-item > .nav-link:hover i {
+[data-bs-theme="dark"] nav.app-header.navbar a:hover,
+[data-bs-theme="dark"] nav.app-header.navbar .nav-link:hover,
+[data-bs-theme="dark"] nav.app-header.navbar .btn:hover {
     color: #ffffff !important;
 }
-[data-bs-theme="dark"] .app-header.navbar .navbar-nav > .nav-item > .nav-link:hover {
+[data-bs-theme="dark"] nav.app-header.navbar .navbar-nav > .nav-item > .nav-link:hover {
     background-color: rgba(255, 255, 255, 0.08);
+}
+[data-bs-theme="dark"] nav.app-header.navbar .form-control-navbar {
+    color: rgba(255, 255, 255, 0.9) !important;
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+[data-bs-theme="dark"] nav.app-header.navbar .form-control-navbar::placeholder {
+    color: rgba(255, 255, 255, 0.55) !important;
 }
 
 
