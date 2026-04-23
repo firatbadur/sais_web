@@ -72,6 +72,77 @@
 }
 
 
+/* -- Tabular inline: Parameter kolonu / select'ler çok dar kalmasın ------- */
+/* Problem: ScanGroup detayındaki sensör inline'ında Parameter dropdown'u
+   varsayılan olarak çok daralıyor; "pH", "İletkenlik" gibi isimler truncate
+   oluyor. Hem native <select> hem de select2 autocomplete için genişlik
+   garantisi. */
+
+.inline-group table.tabular td.field-parameter,
+.inline-group table.tabular th.column-parameter {
+    min-width: 200px;
+}
+
+.inline-group table.tabular td select:not(.select2-hidden-accessible) {
+    min-width: 100%;
+    max-width: 100%;
+}
+
+.inline-group table.tabular td .select2-container {
+    min-width: 180px !important;
+    width: 100% !important;
+}
+
+/* Dropdown açılınca liste de geniş olsun — option'lar truncate olmasın */
+.select2-dropdown {
+    min-width: 220px;
+}
+
+
+/* -- Navbar user / language menu her zaman görünür ------------------------ */
+/* Problem: Jazzmin 3.x "flatly" + navbar-dark + bg-body kombinasyonunda sağ
+   üstteki user/language menu ikonları (`.nav-link.btn` içindeki `<i>`) arka
+   plana karışıyor; kullanıcı hover yapmadan butonu göremiyordu. Jazzmin 3.x
+   navbar class'ı AdminLTE 4'teki `app-header navbar` — eski `main-header`
+   değil. */
+
+/* Default (tema bilinmiyor / light): açık arka plan → koyu ikon + tam opak */
+.app-header.navbar .navbar-nav > .nav-item > .nav-link,
+.app-header.navbar .navbar-nav > .nav-item > .nav-link i {
+    opacity: 1 !important;
+    color: rgba(0, 0, 0, 0.75) !important;
+}
+.app-header.navbar .navbar-nav > .nav-item > .nav-link:hover,
+.app-header.navbar .navbar-nav > .nav-item > .nav-link:focus,
+.app-header.navbar .navbar-nav > .nav-item > .nav-link:hover i {
+    color: rgba(0, 0, 0, 0.95) !important;
+}
+
+/* Görünürlük için ince bir çerçeve + hover arka planı. */
+.app-header.navbar .navbar-nav > .nav-item > .nav-link {
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+    padding: 0.35rem 0.6rem;
+}
+.app-header.navbar .navbar-nav > .nav-item > .nav-link:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+}
+
+/* Dark mod override — data-bs-theme="dark" veya prefers-color-scheme: dark */
+[data-bs-theme="dark"] .app-header.navbar .navbar-nav > .nav-item > .nav-link,
+[data-bs-theme="dark"] .app-header.navbar .navbar-nav > .nav-item > .nav-link i {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+[data-bs-theme="dark"] .app-header.navbar .navbar-nav > .nav-item > .nav-link:hover,
+[data-bs-theme="dark"] .app-header.navbar .navbar-nav > .nav-item > .nav-link:focus,
+[data-bs-theme="dark"] .app-header.navbar .navbar-nav > .nav-item > .nav-link:hover i {
+    color: #ffffff !important;
+}
+[data-bs-theme="dark"] .app-header.navbar .navbar-nav > .nav-item > .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+
 /* -- Dark mode uyumu (prefers-color-scheme: dark) ------------------------- */
 
 @media (prefers-color-scheme: dark) {
