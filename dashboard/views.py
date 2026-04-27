@@ -84,7 +84,18 @@ class ForgotPasswordView(TemplateView):
 # --------------------------------------------------------------------------- #
 
 class HomeView(RoleRequiredMixin, TemplateView):
+    """SCADA-style ana sayfa — analog grid + dijital durum paneli (Layout 1)."""
     template_name = "dashboard/home.html"
+
+
+class HomeV2View(RoleRequiredMixin, TemplateView):
+    """Alternatif minimalist layout — yoğun grid + üst dijital pill bar (Layout 2)."""
+    template_name = "dashboard/home_v2.html"
+
+
+class HomeV3View(RoleRequiredMixin, TemplateView):
+    """Alternatif mosaic layout — gauge + sparkline tile'lar (Layout 3)."""
+    template_name = "dashboard/home_v3.html"
 
 
 # --------------------------------------------------------------------------- #

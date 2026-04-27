@@ -4,326 +4,337 @@
 {% block title %}{% trans "Anasayfa" %}{% endblock %}
 {% block page_title %}{% trans "Anasayfa" %}{% endblock %}
 
+{% block extra_head %}
+<style>
+/* ---------- SCADA shell (V1) ---------- */
+.scada-shell { color: #d6dae5; }
+.scada-topbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding: 8px 0 14px;
+}
+.scada-topbar-left { display: flex; gap: 8px; flex-wrap: wrap; }
+.scada-topbar-right { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; align-items: center; }
+
+.scada-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px;
+    color: #fff; border: 1px solid transparent; cursor: default;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.04) inset;
+}
+.scada-pill i { font-size: 14px; }
+.scada-pill-station { background: #1bc197; }
+.scada-pill-ups { background: #f1416c; }
+
+.scada-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px;
+    color: #fff; border: 0; cursor: pointer; text-decoration: none;
+}
+.scada-btn-purple { background: #7239ea; }
+.scada-btn-purple:hover { background: #5e26d4; color: #fff; }
+.scada-btn-cyan { background: #17c1d6; }
+.scada-btn-cyan:hover { background: #13a4b6; color: #fff; }
+
+.scada-layout-switcher {
+    display: inline-flex; gap: 0;
+    margin-left: 6px; border-radius: 6px; overflow: hidden;
+    border: 1px solid #2a2f3a;
+}
+.scada-layout-switcher a {
+    padding: 6px 12px; font-size: 12px; font-weight: 600;
+    color: #a0a8b8; background: #1a1d24; text-decoration: none;
+    border-right: 1px solid #2a2f3a;
+}
+.scada-layout-switcher a:last-child { border-right: 0; }
+.scada-layout-switcher a.active { background: #7239ea; color: #fff; }
+.scada-layout-switcher a:hover:not(.active) { background: #232730; color: #fff; }
+
+/* ---------- Main 2-col layout ---------- */
+.scada-main {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 18px;
+}
+@media (max-width: 1199px) { .scada-main { grid-template-columns: 1fr; } }
+
+/* Analog grid (3 col) */
+.scada-analog-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+}
+@media (max-width: 991px) { .scada-analog-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 575px) { .scada-analog-grid { grid-template-columns: 1fr; } }
+
+.scada-box {
+    background: #1a1d24; border: 1px solid #232733; border-radius: 6px;
+    padding: 14px 16px; min-height: 110px; display: flex; flex-direction: column;
+    justify-content: space-between;
+}
+.scada-box-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.4px;
+    color: #9aa1b1; text-transform: uppercase;
+}
+.scada-box-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+.scada-box-value {
+    font-size: 28px; font-weight: 700; color: #b58cf2; text-align: right;
+    line-height: 1.1; font-variant-numeric: tabular-nums;
+}
+.scada-box-strip {
+    height: 6px; border-radius: 3px; margin: 6px 0; position: relative; overflow: hidden;
+    background: linear-gradient(45deg, #f1416c 25%, #d92850 25%, #d92850 50%, #f1416c 50%, #f1416c 75%, #d92850 75%);
+    background-size: 14px 14px;
+}
+.scada-box-strip.good {
+    background: linear-gradient(45deg, #1bc197 25%, #16a984 25%, #16a984 50%, #1bc197 50%, #1bc197 75%, #16a984 75%);
+    background-size: 14px 14px;
+}
+.scada-box-strip.warn {
+    background: linear-gradient(45deg, #ffc700 25%, #e0ae00 25%, #e0ae00 50%, #ffc700 50%, #ffc700 75%, #e0ae00 75%);
+    background-size: 14px 14px;
+}
+.scada-box-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; color: #7a8195;
+}
+.scada-box-footer .dots { color: #50546a; cursor: pointer; }
+
+/* Digital status panel */
+.scada-digital {
+    background: #1a1d24; border: 1px solid #232733; border-radius: 6px;
+    padding: 18px 8px 18px 18px;
+}
+.scada-digital-title {
+    font-size: 13px; font-weight: 700; letter-spacing: 0.4px;
+    color: #d6dae5; margin: 0 0 12px; text-transform: uppercase;
+}
+.scada-digital-list {
+    max-height: 76vh; overflow-y: auto; padding-right: 8px;
+}
+.scada-digital-list::-webkit-scrollbar { width: 6px; }
+.scada-digital-list::-webkit-scrollbar-thumb { background: #303644; border-radius: 3px; }
+
+.scada-digital-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 4px; border-bottom: 1px dashed #232733;
+}
+.scada-digital-row:last-child { border-bottom: 0; }
+.scada-digital-dot {
+    width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+    background: #f1416c; box-shadow: 0 0 6px rgba(241,65,108,0.4);
+}
+.scada-digital-dot.active { background: #1bc197; box-shadow: 0 0 6px rgba(27,193,151,0.5); }
+.scada-digital-info { flex: 1; min-width: 0; }
+.scada-digital-name {
+    font-size: 13px; font-weight: 600; color: #d6dae5; line-height: 1.1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.scada-digital-time {
+    font-size: 11px; color: #7a8195; margin-top: 2px;
+}
+.scada-digital-badge {
+    padding: 3px 12px; border-radius: 4px; font-size: 11px; font-weight: 700;
+    border: 1px solid #f1416c; color: #f1416c;
+    text-transform: uppercase; letter-spacing: 0.4px;
+}
+.scada-digital-badge.active { border-color: #1bc197; color: #1bc197; }
+
+.scada-empty {
+    padding: 40px 10px; text-align: center; color: #7a8195; font-size: 13px;
+}
+.scada-loading {
+    color: #7a8195; font-size: 12px; padding: 20px; text-align: center;
+}
+</style>
+{% endblock %}
+
 {% block content %}
+<div class="scada-shell">
 
-<!-- ============ KPI CARDS ============ -->
-<div class="row g-5 g-xl-10 mb-5 mb-xl-10">
-    <div class="col-md-6 col-lg-3">
-        <div class="card h-100 shadow-sm">
-            <div class="card-body py-5">
-                <span class="fs-6 fw-semibold text-gray-500">{% trans "Aktif İstasyon" %}</span>
-                <div class="d-flex align-items-center mt-2">
-                    <i class="ki-outline ki-home-2 fs-2hx text-primary me-3"></i>
-                    <span class="fs-2hx fw-bolder text-gray-900" id="kpi-stations">-</span>
-                </div>
+    <!-- ============ TOP BAR ============ -->
+    <div class="scada-topbar">
+        <div class="scada-topbar-left">
+            <span class="scada-pill scada-pill-station" id="station-pill">
+                <i class="ki-outline ki-geolocation"></i>
+                <span id="station-pill-name">{% trans "Tüm Tesisler" %}</span>
+            </span>
+            <span class="scada-pill scada-pill-ups">
+                <i class="ki-outline ki-electricity"></i> UPS
+            </span>
+        </div>
+
+        <div class="scada-topbar-right">
+            <div class="dropdown">
+                <button class="scada-btn scada-btn-purple dropdown-toggle" type="button"
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                    {% trans "İstasyon Seçimi" %}
+                </button>
+                <ul class="dropdown-menu" id="station-list" style="max-height: 320px; overflow-y: auto;">
+                    <li><span class="dropdown-item-text text-muted small">{% trans "Yükleniyor..." %}</span></li>
+                </ul>
             </div>
+            <button class="scada-btn scada-btn-cyan" id="btn-all-stations" type="button">
+                <i class="ki-outline ki-element-11"></i> {% trans "Tüm Tesisler" %}
+            </button>
+            <span class="scada-layout-switcher">
+                <a href="{% url 'dashboard:home' %}" class="active">L1</a>
+                <a href="{% url 'dashboard:home_v2' %}">L2</a>
+                <a href="{% url 'dashboard:home_v3' %}">L3</a>
+            </span>
         </div>
     </div>
-    <div class="col-md-6 col-lg-3">
-        <div class="card h-100 shadow-sm">
-            <div class="card-body py-5">
-                <span class="fs-6 fw-semibold text-gray-500">{% trans "Aktif Sensör" %}</span>
-                <div class="d-flex align-items-center mt-2">
-                    <i class="ki-outline ki-chart-line-star fs-2hx text-success me-3"></i>
-                    <span class="fs-2hx fw-bolder text-gray-900" id="kpi-sensors">-</span>
-                </div>
-            </div>
+
+    <!-- ============ MAIN ============ -->
+    <div class="scada-main">
+        <div class="scada-analog-grid" id="analog-grid">
+            <div class="scada-loading">{% trans "Yükleniyor..." %}</div>
         </div>
-    </div>
-    <div class="col-md-6 col-lg-3">
-        <div class="card h-100 shadow-sm">
-            <div class="card-body py-5">
-                <span class="fs-6 fw-semibold text-gray-500">{% trans "Açık Bağlantı" %}</span>
-                <div class="d-flex align-items-center mt-2">
-                    <i class="ki-outline ki-wifi fs-2hx text-info me-3"></i>
-                    <span class="fs-2hx fw-bolder text-gray-900" id="kpi-connections">-</span>
-                </div>
+
+        <aside class="scada-digital">
+            <h6 class="scada-digital-title">{% trans "Dijital Durumlar" %}</h6>
+            <div class="scada-digital-list" id="digital-list">
+                <div class="scada-loading">{% trans "Yükleniyor..." %}</div>
             </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-lg-3">
-        <div class="card h-100 shadow-sm">
-            <div class="card-body py-5">
-                <span class="fs-6 fw-semibold text-gray-500">{% trans "Son 1 Saat Okuma" %}</span>
-                <div class="d-flex align-items-center mt-2">
-                    <i class="ki-outline ki-pulse fs-2hx text-warning me-3"></i>
-                    <span class="fs-2hx fw-bolder text-gray-900" id="kpi-readings">-</span>
-                </div>
-            </div>
-        </div>
+        </aside>
     </div>
 </div>
-
-<div class="row g-5 g-xl-10 mb-5 mb-xl-10">
-    <!-- ============ LIVE SENSOR GRID ============ -->
-    <div class="col-xl-8">
-        <div class="card card-flush h-100">
-            <div class="card-header pt-5">
-                <h3 class="card-title fw-bold text-gray-800">{% trans "Anlık Sensör Değerleri" %}</h3>
-                <div class="card-toolbar">
-                    <span class="text-muted fs-7">
-                        <i class="ki-outline ki-time fs-6 me-1"></i>
-                        <span id="snapshot-updated">-</span>
-                    </span>
-                </div>
-            </div>
-            <div class="card-body pt-4">
-                <div class="table-responsive">
-                    <table class="table table-row-dashed align-middle gs-0 gy-3">
-                        <thead>
-                            <tr class="fs-7 fw-bold text-gray-500 text-uppercase">
-                                <th>{% trans "İstasyon" %}</th>
-                                <th>{% trans "Parametre" %}</th>
-                                <th class="text-end">{% trans "Değer" %}</th>
-                                <th>{% trans "Birim" %}</th>
-                                <th>{% trans "Kalite" %}</th>
-                                <th class="text-end">{% trans "Son Okuma" %}</th>
-                            </tr>
-                        </thead>
-                        <tbody id="snapshot-body">
-                            <tr><td colspan="6" class="text-center text-muted">{% trans "Yükleniyor..." %}</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ============ EVENTS FEED ============ -->
-    <div class="col-xl-4">
-        <div class="card card-flush h-100">
-            <div class="card-header pt-5">
-                <h3 class="card-title fw-bold text-gray-800">{% trans "Son Olaylar" %}</h3>
-            </div>
-            <div class="card-body pt-4" style="max-height:500px; overflow-y:auto;">
-                <div class="timeline timeline-border-dashed" id="events-list">
-                    <div class="text-muted">{% trans "Yükleniyor..." %}</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ============ TREND CHART ============ -->
-<div class="row g-5 g-xl-10">
-    <div class="col-12">
-        <div class="card card-flush">
-            <div class="card-header pt-5">
-                <h3 class="card-title fw-bold text-gray-800">{% trans "24 Saatlik Sensör Trendi" %}</h3>
-                <div class="card-toolbar">
-                    <span class="text-muted fs-7" id="trend-subtitle">—</span>
-                </div>
-            </div>
-            <div class="card-body">
-                <div id="trend-chart" style="height:360px;"></div>
-                <div id="trend-empty" class="text-center text-muted py-5" style="display:none;">
-                    {% trans "Henüz trend verisi yok. Sensörlerin okumaya başlaması veya aggregate task'larının çalışması bekleniyor." %}
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
 (function() {
-    const URLS = {
-        kpis:     "{% url 'dashboard:api_home_kpis' %}",
-        snapshot: "{% url 'dashboard:api_home_snapshot' %}",
-        trend:    "{% url 'dashboard:api_home_trend' %}",
-        events:   "{% url 'dashboard:api_home_events' %}"
-    };
-
-    const QUALITY_BADGE = {
-        good:        'badge-light-success',
-        bad:         'badge-light-danger',
-        uncertain:   'badge-light-warning',
-        stale:       'badge-light-secondary',
-        substituted: 'badge-light-info',
-        manual:      'badge-light-primary'
-    };
-
-    const BUCKET_LABEL = {
-        hourly: "{% trans 'Saatlik ortalama (ReadingHourly)' %}",
-        '15min': "{% trans '15-dakikalık ortalama (ReadingFifteenMin)' %}",
-        raw:    "{% trans 'Ham okuma (Reading) — aggregate henüz dönmedi' %}"
-    };
-
-    // 5 dakikadan eski okumayı "stale" say.
-    const STALE_AGE_MS = 5 * 60 * 1000;
-
+    const SCADA_URL = "{% url 'dashboard:api_home_scada' %}";
+    const STALE_MS = 5 * 60 * 1000;
     const LOCALE = "{{ LANGUAGE_CODE|default:'tr' }}" === "en" ? "en-US" : "tr-TR";
 
-    function formatTime(iso) {
-        if (!iso) return '-';
-        try { return new Date(iso).toLocaleTimeString(LOCALE); }
-        catch(e) { return iso; }
+    // --- selected station state (persisted in localStorage) ---
+    let selectedStation = localStorage.getItem("scada.selected_station") || "";
+
+    function setSelectedStation(id, name) {
+        selectedStation = id || "";
+        if (selectedStation) localStorage.setItem("scada.selected_station", selectedStation);
+        else localStorage.removeItem("scada.selected_station");
+        const pillName = document.getElementById("station-pill-name");
+        if (pillName) pillName.textContent = name || "{% trans 'Tüm Tesisler' %}";
+        refresh();
     }
-    function formatDateTime(iso) {
-        if (!iso) return '-';
-        try { return new Date(iso).toLocaleString(LOCALE); }
-        catch(e) { return iso; }
+
+    function escapeHtml(s) {
+        if (s == null) return "";
+        return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
     }
-    function formatValue(v, decimals) {
-        if (v === null || v === undefined) return '—';
+    function fmtValue(v, decimals) {
+        if (v === null || v === undefined || v === "") return "—";
         const n = Number(v);
-        if (!isFinite(n)) return '—';
-        const opts = (decimals != null) ? { minimumFractionDigits: decimals, maximumFractionDigits: decimals } : {};
+        if (!isFinite(n)) return escapeHtml(String(v));
+        const opts = (decimals != null) ? { minimumFractionDigits: decimals, maximumFractionDigits: decimals } : { maximumFractionDigits: 2 };
         return n.toLocaleString(undefined, opts);
+    }
+    function fmtDateTime(iso) {
+        if (!iso) return "—";
+        try { return new Date(iso).toLocaleString(LOCALE); } catch(e) { return iso; }
     }
     function isStale(iso) {
         if (!iso) return true;
         const t = new Date(iso).getTime();
-        if (isNaN(t)) return false;
-        return (Date.now() - t) > STALE_AGE_MS;
+        if (isNaN(t)) return true;
+        return (Date.now() - t) > STALE_MS;
     }
-    function escapeHtml(s) {
-        if (s == null) return '';
-        return String(s).replace(/[&<>"']/g, c => (
-            {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
-        ));
+    function stripClass(quality, readtime) {
+        if (quality === "good" && !isStale(readtime)) return "good";
+        if (quality === "uncertain") return "warn";
+        return "";  // default = bad/stale = red
     }
 
-    async function fetchJson(url) {
-        const r = await fetch(url, { credentials: 'same-origin' });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    async function fetchScada() {
+        const url = selectedStation ? `${SCADA_URL}?station_id=${encodeURIComponent(selectedStation)}` : SCADA_URL;
+        const r = await fetch(url, { credentials: "same-origin" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
     }
 
-    // --- KPIs (every 30s) ---
-    async function refreshKpis() {
-        try {
-            const data = await fetchJson(URLS.kpis);
-            document.getElementById('kpi-stations').textContent = data.station_count ?? '-';
-            document.getElementById('kpi-sensors').textContent = data.sensor_count ?? '-';
-            document.getElementById('kpi-connections').textContent = data.connection_count ?? '-';
-            document.getElementById('kpi-readings').textContent = data.readings_last_hour ?? '-';
-        } catch(e) { console.warn('KPI refresh fail:', e); }
+    function renderStations(stations) {
+        const ul = document.getElementById("station-list");
+        if (!ul) return;
+        if (!stations.length) {
+            ul.innerHTML = `<li><span class="dropdown-item-text text-muted small">{% trans "İstasyon yok" %}</span></li>`;
+            return;
+        }
+        const items = stations.map(s =>
+            `<li><a class="dropdown-item ${String(s.id) === selectedStation ? 'active' : ''}" href="#" data-id="${s.id}" data-name="${escapeHtml(s.name)}">${escapeHtml(s.name)}</a></li>`
+        ).join("");
+        ul.innerHTML = items;
+        ul.querySelectorAll("a[data-id]").forEach(a => {
+            a.addEventListener("click", (e) => {
+                e.preventDefault();
+                setSelectedStation(a.dataset.id, a.dataset.name);
+            });
+        });
     }
 
-    // --- Snapshot grid (every 5s) ---
-    async function refreshSnapshot() {
-        try {
-            const data = await fetchJson(URLS.snapshot);
-            const tbody = document.getElementById('snapshot-body');
-            if (!data.rows || data.rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">{% trans "Henüz sensör verisi yok." %}</td></tr>`;
-            } else {
-                tbody.innerHTML = data.rows.map(r => {
-                    const badge = QUALITY_BADGE[r.quality] || 'badge-light-secondary';
-                    const stale = isStale(r.readtime);
-                    const valueTxt = formatValue(r.value, 2);
-                    const timeTxt = formatTime(r.readtime);
-                    const stationTxt = r.station_name ? escapeHtml(r.station_name) : '<span class="text-muted">-</span>';
-                    const staleBadge = stale
-                        ? ` <i class="ki-outline ki-time fs-7 text-warning ms-1" title="{% trans 'Okuma 5 dakikadan eski' %}"></i>`
-                        : '';
-                    return `<tr${stale ? ' class="opacity-75"' : ''}>
-                        <td class="text-gray-700">${stationTxt}</td>
-                        <td class="fw-semibold text-gray-800">${escapeHtml(r.parameter_name || '-')}</td>
-                        <td class="text-end fw-bolder fs-5 text-gray-900">${valueTxt}</td>
-                        <td class="text-muted">${escapeHtml(r.unit || '-')}</td>
-                        <td><span class="badge ${badge}">${escapeHtml(r.quality || '-')}</span></td>
-                        <td class="text-end text-muted">${timeTxt}${staleBadge}</td>
-                    </tr>`;
-                }).join('');
-            }
-            document.getElementById('snapshot-updated').textContent = new Date().toLocaleTimeString();
-        } catch(e) { console.warn('Snapshot fail:', e); }
+    function renderAnalog(items) {
+        const grid = document.getElementById("analog-grid");
+        if (!items.length) {
+            grid.innerHTML = `<div class="scada-empty" style="grid-column: 1 / -1;">{% trans "Analog sensör verisi yok." %}</div>`;
+            return;
+        }
+        grid.innerHTML = items.map(it => {
+            const strip = stripClass(it.quality, it.readtime);
+            return `
+            <div class="scada-box">
+                <div class="scada-box-header">
+                    <span class="scada-box-name" title="${escapeHtml(it.name)}">${escapeHtml(it.name)} | ${escapeHtml(it.unit)}</span>
+                </div>
+                <div class="scada-box-value">${fmtValue(it.value, it.decimals)}</div>
+                <div class="scada-box-strip ${strip}"></div>
+                <div class="scada-box-footer">
+                    <span>${fmtDateTime(it.readtime)}</span>
+                    <span class="dots">⋯</span>
+                </div>
+            </div>`;
+        }).join("");
     }
 
-    // --- Events feed (every 30s) ---
-    async function refreshEvents() {
-        try {
-            const data = await fetchJson(URLS.events);
-            const list = document.getElementById('events-list');
-            if (!data.events || data.events.length === 0) {
-                list.innerHTML = `<div class="text-muted">{% trans "Henüz olay yok." %}</div>`;
-            } else {
-                list.innerHTML = data.events.map(ev => {
-                    const iconByKind = {
-                        system_log: 'ki-information-5 text-info',
-                        power_off: 'ki-power text-warning',
-                        bad_reading: 'ki-shield-cross text-danger'
-                    };
-                    const iconClass = iconByKind[ev.kind] || 'ki-information-5 text-muted';
-                    return `<div class="timeline-item">
-                        <div class="timeline-line w-40px"></div>
-                        <div class="timeline-icon symbol symbol-circle symbol-40px">
-                            <div class="symbol-label bg-light">
-                                <i class="ki-outline ${iconClass} fs-2"></i>
-                            </div>
-                        </div>
-                        <div class="timeline-content mb-10 mt-n1">
-                            <div class="pe-3 mb-1">
-                                <div class="fs-6 fw-semibold text-gray-800">${ev.title || '-'}</div>
-                                <div class="d-flex align-items-center mt-1 fs-8 text-muted">
-                                    <i class="ki-outline ki-time fs-7 me-1"></i>${formatDateTime(ev.time)}
-                                </div>
-                            </div>
-                            <div class="overflow-auto pb-1">
-                                <div class="fs-7 text-muted">${ev.detail || ''}</div>
-                            </div>
-                        </div>
-                    </div>`;
-                }).join('');
-            }
-        } catch(e) { console.warn('Events fail:', e); }
+    function renderDigital(items) {
+        const list = document.getElementById("digital-list");
+        if (!items.length) {
+            list.innerHTML = `<div class="scada-empty">{% trans "Dijital sensör yok." %}</div>`;
+            return;
+        }
+        list.innerHTML = items.map(it => {
+            const isActive = it.active === true;
+            return `
+            <div class="scada-digital-row">
+                <span class="scada-digital-dot ${isActive ? 'active' : ''}"></span>
+                <div class="scada-digital-info">
+                    <div class="scada-digital-name" title="${escapeHtml(it.name)}">${escapeHtml(it.name)}</div>
+                    <div class="scada-digital-time">${fmtDateTime(it.readtime)}</div>
+                </div>
+                <span class="scada-digital-badge ${isActive ? 'active' : ''}">${isActive ? "{% trans 'AKTİF' %}" : "{% trans 'PASİF' %}"}</span>
+            </div>`;
+        }).join("");
     }
 
-    // --- Trend chart (every 5 min) ---
-    let trendChart = null;
-    async function refreshTrend() {
+    async function refresh() {
         try {
-            const data = await fetchJson(URLS.trend);
-            const empty = document.getElementById('trend-empty');
-            const container = document.getElementById('trend-chart');
-            const subtitle = document.getElementById('trend-subtitle');
-            if (subtitle) {
-                subtitle.textContent = BUCKET_LABEL[data.bucket_level] || '—';
+            const data = await fetchScada();
+            renderStations(data.stations || []);
+            renderAnalog(data.analog || []);
+            renderDigital(data.digital || []);
+            // restore pill name if persisted id matches a known station
+            if (selectedStation) {
+                const match = (data.stations || []).find(s => String(s.id) === selectedStation);
+                const pillName = document.getElementById("station-pill-name");
+                if (pillName && match) pillName.textContent = match.name;
             }
-            if (!data.series || data.series.length === 0) {
-                empty.style.display = 'block';
-                container.style.display = 'none';
-                return;
-            }
-            empty.style.display = 'none';
-            container.style.display = 'block';
-
-            const series = data.series.map(s => ({
-                name: s.label,
-                data: s.points
-                    .filter(p => p.t && p.avg !== null && p.avg !== undefined)
-                    .map(p => [new Date(p.t).getTime(), p.avg])
-            }));
-
-            const options = {
-                chart: { type: 'line', height: 360, toolbar: { show: true }, animations: { enabled: true } },
-                series: series,
-                stroke: { curve: 'smooth', width: 2 },
-                xaxis: { type: 'datetime' },
-                yaxis: { labels: { formatter: v => Number(v).toFixed(2) } },
-                legend: { position: 'top' },
-                tooltip: { x: { format: 'dd/MM HH:mm' } },
-                colors: ['#009ef7', '#50cd89', '#f1416c', '#ffc700', '#7239ea']
-            };
-
-            if (trendChart) {
-                trendChart.updateOptions(options);
-            } else {
-                trendChart = new ApexCharts(container, options);
-                trendChart.render();
-            }
-        } catch(e) { console.warn('Trend fail:', e); }
+        } catch(e) {
+            console.warn("SCADA refresh fail:", e);
+        }
     }
 
-    // Initial load + intervals
-    refreshKpis(); setInterval(refreshKpis, 30000);
-    refreshSnapshot(); setInterval(refreshSnapshot, 5000);
-    refreshEvents(); setInterval(refreshEvents, 30000);
-    refreshTrend(); setInterval(refreshTrend, 300000);
+    document.getElementById("btn-all-stations").addEventListener("click", () => setSelectedStation("", null));
+
+    refresh();
+    setInterval(refresh, 5000);
 })();
 </script>
 {% endblock %}

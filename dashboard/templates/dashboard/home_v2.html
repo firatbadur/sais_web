@@ -1,0 +1,241 @@
+{% extends "dashboard/base.html" %}
+{% load static i18n dashboard_extras %}
+
+{% block title %}{% trans "Anasayfa" %} · L2{% endblock %}
+{% block page_title %}{% trans "Anasayfa" %} <span class="text-muted fs-5 fw-normal ms-2">· Layout 2</span>{% endblock %}
+
+{% block extra_head %}
+<style>
+.scada2-shell { color: #d6dae5; }
+
+.scada2-topbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0 12px;
+}
+.scada2-station-select {
+    flex: 0 1 280px; background: #1a1d24; border: 1px solid #2a2f3a;
+    color: #d6dae5; padding: 7px 12px; border-radius: 6px; font-size: 13px;
+}
+.scada2-station-select:focus { outline: none; border-color: #7239ea; box-shadow: 0 0 0 2px rgba(114,57,234,0.2); }
+.scada2-search {
+    flex: 0 1 220px; background: #1a1d24; border: 1px solid #2a2f3a;
+    color: #d6dae5; padding: 7px 12px; border-radius: 6px; font-size: 13px;
+}
+.scada2-counter {
+    color: #7a8195; font-size: 12px; margin-left: auto; padding-right: 8px;
+}
+.scada2-layout-switcher {
+    display: inline-flex; gap: 0; border-radius: 6px; overflow: hidden;
+    border: 1px solid #2a2f3a;
+}
+.scada2-layout-switcher a {
+    padding: 6px 12px; font-size: 12px; font-weight: 600;
+    color: #a0a8b8; background: #1a1d24; text-decoration: none;
+    border-right: 1px solid #2a2f3a;
+}
+.scada2-layout-switcher a:last-child { border-right: 0; }
+.scada2-layout-switcher a.active { background: #7239ea; color: #fff; }
+
+/* Digital pill bar (üstte yatay strip) */
+.scada2-digital-bar {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    padding: 10px 12px; background: #15171d; border: 1px solid #232733; border-radius: 6px;
+    margin-bottom: 14px;
+}
+.scada2-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600;
+    background: #1a1d24; border: 1px solid #2a2f3a; color: #9aa1b1;
+    text-transform: uppercase; letter-spacing: 0.3px;
+}
+.scada2-pill .scada2-pill-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #f1416c;
+}
+.scada2-pill.active { color: #1bc197; border-color: #1bc197; }
+.scada2-pill.active .scada2-pill-dot { background: #1bc197; box-shadow: 0 0 4px rgba(27,193,151,0.6); }
+.scada2-pill[data-stale="1"] { opacity: 0.6; }
+
+/* Analog grid 4-col */
+.scada2-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+}
+@media (max-width: 1199px) { .scada2-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 767px)  { .scada2-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px)  { .scada2-grid { grid-template-columns: 1fr; } }
+
+.scada2-cell {
+    background: #1a1d24; border: 1px solid #232733; border-radius: 6px;
+    padding: 10px 12px; display: grid; grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto; column-gap: 10px; align-items: center;
+    border-left: 3px solid #f1416c;
+    transition: border-color 0.2s;
+}
+.scada2-cell.good { border-left-color: #1bc197; }
+.scada2-cell.warn { border-left-color: #ffc700; }
+.scada2-cell-name {
+    font-size: 11px; font-weight: 700; color: #9aa1b1; text-transform: uppercase;
+    letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.scada2-cell-value {
+    grid-row: 1 / 3; font-size: 22px; font-weight: 700; color: #b58cf2;
+    text-align: right; font-variant-numeric: tabular-nums; line-height: 1;
+}
+.scada2-cell-meta {
+    font-size: 10px; color: #6a7186; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+}
+
+.scada2-empty { padding: 30px; text-align: center; color: #7a8195; }
+.scada2-loading { padding: 20px; text-align: center; color: #7a8195; font-size: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="scada2-shell">
+
+    <!-- TOPBAR -->
+    <div class="scada2-topbar">
+        <select class="scada2-station-select" id="station-select">
+            <option value="">{% trans "Tüm Tesisler" %}</option>
+        </select>
+        <input class="scada2-search" id="filter-search" type="search" placeholder="{% trans 'Filtre... (örn: PH)' %}">
+        <span class="scada2-counter" id="counter">—</span>
+        <span class="scada2-layout-switcher">
+            <a href="{% url 'dashboard:home' %}">L1</a>
+            <a href="{% url 'dashboard:home_v2' %}" class="active">L2</a>
+            <a href="{% url 'dashboard:home_v3' %}">L3</a>
+        </span>
+    </div>
+
+    <!-- DIGITAL PILL BAR -->
+    <div class="scada2-digital-bar" id="digital-bar">
+        <span class="scada2-loading">{% trans "Yükleniyor..." %}</span>
+    </div>
+
+    <!-- ANALOG GRID -->
+    <div class="scada2-grid" id="analog-grid">
+        <div class="scada2-loading" style="grid-column: 1 / -1;">{% trans "Yükleniyor..." %}</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+    const SCADA_URL = "{% url 'dashboard:api_home_scada' %}";
+    const STALE_MS = 5 * 60 * 1000;
+    const LOCALE = "{{ LANGUAGE_CODE|default:'tr' }}" === "en" ? "en-US" : "tr-TR";
+
+    let selectedStation = localStorage.getItem("scada.selected_station") || "";
+    let filterText = "";
+    let lastData = { analog: [], digital: [] };
+
+    function escapeHtml(s) {
+        if (s == null) return "";
+        return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    }
+    function fmtValue(v, decimals) {
+        if (v === null || v === undefined || v === "") return "—";
+        const n = Number(v);
+        if (!isFinite(n)) return escapeHtml(String(v));
+        const opts = (decimals != null) ? { minimumFractionDigits: decimals, maximumFractionDigits: decimals } : { maximumFractionDigits: 2 };
+        return n.toLocaleString(undefined, opts);
+    }
+    function fmtTime(iso) {
+        if (!iso) return "—";
+        try { return new Date(iso).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }); }
+        catch(e) { return iso; }
+    }
+    function isStale(iso) {
+        if (!iso) return true;
+        const t = new Date(iso).getTime();
+        return isNaN(t) || (Date.now() - t) > STALE_MS;
+    }
+    function qualityClass(q, t) {
+        if (q === "good" && !isStale(t)) return "good";
+        if (q === "uncertain") return "warn";
+        return "";
+    }
+
+    async function fetchScada() {
+        const url = selectedStation ? `${SCADA_URL}?station_id=${encodeURIComponent(selectedStation)}` : SCADA_URL;
+        const r = await fetch(url, { credentials: "same-origin" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+    }
+
+    function renderStationOptions(stations) {
+        const sel = document.getElementById("station-select");
+        const current = selectedStation;
+        sel.innerHTML = `<option value="">{% trans "Tüm Tesisler" %}</option>` + stations.map(s =>
+            `<option value="${s.id}" ${String(s.id) === current ? "selected" : ""}>${escapeHtml(s.name)}</option>`
+        ).join("");
+    }
+
+    function renderDigital(items) {
+        const bar = document.getElementById("digital-bar");
+        if (!items.length) {
+            bar.innerHTML = `<span class="scada2-empty" style="padding:6px;">{% trans "Dijital yok." %}</span>`;
+            return;
+        }
+        bar.innerHTML = items.map(it => {
+            const isActive = it.active === true;
+            const stale = isStale(it.readtime) ? "1" : "0";
+            return `<span class="scada2-pill ${isActive ? 'active' : ''}" data-stale="${stale}" title="${escapeHtml(it.name)} — ${fmtTime(it.readtime)}">
+                <span class="scada2-pill-dot"></span>${escapeHtml(it.name)}
+            </span>`;
+        }).join("");
+    }
+
+    function renderAnalog(items) {
+        const grid = document.getElementById("analog-grid");
+        const filtered = filterText
+            ? items.filter(it => (it.name || "").toLowerCase().includes(filterText))
+            : items;
+
+        document.getElementById("counter").textContent =
+            filterText
+                ? `${filtered.length} / ${items.length} {% trans 'sensör' %}`
+                : `${items.length} {% trans 'sensör' %}`;
+
+        if (!filtered.length) {
+            grid.innerHTML = `<div class="scada2-empty" style="grid-column: 1 / -1;">{% trans "Eşleşen sensör yok." %}</div>`;
+            return;
+        }
+        grid.innerHTML = filtered.map(it => {
+            const cls = qualityClass(it.quality, it.readtime);
+            return `
+            <div class="scada2-cell ${cls}">
+                <div class="scada2-cell-name" title="${escapeHtml(it.name)}">${escapeHtml(it.name)}</div>
+                <div class="scada2-cell-meta">${escapeHtml(it.unit)} · ${fmtTime(it.readtime)}</div>
+                <div class="scada2-cell-value">${fmtValue(it.value, it.decimals)}</div>
+            </div>`;
+        }).join("");
+    }
+
+    async function refresh() {
+        try {
+            const data = await fetchScada();
+            lastData = data;
+            renderStationOptions(data.stations || []);
+            renderDigital(data.digital || []);
+            renderAnalog(data.analog || []);
+        } catch(e) { console.warn("SCADA v2 refresh fail:", e); }
+    }
+
+    document.getElementById("station-select").addEventListener("change", (e) => {
+        selectedStation = e.target.value;
+        if (selectedStation) localStorage.setItem("scada.selected_station", selectedStation);
+        else localStorage.removeItem("scada.selected_station");
+        refresh();
+    });
+    document.getElementById("filter-search").addEventListener("input", (e) => {
+        filterText = (e.target.value || "").toLowerCase().trim();
+        renderAnalog(lastData.analog || []);
+    });
+
+    refresh();
+    setInterval(refresh, 5000);
+})();
+</script>
+{% endblock %}
