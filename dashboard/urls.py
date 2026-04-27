@@ -18,10 +18,8 @@ urlpatterns = [
     path("logout/", views.DashboardLogoutView.as_view(), name="logout"),
     path("forgot-password/", views.ForgotPasswordView.as_view(), name="forgot_password"),
 
-    # --- Home (3 layout variant) ---
+    # --- Home ---
     path("", views.HomeView.as_view(), name="home"),
-    path("v2/", views.HomeV2View.as_view(), name="home_v2"),
-    path("v3/", views.HomeV3View.as_view(), name="home_v3"),
 
     # --- Reports ---
     path("reports/readings/", views.ReadingsReportView.as_view(), name="reports_readings"),
@@ -58,5 +56,4 @@ urlpatterns = [
     path("api/home/snapshot/", api_views.home_snapshot, name="api_home_snapshot"),
     path("api/home/trend/", api_views.home_trend, name="api_home_trend"),
     path("api/home/events/", api_views.home_events, name="api_home_events"),
-    path("api/home/scada/", api_views.home_scada, name="api_home_scada"),
 ]
