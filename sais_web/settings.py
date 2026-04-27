@@ -269,6 +269,28 @@ CELERY_TASK_ACKS_LATE = True            # task crash'inde başka worker tekrar d
 # USE_TZ=False denenirse beat is_due() naive vs aware tzinfo karşılaştırmasında
 # sessizce False döner ve hiç task tetiklenmez (gözlemlenmiş bug).
 
+
+# SAIS / Envisoft dış entegrasyon client'ları (sais_domain.clients)
+# Bakanlık (entegrationsais.csb.gov.tr) — SaisSimClient
+SAIS_SIM_BASE_URL = os.getenv("SAIS_SIM_BASE_URL", "https://entegrationsais.csb.gov.tr")
+SAIS_SIM_SOFTWARE_VERSION = os.getenv("SAIS_SIM_SOFTWARE_VERSION", "EnvisoftV.2")
+# Login ticket Django cache'ine bu süre (sn) için yazılır; 401 zaten reaktif
+# olarak ticket yenilemeyi tetikler — TTL sadece üst sınır.
+SAIS_SIM_TICKET_TTL = int(os.getenv("SAIS_SIM_TICKET_TTL", str(60 * 60)))
+
+# Envisoft (scada/entegration.onlinecevre.com.tr) — EnvisoftClient
+ENVISOFT_DIAGNOSTIC_URL = os.getenv(
+    "ENVISOFT_DIAGNOSTIC_URL",
+    "https://scada.onlinecevre.com.tr/sais-get-diagnostic/",
+)
+ENVISOFT_SEND_DATA_URL = os.getenv(
+    "ENVISOFT_SEND_DATA_URL",
+    "https://entegration.onlinecevre.com.tr/SendData",
+)
+ENVISOFT_USERNAME = os.getenv("ENVISOFT_USERNAME", "envisoft")
+ENVISOFT_PASSWORD = os.getenv("ENVISOFT_PASSWORD", "")
+ENVISOFT_VERIFY_TLS = env_bool("ENVISOFT_VERIFY_TLS", default=False)
+
 INTERNAL_IPS = ["127.0.0.1"]
 
 
