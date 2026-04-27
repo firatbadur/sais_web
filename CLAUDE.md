@@ -140,7 +140,7 @@ copy .env.example .env
 python manage.py migrate
 python manage.py seed_initial_data    # çekirdek: Station, Parameter, StatusCode, jenerik RequestType
 python manage.py seed_sais_data       # SAIS: atıksu StationType, ministry_sample, EnvisoftChannel
-python manage.py seed_periodic_tasks  # 8 Celery beat periodic task (idempotent)
+python manage.py seed_periodic_tasks  # 9 Celery beat periodic task (idempotent)
 python manage.py createsuperuser
 python manage.py runserver
 
@@ -203,6 +203,7 @@ Tüm periyodik iş Celery beat'in DB'de tuttuğu `PeriodicTask` kayıtlarıyla y
 | `api.tasks.aggregate_readings_daily` | `0 1 * * *` | Son 48 saatlik günlük aggregate |
 | `api.tasks.prune_readings_task` | `30 2 * * *` | Reading + aggregate retention'ı geçenleri sil |
 | `api.tasks.prune_api_logs_task` | `0 3 * * *` | `API_LOG_RETENTION_DAYS`'den eski kayıtları sil |
+| `sais_domain.tasks.publish_minute_data` | `* * * * *` | Aktif kabinler için SIM + Envisoft `SendData` fan-out |
 
 Yönetim:
 - Admin panelinden (`/admin/django_celery_beat/periodictask/`) bireysel task'lar enable/disable edilebilir veya periyot değiştirilebilir.
