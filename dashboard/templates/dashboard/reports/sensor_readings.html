@@ -23,6 +23,40 @@
     }
     /* Flatpickr koyu temada okunabilirlik */
     .flatpickr-calendar { z-index: 10000; }
+
+    /* --- Grafik kartı / ApexCharts kontrast iyileştirmeleri --- */
+    #report-chart-wrap {
+        padding: 1rem 0.5rem;
+        background-color: var(--bs-app-bg-color, var(--bs-body-bg));
+        border: 1px solid var(--bs-gray-200);
+        border-radius: 0.625rem;
+        box-shadow: inset 0 0 0 1px rgba(0,0,0,0.02);
+    }
+    [data-bs-theme="dark"] #report-chart-wrap {
+        border-color: var(--bs-gray-300);
+    }
+    /* Toolbar ikonları default Apex çok soluk — kontrast yükselt */
+    .apexcharts-toolbar { opacity: 1 !important; z-index: 3; }
+    .apexcharts-toolbar svg {
+        fill: var(--bs-gray-700) !important;
+        transition: fill 0.15s ease;
+    }
+    .apexcharts-toolbar svg:hover { fill: var(--bs-primary) !important; }
+    .apexcharts-toolbar .apexcharts-selected svg { fill: var(--bs-primary) !important; }
+    .apexcharts-menu {
+        background: var(--bs-body-bg) !important;
+        border: 1px solid var(--bs-gray-300) !important;
+        color: var(--bs-body-color) !important;
+        border-radius: 0.475rem;
+        padding: 0.25rem 0;
+    }
+    .apexcharts-menu-item { color: var(--bs-body-color) !important; }
+    .apexcharts-menu-item:hover { background: var(--bs-gray-100) !important; }
+    /* Legend marker daha belirgin */
+    .apexcharts-legend-series .apexcharts-legend-text {
+        color: var(--bs-text-gray-700) !important;
+        font-weight: 600 !important;
+    }
 </style>
 {% endblock %}
 
@@ -370,24 +404,104 @@
             chartEl.innerHTML = '<div class="text-center text-muted py-10">{% trans "Grafik için sayısal veri yok." %}</div>';
             return;
         }
+
+        // Mevcut Metronic temasına göre light/dark otomatik
+        const isDark = (document.documentElement.getAttribute('data-bs-theme') || 'light') === 'dark';
+        const axisColor = isDark ? '#92929F' : '#5E6278';
+        const gridColor = isDark ? '#2B2B40' : '#E4E6EF';
+        const palette = [
+            '#009EF7', '#50CD89', '#F1416C', '#FFA800',
+            '#7239EA', '#17C653', '#0BB7AF', '#F39C12',
+            '#E91E63', '#FF5722'
+        ];
+
         const options = {
-            chart: { type: 'line', height: 420, toolbar: { show: true }, animations: { enabled: true }, background: 'transparent' },
-            theme: { mode: 'dark' },
+            chart: {
+                type: 'line',
+                height: 420,
+                fontFamily: 'inherit',
+                background: 'transparent',
+                toolbar: {
+                    show: true,
+                    tools: { download: true, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true, reset: true },
+                    autoSelected: 'zoom'
+                },
+                animations: { enabled: true, easing: 'easeinout', speed: 600 },
+                zoom: { enabled: true, type: 'x', autoScaleYaxis: true }
+            },
+            theme: { mode: isDark ? 'dark' : 'light' },
             series: apexSeries,
-            stroke: { curve: 'smooth', width: 2 },
-            xaxis: { type: 'datetime' },
-            yaxis: { labels: { formatter: v => Number(v).toFixed(2) } },
-            legend: { position: 'top' },
-            tooltip: { x: { format: 'dd.MM.yyyy HH:mm:ss' }, theme: 'dark' },
-            colors: ['#009ef7', '#50cd89', '#f1416c', '#ffc700', '#7239ea', '#17c653', '#f6c000']
+            stroke: { curve: 'smooth', width: 3, lineCap: 'round' },
+            markers: {
+                size: 0,
+                strokeWidth: 0,
+                hover: { size: 6, sizeOffset: 3 }
+            },
+            dataLabels: { enabled: false },
+            grid: {
+                show: true,
+                borderColor: gridColor,
+                strokeDashArray: 4,
+                xaxis: { lines: { show: true } },
+                yaxis: { lines: { show: true } },
+                padding: { top: 10, right: 16, bottom: 0, left: 16 }
+            },
+            xaxis: {
+                type: 'datetime',
+                axisBorder: { show: true, color: gridColor },
+                axisTicks: { show: true, color: gridColor },
+                tooltip: { enabled: false },
+                labels: {
+                    style: { colors: axisColor, fontSize: '12px', fontWeight: 500 },
+                    datetimeUTC: false,
+                    datetimeFormatter: {
+                        year:   'yyyy',
+                        month:  "MMM 'yy",
+                        day:    'dd MMM',
+                        hour:   'HH:mm',
+                        minute: 'HH:mm:ss'
+                    }
+                }
+            },
+            yaxis: {
+                axisBorder: { show: false },
+                labels: {
+                    formatter: v => Number(v).toFixed(2),
+                    style: { colors: axisColor, fontSize: '12px', fontWeight: 500 }
+                }
+            },
+            legend: {
+                position: 'top',
+                horizontalAlign: 'left',
+                fontSize: '13px',
+                fontWeight: 600,
+                offsetY: 0,
+                itemMargin: { horizontal: 12, vertical: 6 },
+                markers: { width: 14, height: 14, radius: 7, strokeWidth: 0 },
+                labels: { colors: isDark ? '#CDCDDE' : '#3F4254' }
+            },
+            tooltip: {
+                theme: isDark ? 'dark' : 'light',
+                shared: true,
+                intersect: false,
+                x: { format: 'dd.MM.yyyy HH:mm:ss' },
+                y: { formatter: v => v == null ? '—' : Number(v).toFixed(3) },
+                marker: { show: true }
+            },
+            colors: palette,
+            responsive: [{
+                breakpoint: 768,
+                options: { chart: { height: 320 }, legend: { position: 'bottom' } }
+            }]
         };
+
         if (chartInstance) {
-            chartInstance.updateOptions(options, true, true);
-        } else {
-            chartEl.innerHTML = '';
-            chartInstance = new ApexCharts(chartEl, options);
-            chartInstance.render();
+            chartInstance.destroy();
+            chartInstance = null;
         }
+        chartEl.innerHTML = '';
+        chartInstance = new ApexCharts(chartEl, options);
+        chartInstance.render();
     }
 
     function updateChartVisibility() {
