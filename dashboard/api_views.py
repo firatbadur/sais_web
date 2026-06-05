@@ -198,19 +198,46 @@ def home_events(request):
 
 @login_required
 def station_parameters(request):
-    """İstasyona ait parametre listesi — rapor formu select2'sini doldurur."""
+    """İstasyona ait parametre listesi — rapor formu select2'sini doldurur.
+
+    Sensör tipine göre Analog / Dijital / Diğer optgroup'larıyla döner;
+    boş gruplar atlanır.
+    """
     try:
         station_id = int(request.GET.get("station") or 0) or None
     except (TypeError, ValueError):
         station_id = None
-    qs = Parameter.objects.order_by("parameter_name")
+    qs = (
+        Parameter.objects
+        .order_by("parameter_name")
+        .prefetch_related("sensors")
+    )
     if station_id:
         qs = qs.filter(station_id=station_id)
     else:
         qs = qs.none()
-    items = [
-        {"id": p.id, "text": p.parameter_name or f"Parametre {p.id}",
-         "unit": p.unit_txt or p.unit or ""}
-        for p in qs
-    ]
-    return JsonResponse({"results": items})
+
+    analog, digital, other = [], [], []
+    for p in qs:
+        sensors = list(p.sensors.all())
+        stype = sensors[0].sensor_type if sensors else None
+        item = {
+            "id": p.id,
+            "text": p.parameter_name or f"Parametre {p.id}",
+            "unit": p.unit_txt or p.unit or "",
+        }
+        if stype in (0, 1):
+            analog.append(item)
+        elif stype in (2, 3):
+            digital.append(item)
+        else:
+            other.append(item)
+
+    groups = []
+    if analog:
+        groups.append({"text": "Analog", "children": analog})
+    if digital:
+        groups.append({"text": "Dijital", "children": digital})
+    if other:
+        groups.append({"text": "Diğer", "children": other})
+    return JsonResponse({"results": groups})

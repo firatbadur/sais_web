@@ -32,6 +32,7 @@ from api.models import (
     ReadingHourly,
     Sensor,
     Station,
+    StatusCode,
     SystemLog,
 )
 
@@ -98,18 +99,23 @@ class HomeView(RoleRequiredMixin, TemplateView):
 # --------------------------------------------------------------------------- #
 
 class ReadingsReportView(RoleRequiredMixin, ListView):
-    """SAIS Parametre Raporu — istasyon + parametre + tarih + aralık + kalite filtreli.
+    """Sensör Okumaları — istasyon + parametre + tip + tarih + aralık + status filtreli.
 
     Veri aralığına (`interval`) göre kaynak tablo değişir:
       - ``1min`` → raw `Reading` (1 dk poll varsayımı)
       - ``15min`` → `ReadingFifteenMin`
       - ``hourly`` → `ReadingHourly`
       - ``daily`` → `ReadingDaily`
-    Kalite filtresi sadece raw için anlamlı; aggregate tablolarında atlanır.
+    Status code filtresi sadece raw için anlamlı; aggregate tablolarında atlanır.
+    DataTables client-side handle ettiği için server-side pagination yok;
+    sertlik (DoS koruması) açısından hard limit `MAX_ROWS` ile sağlanır.
     """
     template_name = "dashboard/reports/sensor_readings.html"
     context_object_name = "rows"
-    paginate_by = 100
+    # DataTables client-side; server-side pagination KAPALI.
+    paginate_by = None
+    # Browser'ı bombalamamak için tek sorguda dönecek max satır.
+    MAX_ROWS = 50000
 
     INTERVAL_CHOICES = (
         ("1min", _("1 dk.")),
@@ -117,12 +123,13 @@ class ReadingsReportView(RoleRequiredMixin, ListView):
         ("hourly", _("1 saat")),
         ("daily", _("1 gün")),
     )
-    QUALITY_CHOICES = (
-        ("all", _("Hepsi")),
-        ("good", _("Geçerli")),
-        ("bad", _("Hatalı")),
-        ("uncertain", _("Belirsiz")),
+    # Sensor.sensor_type: 0=AI, 1=AO, 2=DI, 3=DO.
+    SENSOR_TYPE_CHOICES = (
+        ("all", _("Tümü")),
+        ("analog", _("Analog")),
+        ("digital", _("Dijital")),
     )
+    SENSOR_TYPE_GROUPS = {"analog": (0, 1), "digital": (2, 3)}
     DATE_FORMAT = "%d.%m.%Y %H:%M:%S"
 
     def _parse_dt(self, raw: str):
@@ -157,20 +164,28 @@ class ReadingsReportView(RoleRequiredMixin, ListView):
             except (TypeError, ValueError):
                 continue
 
+        status_ids = []
+        for raw in gp.getlist("status"):
+            try:
+                status_ids.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+
         interval = gp.get("interval") or "1min"
         if interval not in dict(self.INTERVAL_CHOICES):
             interval = "1min"
 
-        quality = gp.get("quality") or "all"
-        if quality not in dict(self.QUALITY_CHOICES):
-            quality = "all"
+        sensor_type = gp.get("sensor_type") or "all"
+        if sensor_type not in dict(self.SENSOR_TYPE_CHOICES):
+            sensor_type = "all"
 
         return {
             "submitted": bool(gp),
             "station_id": station_id,
             "parameter_ids": param_ids,
+            "status_ids": status_ids,
             "interval": interval,
-            "quality": quality,
+            "sensor_type": sensor_type,
             "start": start,
             "end": end,
             "chart": gp.get("chart") == "1",
@@ -191,18 +206,25 @@ class ReadingsReportView(RoleRequiredMixin, ListView):
         }[f["interval"]]
 
         time_field = "time_iso" if is_raw else "bucket_start"
+        select_related = ("sensor", "sensor__parameter")
+        if is_raw:
+            select_related = select_related + ("status",)
         qs = (model.objects
-              .select_related("sensor", "sensor__parameter")
+              .select_related(*select_related)
               .filter(**{f"{time_field}__gte": f["start"], f"{time_field}__lte": f["end"],
                          "sensor__connection__station_id": f["station_id"]}))
 
         if f["parameter_ids"]:
             qs = qs.filter(sensor__parameter_id__in=f["parameter_ids"])
 
-        if is_raw and f["quality"] != "all":
-            qs = qs.filter(quality=f["quality"])
+        type_group = self.SENSOR_TYPE_GROUPS.get(f["sensor_type"])
+        if type_group:
+            qs = qs.filter(sensor__sensor_type__in=type_group)
 
-        return qs.order_by(f"-{time_field}", "sensor_id")
+        if is_raw and f["status_ids"]:
+            qs = qs.filter(status_id__in=f["status_ids"])
+
+        return qs.order_by(f"-{time_field}", "sensor_id")[: self.MAX_ROWS]
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -210,13 +232,31 @@ class ReadingsReportView(RoleRequiredMixin, ListView):
         ctx["filters"] = f
         ctx["is_raw"] = f["interval"] == "1min"
         ctx["interval_choices"] = self.INTERVAL_CHOICES
-        ctx["quality_choices"] = self.QUALITY_CHOICES
+        ctx["sensor_type_choices"] = self.SENSOR_TYPE_CHOICES
         ctx["stations"] = Station.objects.filter(active=True).order_by("name")
-        # Parametre listesi: istasyon seçildiyse o istasyona ait + boş istasyonlu olanlar.
-        param_qs = Parameter.objects.order_by("parameter_name")
+        ctx["status_codes"] = StatusCode.objects.order_by("code")
+
+        # Parametre listesini sensör tipine göre Analog / Dijital olarak grupla.
+        param_qs = (
+            Parameter.objects
+            .order_by("parameter_name")
+            .prefetch_related("sensors")
+        )
         if f["station_id"]:
             param_qs = param_qs.filter(station_id=f["station_id"])
-        ctx["parameters"] = param_qs
+        analog, digital, other = [], [], []
+        for p in param_qs:
+            sensors = list(p.sensors.all())
+            stype = sensors[0].sensor_type if sensors else None
+            if stype in (0, 1):
+                analog.append(p)
+            elif stype in (2, 3):
+                digital.append(p)
+            else:
+                other.append(p)
+        ctx["parameters_analog"] = analog
+        ctx["parameters_digital"] = digital
+        ctx["parameters_other"] = other
         return ctx
 
 

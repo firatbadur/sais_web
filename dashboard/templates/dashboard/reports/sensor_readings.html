@@ -1,14 +1,36 @@
 {% extends "dashboard/base.html" %}
 {% load i18n dashboard_extras %}
 
-{% block title %}{% trans "SAIS Parametre Raporu" %}{% endblock %}
-{% block page_title %}{% trans "SAIS Parametre Raporu" %}{% endblock %}
+{% block title %}{% trans "Sensör Okumaları" %}{% endblock %}
+{% block page_title %}{% trans "Sensör Okumaları" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Sayfa-özel renk tutarlılığı: SCADA için soft mavi + koyu accent. */
+    #report-filter-form .form-label { color: var(--bs-text-muted); }
+    #report-results-card .dt-buttons .btn {
+        margin-right: 0.35rem;
+        padding: 0.45rem 0.85rem;
+    }
+    /* DataTables filter/length etiketleri */
+    #report-results-card .dataTables_filter,
+    #report-results-card .dataTables_length {
+        margin-bottom: 0.5rem;
+    }
+    #report-results-card .dataTables_filter input,
+    #report-results-card .dataTables_length select {
+        margin-left: 0.5rem;
+    }
+    /* Flatpickr koyu temada okunabilirlik */
+    .flatpickr-calendar { z-index: 10000; }
+</style>
+{% endblock %}
 
 {% block content %}
 <!-- ============ FİLTRE FORMU ============ -->
 <div class="card mb-5 mb-xl-8">
     <div class="card-header border-0 pt-6">
-        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "SAIS Parametre Raporu" %}</h3>
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Sensör Okumaları" %}</h3>
     </div>
     <div class="card-body pt-2">
         <form method="get" id="report-filter-form" class="row g-5">
@@ -24,16 +46,38 @@
                 </select>
             </div>
 
-            <!-- Parametre Listesi -->
+            <!-- Parametre Listesi (search'lü, optgroup'lu, multi) -->
             <div class="col-md-6">
                 <label class="form-label fw-semibold">{% trans "Parametre Listesi" %}</label>
                 <select name="parameter" id="filter-parameters" class="form-select" data-control="select2"
-                        data-placeholder='{% trans "Parametre seçiniz" %}' multiple>
-                    {% for p in parameters %}
-                        <option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>
-                            {{ p.parameter_name }}{% if p.unit_txt %} ({{ p.unit_txt }}){% elif p.unit %} ({{ p.unit }}){% endif %}
-                        </option>
-                    {% endfor %}
+                        data-placeholder='{% trans "Parametre seçiniz (aranabilir)" %}' multiple>
+                    {% if parameters_analog %}
+                    <optgroup label="{% trans 'Analog' %}">
+                        {% for p in parameters_analog %}
+                            <option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>
+                                {{ p.parameter_name }}{% if p.unit_txt %} ({{ p.unit_txt }}){% elif p.unit %} ({{ p.unit }}){% endif %}
+                            </option>
+                        {% endfor %}
+                    </optgroup>
+                    {% endif %}
+                    {% if parameters_digital %}
+                    <optgroup label="{% trans 'Dijital' %}">
+                        {% for p in parameters_digital %}
+                            <option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>
+                                {{ p.parameter_name }}
+                            </option>
+                        {% endfor %}
+                    </optgroup>
+                    {% endif %}
+                    {% if parameters_other %}
+                    <optgroup label="{% trans 'Diğer' %}">
+                        {% for p in parameters_other %}
+                            <option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>
+                                {{ p.parameter_name }}{% if p.unit_txt %} ({{ p.unit_txt }}){% elif p.unit %} ({{ p.unit }}){% endif %}
+                            </option>
+                        {% endfor %}
+                    </optgroup>
+                    {% endif %}
                 </select>
             </div>
 
@@ -47,12 +91,12 @@
                 </select>
             </div>
 
-            <!-- Filtreleme (kalite) -->
+            <!-- Sensör Tipi -->
             <div class="col-md-3">
-                <label class="form-label fw-semibold">{% trans "Filtreleme" %}</label>
-                <select name="quality" class="form-select" data-control="select2" data-hide-search="true">
-                    {% for code, label in quality_choices %}
-                        <option value="{{ code }}" {% if filters.quality == code %}selected{% endif %}>{{ label }}</option>
+                <label class="form-label fw-semibold">{% trans "Sensör Tipi" %}</label>
+                <select name="sensor_type" class="form-select" data-control="select2" data-hide-search="true">
+                    {% for code, label in sensor_type_choices %}
+                        <option value="{{ code }}" {% if filters.sensor_type == code %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -61,23 +105,37 @@
             <div class="col-md-3">
                 <label class="form-label fw-semibold">{% trans "Rapor Başlangıç Tarihi" %}</label>
                 <input type="text" name="start" id="filter-start" class="form-control"
-                       value="{{ filters.start|date:'d.m.Y H:i:s' }}" placeholder="dd.mm.yyyy HH:MM:SS">
+                       value="{{ filters.start|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
             </div>
 
             <!-- Bitiş -->
             <div class="col-md-3">
                 <label class="form-label fw-semibold">{% trans "Rapor Bitiş Tarihi" %}</label>
                 <input type="text" name="end" id="filter-end" class="form-control"
-                       value="{{ filters.end|date:'d.m.Y H:i:s' }}" placeholder="dd.mm.yyyy HH:MM:SS">
+                       value="{{ filters.end|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+            </div>
+
+            <!-- Status Code Filtresi (multi) -->
+            <div class="col-md-12">
+                <label class="form-label fw-semibold">{% trans "Status Filtresi" %}</label>
+                <select name="status" id="filter-status" class="form-select" data-control="select2"
+                        data-placeholder='{% trans "Status kodu (boş = hepsi)" %}' multiple>
+                    {% for sc in status_codes %}
+                        <option value="{{ sc.id }}" {% if sc.id in filters.status_ids %}selected{% endif %}>
+                            {% if sc.code is not None %}[{{ sc.code }}] {% endif %}{{ sc.name|default:'—' }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">{% trans "Sadece 1 dk. (raw) aralığında uygulanır; aggregate'lerde göz ardı edilir." %}</div>
             </div>
 
             <!-- Butonlar -->
             <div class="col-12">
-                <button type="submit" class="btn btn-success">
+                <button type="submit" class="btn btn-primary">
                     <i class="ki-outline ki-flash fs-3"></i>{% trans "Rapor Getir" %}
                 </button>
                 {% if filters.submitted %}
-                <a href="{% url 'dashboard:reports_readings' %}" class="btn btn-light ms-2">
+                <a href="{% url 'dashboard:reports_readings' %}" class="btn btn-light-warning ms-2">
                     <i class="ki-outline ki-arrows-circle fs-3"></i>{% trans "Sıfırla" %}
                 </a>
                 {% endif %}
@@ -87,13 +145,13 @@
 </div>
 
 <!-- ============ RAPOR ÇIKTISI ============ -->
-<div class="card">
+<div class="card" id="report-results-card">
     <div class="card-header border-0 pt-6">
         <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Rapor Çıktısı" %}</h3>
         <div class="card-toolbar">
             <label class="form-check form-switch form-check-custom form-check-solid">
                 <input class="form-check-input" type="checkbox" id="chart-toggle" {% if filters.chart %}checked{% endif %}>
-                <span class="form-check-label fw-semibold text-muted">{% trans "Grafik Oluştur" %}</span>
+                <span class="form-check-label fw-semibold text-muted ms-2">{% trans "Grafik Oluştur" %}</span>
             </label>
         </div>
     </div>
@@ -106,20 +164,21 @@
             </div>
         {% else %}
             <!-- Grafik -->
-            <div id="report-chart-wrap" class="mb-5" style="display:none;">
-                <div id="report-chart" style="height:380px;"></div>
+            <div id="report-chart-wrap" style="display:none;">
+                <div id="report-chart" style="height:420px;"></div>
             </div>
 
             <!-- Tablo -->
-            <div class="table-responsive">
-                <table class="table table-row-dashed align-middle gs-0 gy-3">
-                    <thead class="fs-7 fw-bold text-uppercase text-gray-500">
+            <div id="report-table-wrap" class="table-responsive">
+                <table id="report-table" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
+                    <thead class="fs-7 fw-bold text-uppercase text-gray-700">
                         <tr>
                             {% if is_raw %}
                                 <th>{% trans "Zaman" %}</th>
                                 <th>{% trans "Parametre" %}</th>
                                 <th class="text-end">{% trans "Değer" %}</th>
                                 <th>{% trans "Birim" %}</th>
+                                <th>{% trans "Status Kodu" %}</th>
                                 <th>{% trans "Kalite" %}</th>
                             {% else %}
                                 <th>{% trans "Bucket" %}</th>
@@ -137,59 +196,35 @@
                         {% for r in rows %}
                             <tr>
                                 {% if is_raw %}
-                                    <td class="text-muted">{{ r.time_iso|date:"d.m.Y H:i:s" }}</td>
+                                    <td data-order="{{ r.time_iso|date:'U' }}">{{ r.time_iso|date:"d.m.Y H:i:s" }}</td>
                                     <td>{{ r.sensor.parameter.parameter_name|default:r.sensor_id }}</td>
-                                    <td class="text-end fw-semibold">{{ r.value|default:"—" }}</td>
+                                    <td class="text-end fw-semibold" data-order="{{ r.value|default_if_none:'' }}">{{ r.value|default:"—" }}</td>
                                     <td class="text-muted">{{ r.sensor.parameter.unit_txt|default:r.sensor.parameter.unit|default:"" }}</td>
+                                    <td>
+                                        {% if r.status %}
+                                            <span class="text-gray-700">{% if r.status.code is not None %}[{{ r.status.code }}] {% endif %}{{ r.status.name|default:'' }}</span>
+                                        {% else %}<span class="text-muted">—</span>{% endif %}
+                                    </td>
                                     <td>
                                         <span class="badge badge-light-{% if r.quality == 'good' %}success{% elif r.quality == 'bad' %}danger{% elif r.quality == 'uncertain' %}warning{% else %}secondary{% endif %}">
                                             {{ r.get_quality_display }}
                                         </span>
                                     </td>
                                 {% else %}
-                                    <td class="text-muted">{{ r.bucket_start|date:"d.m.Y H:i" }}</td>
+                                    <td data-order="{{ r.bucket_start|date:'U' }}">{{ r.bucket_start|date:"d.m.Y H:i" }}</td>
                                     <td>{{ r.sensor.parameter.parameter_name|default:r.sensor_id }}</td>
-                                    <td class="text-end fw-semibold">{{ r.avg_value|default:"—" }}</td>
-                                    <td class="text-end text-muted">{{ r.min_value|default:"—" }}</td>
-                                    <td class="text-end text-muted">{{ r.max_value|default:"—" }}</td>
+                                    <td class="text-end fw-semibold" data-order="{{ r.avg_value|default_if_none:'' }}">{{ r.avg_value|default:"—" }}</td>
+                                    <td class="text-end text-muted" data-order="{{ r.min_value|default_if_none:'' }}">{{ r.min_value|default:"—" }}</td>
+                                    <td class="text-end text-muted" data-order="{{ r.max_value|default_if_none:'' }}">{{ r.max_value|default:"—" }}</td>
                                     <td class="text-muted">{{ r.sensor.parameter.unit_txt|default:r.sensor.parameter.unit|default:"" }}</td>
                                     <td class="text-end">{{ r.count }}</td>
                                     <td class="text-end">{% if r.bad_count %}<span class="text-danger">{{ r.bad_count }}</span>{% else %}0{% endif %}</td>
                                 {% endif %}
                             </tr>
-                        {% empty %}
-                            <tr>
-                                <td colspan="{% if is_raw %}5{% else %}8{% endif %}" class="text-center text-muted py-5">
-                                    {% trans "Seçilen kriterlerle eşleşen kayıt bulunamadı." %}
-                                </td>
-                            </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-            {% if is_paginated %}
-            {% querystring_without "page" as base_qs %}
-            <div class="d-flex flex-stack flex-wrap pt-10">
-                <div class="fs-6 fw-semibold text-gray-700">
-                    {% blocktrans with count=page_obj.paginator.count start=page_obj.start_index end=page_obj.end_index %}{{ start }}-{{ end }} / toplam {{ count }}{% endblocktrans %}
-                </div>
-                <ul class="pagination">
-                    {% if page_obj.has_previous %}
-                        <li class="page-item previous"><a href="?{{ base_qs }}&page={{ page_obj.previous_page_number }}" class="page-link"><i class="previous"></i></a></li>
-                    {% endif %}
-                    {% for num in page_obj.paginator.page_range %}
-                        {% if num == page_obj.number %}
-                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                        {% elif num > page_obj.number|add:-3 and num < page_obj.number|add:3 %}
-                            <li class="page-item"><a href="?{{ base_qs }}&page={{ num }}" class="page-link">{{ num }}</a></li>
-                        {% endif %}
-                    {% endfor %}
-                    {% if page_obj.has_next %}
-                        <li class="page-item next"><a href="?{{ base_qs }}&page={{ page_obj.next_page_number }}" class="page-link"><i class="next"></i></a></li>
-                    {% endif %}
-                </ul>
-            </div>
-            {% endif %}
         {% endif %}
     </div>
 </div>
@@ -198,70 +233,131 @@
 {% block extra_scripts %}
 <script>
 (function() {
-    // --- Flatpickr (tarih-saat seçici) ---
+    // Page-level constants
+    const IS_RAW = {{ is_raw|yesno:"true,false" }};
+    const ROWS_RENDERED = {{ rows|length|default:0 }};
+
+    // --- Flatpickr (TR locale inline) ---
+    const flatpickrTR = {
+        weekdays: { shorthand: ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'],
+                    longhand:  ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'] },
+        months:   { shorthand: ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'],
+                    longhand:  ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+                                'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'] },
+        firstDayOfWeek: 1,
+        rangeSeparator: ' - ',
+        weekAbbreviation: 'Hf',
+        scrollTitle: 'Yıllarda Gez',
+        toggleTitle: 'Saati Aç/Kapa',
+        ordinal: () => '.',
+        time_24hr: true,
+    };
     if (typeof flatpickr !== 'undefined') {
         const opts = {
             enableTime: true, enableSeconds: true,
             dateFormat: "d.m.Y H:i:S", time_24hr: true,
-            allowInput: true,
+            allowInput: true, locale: flatpickrTR,
         };
         flatpickr("#filter-start", opts);
         flatpickr("#filter-end", opts);
     }
 
-    // --- İstasyon değişince parametre listesini AJAX ile yenile ---
+    // --- Parametre listesini istasyon değişiminde AJAX ile yenile ---
     const stationSel = document.getElementById('filter-station');
     const paramSel = document.getElementById('filter-parameters');
     const paramUrl = "{% url 'dashboard:api_station_parameters' %}";
 
     function reloadParameters(stationId) {
         if (!paramSel) return;
-        // Mevcut Select2 seçimini temizle
         $(paramSel).val(null).trigger('change');
-        // Tüm option'ları kaldır
         while (paramSel.firstChild) paramSel.removeChild(paramSel.firstChild);
         if (!stationId) return;
         fetch(`${paramUrl}?station=${encodeURIComponent(stationId)}`, { credentials: 'same-origin' })
             .then(r => r.json())
             .then(data => {
-                (data.results || []).forEach(p => {
-                    const opt = document.createElement('option');
-                    opt.value = p.id;
-                    opt.textContent = p.unit ? `${p.text} (${p.unit})` : p.text;
-                    paramSel.appendChild(opt);
+                (data.results || []).forEach(group => {
+                    const og = document.createElement('optgroup');
+                    og.label = group.text;
+                    (group.children || []).forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id;
+                        opt.textContent = p.unit ? `${p.text} (${p.unit})` : p.text;
+                        og.appendChild(opt);
+                    });
+                    paramSel.appendChild(og);
                 });
+                // Tetikle ki Select2 yenisini görsün
+                $(paramSel).trigger('change');
             })
             .catch(e => console.warn('Parameter reload fail:', e));
     }
-
     if (stationSel) {
-        // Select2 jQuery event'i ile dinle
-        $(stationSel).on('change', function() {
-            reloadParameters(this.value);
+        $(stationSel).on('change', function() { reloadParameters(this.value); });
+    }
+
+    // --- DataTables init (client-side, Buttons ext) ---
+    let dt = null;
+    const tableEl = document.getElementById('report-table');
+    if (tableEl && typeof $.fn.dataTable !== 'undefined') {
+        dt = $('#report-table').DataTable({
+            dom:
+                "<'row mb-3'<'col-sm-12 col-md-6 d-flex align-items-center'B><'col-sm-12 col-md-6 d-flex justify-content-md-end align-items-center'f>>" +
+                "<'row'<'col-sm-12'tr>>" +
+                "<'row mt-3'<'col-sm-12 col-md-5 d-flex align-items-center'<'me-3'l>i><'col-sm-12 col-md-7 d-flex justify-content-md-end'p>>",
+            buttons: [
+                { extend: 'copyHtml5',  text: '<i class="ki-outline ki-copy fs-3"></i> {% trans "Kopyala" %}',  className: 'btn btn-sm btn-light-primary' },
+                { extend: 'csvHtml5',   text: '<i class="ki-outline ki-document fs-3"></i> CSV',                 className: 'btn btn-sm btn-light-primary' },
+                { extend: 'excelHtml5', text: '<i class="ki-outline ki-file-down fs-3"></i> Excel',              className: 'btn btn-sm btn-light-success' },
+                { extend: 'pdfHtml5',   text: '<i class="ki-outline ki-file-down fs-3"></i> PDF',                className: 'btn btn-sm btn-light-danger' },
+                { extend: 'print',      text: '<i class="ki-outline ki-printer fs-3"></i> {% trans "Yazdır" %}', className: 'btn btn-sm btn-light-info' },
+                { extend: 'colvis',     text: '<i class="ki-outline ki-eye fs-3"></i> {% trans "Kolonlar" %}',    className: 'btn btn-sm btn-light' },
+            ],
+            order: [[0, 'desc']],
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, '{% trans "Hepsi" %}']],
+            language: {
+                "lengthMenu":     '{% trans "Sayfada _MENU_ kayıt göster" %}',
+                "zeroRecords":    '{% trans "Kayıt bulunamadı." %}',
+                "info":           '{% trans "_TOTAL_ kayıttan _START_ - _END_ arası" %}',
+                "infoEmpty":      '{% trans "Kayıt yok" %}',
+                "infoFiltered":   '{% trans "(_MAX_ kayıt arasından filtrelendi)" %}',
+                "search":         '{% trans "Ara:" %}',
+                "emptyTable":     '{% trans "Seçilen kriterlerle eşleşen kayıt bulunamadı." %}',
+                "paginate":       {
+                    "first":    '{% trans "İlk" %}',
+                    "last":     '{% trans "Son" %}',
+                    "next":     '{% trans "Sonraki" %}',
+                    "previous": '{% trans "Önceki" %}',
+                }
+            }
         });
     }
 
-    // --- Grafik toggle + ApexCharts ---
+    // --- Grafik toggle (tabloyu gizle / grafik göster) ---
     const chartToggle = document.getElementById('chart-toggle');
-    const chartWrap = document.getElementById('report-chart-wrap');
-    const chartEl = document.getElementById('report-chart');
+    const chartWrap   = document.getElementById('report-chart-wrap');
+    const chartEl     = document.getElementById('report-chart');
+    const tableWrap   = document.getElementById('report-table-wrap');
     let chartInstance = null;
+
+    function tdText(td) { return (td.innerText || td.textContent || '').trim(); }
 
     function buildChartFromTable() {
         if (!chartEl) return;
-        const rows = Array.from(document.querySelectorAll('#report-filter-form ~ .card .table tbody tr'));
-        // Parametre → [{x: ts, y: val}, ...] gruplama
+        // Datatables filtre uygulamış olabilir; ama biz tüm raw DOM satırlarını alalım.
+        const tbodyRows = Array.from(document.querySelectorAll('#report-table tbody tr'));
         const series = {};
-        const isRaw = {{ is_raw|yesno:"true,false" }};
-        rows.forEach(tr => {
+        tbodyRows.forEach(tr => {
             const cells = tr.querySelectorAll('td');
             if (cells.length < 3) return;
-            const t = cells[0].textContent.trim();
-            const param = cells[1].textContent.trim();
-            const val = parseFloat((cells[2].textContent || '').replace(',', '.'));
+            const tTxt   = tdText(cells[0]);
+            const param  = tdText(cells[1]);
+            // Raw → cells[2] = Değer; Aggregate → cells[2] = Ortalama
+            const rawVal = tdText(cells[2]).replace(/\s/g, '').replace(',', '.').replace('—', '');
+            const val = parseFloat(rawVal);
             if (!param || !isFinite(val)) return;
-            // dd.mm.yyyy HH:MM(:SS) → Date
-            const m = t.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+            // dd.mm.yyyy HH:MM(:SS)
+            const m = tTxt.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
             if (!m) return;
             const d = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], +(m[6] || 0));
             if (!series[param]) series[param] = [];
@@ -271,34 +367,41 @@
             name, data: data.sort((a,b) => a[0]-b[0])
         }));
         if (apexSeries.length === 0) {
-            chartEl.innerHTML = '<div class="text-center text-muted py-5">{% trans "Grafik için sayısal veri yok." %}</div>';
+            chartEl.innerHTML = '<div class="text-center text-muted py-10">{% trans "Grafik için sayısal veri yok." %}</div>';
             return;
         }
         const options = {
-            chart: { type: 'line', height: 380, toolbar: { show: true }, animations: { enabled: true } },
+            chart: { type: 'line', height: 420, toolbar: { show: true }, animations: { enabled: true }, background: 'transparent' },
+            theme: { mode: 'dark' },
             series: apexSeries,
             stroke: { curve: 'smooth', width: 2 },
             xaxis: { type: 'datetime' },
             yaxis: { labels: { formatter: v => Number(v).toFixed(2) } },
             legend: { position: 'top' },
-            tooltip: { x: { format: 'dd.MM.yyyy HH:mm' } },
+            tooltip: { x: { format: 'dd.MM.yyyy HH:mm:ss' }, theme: 'dark' },
             colors: ['#009ef7', '#50cd89', '#f1416c', '#ffc700', '#7239ea', '#17c653', '#f6c000']
         };
         if (chartInstance) {
-            chartInstance.updateOptions(options);
+            chartInstance.updateOptions(options, true, true);
         } else {
+            chartEl.innerHTML = '';
             chartInstance = new ApexCharts(chartEl, options);
             chartInstance.render();
         }
     }
 
     function updateChartVisibility() {
-        if (!chartWrap || !chartToggle) return;
+        if (!chartToggle) return;
         if (chartToggle.checked) {
-            chartWrap.style.display = 'block';
-            buildChartFromTable();
+            if (tableWrap) tableWrap.style.display = 'none';
+            if (chartWrap) chartWrap.style.display = 'block';
+            if (ROWS_RENDERED > 0) buildChartFromTable();
+            else if (chartEl) chartEl.innerHTML = '<div class="text-center text-muted py-10">{% trans "Grafik için veri yok." %}</div>';
         } else {
-            chartWrap.style.display = 'none';
+            if (chartWrap) chartWrap.style.display = 'none';
+            if (tableWrap) tableWrap.style.display = 'block';
+            // DataTables responsive recalc
+            if (dt) { dt.columns.adjust(); }
         }
     }
 

@@ -622,3 +622,76 @@ msgstr "Bad"
 
 msgid "Belirsiz"
 msgstr "Uncertain"
+
+msgid "Sensör Tipi"
+msgstr "Sensor Type"
+
+msgid "Tümü"
+msgstr "All"
+
+msgid "Analog"
+msgstr "Analog"
+
+msgid "Dijital"
+msgstr "Digital"
+
+msgid "Diğer"
+msgstr "Other"
+
+msgid "Status Filtresi"
+msgstr "Status Filter"
+
+msgid "Status Kodu"
+msgstr "Status Code"
+
+msgid "Status kodu (boş = hepsi)"
+msgstr "Status code (empty = all)"
+
+msgid "Sadece 1 dk. (raw) aralığında uygulanır; aggregate'lerde göz ardı edilir."
+msgstr "Applied only for the 1-minute (raw) interval; ignored for aggregates."
+
+msgid "Parametre seçiniz (aranabilir)"
+msgstr "Select parameters (searchable)"
+
+msgid "Grafik için veri yok."
+msgstr "No data available for chart."
+
+# ---- DataTables ----
+msgid "Kopyala"
+msgstr "Copy"
+
+msgid "Yazdır"
+msgstr "Print"
+
+msgid "Kolonlar"
+msgstr "Columns"
+
+msgid "Sayfada _MENU_ kayıt göster"
+msgstr "Show _MENU_ records per page"
+
+msgid "Kayıt bulunamadı."
+msgstr "No records found."
+
+msgid "_TOTAL_ kayıttan _START_ - _END_ arası"
+msgstr "Showing _START_ to _END_ of _TOTAL_ entries"
+
+msgid "Kayıt yok"
+msgstr "No records"
+
+msgid "(_MAX_ kayıt arasından filtrelendi)"
+msgstr "(filtered from _MAX_ total entries)"
+
+msgid "Ara:"
+msgstr "Search:"
+
+msgid "İlk"
+msgstr "First"
+
+msgid "Son"
+msgstr "Last"
+
+msgid "Sonraki"
+msgstr "Next"
+
+msgid "Önceki"
+msgstr "Previous"
