@@ -661,6 +661,9 @@ msgstr "No analog sensor data yet."
 msgid "Dijital sensör yok."
 msgstr "No digital sensors."
 
+msgid "Menüyü Daralt / Genişlet"
+msgstr "Collapse / Expand Menu"
+
 msgid "Sensör Tipi"
 msgstr "Sensor Type"
 
