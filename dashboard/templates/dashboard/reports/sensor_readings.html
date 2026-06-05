@@ -297,35 +297,58 @@
     }
 
     // --- Parametre listesini istasyon değişiminde AJAX ile yenile ---
+    // Metronic data-control="select2" ile auto-init edilen instance, sonradan
+    // DOM'a eklenen <option>'ları kendiliğinden tanımıyor. AJAX yanıtı geldikten
+    // sonra select2'yi destroy + reinit ediyoruz.
     const stationSel = document.getElementById('filter-station');
-    const paramSel = document.getElementById('filter-parameters');
-    const paramUrl = "{% url 'dashboard:api_station_parameters' %}";
+    const $paramSel  = $('#filter-parameters');
+    const paramUrl   = "{% url 'dashboard:api_station_parameters' %}";
+
+    const PARAM_S2_OPTS = {
+        placeholder: "{% trans 'Parametre seçiniz (aranabilir)' %}",
+        allowClear: false,
+        width: '100%',
+        closeOnSelect: false,
+    };
+
+    function reinitParamSelect2() {
+        if ($paramSel.hasClass('select2-hidden-accessible')) {
+            $paramSel.select2('destroy');
+        }
+        $paramSel.select2(PARAM_S2_OPTS);
+    }
 
     function reloadParameters(stationId) {
-        if (!paramSel) return;
-        $(paramSel).val(null).trigger('change');
-        while (paramSel.firstChild) paramSel.removeChild(paramSel.firstChild);
-        if (!stationId) return;
+        $paramSel.val(null);
+        $paramSel.empty();
+        if (!stationId) {
+            reinitParamSelect2();
+            return;
+        }
         fetch(`${paramUrl}?station=${encodeURIComponent(stationId)}`, { credentials: 'same-origin' })
             .then(r => r.json())
             .then(data => {
                 (data.results || []).forEach(group => {
-                    const og = document.createElement('optgroup');
-                    og.label = group.text;
+                    const $og = $('<optgroup>').attr('label', group.text);
                     (group.children || []).forEach(p => {
-                        const opt = document.createElement('option');
-                        opt.value = p.id;
-                        opt.textContent = p.unit ? `${p.text} (${p.unit})` : p.text;
-                        og.appendChild(opt);
+                        const label = p.unit ? `${p.text} (${p.unit})` : p.text;
+                        $('<option>').val(p.id).text(label).appendTo($og);
                     });
-                    paramSel.appendChild(og);
+                    $paramSel.append($og);
                 });
-                // Tetikle ki Select2 yenisini görsün
-                $(paramSel).trigger('change');
+                reinitParamSelect2();
             })
-            .catch(e => console.warn('Parameter reload fail:', e));
+            .catch(e => {
+                console.warn('Parameter reload fail:', e);
+                reinitParamSelect2();
+            });
     }
+
     if (stationSel) {
+        // Sayfa ilk yüklendiğinde server zaten ?station=X için option'ları
+        // doldurmuş ve seçimleri `selected` ile işaretlemiş; Metronic data-control
+        // ile select2 auto-init edilir — biz dokunmayız.
+        // İstasyon kullanıcı tarafından değiştiğinde AJAX ile parametreleri tazele.
         $(stationSel).on('change', function() { reloadParameters(this.value); });
     }
 
