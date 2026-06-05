@@ -233,6 +233,134 @@ python manage.py prune_api_logs --dry-run              # ApiLog retention sayım
 - **pymodbus 3.13+ API:** read_coils/holding_registers/input_registers/discrete_inputs ve write_coil/register'da `device_id=` parametresi kullanılır; eski `slave=` kabul edilmez.
 - `pyproject.toml`/`ruff`/`black` gibi linter yok — mevcut stili el ile koru.
 
+## Dashboard rapor sayfaları — standart iskelet
+
+`/dashboard/reports/` altındaki rapor sayfalarının standardı `dashboard/templates/dashboard/reports/sensor_readings.html` + `ReadingsReportView` (`dashboard/views.py`) + `station_parameters` (`dashboard/api_views.py`) ile belirlenmiştir. Yeni rapor sayfası (`/dashboard/reports/<x>/`) eklerken aşağıdaki desenleri **birebir uygula**.
+
+### View (ListView)
+
+- `class XxxReportView(RoleRequiredMixin, ListView)` — rol 3 dahil herkes; salt-operatör için `OperatorRequiredMixin`.
+- `paginate_by = None` (DataTables client-side handle eder); `MAX_ROWS = 50000` hard limit ile queryset'i slice et (`qs.order_by(...)[: self.MAX_ROWS]`).
+- `DATE_FORMAT = "%d.%m.%Y %H:%M:%S"` + `_parse_dt(raw)` helper'ı TZ-aware datetime döndürsün (`timezone.make_aware`).
+- `INTERVAL_CHOICES` ile bucket seçimi: `1min→Reading`, `15min→ReadingFifteenMin`, `hourly→ReadingHourly`, `daily→ReadingDaily`. Raw için `time_iso`, aggregate'lerde `bucket_start` filtre kullan.
+- `_filters()` method'u GET parametrelerini normalize edip dict döndürsün (`submitted`, `station_id`, `parameter_ids`, `status_ids`, `interval`, `start`, `end`, `chart`).
+- `get_queryset`: `submitted=False` veya `station_id=None` ise `Model.objects.none()`.
+- **Parametre kapsamı**: `Parameter.objects.filter(sensors__connection__station_id=X).distinct()`. `Parameter.station` FK'sı **güvenilir değil** — her zaman sensörlerden git. Aynı kural [`station_parameters`](dashboard/api_views.py) AJAX endpoint için de geçerli.
+- Parametre grup ataması (sensors[0].sensor_type): `0/1 → Analog`, `2/3 → Dijital`, başka/yok → `Diğer`. `parameters_analog/digital/other` context'e koy.
+- `get_context_data` çıktısı: `filters, is_raw, interval_choices, stations, status_codes, parameters_analog/digital/other`.
+
+### Template iskeleti
+
+İki kart: **Filtre kartı** + **Rapor Çıktısı kartı**.
+
+- `{% extends "dashboard/base.html" %}` + `{% load i18n static dashboard_extras %}`.
+- `{% block title %}` ve `{% block page_title %}` aynı i18n stringi versin.
+- Filtre form: `<form method="get" id="report-filter-form" class="row g-5">`, GET submit.
+- **İstasyon Seçimi** (col-md-6): `data-control="select2" data-allow-clear="true"`, ilk option boş.
+- **Parametre Listesi** (col-md-6): `multi + data-control="select2"` + optgroup `Analog/Dijital/Diğer`; istasyon yoksa `disabled`. Altta hint metni: "Önce bir istasyon seçin." → seçim sonrası "Parametre seçilmezse o istasyonun tüm parametreleri gösterilir.".
+- **Veri Aralığı** (col-md-3): `interval_choices` dropdown.
+- **Status Filtresi** (col-md-3, multi `StatusCode`): sadece raw için uygulanır, aggregate'lerde göz ardı.
+- **Başlangıç / Bitiş Tarihi** (col-md-3 + col-md-3): flatpickr inline TR locale (`flatpickrTR` object); format `d.m.Y H:i:S`. Altlarında `<div class="invalid-feedback">`.
+- **Form-seviyesi alert**: `<div id="form-alert" class="alert alert-warning d-none">`.
+- **Rapor Getir**: `id="btn-generate" class="btn btn-primary"`; istasyon yoksa `disabled`. **Sıfırla**: `btn-light-warning` (yalnız `filters.submitted` iken).
+- **Rapor Çıktısı kartı**: `id="report-results-card"` + card-toolbar'da "Grafik Oluştur" toggle switch. Boş durumda "rapor oluşturmak için istasyon seçip…" mesajı. Tablo wrapper `id="report-table-wrap"`, grafik wrapper `id="report-chart-wrap"` (default `display:none`).
+- **Tablo**: `<table id="report-table" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">`. Sıralanacak sütunlarda `<td data-order="...">` (Unix timestamp, raw float).
+
+### JS — validasyon
+
+`validateForm()` sayfa load + her input/change/flatpickr `onChange`/`onClose`'da çağrılsın:
+
+- Tarih: boş / format hatalı (`gg.aa.yyyy SS:DD:SS` regex) / başlangıç > bitiş.
+- Hata varsa: input'a `is-invalid` class + `invalid-feedback` mesaj + form üstü alert.
+- İstasyon yoksa hata listesine ekle.
+- Hatalı durumda **Rapor Getir disabled** + submit handler `e.preventDefault()` (Enter ile bypass'ı engelle).
+
+### JS — AJAX dinamik parametre yenileme
+
+- Endpoint: `dashboard:api_station_parameters` (`/dashboard/api/parameters/?station=<id>`).
+- JSON kontratı: `{"results": [{"text": "Analog", "children": [{id, text, unit}, ...]}]}`.
+- Frontend: yanıt geldikten sonra **select2 destroy + reinit**:
+
+```js
+function reinitParamSelect2() {
+    if ($paramSel.hasClass('select2-hidden-accessible')) $paramSel.select2('destroy');
+    $paramSel.select2(PARAM_S2_OPTS);
+}
+```
+
+Metronic'in `data-control="select2"` auto-init'i sonradan DOM'a eklenen `<option>`'ları görmüyor — `trigger('change')` yetmez.
+- İstasyon değiştiğinde: select empty → AJAX → optgroup'ları doldur → `setParamDisabled(false)` + `reinitParamSelect2()` + `validateForm()`.
+- İstasyon temizlenince: select empty + `disabled` + hint metnini sıfırla.
+
+### DataTables init
+
+- Client-side (server-side pagination YOK).
+- `dom`: `Buttons (B) + length (l) + filter (f) + table (t) + info (i) + paginate (p)` pattern (bkz. `sensor_readings.html`).
+- Buttons: `copyHtml5, csvHtml5, excelHtml5, pdfHtml5, print, colvis` + KI ikon + Metronic `btn-sm` color class'ları:
+  - Copy → `btn-light-primary`, CSV → `btn-light-primary`, Excel → `btn-light-success`, PDF → `btn-light-danger`, Print → `btn-light-info`, Colvis → `btn-light`.
+- `pageLength: 10`, `lengthMenu: [[10,25,50,100,-1], [10,25,50,100,'Hepsi']]`, `order: [[0,'desc']]`.
+- `language` TR `{% trans %}` ile besle (lengthMenu, search, paginate, info, zeroRecords, emptyTable).
+
+### ApexCharts grafik
+
+- "Grafik Oluştur" toggle: açılınca `tableWrap.style.display='none'`, `chartWrap.style.display='block'`, render. Kapanınca tersi + `dt.columns.adjust()`.
+- Veri kaynağı: `#report-table tbody tr` cells[0]=zaman, cells[1]=parametre, cells[2]=değer; regex `/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/`.
+- Tema dinamik: `isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'`. Light/dark için `axisColor`, `gridColor`, `theme.mode`, `tooltip.theme` ayrı.
+- 10 renkli palette (Metronic primary/success/danger/warning/info ekseninde).
+- `chart.toolbar.tools` tümü açık, `autoSelected: 'zoom'`.
+- `stroke.width: 3 + lineCap:'round'`, `markers.hover.size: 6`, `grid.strokeDashArray: 4`.
+- Re-render için **`chartInstance.destroy()` + yeni `ApexCharts(...)`** (updateOptions yerine tam destroy/reinit — light↔dark geçişlerinde tutarlılık).
+- Toolbar ikonlarının default Apex SVG'leri silik kalır; CSS override ile `fill: var(--bs-gray-700)` → hover/`selected` `var(--bs-primary)`.
+
+### FOUC önleme
+
+Rapor sayfası submit'i sonrası DataTables/select2/flatpickr/Apex init zinciri tamamlanana dek "atlama" oluşuyor. Sayfa-spesifik patch:
+
+```css
+#kt_app_content_container { opacity: 0; }
+body.page-ready #kt_app_content_container {
+    opacity: 1;
+    transition: opacity 0.18s ease-in-out;
+}
+```
+
+```js
+function revealContent() {
+    if (document.body.classList.contains('page-ready')) return;
+    requestAnimationFrame(() => document.body.classList.add('page-ready'));
+}
+if (document.readyState === 'complete') revealContent();
+else window.addEventListener('load', revealContent);
+setTimeout(revealContent, 1200);   // failsafe
+```
+
+### i18n
+
+- Tüm UI metinleri `{% trans %}`; JS string'leri için `const I18N = { key: "{% trans 'X' %}" };` paterni.
+- DataTables `language` config'i de `{% trans %}` ile.
+- Yeni string → `dashboard/locale/en/LC_MESSAGES/django.po`'ya çeviri ekle, ardından `.mo` derle. Windows'ta gettext yok; mevcut pure-Python msgfmt scripti ile derliyoruz (önceki bash bloğunda kullanıldı — kabaca `parse_po` + GNU MO struct yaz).
+
+### URL routing
+
+- View → `dashboard/views.py`; URL → `dashboard/urls.py` (namespace `dashboard`); pattern: `path("reports/<x>/", views.XxxReportView.as_view(), name="reports_<x>")`.
+- AJAX endpoint'leri `dashboard/api_views.py` + `login_required`; URL prefix `/dashboard/api/...`.
+
+### Pagination yerine querystring koruma
+
+Sayfalama yapan tablolarda `{% querystring_without "page" %}` template tag'i ile mevcut filtre parametrelerini link'lerde koru.
+
+### Buton renkleri (SCADA paleti)
+
+- Action (Rapor Getir / Submit): `btn-primary`.
+- Reset / ikincil: `btn-light-warning` veya `btn-light`.
+- DataTables export buton renkleri yukarıda.
+
+### Container
+
+- Tüm dashboard sayfaları `container-fluid` ([`base.html`](dashboard/templates/dashboard/base.html)'de set edildi). `container-xxl` kullanma — geniş ekranda iki yanda boşluk açar.
+
+> **Yeni rapor sayfası eklerken**: `sensor_readings.html` + `ReadingsReportView` referans alınmalı; üst başlık, filtre alanları, validasyon, DataTables, grafik, FOUC blocklarının tamamı kopyalanıp adapte edilmeli — kullanıcı bu sayfayla "rapor altyapısını öğrendik" diye onayladı, bu standart artık her rapor sayfasında beklenmeli.
+
 ## Testler
 
 `api/tests.py`, `users/tests.py`, `modbus/tests.py` şu an boş. Yeni özellik eklerken ilgili uygulamaya test yazılması beklenir.
