@@ -23,6 +23,29 @@
     }
     /* Flatpickr koyu temada okunabilirlik */
     .flatpickr-calendar { z-index: 10000; }
+
+    /* Parametre listesi custom panel */
+    .param-picker {
+        border: 1px solid var(--bs-gray-300);
+        border-radius: 0.475rem;
+        background-color: var(--bs-app-bg-color, var(--bs-body-bg));
+    }
+    .param-picker-summary {
+        padding: 0.65rem 1rem;
+        border-bottom: 1px solid var(--bs-gray-300);
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: #b794f4;     /* SCADA mor accent */
+        min-height: 2.6rem;
+    }
+    .param-picker-body { padding: 1rem 1.25rem; }
+    .param-picker-master,
+    .param-picker-group {
+        margin-bottom: 0.5rem;
+    }
+    .param-picker-group .form-check-label { font-weight: 700; }
+    .param-picker-items { margin: 0.25rem 0 1.25rem 1.5rem; }
+    .param-picker .form-check { margin-bottom: 0; }
 </style>
 {% endblock %}
 
@@ -46,43 +69,8 @@
                 </select>
             </div>
 
-            <!-- Parametre Listesi (search'lü, optgroup'lu, multi) -->
-            <div class="col-md-6">
-                <label class="form-label fw-semibold">{% trans "Parametre Listesi" %}</label>
-                <select name="parameter" id="filter-parameters" class="form-select" data-control="select2"
-                        data-placeholder='{% trans "Parametre seçiniz (aranabilir)" %}' multiple>
-                    {% if parameters_analog %}
-                    <optgroup label="{% trans 'Analog' %}">
-                        {% for p in parameters_analog %}
-                            <option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>
-                                {{ p.parameter_name }}{% if p.unit_txt %} ({{ p.unit_txt }}){% elif p.unit %} ({{ p.unit }}){% endif %}
-                            </option>
-                        {% endfor %}
-                    </optgroup>
-                    {% endif %}
-                    {% if parameters_digital %}
-                    <optgroup label="{% trans 'Dijital' %}">
-                        {% for p in parameters_digital %}
-                            <option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>
-                                {{ p.parameter_name }}
-                            </option>
-                        {% endfor %}
-                    </optgroup>
-                    {% endif %}
-                    {% if parameters_other %}
-                    <optgroup label="{% trans 'Diğer' %}">
-                        {% for p in parameters_other %}
-                            <option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>
-                                {{ p.parameter_name }}{% if p.unit_txt %} ({{ p.unit_txt }}){% elif p.unit %} ({{ p.unit }}){% endif %}
-                            </option>
-                        {% endfor %}
-                    </optgroup>
-                    {% endif %}
-                </select>
-            </div>
-
             <!-- Veri Aralığı -->
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label fw-semibold">{% trans "Veri Aralığı" %}</label>
                 <select name="interval" class="form-select" data-control="select2" data-hide-search="true">
                     {% for code, label in interval_choices %}
@@ -91,28 +79,31 @@
                 </select>
             </div>
 
-            <!-- Sensör Tipi -->
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">{% trans "Sensör Tipi" %}</label>
-                <select name="sensor_type" class="form-select" data-control="select2" data-hide-search="true">
-                    {% for code, label in sensor_type_choices %}
-                        <option value="{{ code }}" {% if filters.sensor_type == code %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
             <!-- Başlangıç -->
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label fw-semibold">{% trans "Rapor Başlangıç Tarihi" %}</label>
                 <input type="text" name="start" id="filter-start" class="form-control"
                        value="{{ filters.start|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
             </div>
 
             <!-- Bitiş -->
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label fw-semibold">{% trans "Rapor Bitiş Tarihi" %}</label>
                 <input type="text" name="end" id="filter-end" class="form-control"
                        value="{{ filters.end|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+            </div>
+
+            <!-- Parametre Listesi (custom checkbox panel) -->
+            <div class="col-12">
+                <label class="form-label fw-semibold">{% trans "Parametre Listesi" %}</label>
+                {{ parameter_groups|json_script:"param-groups-data" }}
+                {{ selected_parameter_ids|json_script:"param-selected-data" }}
+                <div class="param-picker" id="param-picker">
+                    <div class="param-picker-summary" id="param-picker-summary">[ -- ]</div>
+                    <div class="param-picker-body" id="param-picker-body">
+                        <div class="text-muted">{% trans "İstasyon seçildiğinde parametre listesi yüklenecek." %}</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Status Code Filtresi (multi) -->
@@ -262,38 +253,178 @@
         flatpickr("#filter-end", opts);
     }
 
-    // --- Parametre listesini istasyon değişiminde AJAX ile yenile ---
+    // --- Parametre Listesi (custom checkbox panel) ---
     const stationSel = document.getElementById('filter-station');
-    const paramSel = document.getElementById('filter-parameters');
-    const paramUrl = "{% url 'dashboard:api_station_parameters' %}";
+    const paramBody  = document.getElementById('param-picker-body');
+    const paramSum   = document.getElementById('param-picker-summary');
+    const paramUrl   = "{% url 'dashboard:api_station_parameters' %}";
+    const GROUP_LABEL_FALLBACK = {
+        analog:  "{% trans 'Analog Kanallar' %}",
+        digital: "{% trans 'Dijital Kanallar' %}",
+        other:   "{% trans 'Diğer Kanallar' %}",
+    };
+    const TXT_SELECT_ALL = "{% trans '[Tümünü Seç]' %}";
+    const TXT_EMPTY      = "[ -- ]";
+    const TXT_NO_PARAMS  = "{% trans 'Bu istasyon için tanımlı parametre yok.' %}";
 
-    function reloadParameters(stationId) {
-        if (!paramSel) return;
-        $(paramSel).val(null).trigger('change');
-        while (paramSel.firstChild) paramSel.removeChild(paramSel.firstChild);
-        if (!stationId) return;
+    let currentGroups = [];
+    let selectedIds   = new Set();
+
+    function escapeHtml(s) {
+        if (s == null) return '';
+        return String(s).replace(/[&<>"']/g, c => (
+            {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+        ));
+    }
+
+    function renderPicker(groups) {
+        currentGroups = Array.isArray(groups) ? groups : [];
+        if (!paramBody) return;
+        if (currentGroups.length === 0) {
+            paramBody.innerHTML = `<div class="text-muted">${TXT_NO_PARAMS}</div>`;
+            updateSummary();
+            return;
+        }
+        let html = `
+            <div class="form-check form-check-custom form-check-solid param-picker-master">
+                <input class="form-check-input" type="checkbox" id="param-master">
+                <label class="form-check-label fw-semibold ms-2" for="param-master">${escapeHtml(TXT_SELECT_ALL)}</label>
+            </div>`;
+        currentGroups.forEach(g => {
+            const key = g.key;
+            const label = g.text || GROUP_LABEL_FALLBACK[key] || key;
+            html += `
+                <div class="form-check form-check-custom form-check-solid param-picker-group">
+                    <input class="form-check-input param-group" data-group="${escapeHtml(key)}" type="checkbox" id="param-group-${escapeHtml(key)}">
+                    <label class="form-check-label fw-bold ms-2" for="param-group-${escapeHtml(key)}">${escapeHtml(label)}</label>
+                </div>
+                <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3 param-picker-items">`;
+            (g.items || []).forEach(p => {
+                const checked = selectedIds.has(p.id) ? 'checked' : '';
+                const unitHint = p.unit ? ` <span class="text-muted">(${escapeHtml(p.unit)})</span>` : '';
+                html += `
+                    <div class="col">
+                        <label class="form-check form-check-custom form-check-solid">
+                            <input class="form-check-input param-item" type="checkbox"
+                                   data-group="${escapeHtml(key)}" data-name="${escapeHtml(p.text)}"
+                                   name="parameter" value="${p.id}" ${checked}>
+                            <span class="form-check-label ms-2">${escapeHtml(p.text)}${unitHint}</span>
+                        </label>
+                    </div>`;
+            });
+            html += `</div>`;
+        });
+        paramBody.innerHTML = html;
+        bindPickerEvents();
+        recalcCheckboxState();
+        updateSummary();
+    }
+
+    function bindPickerEvents() {
+        const master = document.getElementById('param-master');
+        const groupBoxes = paramBody.querySelectorAll('.param-group');
+        const itemBoxes  = paramBody.querySelectorAll('.param-item');
+
+        if (master) {
+            master.addEventListener('change', () => {
+                itemBoxes.forEach(i => { i.checked = master.checked; });
+                syncSelectedIds();
+                recalcCheckboxState();
+                updateSummary();
+            });
+        }
+        groupBoxes.forEach(gcb => {
+            gcb.addEventListener('change', () => {
+                const grp = gcb.dataset.group;
+                itemBoxes.forEach(i => { if (i.dataset.group === grp) i.checked = gcb.checked; });
+                syncSelectedIds();
+                recalcCheckboxState();
+                updateSummary();
+            });
+        });
+        itemBoxes.forEach(cb => {
+            cb.addEventListener('change', () => {
+                syncSelectedIds();
+                recalcCheckboxState();
+                updateSummary();
+            });
+        });
+    }
+
+    function syncSelectedIds() {
+        selectedIds = new Set();
+        paramBody.querySelectorAll('.param-item:checked').forEach(cb => {
+            selectedIds.add(parseInt(cb.value, 10));
+        });
+    }
+
+    function recalcCheckboxState() {
+        const master = document.getElementById('param-master');
+        const groupBoxes = paramBody.querySelectorAll('.param-group');
+        const itemBoxes  = paramBody.querySelectorAll('.param-item');
+
+        groupBoxes.forEach(gcb => {
+            const grp = gcb.dataset.group;
+            const items = Array.from(itemBoxes).filter(i => i.dataset.group === grp);
+            const checkedCnt = items.filter(i => i.checked).length;
+            gcb.checked = items.length > 0 && checkedCnt === items.length;
+            gcb.indeterminate = checkedCnt > 0 && checkedCnt < items.length;
+        });
+        if (master) {
+            const allCnt = itemBoxes.length;
+            const checkedCnt = Array.from(itemBoxes).filter(i => i.checked).length;
+            master.checked = allCnt > 0 && checkedCnt === allCnt;
+            master.indeterminate = checkedCnt > 0 && checkedCnt < allCnt;
+        }
+    }
+
+    function updateSummary() {
+        if (!paramSum) return;
+        const byGroup = {};
+        paramBody.querySelectorAll('.param-item:checked').forEach(cb => {
+            const g = cb.dataset.group;
+            (byGroup[g] = byGroup[g] || []).push(cb.dataset.name);
+        });
+        const parts = [];
+        currentGroups.forEach(g => {
+            if (byGroup[g.key] && byGroup[g.key].length > 0) {
+                const label = g.text || GROUP_LABEL_FALLBACK[g.key] || g.key;
+                parts.push(`[${label}: ${byGroup[g.key].join(', ')}]`);
+            }
+        });
+        paramSum.textContent = parts.length ? parts.join('  ') : TXT_EMPTY;
+    }
+
+    function loadFromAjax(stationId) {
+        selectedIds = new Set();    // istasyon değişti → seçim sıfır
+        if (!stationId) {
+            renderPicker([]);
+            return;
+        }
         fetch(`${paramUrl}?station=${encodeURIComponent(stationId)}`, { credentials: 'same-origin' })
             .then(r => r.json())
-            .then(data => {
-                (data.results || []).forEach(group => {
-                    const og = document.createElement('optgroup');
-                    og.label = group.text;
-                    (group.children || []).forEach(p => {
-                        const opt = document.createElement('option');
-                        opt.value = p.id;
-                        opt.textContent = p.unit ? `${p.text} (${p.unit})` : p.text;
-                        og.appendChild(opt);
-                    });
-                    paramSel.appendChild(og);
-                });
-                // Tetikle ki Select2 yenisini görsün
-                $(paramSel).trigger('change');
-            })
-            .catch(e => console.warn('Parameter reload fail:', e));
+            .then(data => renderPicker(data.groups || []))
+            .catch(e => { console.warn('Parameter reload fail:', e); renderPicker([]); });
     }
+
+    // İstasyon değiştiğinde AJAX ile yeniden çek
     if (stationSel) {
-        $(stationSel).on('change', function() { reloadParameters(this.value); });
+        $(stationSel).on('change', function() { loadFromAjax(this.value); });
     }
+
+    // İlk render: server-side embed JSON'dan
+    (function initialParamRender() {
+        try {
+            const groupsEl = document.getElementById('param-groups-data');
+            const selEl    = document.getElementById('param-selected-data');
+            const initialGroups   = groupsEl ? JSON.parse(groupsEl.textContent) : [];
+            const initialSelected = selEl ? JSON.parse(selEl.textContent) : [];
+            selectedIds = new Set(initialSelected || []);
+            renderPicker(initialGroups);
+        } catch (e) {
+            console.warn('Initial param render fail:', e);
+        }
+    })();
 
     // --- DataTables init (client-side, Buttons ext) ---
     let dt = null;
