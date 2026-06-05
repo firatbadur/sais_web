@@ -198,11 +198,10 @@ def home_events(request):
 
 @login_required
 def station_parameters(request):
-    """İstasyona ait parametre listesi — rapor formu checkbox panelini doldurur.
+    """İstasyona ait parametre listesi — rapor formu select2'sini doldurur.
 
-    Sensör tipine göre Analog Kanallar / Dijital Kanallar / Diğer gruplarıyla
-    döner; boş gruplar atlanır. Front-end ile aynı kontratı paylaşmak için
-    server-side initial render ve AJAX yenileme aynı JSON şemasını kullanır.
+    Sensör tipine göre Analog / Dijital / Diğer optgroup'larıyla döner;
+    boş gruplar atlanır.
     """
     try:
         station_id = int(request.GET.get("station") or 0) or None
@@ -236,9 +235,9 @@ def station_parameters(request):
 
     groups = []
     if analog:
-        groups.append({"key": "analog", "text": "Analog Kanallar", "items": analog})
+        groups.append({"text": "Analog", "children": analog})
     if digital:
-        groups.append({"key": "digital", "text": "Dijital Kanallar", "items": digital})
+        groups.append({"text": "Dijital", "children": digital})
     if other:
-        groups.append({"key": "other", "text": "Diğer Kanallar", "items": other})
-    return JsonResponse({"groups": groups})
+        groups.append({"text": "Diğer", "children": other})
+    return JsonResponse({"results": groups})

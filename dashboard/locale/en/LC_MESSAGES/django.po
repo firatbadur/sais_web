@@ -638,24 +638,6 @@ msgstr "Digital"
 msgid "Diğer"
 msgstr "Other"
 
-msgid "Analog Kanallar"
-msgstr "Analog Channels"
-
-msgid "Dijital Kanallar"
-msgstr "Digital Channels"
-
-msgid "Diğer Kanallar"
-msgstr "Other Channels"
-
-msgid "[Tümünü Seç]"
-msgstr "[Select All]"
-
-msgid "İstasyon seçildiğinde parametre listesi yüklenecek."
-msgstr "Parameter list will be loaded after a station is selected."
-
-msgid "Bu istasyon için tanımlı parametre yok."
-msgstr "No parameters defined for this station."
-
 msgid "Status Filtresi"
 msgstr "Status Filter"
 

@@ -123,6 +123,13 @@ class ReadingsReportView(RoleRequiredMixin, ListView):
         ("hourly", _("1 saat")),
         ("daily", _("1 gün")),
     )
+    # Sensor.sensor_type: 0=AI, 1=AO, 2=DI, 3=DO.
+    SENSOR_TYPE_CHOICES = (
+        ("all", _("Tümü")),
+        ("analog", _("Analog")),
+        ("digital", _("Dijital")),
+    )
+    SENSOR_TYPE_GROUPS = {"analog": (0, 1), "digital": (2, 3)}
     DATE_FORMAT = "%d.%m.%Y %H:%M:%S"
 
     def _parse_dt(self, raw: str):
@@ -168,12 +175,17 @@ class ReadingsReportView(RoleRequiredMixin, ListView):
         if interval not in dict(self.INTERVAL_CHOICES):
             interval = "1min"
 
+        sensor_type = gp.get("sensor_type") or "all"
+        if sensor_type not in dict(self.SENSOR_TYPE_CHOICES):
+            sensor_type = "all"
+
         return {
             "submitted": bool(gp),
             "station_id": station_id,
             "parameter_ids": param_ids,
             "status_ids": status_ids,
             "interval": interval,
+            "sensor_type": sensor_type,
             "start": start,
             "end": end,
             "chart": gp.get("chart") == "1",
@@ -205,6 +217,10 @@ class ReadingsReportView(RoleRequiredMixin, ListView):
         if f["parameter_ids"]:
             qs = qs.filter(sensor__parameter_id__in=f["parameter_ids"])
 
+        type_group = self.SENSOR_TYPE_GROUPS.get(f["sensor_type"])
+        if type_group:
+            qs = qs.filter(sensor__sensor_type__in=type_group)
+
         if is_raw and f["status_ids"]:
             qs = qs.filter(status_id__in=f["status_ids"])
 
@@ -216,11 +232,11 @@ class ReadingsReportView(RoleRequiredMixin, ListView):
         ctx["filters"] = f
         ctx["is_raw"] = f["interval"] == "1min"
         ctx["interval_choices"] = self.INTERVAL_CHOICES
+        ctx["sensor_type_choices"] = self.SENSOR_TYPE_CHOICES
         ctx["stations"] = Station.objects.filter(active=True).order_by("name")
         ctx["status_codes"] = StatusCode.objects.order_by("code")
 
-        # Parametre listesini sensör tipine göre Analog / Dijital olarak grupla;
-        # JSON-script ile inline embed edilip JS-driven checkbox panel'ine yedirilir.
+        # Parametre listesini sensör tipine göre Analog / Dijital olarak grupla.
         param_qs = (
             Parameter.objects
             .order_by("parameter_name")
@@ -232,27 +248,15 @@ class ReadingsReportView(RoleRequiredMixin, ListView):
         for p in param_qs:
             sensors = list(p.sensors.all())
             stype = sensors[0].sensor_type if sensors else None
-            payload = {
-                "id": p.id,
-                "text": p.parameter_name or f"Parametre {p.id}",
-                "unit": p.unit_txt or p.unit or "",
-            }
             if stype in (0, 1):
-                analog.append(payload)
+                analog.append(p)
             elif stype in (2, 3):
-                digital.append(payload)
+                digital.append(p)
             else:
-                other.append(payload)
-
-        groups = []
-        if analog:
-            groups.append({"key": "analog", "text": str(_("Analog Kanallar")), "items": analog})
-        if digital:
-            groups.append({"key": "digital", "text": str(_("Dijital Kanallar")), "items": digital})
-        if other:
-            groups.append({"key": "other", "text": str(_("Diğer Kanallar")), "items": other})
-        ctx["parameter_groups"] = groups
-        ctx["selected_parameter_ids"] = f["parameter_ids"]
+                other.append(p)
+        ctx["parameters_analog"] = analog
+        ctx["parameters_digital"] = digital
+        ctx["parameters_other"] = other
         return ctx
 
 
