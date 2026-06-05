@@ -6,6 +6,14 @@
 
 {% block extra_head %}
 <style>
+    /* FOUC önleme: select2/flatpickr/DataTables init bitmeden ham elementler
+       görünmesin. Init zinciri tamamlandığında JS .page-ready ekler ve
+       içerik 0.18sn fade-in olur. */
+    #kt_app_content_container { opacity: 0; }
+    body.page-ready #kt_app_content_container {
+        opacity: 1;
+        transition: opacity 0.18s ease-in-out;
+    }
     /* Sayfa-özel renk tutarlılığı: SCADA için soft mavi + koyu accent. */
     #report-filter-form .form-label { color: var(--bs-text-muted); }
     #report-results-card .dt-buttons .btn {
@@ -687,6 +695,24 @@
         chartToggle.addEventListener('change', updateChartVisibility);
         updateChartVisibility();
     }
+
+    // --- FOUC önleme: tüm init zinciri tamamlanınca içeriği aç ---
+    // window.load tüm asset'ler (CSS/JS/font) yüklendiğinde tetiklenir; bir
+    // requestAnimationFrame daha bekleyerek select2/DataTables wrap'lerinin
+    // DOM'a yerleşmesini garantiliyoruz.
+    function revealContent() {
+        if (document.body.classList.contains('page-ready')) return;
+        requestAnimationFrame(function() {
+            document.body.classList.add('page-ready');
+        });
+    }
+    if (document.readyState === 'complete') {
+        revealContent();
+    } else {
+        window.addEventListener('load', revealContent);
+    }
+    // Failsafe: load event bir sebepten tetiklenmezse 1.2sn sonra zorla göster
+    setTimeout(revealContent, 1200);
 })();
 </script>
 {% endblock %}
