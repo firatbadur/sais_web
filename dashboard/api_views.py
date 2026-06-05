@@ -207,15 +207,18 @@ def station_parameters(request):
         station_id = int(request.GET.get("station") or 0) or None
     except (TypeError, ValueError):
         station_id = None
-    qs = (
-        Parameter.objects
-        .order_by("parameter_name")
-        .prefetch_related("sensors")
-    )
     if station_id:
-        qs = qs.filter(station_id=station_id)
+        # Parameter.station FK'sı her zaman güvenilir değil; bu istasyonun
+        # connection'larına bağlı sensörleri olan parametreleri döndür.
+        qs = (
+            Parameter.objects
+            .filter(sensors__connection__station_id=station_id)
+            .distinct()
+            .order_by("parameter_name")
+            .prefetch_related("sensors")
+        )
     else:
-        qs = qs.none()
+        qs = Parameter.objects.none()
 
     analog, digital, other = [], [], []
     for p in qs:

@@ -80,11 +80,12 @@
                 </select>
             </div>
 
-            <!-- Parametre Listesi (search'lü, optgroup'lu, multi) -->
+            <!-- Parametre Listesi (search'lü, optgroup'lu, multi) — istasyon seçilene dek disabled -->
             <div class="col-md-6">
                 <label class="form-label fw-semibold">{% trans "Parametre Listesi" %}</label>
                 <select name="parameter" id="filter-parameters" class="form-select" data-control="select2"
-                        data-placeholder='{% trans "Parametre seçiniz (aranabilir)" %}' multiple>
+                        data-placeholder='{% trans "Parametre seçiniz (aranabilir)" %}' multiple
+                        {% if not filters.station_id %}disabled{% endif %}>
                     {% if parameters_analog %}
                     <optgroup label="{% trans 'Analog' %}">
                         {% for p in parameters_analog %}
@@ -113,6 +114,9 @@
                     </optgroup>
                     {% endif %}
                 </select>
+                <div class="form-text" id="parameter-hint">
+                    {% trans "Önce bir istasyon seçin." %}
+                </div>
             </div>
 
             <!-- Veri Aralığı -->
@@ -125,32 +129,8 @@
                 </select>
             </div>
 
-            <!-- Sensör Tipi -->
+            <!-- Status Code Filtresi (multi) — Sensör Tipi alanının yerine -->
             <div class="col-md-3">
-                <label class="form-label fw-semibold">{% trans "Sensör Tipi" %}</label>
-                <select name="sensor_type" class="form-select" data-control="select2" data-hide-search="true">
-                    {% for code, label in sensor_type_choices %}
-                        <option value="{{ code }}" {% if filters.sensor_type == code %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <!-- Başlangıç -->
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">{% trans "Rapor Başlangıç Tarihi" %}</label>
-                <input type="text" name="start" id="filter-start" class="form-control"
-                       value="{{ filters.start|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
-            </div>
-
-            <!-- Bitiş -->
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">{% trans "Rapor Bitiş Tarihi" %}</label>
-                <input type="text" name="end" id="filter-end" class="form-control"
-                       value="{{ filters.end|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
-            </div>
-
-            <!-- Status Code Filtresi (multi) -->
-            <div class="col-md-12">
                 <label class="form-label fw-semibold">{% trans "Status Filtresi" %}</label>
                 <select name="status" id="filter-status" class="form-select" data-control="select2"
                         data-placeholder='{% trans "Status kodu (boş = hepsi)" %}' multiple>
@@ -160,12 +140,37 @@
                         </option>
                     {% endfor %}
                 </select>
-                <div class="form-text">{% trans "Sadece 1 dk. (raw) aralığında uygulanır; aggregate'lerde göz ardı edilir." %}</div>
+                <div class="form-text">{% trans "Sadece 1 dk. (raw) için uygulanır." %}</div>
+            </div>
+
+            <!-- Başlangıç -->
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Rapor Başlangıç Tarihi" %}</label>
+                <input type="text" name="start" id="filter-start" class="form-control"
+                       value="{{ filters.start|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+                <div class="invalid-feedback" id="start-feedback"></div>
+            </div>
+
+            <!-- Bitiş -->
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Rapor Bitiş Tarihi" %}</label>
+                <input type="text" name="end" id="filter-end" class="form-control"
+                       value="{{ filters.end|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+                <div class="invalid-feedback" id="end-feedback"></div>
+            </div>
+
+            <!-- Form-seviyesi uyarı kutusu (boşken görünmez) -->
+            <div class="col-12">
+                <div id="form-alert" class="alert alert-warning d-none mb-0" role="alert">
+                    <i class="ki-outline ki-information-5 fs-2 me-2"></i>
+                    <span id="form-alert-text"></span>
+                </div>
             </div>
 
             <!-- Butonlar -->
             <div class="col-12">
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" id="btn-generate" class="btn btn-primary"
+                        {% if not filters.station_id %}disabled{% endif %}>
                     <i class="ki-outline ki-flash fs-3"></i>{% trans "Rapor Getir" %}
                 </button>
                 {% if filters.submitted %}
@@ -271,6 +276,110 @@
     const IS_RAW = {{ is_raw|yesno:"true,false" }};
     const ROWS_RENDERED = {{ rows|length|default:0 }};
 
+    // --- Form validation state ---
+    const startInput   = document.getElementById('filter-start');
+    const endInput     = document.getElementById('filter-end');
+    const startFb      = document.getElementById('start-feedback');
+    const endFb        = document.getElementById('end-feedback');
+    const formAlert    = document.getElementById('form-alert');
+    const formAlertTxt = document.getElementById('form-alert-text');
+    const btnGenerate  = document.getElementById('btn-generate');
+    const paramHint    = document.getElementById('parameter-hint');
+
+    const I18N = {
+        pickStation:   "{% trans 'Önce bir istasyon seçin.' %}",
+        startGtEnd:    "{% trans 'Başlangıç tarihi bitiş tarihinden büyük olamaz.' %}",
+        endLtStart:    "{% trans 'Bitiş tarihi başlangıç tarihinden küçük olamaz.' %}",
+        invalidDate:   "{% trans 'Geçerli bir tarih giriniz (gg.aa.yyyy SS:DD:SS).' %}",
+        emptyDate:     "{% trans 'Tarih boş olamaz.' %}",
+        paramHintIdle: "{% trans 'Parametre seçilmezse o istasyonun tüm parametreleri gösterilir.' %}",
+        paramHintNone: "{% trans 'Önce bir istasyon seçin.' %}",
+    };
+
+    function parseDate(txt) {
+        if (!txt) return null;
+        const m = txt.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
+        if (!m) return null;
+        const d = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], +(m[6] || 0));
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    function setFieldError(input, fbEl, msg) {
+        if (msg) {
+            input.classList.add('is-invalid');
+            if (fbEl) { fbEl.textContent = msg; fbEl.style.display = 'block'; }
+        } else {
+            input.classList.remove('is-invalid');
+            if (fbEl) { fbEl.textContent = ''; fbEl.style.display = ''; }
+        }
+    }
+
+    function showAlert(msg) {
+        if (!formAlert) return;
+        if (msg) {
+            formAlertTxt.textContent = msg;
+            formAlert.classList.remove('d-none');
+        } else {
+            formAlertTxt.textContent = '';
+            formAlert.classList.add('d-none');
+        }
+    }
+
+    function validateForm() {
+        const stationVal = (document.getElementById('filter-station') || {}).value || '';
+        const startTxt = startInput.value;
+        const endTxt   = endInput.value;
+        const startDt  = parseDate(startTxt);
+        const endDt    = parseDate(endTxt);
+
+        let errors = [];
+
+        // Tarih alanları
+        if (!startTxt) {
+            setFieldError(startInput, startFb, I18N.emptyDate);
+            errors.push(I18N.emptyDate);
+        } else if (!startDt) {
+            setFieldError(startInput, startFb, I18N.invalidDate);
+            errors.push(I18N.invalidDate);
+        } else {
+            setFieldError(startInput, startFb, '');
+        }
+
+        if (!endTxt) {
+            setFieldError(endInput, endFb, I18N.emptyDate);
+            errors.push(I18N.emptyDate);
+        } else if (!endDt) {
+            setFieldError(endInput, endFb, I18N.invalidDate);
+            errors.push(I18N.invalidDate);
+        } else {
+            setFieldError(endInput, endFb, '');
+        }
+
+        // Aralık kontrolü
+        if (startDt && endDt && startDt > endDt) {
+            setFieldError(startInput, startFb, I18N.startGtEnd);
+            setFieldError(endInput,   endFb,   I18N.endLtStart);
+            errors.push(I18N.startGtEnd);
+        }
+
+        // İstasyon
+        if (!stationVal) {
+            errors.push(I18N.pickStation);
+        }
+
+        // Buton & alert
+        if (errors.length > 0) {
+            // Birinci hatayı alert'te göster — çakışan mesajları tekrarlama
+            showAlert(errors[0]);
+            if (btnGenerate) btnGenerate.disabled = true;
+            return false;
+        } else {
+            showAlert('');
+            if (btnGenerate) btnGenerate.disabled = false;
+            return true;
+        }
+    }
+
     // --- Flatpickr (TR locale inline) ---
     const flatpickrTR = {
         weekdays: { shorthand: ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'],
@@ -291,10 +400,16 @@
             enableTime: true, enableSeconds: true,
             dateFormat: "d.m.Y H:i:S", time_24hr: true,
             allowInput: true, locale: flatpickrTR,
+            onChange: () => validateForm(),
+            onClose:  () => validateForm(),
         };
         flatpickr("#filter-start", opts);
         flatpickr("#filter-end", opts);
     }
+    // Manuel typing senaryosu için input event'ini de dinle
+    [startInput, endInput].forEach(el => {
+        if (el) el.addEventListener('input', () => validateForm());
+    });
 
     // --- Parametre listesini istasyon değişiminde AJAX ile yenile ---
     // Metronic data-control="select2" ile auto-init edilen instance, sonradan
@@ -318,11 +433,20 @@
         $paramSel.select2(PARAM_S2_OPTS);
     }
 
+    function setParamDisabled(disabled) {
+        $paramSel.prop('disabled', !!disabled);
+        // disabled değişiminde select2 wrapper'ı da güncellesin
+        reinitParamSelect2();
+        if (paramHint) {
+            paramHint.textContent = disabled ? I18N.paramHintNone : I18N.paramHintIdle;
+        }
+    }
+
     function reloadParameters(stationId) {
         $paramSel.val(null);
         $paramSel.empty();
         if (!stationId) {
-            reinitParamSelect2();
+            setParamDisabled(true);
             return;
         }
         fetch(`${paramUrl}?station=${encodeURIComponent(stationId)}`, { credentials: 'same-origin' })
@@ -336,21 +460,38 @@
                     });
                     $paramSel.append($og);
                 });
-                reinitParamSelect2();
+                setParamDisabled(false);
             })
             .catch(e => {
                 console.warn('Parameter reload fail:', e);
-                reinitParamSelect2();
+                setParamDisabled(false);
             });
     }
 
     if (stationSel) {
-        // Sayfa ilk yüklendiğinde server zaten ?station=X için option'ları
-        // doldurmuş ve seçimleri `selected` ile işaretlemiş; Metronic data-control
-        // ile select2 auto-init edilir — biz dokunmayız.
-        // İstasyon kullanıcı tarafından değiştiğinde AJAX ile parametreleri tazele.
-        $(stationSel).on('change', function() { reloadParameters(this.value); });
+        $(stationSel).on('change', function() {
+            reloadParameters(this.value);
+            validateForm();
+        });
+        // İlk render sonrası hint metnini de duruma göre ayarla
+        if (paramHint) {
+            paramHint.textContent = stationSel.value ? I18N.paramHintIdle : I18N.paramHintNone;
+        }
     }
+
+    // Submit guard — disabled buton kapatıldıktan sonra Enter ile gönderimi de yakala
+    const filterForm = document.getElementById('report-filter-form');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(e) {
+            if (!validateForm()) {
+                e.preventDefault();
+                if (formAlert) formAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+    }
+
+    // İlk durum: form load anında validate çalışsın (initial button state ayarı)
+    validateForm();
 
     // --- DataTables init (client-side, Buttons ext) ---
     let dt = null;
@@ -370,7 +511,7 @@
                 { extend: 'colvis',     text: '<i class="ki-outline ki-eye fs-3"></i> {% trans "Kolonlar" %}',    className: 'btn btn-sm btn-light' },
             ],
             order: [[0, 'desc']],
-            pageLength: 25,
+            pageLength: 10,
             lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, '{% trans "Hepsi" %}']],
             language: {
                 "lengthMenu":     '{% trans "Sayfada _MENU_ kayıt göster" %}',

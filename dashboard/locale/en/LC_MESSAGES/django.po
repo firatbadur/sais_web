@@ -623,6 +623,28 @@ msgstr "Bad"
 msgid "Belirsiz"
 msgstr "Uncertain"
 
+# ---- Form validasyon mesajları ----
+msgid "Önce bir istasyon seçin."
+msgstr "Please select a station first."
+
+msgid "Başlangıç tarihi bitiş tarihinden büyük olamaz."
+msgstr "Start date cannot be later than end date."
+
+msgid "Bitiş tarihi başlangıç tarihinden küçük olamaz."
+msgstr "End date cannot be earlier than start date."
+
+msgid "Geçerli bir tarih giriniz (gg.aa.yyyy SS:DD:SS)."
+msgstr "Please enter a valid date (dd.mm.yyyy HH:MM:SS)."
+
+msgid "Tarih boş olamaz."
+msgstr "Date cannot be empty."
+
+msgid "Parametre seçilmezse o istasyonun tüm parametreleri gösterilir."
+msgstr "If no parameter is selected, all parameters of the station are shown."
+
+msgid "Sadece 1 dk. (raw) için uygulanır."
+msgstr "Applied only for the 1-minute (raw) interval."
+
 msgid "Sensör Tipi"
 msgstr "Sensor Type"
 
