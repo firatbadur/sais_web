@@ -42,7 +42,21 @@ def home_kpis(request):
 
 @login_required
 def home_snapshot(request):
-    """Anlık sensör grid'i — SensorLatest snapshot'ları."""
+    """Anlık sensör grid'i — SensorLatest snapshot'ları.
+
+    Query param `type`:
+      - `analog`  → yalnız sensor_type ∈ (0=AI, 1=AO)
+      - `digital` → yalnız sensor_type ∈ (2=DI, 3=DO); response'a `is_active`
+                    (digital_inverse uygulanmış bool) ve `sensor_type` ekler
+      - omit/`all` → hepsi
+    """
+    type_filter = (request.GET.get("type") or "all").lower()
+    sensor_types = None
+    if type_filter == "analog":
+        sensor_types = (0, 1)
+    elif type_filter == "digital":
+        sensor_types = (2, 3)
+
     qs = (
         SensorLatest.objects
         .select_related(
@@ -58,19 +72,33 @@ def home_snapshot(request):
             "sensor__parameter__parameter_name",
         )
     )
+    if sensor_types is not None:
+        qs = qs.filter(sensor__sensor_type__in=sensor_types)
+
     rows = []
-    for latest in qs[:200]:   # şimdilik 200 ile sınırla; ileride filtre eklenir
+    for latest in qs[:200]:
         sensor = latest.sensor
         parameter = getattr(sensor, "parameter", None)
         connection = getattr(sensor, "connection", None) if sensor else None
         station = getattr(connection, "station", None) if connection else None
+        stype = sensor.sensor_type if sensor else None
+
+        is_active = None
+        if sensor and stype in (2, 3):
+            raw = bool(latest.value) if latest.value is not None else False
+            if sensor.digital_inverse:
+                raw = not raw
+            is_active = raw
+
         rows.append({
             "sensor_id": sensor.pk if sensor else None,
+            "sensor_type": stype,
             "station_name": station.name if station else None,
             "connection": connection.name if connection else None,
             "parameter_name": (parameter.parameter_name if parameter else None) or "-",
             "unit": (parameter.unit_txt if parameter else "") or (parameter.unit if parameter else "") or "",
             "value": latest.value,
+            "is_active": is_active,
             "quality": latest.quality,
             "status_code": latest.status.code if latest.status else None,
             "readtime": latest.readtime.isoformat() if latest.readtime else None,

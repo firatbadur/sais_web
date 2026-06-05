@@ -55,11 +55,11 @@
 </div>
 
 <div class="row g-5 g-xl-10 mb-5 mb-xl-10">
-    <!-- ============ LIVE SENSOR GRID ============ -->
+    <!-- ============ ANALOG KANALLAR ============ -->
     <div class="col-xl-8">
         <div class="card card-flush h-100">
             <div class="card-header pt-5">
-                <h3 class="card-title fw-bold text-gray-800">{% trans "Anlık Sensör Değerleri" %}</h3>
+                <h3 class="card-title fw-bold text-gray-800">{% trans "Anlık Sensör Değerleri" %} <span class="text-muted fs-7 fw-semibold ms-2">{% trans "(Analog Kanallar)" %}</span></h3>
                 <div class="card-toolbar">
                     <span class="text-muted fs-7">
                         <i class="ki-outline ki-time fs-6 me-1"></i>
@@ -89,35 +89,48 @@
         </div>
     </div>
 
-    <!-- ============ EVENTS FEED ============ -->
+    <!-- ============ DİJİTAL KANALLAR ============ -->
     <div class="col-xl-4">
         <div class="card card-flush h-100">
             <div class="card-header pt-5">
-                <h3 class="card-title fw-bold text-gray-800">{% trans "Son Olaylar" %}</h3>
+                <h3 class="card-title fw-bold text-gray-800">{% trans "Dijital Kanallar" %}</h3>
+                <div class="card-toolbar">
+                    <span class="text-muted fs-7">
+                        <i class="ki-outline ki-time fs-6 me-1"></i>
+                        <span id="digital-updated">-</span>
+                    </span>
+                </div>
             </div>
             <div class="card-body pt-4" style="max-height:500px; overflow-y:auto;">
-                <div class="timeline timeline-border-dashed" id="events-list">
-                    <div class="text-muted">{% trans "Yükleniyor..." %}</div>
+                <div class="table-responsive">
+                    <table class="table table-row-dashed align-middle gs-0 gy-3">
+                        <thead>
+                            <tr class="fs-7 fw-bold text-gray-500 text-uppercase">
+                                <th>{% trans "Sensör" %}</th>
+                                <th>{% trans "Durum" %}</th>
+                                <th class="text-end">{% trans "Son Okuma" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="digital-body">
+                            <tr><td colspan="3" class="text-center text-muted">{% trans "Yükleniyor..." %}</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ============ TREND CHART ============ -->
+<!-- ============ SON OLAYLAR ============ -->
 <div class="row g-5 g-xl-10">
     <div class="col-12">
         <div class="card card-flush">
             <div class="card-header pt-5">
-                <h3 class="card-title fw-bold text-gray-800">{% trans "24 Saatlik Sensör Trendi" %}</h3>
-                <div class="card-toolbar">
-                    <span class="text-muted fs-7" id="trend-subtitle">—</span>
-                </div>
+                <h3 class="card-title fw-bold text-gray-800">{% trans "Son Olaylar" %}</h3>
             </div>
-            <div class="card-body">
-                <div id="trend-chart" style="height:360px;"></div>
-                <div id="trend-empty" class="text-center text-muted py-5" style="display:none;">
-                    {% trans "Henüz trend verisi yok. Sensörlerin okumaya başlaması veya aggregate task'larının çalışması bekleniyor." %}
+            <div class="card-body pt-4" style="max-height:500px; overflow-y:auto;">
+                <div class="timeline timeline-border-dashed" id="events-list">
+                    <div class="text-muted">{% trans "Yükleniyor..." %}</div>
                 </div>
             </div>
         </div>
@@ -132,7 +145,6 @@
     const URLS = {
         kpis:     "{% url 'dashboard:api_home_kpis' %}",
         snapshot: "{% url 'dashboard:api_home_snapshot' %}",
-        trend:    "{% url 'dashboard:api_home_trend' %}",
         events:   "{% url 'dashboard:api_home_events' %}"
     };
 
@@ -143,12 +155,6 @@
         stale:       'badge-light-secondary',
         substituted: 'badge-light-info',
         manual:      'badge-light-primary'
-    };
-
-    const BUCKET_LABEL = {
-        hourly: "{% trans 'Saatlik ortalama (ReadingHourly)' %}",
-        '15min': "{% trans '15-dakikalık ortalama (ReadingFifteenMin)' %}",
-        raw:    "{% trans 'Ham okuma (Reading) — aggregate henüz dönmedi' %}"
     };
 
     // 5 dakikadan eski okumayı "stale" say.
@@ -203,13 +209,13 @@
         } catch(e) { console.warn('KPI refresh fail:', e); }
     }
 
-    // --- Snapshot grid (every 5s) ---
+    // --- Analog kanallar (Anlık Sensör Değerleri) (every 5s) ---
     async function refreshSnapshot() {
         try {
-            const data = await fetchJson(URLS.snapshot);
+            const data = await fetchJson(URLS.snapshot + '?type=analog');
             const tbody = document.getElementById('snapshot-body');
             if (!data.rows || data.rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">{% trans "Henüz sensör verisi yok." %}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">{% trans "Henüz analog sensör verisi yok." %}</td></tr>`;
             } else {
                 tbody.innerHTML = data.rows.map(r => {
                     const badge = QUALITY_BADGE[r.quality] || 'badge-light-secondary';
@@ -232,6 +238,37 @@
             }
             document.getElementById('snapshot-updated').textContent = new Date().toLocaleTimeString();
         } catch(e) { console.warn('Snapshot fail:', e); }
+    }
+
+    // --- Dijital Kanallar (every 5s) ---
+    async function refreshDigital() {
+        try {
+            const data = await fetchJson(URLS.snapshot + '?type=digital');
+            const tbody = document.getElementById('digital-body');
+            if (!data.rows || data.rows.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">{% trans "Dijital sensör yok." %}</td></tr>`;
+            } else {
+                tbody.innerHTML = data.rows.map(r => {
+                    const stale = isStale(r.readtime);
+                    const timeTxt = formatTime(r.readtime);
+                    const isActive = !!r.is_active;
+                    const statusBadge = isActive
+                        ? `<span class="badge badge-light-success"><i class="ki-outline ki-shield-tick fs-7 me-1"></i>{% trans "Aktif" %}</span>`
+                        : `<span class="badge badge-light-secondary"><i class="ki-outline ki-shield-cross fs-7 me-1"></i>{% trans "Pasif" %}</span>`;
+                    const staleBadge = stale
+                        ? ` <i class="ki-outline ki-time fs-7 text-warning ms-1" title="{% trans 'Okuma 5 dakikadan eski' %}"></i>`
+                        : '';
+                    const nameTxt = escapeHtml(r.parameter_name || '-');
+                    const stationTxt = r.station_name ? `<div class="text-muted fs-8">${escapeHtml(r.station_name)}</div>` : '';
+                    return `<tr${stale ? ' class="opacity-75"' : ''}>
+                        <td><div class="fw-semibold text-gray-800">${nameTxt}</div>${stationTxt}</td>
+                        <td>${statusBadge}</td>
+                        <td class="text-end text-muted fs-7">${timeTxt}${staleBadge}</td>
+                    </tr>`;
+                }).join('');
+            }
+            document.getElementById('digital-updated').textContent = new Date().toLocaleTimeString();
+        } catch(e) { console.warn('Digital fail:', e); }
     }
 
     // --- Events feed (every 30s) ---
@@ -273,57 +310,11 @@
         } catch(e) { console.warn('Events fail:', e); }
     }
 
-    // --- Trend chart (every 5 min) ---
-    let trendChart = null;
-    async function refreshTrend() {
-        try {
-            const data = await fetchJson(URLS.trend);
-            const empty = document.getElementById('trend-empty');
-            const container = document.getElementById('trend-chart');
-            const subtitle = document.getElementById('trend-subtitle');
-            if (subtitle) {
-                subtitle.textContent = BUCKET_LABEL[data.bucket_level] || '—';
-            }
-            if (!data.series || data.series.length === 0) {
-                empty.style.display = 'block';
-                container.style.display = 'none';
-                return;
-            }
-            empty.style.display = 'none';
-            container.style.display = 'block';
-
-            const series = data.series.map(s => ({
-                name: s.label,
-                data: s.points
-                    .filter(p => p.t && p.avg !== null && p.avg !== undefined)
-                    .map(p => [new Date(p.t).getTime(), p.avg])
-            }));
-
-            const options = {
-                chart: { type: 'line', height: 360, toolbar: { show: true }, animations: { enabled: true } },
-                series: series,
-                stroke: { curve: 'smooth', width: 2 },
-                xaxis: { type: 'datetime' },
-                yaxis: { labels: { formatter: v => Number(v).toFixed(2) } },
-                legend: { position: 'top' },
-                tooltip: { x: { format: 'dd/MM HH:mm' } },
-                colors: ['#009ef7', '#50cd89', '#f1416c', '#ffc700', '#7239ea']
-            };
-
-            if (trendChart) {
-                trendChart.updateOptions(options);
-            } else {
-                trendChart = new ApexCharts(container, options);
-                trendChart.render();
-            }
-        } catch(e) { console.warn('Trend fail:', e); }
-    }
-
     // Initial load + intervals
-    refreshKpis(); setInterval(refreshKpis, 30000);
+    refreshKpis();     setInterval(refreshKpis, 30000);
     refreshSnapshot(); setInterval(refreshSnapshot, 5000);
-    refreshEvents(); setInterval(refreshEvents, 30000);
-    refreshTrend(); setInterval(refreshTrend, 300000);
+    refreshDigital();  setInterval(refreshDigital, 5000);
+    refreshEvents();   setInterval(refreshEvents, 30000);
 })();
 </script>
 {% endblock %}

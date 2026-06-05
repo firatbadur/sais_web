@@ -645,6 +645,22 @@ msgstr "If no parameter is selected, all parameters of the station are shown."
 msgid "Sadece 1 dk. (raw) için uygulanır."
 msgstr "Applied only for the 1-minute (raw) interval."
 
+# ---- Home: analog/digital channel panels ----
+msgid "Analog Kanallar"
+msgstr "Analog Channels"
+
+msgid "Dijital Kanallar"
+msgstr "Digital Channels"
+
+msgid "(Analog Kanallar)"
+msgstr "(Analog Channels)"
+
+msgid "Henüz analog sensör verisi yok."
+msgstr "No analog sensor data yet."
+
+msgid "Dijital sensör yok."
+msgstr "No digital sensors."
+
 msgid "Sensör Tipi"
 msgstr "Sensor Type"
 
