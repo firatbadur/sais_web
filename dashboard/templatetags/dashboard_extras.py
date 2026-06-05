@@ -60,6 +60,24 @@ def has_role(user, roles_csv: str) -> bool:
     return user_has_role(user, *roles)
 
 
+@register.simple_tag(takes_context=True)
+def querystring_without(context, *keys) -> str:
+    """request.GET'i verilen key'leri çıkararak urlencode eder.
+
+    Kullanım: ?{% querystring_without "page" %}&page=2
+    Sayfalama linklerinde mevcut filtre parametrelerini koruyup `page`'i
+    yeniden yazmaya yarar.
+    """
+    request = context.get("request")
+    if not request:
+        return ""
+    qd = request.GET.copy()
+    for k in keys:
+        if k in qd:
+            qd.pop(k)
+    return qd.urlencode()
+
+
 @register.filter
 def quality_badge(quality: str) -> str:
     """Sensör kalite → Bootstrap/Metronic badge class'ı."""

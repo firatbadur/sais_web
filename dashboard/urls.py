@@ -56,4 +56,7 @@ urlpatterns = [
     path("api/home/snapshot/", api_views.home_snapshot, name="api_home_snapshot"),
     path("api/home/trend/", api_views.home_trend, name="api_home_trend"),
     path("api/home/events/", api_views.home_events, name="api_home_events"),
+
+    # --- AJAX API (raporlar) ---
+    path("api/parameters/", api_views.station_parameters, name="api_station_parameters"),
 ]

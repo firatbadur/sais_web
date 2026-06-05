@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import secrets
 import string
+from datetime import datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model, update_session_auth_hash
@@ -14,6 +15,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView
 
@@ -22,8 +24,12 @@ from api.models import (
     Calibration,
     Command,
     Connection,
+    Parameter,
     PowerOff,
     Reading,
+    ReadingDaily,
+    ReadingFifteenMin,
+    ReadingHourly,
     Sensor,
     Station,
     SystemLog,
@@ -92,16 +98,126 @@ class HomeView(RoleRequiredMixin, TemplateView):
 # --------------------------------------------------------------------------- #
 
 class ReadingsReportView(RoleRequiredMixin, ListView):
-    """Sensör okumaları — 15 dakikalık aggregate'ten."""
+    """SAIS Parametre Raporu — istasyon + parametre + tarih + aralık + kalite filtreli.
+
+    Veri aralığına (`interval`) göre kaynak tablo değişir:
+      - ``1min`` → raw `Reading` (1 dk poll varsayımı)
+      - ``15min`` → `ReadingFifteenMin`
+      - ``hourly`` → `ReadingHourly`
+      - ``daily`` → `ReadingDaily`
+    Kalite filtresi sadece raw için anlamlı; aggregate tablolarında atlanır.
+    """
     template_name = "dashboard/reports/sensor_readings.html"
     context_object_name = "rows"
-    paginate_by = 50
+    paginate_by = 100
+
+    INTERVAL_CHOICES = (
+        ("1min", _("1 dk.")),
+        ("15min", _("15 dk.")),
+        ("hourly", _("1 saat")),
+        ("daily", _("1 gün")),
+    )
+    QUALITY_CHOICES = (
+        ("all", _("Hepsi")),
+        ("good", _("Geçerli")),
+        ("bad", _("Hatalı")),
+        ("uncertain", _("Belirsiz")),
+    )
+    DATE_FORMAT = "%d.%m.%Y %H:%M:%S"
+
+    def _parse_dt(self, raw: str):
+        if not raw:
+            return None
+        try:
+            naive = datetime.strptime(raw.strip(), self.DATE_FORMAT)
+        except ValueError:
+            return None
+        if timezone.is_naive(naive):
+            return timezone.make_aware(naive, timezone.get_current_timezone())
+        return naive
+
+    def _filters(self):
+        """Submit edilmiş GET parametrelerini normalize edip döner."""
+        gp = self.request.GET
+        now = timezone.now()
+        start = self._parse_dt(gp.get("start")) or (now - timedelta(days=1))
+        end = self._parse_dt(gp.get("end")) or now
+        if end < start:
+            start, end = end, start
+
+        try:
+            station_id = int(gp.get("station") or 0) or None
+        except (TypeError, ValueError):
+            station_id = None
+
+        param_ids = []
+        for raw in gp.getlist("parameter"):
+            try:
+                param_ids.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+
+        interval = gp.get("interval") or "1min"
+        if interval not in dict(self.INTERVAL_CHOICES):
+            interval = "1min"
+
+        quality = gp.get("quality") or "all"
+        if quality not in dict(self.QUALITY_CHOICES):
+            quality = "all"
+
+        return {
+            "submitted": bool(gp),
+            "station_id": station_id,
+            "parameter_ids": param_ids,
+            "interval": interval,
+            "quality": quality,
+            "start": start,
+            "end": end,
+            "chart": gp.get("chart") == "1",
+        }
 
     def get_queryset(self):
-        from api.models import ReadingFifteenMin
-        return (ReadingFifteenMin.objects
-                .select_related("sensor", "sensor__parameter")
-                .order_by("-bucket_start"))
+        f = self._filters()
+        if not f["submitted"] or not f["station_id"]:
+            # Filtre gönderilmeden boş tablo göster — kullanıcı "Rapor Getir"e bassın.
+            return Reading.objects.none()
+
+        is_raw = f["interval"] == "1min"
+        model = {
+            "1min": Reading,
+            "15min": ReadingFifteenMin,
+            "hourly": ReadingHourly,
+            "daily": ReadingDaily,
+        }[f["interval"]]
+
+        time_field = "time_iso" if is_raw else "bucket_start"
+        qs = (model.objects
+              .select_related("sensor", "sensor__parameter")
+              .filter(**{f"{time_field}__gte": f["start"], f"{time_field}__lte": f["end"],
+                         "sensor__connection__station_id": f["station_id"]}))
+
+        if f["parameter_ids"]:
+            qs = qs.filter(sensor__parameter_id__in=f["parameter_ids"])
+
+        if is_raw and f["quality"] != "all":
+            qs = qs.filter(quality=f["quality"])
+
+        return qs.order_by(f"-{time_field}", "sensor_id")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        f = self._filters()
+        ctx["filters"] = f
+        ctx["is_raw"] = f["interval"] == "1min"
+        ctx["interval_choices"] = self.INTERVAL_CHOICES
+        ctx["quality_choices"] = self.QUALITY_CHOICES
+        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        # Parametre listesi: istasyon seçildiyse o istasyona ait + boş istasyonlu olanlar.
+        param_qs = Parameter.objects.order_by("parameter_name")
+        if f["station_id"]:
+            param_qs = param_qs.filter(station_id=f["station_id"])
+        ctx["parameters"] = param_qs
+        return ctx
 
 
 class AggregatesReportView(RoleRequiredMixin, TemplateView):

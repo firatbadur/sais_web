@@ -552,3 +552,73 @@ msgstr "Turkish"
 
 msgid "English"
 msgstr "English"
+
+# ---- SAIS Parametre Raporu ----
+msgid "SAIS Parametre Raporu"
+msgstr "SAIS Parameter Report"
+
+msgid "İstasyon Seçimi"
+msgstr "Station Selection"
+
+msgid "İstasyon seçiniz"
+msgstr "Select a station"
+
+msgid "Parametre Listesi"
+msgstr "Parameter List"
+
+msgid "Parametre seçiniz"
+msgstr "Select parameters"
+
+msgid "Veri Aralığı"
+msgstr "Data Interval"
+
+msgid "Filtreleme"
+msgstr "Filtering"
+
+msgid "Rapor Başlangıç Tarihi"
+msgstr "Report Start Date"
+
+msgid "Rapor Bitiş Tarihi"
+msgstr "Report End Date"
+
+msgid "Rapor Getir"
+msgstr "Generate Report"
+
+msgid "Sıfırla"
+msgstr "Reset"
+
+msgid "Rapor Çıktısı"
+msgstr "Report Output"
+
+msgid "Grafik Oluştur"
+msgstr "Generate Chart"
+
+msgid "Rapor oluşturmak için istasyon seçip 'Rapor Getir' butonuna basın."
+msgstr "Select a station and press 'Generate Report' to build the report."
+
+msgid "Seçilen kriterlerle eşleşen kayıt bulunamadı."
+msgstr "No records match the selected filters."
+
+msgid "Grafik için sayısal veri yok."
+msgstr "No numeric data available for chart."
+
+msgid "1 dk."
+msgstr "1 min"
+
+msgid "15 dk."
+msgstr "15 min"
+
+msgid "1 saat"
+msgstr "1 hour"
+
+msgid "1 gün"
+msgstr "1 day"
+
+msgid "Hepsi"
+msgstr "All"
+
+msgid "Hatalı"
+msgstr "Bad"
+
+msgid "Belirsiz"
+msgstr "Uncertain"

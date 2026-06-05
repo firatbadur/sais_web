@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from api.models import (
     Connection,
+    Parameter,
     PowerOff,
     Reading,
     ReadingFifteenMin,
@@ -193,3 +194,23 @@ def home_events(request):
     # Zaman sıralı, desc
     events.sort(key=lambda e: e["time"] or "", reverse=True)
     return JsonResponse({"count": len(events), "events": events[:20]})
+
+
+@login_required
+def station_parameters(request):
+    """İstasyona ait parametre listesi — rapor formu select2'sini doldurur."""
+    try:
+        station_id = int(request.GET.get("station") or 0) or None
+    except (TypeError, ValueError):
+        station_id = None
+    qs = Parameter.objects.order_by("parameter_name")
+    if station_id:
+        qs = qs.filter(station_id=station_id)
+    else:
+        qs = qs.none()
+    items = [
+        {"id": p.id, "text": p.parameter_name or f"Parametre {p.id}",
+         "unit": p.unit_txt or p.unit or ""}
+        for p in qs
+    ]
+    return JsonResponse({"results": items})
