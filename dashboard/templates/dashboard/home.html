@@ -61,6 +61,9 @@
             <div class="card-header pt-5">
                 <h3 class="card-title fw-bold text-gray-800">{% trans "Anlık Sensör Değerleri" %} <span class="text-muted fs-7 fw-semibold ms-2">{% trans "(Analog Kanallar)" %}</span></h3>
                 <div class="card-toolbar">
+                    <span id="analog-wash-badge" class="badge badge-primary me-3 d-none">
+                        <i class="ki-outline ki-drop fs-7 me-1"></i><span id="analog-wash-badge-label"></span>
+                    </span>
                     <span class="text-muted fs-7">
                         <i class="ki-outline ki-time fs-6 me-1"></i>
                         <span id="snapshot-updated">-</span>
@@ -174,7 +177,14 @@
         39: ['badge-light-danger',    "{% trans 'Aralık Dışı' %}"]
     };
 
-    function renderStatusBadge(code, name) {
+    function renderStatusBadge(code, name, washOverride) {
+        // Yıkama aktifse rozeti override et — orijinal kodu tooltip'te göster.
+        if (washOverride != null) {
+            const known = STATUS_BADGE[washOverride];
+            const [cls, label] = known || ['badge-light-primary', `#${washOverride}`];
+            const origTxt = code != null ? `Gerçek sensör status'u: #${code}` : '';
+            return `<span class="badge ${cls}" title="${origTxt}">${label}</span>`;
+        }
         if (code == null) return '<span class="badge badge-light-secondary">—</span>';
         const known = STATUS_BADGE[code];
         if (known) {
@@ -238,11 +248,39 @@
         } catch(e) { console.warn('KPI refresh fail:', e); }
     }
 
+    // Analog kart başlığındaki yıkama uyarı rozeti — wash aktifken görünür,
+    // aktif değilken gizlenir.
+    function updateAnalogWashBadge(wash) {
+        const el = document.getElementById('analog-wash-badge');
+        const lbl = document.getElementById('analog-wash-badge-label');
+        if (!el || !lbl) return;
+        if (!wash || !wash.status_code) {
+            el.classList.add('d-none');
+            return;
+        }
+        const isWeekly = wash.kind === 'weekly';
+        el.classList.remove('badge-primary', 'badge-warning');
+        el.classList.add(isWeekly ? 'badge-warning' : 'badge-primary');
+        let txt = isWeekly ? "{% trans 'Haftalık Yıkama' %}" : "{% trans 'Manuel Yıkama' %}";
+        if (wash.remaining_seconds != null) {
+            const rs = wash.remaining_seconds;
+            const m = Math.floor(rs / 60);
+            const s = rs % 60;
+            txt += ' — ' + (m > 0 ? `${m} dk ${String(s).padStart(2,'0')} sn` : `${s} sn`);
+        }
+        lbl.textContent = txt;
+        el.classList.remove('d-none');
+    }
+
     // --- Analog kanallar (Anlık Sensör Değerleri) (every 5s) ---
     async function refreshSnapshot() {
         try {
             const data = await fetchJson(URLS.snapshot + '?type=analog');
             const tbody = document.getElementById('snapshot-body');
+            const washOverride = (data.wash && data.wash.status_code) ? data.wash.status_code : null;
+            // Üst bilgi: yıkama aktifse kartın başlığına küçük bir alarm rozeti.
+            updateAnalogWashBadge(data.wash);
+
             if (!data.rows || data.rows.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">{% trans "Henüz analog sensör verisi yok." %}</td></tr>`;
             } else {
@@ -252,7 +290,7 @@
                     const valueTxt = formatValue(r.value, 2);
                     const timeTxt = formatTime(r.readtime);
                     const stationTxt = r.station_name ? escapeHtml(r.station_name) : '<span class="text-muted">-</span>';
-                    const statusHtml = renderStatusBadge(r.status_code, r.status_name);
+                    const statusHtml = renderStatusBadge(r.status_code, r.status_name, washOverride);
                     const staleBadge = stale
                         ? ` <i class="ki-outline ki-time fs-7 text-warning ms-1" title="{% trans 'Okuma 5 dakikadan eski' %}"></i>`
                         : '';

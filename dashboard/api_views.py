@@ -75,6 +75,19 @@ def home_snapshot(request):
     if sensor_types is not None:
         qs = qs.filter(sensor__sensor_type__in=sensor_types)
 
+    # Yıkama aktifse anasayfada da Status'ları override görsün (operatör
+    # "şu an yıkama gidiyor" sinyalini bir bakışta görmeli). SensorLatest'in
+    # gerçek status'u değişmiyor — frontend `wash.status_code` set ise
+    # rozeti override eder ve tooltip'te orijinal kodu gösterir.
+    from sais_domain.models import SystemSwitch
+    switch = SystemSwitch.load()
+    wash_status_code = switch.active_wash_status_code()
+    wash_info = {
+        "kind": switch.wash_active_kind if wash_status_code else None,
+        "status_code": wash_status_code,
+        "remaining_seconds": switch.wash_remaining_seconds() if wash_status_code else None,
+    }
+
     rows = []
     for latest in qs[:200]:
         sensor = latest.sensor
@@ -104,7 +117,7 @@ def home_snapshot(request):
             "status_name": latest.status.name if latest.status else None,
             "readtime": latest.readtime.isoformat() if latest.readtime else None,
         })
-    return JsonResponse({"count": len(rows), "rows": rows})
+    return JsonResponse({"count": len(rows), "rows": rows, "wash": wash_info})
 
 
 @login_required
