@@ -24,8 +24,23 @@ class EnvisoftChannelAdmin(admin.ModelAdmin):
 @admin.register(SystemSwitch)
 class SystemSwitchAdmin(admin.ModelAdmin):
     list_display = ("__str__", "sim_enabled", "envisoft_enabled", "polling_enabled",
-                    "updated_at", "updated_by")
-    readonly_fields = ("updated_at", "updated_by")
+                    "wash_active_kind", "wash_ends_at", "updated_at", "updated_by")
+    readonly_fields = (
+        "wash_active_kind", "wash_started_at", "wash_ends_at", "wash_started_by",
+        "updated_at", "updated_by",
+    )
+    fieldsets = (
+        ("Veri akışı", {
+            "fields": ("sim_enabled", "envisoft_enabled", "polling_enabled"),
+        }),
+        ("Yıkama süreleri (default)", {
+            "fields": ("manual_wash_duration_minutes", "weekly_wash_duration_minutes"),
+        }),
+        ("Aktif yıkama (readonly)", {
+            "fields": ("wash_active_kind", "wash_started_at", "wash_ends_at", "wash_started_by"),
+        }),
+        ("Audit", {"fields": ("updated_at", "updated_by")}),
+    )
 
     def has_add_permission(self, request):
         # Singleton — sadece bir kayıt; mevcut kayıt varsa yenisi eklenemez.

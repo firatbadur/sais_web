@@ -101,6 +101,7 @@ def home_snapshot(request):
             "is_active": is_active,
             "quality": latest.quality,
             "status_code": latest.status.code if latest.status else None,
+            "status_name": latest.status.name if latest.status else None,
             "readtime": latest.readtime.isoformat() if latest.readtime else None,
         })
     return JsonResponse({"count": len(rows), "rows": rows})
@@ -226,13 +227,17 @@ def home_events(request):
 
 @login_required
 def system_control_status(request):
-    """Sistem Kontrol sayfası — Celery durum widget'ı için JSON.
+    """Sistem Kontrol sayfası — Celery durum widget'ı + aktif yıkama state'i.
 
-    Sayfa bunu 10 sn'de bir poll'lar; worker ping + beat last_run_at döner.
-    Switch'lerin kendisi POST formla kaydedildiği için burada yok.
+    Sayfa bunu 10 sn'de bir poll'lar. Worker ping + beat last_run_at +
+    yıkama bilgileri döner; UI banner state'ini ve geri sayımı bu yanıttan
+    günceller (yıkama bitince sayfa reload zorunluğu yok).
     """
     from dashboard.views import _celery_status
+    from sais_domain.models import SystemSwitch
+
     status = _celery_status()
+    switch = SystemSwitch.load()
     return JsonResponse({
         "worker_ok": status["worker_ok"],
         "worker_count": status["worker_count"],
@@ -240,6 +245,17 @@ def system_control_status(request):
         "beat_last_run": (
             status["beat_last_run"].isoformat() if status["beat_last_run"] else None
         ),
+        "wash_active_kind": switch.wash_active_kind,
+        "wash_started_at": (
+            switch.wash_started_at.isoformat() if switch.wash_started_at else None
+        ),
+        "wash_ends_at": (
+            switch.wash_ends_at.isoformat() if switch.wash_ends_at else None
+        ),
+        "wash_started_by": (
+            switch.wash_started_by.username if switch.wash_started_by else None
+        ),
+        "wash_remaining_seconds": switch.wash_remaining_seconds(),
     })
 
 

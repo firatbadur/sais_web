@@ -809,3 +809,98 @@ msgstr "Not yet fired or beat is not running."
 
 msgid "Manuel Restart"
 msgstr "Manual Restart"
+
+# ---- Yönetici: Yıkama Tetikleme ----
+msgid "Manuel İşlemler"
+msgstr "Manual Operations"
+
+msgid "Manuel Yıkama"
+msgstr "Manual Wash"
+
+msgid "Haftalık Yıkama"
+msgstr "Weekly Wash"
+
+msgid "Yıkama Başlat"
+msgstr "Start Wash"
+
+msgid "Haftalık Yıkama Başlat"
+msgstr "Start Weekly Wash"
+
+msgid "Durdur"
+msgstr "Stop"
+
+msgid "Süre (dk)"
+msgstr "Duration (min)"
+
+msgid "Status kodu 23 — operatör tarafından elle tetiklenir."
+msgstr "Status code 23 — triggered manually by operator."
+
+msgid "Status kodu 24 — uzun süreli rutin yıkama."
+msgstr "Status code 24 — long-duration routine wash."
+
+msgid "AKTİF"
+msgstr "ACTIVE"
+
+msgid "Başlangıç"
+msgstr "Started"
+
+msgid "Bitiş"
+msgstr "Ends"
+
+msgid "Kalan"
+msgstr "Remaining"
+
+msgid "Başlatan"
+msgstr "Started by"
+
+msgid "sona erdi"
+msgstr "finished"
+
+msgid "Yıkamayı durdurmak istediğinizden emin misiniz?"
+msgstr "Are you sure you want to stop the wash?"
+
+msgid "Manuel yıkama başlatıldı: %(m)d dk."
+msgstr "Manual wash started: %(m)d min."
+
+msgid "Haftalık yıkama başlatıldı: %(m)d dk."
+msgstr "Weekly wash started: %(m)d min."
+
+msgid "Yıkama durduruldu."
+msgstr "Wash stopped."
+
+# ---- Home: Analog Status sütunu ----
+msgid "Status"
+msgstr "Status"
+
+msgid "Veri Yok"
+msgstr "No Data"
+
+msgid "Geçerli"
+msgstr "Valid"
+
+msgid "Geçersiz"
+msgstr "Invalid"
+
+msgid "İletişim"
+msgstr "Comm Error"
+
+msgid "Alarm"
+msgstr "Alarm"
+
+msgid "Purge"
+msgstr "Purge"
+
+msgid "Yıkama"
+msgstr "Wash"
+
+msgid "Haftalık Y."
+msgstr "Weekly W."
+
+msgid "İst. Bakım"
+msgstr "Stn. Maint."
+
+msgid "Tesis Bakım"
+msgstr "Plant Maint."
+
+msgid "Aralık Dışı"
+msgstr "Out of Range"

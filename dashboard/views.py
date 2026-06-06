@@ -403,30 +403,92 @@ class ApiLogsView(AdminRequiredMixin, ListView):
 class SystemControlView(AdminRequiredMixin, TemplateView):
     """Yönetici → Sistem Kontrol.
 
-    Üç global aç/kapa: SIM, Envisoft, Polling. Toggle Celery process'lerini
-    etkilemez; ilgili task'lar her tetiklenmede `SystemSwitch.load()` ile
-    bayrağı okuyup kapalıysa no-op yapar. Celery worker/beat durumu canlı
-    gösterilir (broker ping + `PeriodicTask.last_run_at`).
+    Üç global aç/kapa (SIM, Envisoft, Polling) + manuel/haftalık yıkama
+    tetikleme + Celery durum widget'ı. POST handler `action` parametresine
+    göre 4 farklı işlem yapar: save_switches, start_manual_wash,
+    start_weekly_wash, stop_wash.
     """
     template_name = "dashboard/admin_pages/system_control.html"
+
+    # Yıkama süre clamp'i — UI input max'iyle senkron.
+    MANUAL_WASH_MAX_MIN = 60
+    WEEKLY_WASH_MAX_MIN = 180
 
     def get_context_data(self, **kwargs):
         from sais_domain.models import SystemSwitch
         ctx = super().get_context_data(**kwargs)
-        ctx["switch"] = SystemSwitch.load()
+        switch = SystemSwitch.load()
+        ctx["switch"] = switch
         ctx["celery_status"] = _celery_status()
+        ctx["wash_remaining_seconds"] = switch.wash_remaining_seconds()
+        ctx["wash_active_status_code"] = switch.active_wash_status_code()
         return ctx
 
     def post(self, request, *args, **kwargs):
         from sais_domain.models import SystemSwitch
         switch = SystemSwitch.load()
-        switch.sim_enabled = request.POST.get("sim_enabled") == "on"
-        switch.envisoft_enabled = request.POST.get("envisoft_enabled") == "on"
-        switch.polling_enabled = request.POST.get("polling_enabled") == "on"
-        switch.updated_by = request.user
-        switch.save()
-        messages.success(request, _("Sistem kontrol ayarları kaydedildi."))
+        action = request.POST.get("action", "save_switches")
+
+        if action == "start_manual_wash":
+            minutes = self._parse_minutes(
+                request.POST.get("manual_wash_minutes"),
+                default=switch.manual_wash_duration_minutes,
+                lo=1, hi=self.MANUAL_WASH_MAX_MIN,
+            )
+            self._start_wash(switch, request.user, kind="manual", minutes=minutes)
+            switch.manual_wash_duration_minutes = minutes
+            switch.save()
+            messages.success(request,
+                _("Manuel yıkama başlatıldı: %(m)d dk.") % {"m": minutes})
+
+        elif action == "start_weekly_wash":
+            minutes = self._parse_minutes(
+                request.POST.get("weekly_wash_minutes"),
+                default=switch.weekly_wash_duration_minutes,
+                lo=1, hi=self.WEEKLY_WASH_MAX_MIN,
+            )
+            self._start_wash(switch, request.user, kind="weekly", minutes=minutes)
+            switch.weekly_wash_duration_minutes = minutes
+            switch.save()
+            messages.success(request,
+                _("Haftalık yıkama başlatıldı: %(m)d dk.") % {"m": minutes})
+
+        elif action == "stop_wash":
+            switch.wash_active_kind = None
+            switch.wash_started_at = None
+            switch.wash_ends_at = None
+            switch.wash_started_by = None
+            switch.updated_by = request.user
+            switch.save()
+            messages.success(request, _("Yıkama durduruldu."))
+
+        else:  # save_switches — mevcut davranış
+            switch.sim_enabled = request.POST.get("sim_enabled") == "on"
+            switch.envisoft_enabled = request.POST.get("envisoft_enabled") == "on"
+            switch.polling_enabled = request.POST.get("polling_enabled") == "on"
+            switch.updated_by = request.user
+            switch.save()
+            messages.success(request, _("Sistem kontrol ayarları kaydedildi."))
+
         return redirect("dashboard:admin_system_control")
+
+    @staticmethod
+    def _parse_minutes(raw, *, default: int, lo: int, hi: int) -> int:
+        try:
+            n = int(raw)
+        except (TypeError, ValueError):
+            return default
+        return max(lo, min(hi, n))
+
+    @staticmethod
+    def _start_wash(switch, user, *, kind: str, minutes: int) -> None:
+        from datetime import timedelta
+        now = timezone.now()
+        switch.wash_active_kind = kind
+        switch.wash_started_at = now
+        switch.wash_ends_at = now + timedelta(minutes=minutes)
+        switch.wash_started_by = user
+        switch.updated_by = user
 
 
 def _celery_status():

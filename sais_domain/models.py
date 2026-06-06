@@ -99,8 +99,14 @@ class SystemSwitch(models.Model):
     `dispatch_polls`) her tetiklenmede `SystemSwitch.load()` ile bayrakları
     okur ve kapalıysa no-op yapar. Worker/beat process'i çalışmaya devam
     eder — yalnız iş akışı sessizce askıya alınır.
+
+    Manuel/haftalık yıkama state'i de burada tutulur (singleton — aynı anda
+    yalnız bir yıkama aktif olabilir): yıkama tetiklendiğinde belirli süre
+    boyunca SIM + Envisoft payload'larındaki tüm status kodları 23 (manuel)
+    veya 24 (haftalık) ile override edilir.
     """
 
+    # --- Veri akışı bayrakları ---
     sim_enabled = models.BooleanField(
         default=True,
         verbose_name="SIM Veri İletimi",
@@ -116,6 +122,48 @@ class SystemSwitch(models.Model):
         verbose_name="Sensör Okuması (Polling)",
         help_text="Kapalıysa dispatch_polls bağlantı enqueue etmez.",
     )
+
+    # --- Yıkama süreleri (kullanıcı ayarı, kalıcı) ---
+    manual_wash_duration_minutes = models.IntegerField(
+        default=5,
+        verbose_name="Manuel Yıkama Süresi (dk)",
+        help_text="Manuel yıkama başlatıldığında varsayılan süre.",
+    )
+    weekly_wash_duration_minutes = models.IntegerField(
+        default=20,
+        verbose_name="Haftalık Yıkama Süresi (dk)",
+        help_text="Haftalık yıkama başlatıldığında varsayılan süre.",
+    )
+
+    # --- Aktif yıkama state'i ---
+    WASH_KIND_CHOICES = (
+        ("manual", "Manuel Yıkama"),
+        ("weekly", "Haftalık Yıkama"),
+    )
+    # StatusCode.code eşlemesi — seed_initial_data.py ile birebir.
+    WASH_STATUS_CODE = {"manual": 23, "weekly": 24}
+
+    wash_active_kind = models.CharField(
+        max_length=10, choices=WASH_KIND_CHOICES, null=True, blank=True,
+        verbose_name="Aktif Yıkama Tipi",
+    )
+    wash_started_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name="Yıkama Başlangıcı",
+    )
+    wash_ends_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name="Yıkama Bitişi",
+        help_text="Bu zaman geçtikten sonra yıkama otomatik sonlanır.",
+    )
+    wash_started_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="+",
+        verbose_name="Yıkamayı Başlatan",
+    )
+
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Son Güncelleme")
     updated_by = models.ForeignKey(
         CustomUser,
@@ -146,3 +194,25 @@ class SystemSwitch(models.Model):
     def load(cls):
         obj, _created = cls.objects.get_or_create(pk=1)
         return obj
+
+    def active_wash_status_code(self):
+        """Aktif yıkama varsa override edilecek status kodunu (23/24) döner.
+
+        Süresi dolmuş veya hiç başlatılmamışsa None döner. DB'yi temizlemez —
+        okuyucular kısa-circuit'lar; clear işlemi `publish_cabinet_data`
+        içinde lazy yapılır (her dakika çalıştığı için pratik).
+        """
+        from django.utils import timezone
+        if not self.wash_active_kind or not self.wash_ends_at:
+            return None
+        if timezone.now() >= self.wash_ends_at:
+            return None
+        return self.WASH_STATUS_CODE.get(self.wash_active_kind)
+
+    def wash_remaining_seconds(self):
+        """Aktif yıkama kalan saniye sayısı (None döner aktif değilse)."""
+        from django.utils import timezone
+        if not self.wash_active_kind or not self.wash_ends_at:
+            return None
+        remaining = (self.wash_ends_at - timezone.now()).total_seconds()
+        return max(0, int(remaining))

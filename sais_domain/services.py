@@ -89,6 +89,7 @@ def build_sim_payload(
     *,
     readtime: datetime,
     period: int | None = None,
+    force_status: int | None = None,
 ) -> SimSendDataPayload:
     """Bakanlık SIM ``/SAIS/SendData`` payload'ını snapshot'lardan üretir.
 
@@ -100,6 +101,11 @@ def build_sim_payload(
 
     ``-9999`` Bakanlık'ın "geçersiz/eksik veri" sentinel'idir; orijinal
     istasyon kodundan korunmuştur.
+
+    ``force_status`` set ise (manuel/haftalık yıkama esnasında) tüm
+    ``{parameter_name}_Status`` alanları bu kodla override edilir;
+    engineering değerler korunur (yıkama esnasında okumaya devam ediyoruz,
+    sadece status etiketi değişir).
 
     Aynı parametreye birden fazla sensör eşleşirse — pratik olmasa da —
     iteration sırasında son okunan kazanır.
@@ -114,7 +120,10 @@ def build_sim_payload(
         if not param_name:
             continue
         value = snap.value if snap.value is not None else -9999
-        status_code = snap.status.code if snap.status_id and snap.status.code is not None else 0
+        if force_status is not None:
+            status_code = force_status
+        else:
+            status_code = snap.status.code if snap.status_id and snap.status.code is not None else 0
         values[param_name] = value
         values[f"{param_name}_Status"] = status_code
 
@@ -151,6 +160,7 @@ def build_envisoft_rows(
     cabinet: SaisCabinet,
     *,
     readtime: datetime,
+    force_status: int | None = None,
 ) -> list[EnvisoftRow]:
     """Envisoft ``/SendData`` payload'ı için satır listesi üretir.
 
@@ -159,6 +169,9 @@ def build_envisoft_rows(
       gönderilir (orijinal istasyon kodundaki "dijital dataları sürekli
       kaydetmemek için" optimizasyonu birebir korunmuştur — Envisoft
       tarafında dijital event-driven kabul edilir).
+
+    ``force_status`` set ise (manuel/haftalık yıkama) her satırın 8. indeks
+    status kodu bu değer ile override edilir.
 
     Snapshot ``readtime``'ı yoksa o sensör atlanır (henüz hiç okunmamış).
     """
@@ -181,11 +194,14 @@ def build_envisoft_rows(
 
         channel_id = param.channel_number or sensor.id
         value = snap.value if snap.value is not None else -9999
-        status_code = (
-            snap.status.code
-            if snap.status_id and snap.status.code is not None
-            else 0
-        )
+        if force_status is not None:
+            status_code = force_status
+        else:
+            status_code = (
+                snap.status.code
+                if snap.status_id and snap.status.code is not None
+                else 0
+            )
         device = (sensor.brand or sensor.model or "").strip()
         parameter_name = (param.parameter_name or param.parameter_txt or "").strip()
         signal_type = sensor.signal_type if sensor.signal_type is not None else 0

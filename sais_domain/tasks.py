@@ -67,27 +67,41 @@ def publish_cabinet_data(cabinet_id: int) -> dict:
         return {"cabinet_id": cabinet_id, "skipped": "istasyon pasif"}
 
     switch = SystemSwitch.load()
+    force_status = switch.active_wash_status_code()
+
+    # Yıkama süresi bittiyse state'i temizle — race-free conditional update,
+    # böylece eş zamanlı task'lar bayrağı çiftleyemez. Bayrak set ama
+    # active_wash_status_code() None döndüyse süre dolmuş demektir.
+    if force_status is None and switch.wash_active_kind:
+        SystemSwitch.objects.filter(pk=1, wash_active_kind=switch.wash_active_kind).update(
+            wash_active_kind=None,
+            wash_started_at=None,
+            wash_ends_at=None,
+            wash_started_by=None,
+        )
+
     readtime = timezone.localtime()
 
     sim_result = (
-        _publish_sim(cabinet, readtime) if switch.sim_enabled
+        _publish_sim(cabinet, readtime, force_status=force_status) if switch.sim_enabled
         else {"sent": False, "reason": "sim_disabled"}
     )
     envisoft_result = (
-        _publish_envisoft(cabinet, readtime) if switch.envisoft_enabled
+        _publish_envisoft(cabinet, readtime, force_status=force_status) if switch.envisoft_enabled
         else {"sent": False, "reason": "envisoft_disabled"}
     )
 
     return {
         "cabinet_id": cabinet_id,
         "readtime": readtime.strftime("%Y-%m-%dT%H:%M:00"),
+        "wash_status": force_status,
         "sim": sim_result,
         "envisoft": envisoft_result,
     }
 
 
-def _publish_sim(cabinet: SaisCabinet, readtime) -> dict:
-    payload = build_sim_payload(cabinet, readtime=readtime)
+def _publish_sim(cabinet: SaisCabinet, readtime, *, force_status: int | None = None) -> dict:
+    payload = build_sim_payload(cabinet, readtime=readtime, force_status=force_status)
     if payload.is_empty:
         return {"sent": False, "reason": "no analog values"}
     try:
@@ -110,8 +124,8 @@ def _publish_sim(cabinet: SaisCabinet, readtime) -> dict:
         return {"sent": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
-def _publish_envisoft(cabinet: SaisCabinet, readtime) -> dict:
-    rows = build_envisoft_rows(cabinet, readtime=readtime)
+def _publish_envisoft(cabinet: SaisCabinet, readtime, *, force_status: int | None = None) -> dict:
+    rows = build_envisoft_rows(cabinet, readtime=readtime, force_status=force_status)
     if not rows:
         return {"sent": False, "reason": "no rows"}
     try:

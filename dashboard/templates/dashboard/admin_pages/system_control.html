@@ -21,6 +21,8 @@
             <div class="card-body">
                 <form method="post" id="switch-form">
                     {% csrf_token %}
+                    <input type="hidden" name="action" value="save_switches">
+                    {# Yıkama süre alanları ayrı formda gönderilecek; burada switch state'i korunur #}
 
                     {# SIM #}
                     <div class="d-flex align-items-center border border-dashed border-gray-300 rounded p-5 mb-4">
@@ -165,6 +167,132 @@
     </div>
 
 </div>
+
+{# =============================================================== #}
+{#  Manuel İşlemler — Yıkama / Haftalık Yıkama                      #}
+{# =============================================================== #}
+<div class="row g-5 mt-2">
+    <div class="col-12">
+        <div class="card card-flush">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-drop fs-2 me-2 text-info"></i>
+                    {% trans "Manuel İşlemler" %}
+                </h3>
+            </div>
+            <div class="card-body">
+
+                {% if wash_active_status_code %}
+                {# ------- A. Aktif yıkama varsa: alarm banner ------- #}
+                <div id="wash-banner"
+                     class="notice d-flex bg-{% if switch.wash_active_kind == 'weekly' %}light-warning border-warning{% else %}light-primary border-primary{% endif %} rounded border border-dashed p-6">
+                    <i class="ki-outline ki-drop fs-3x {% if switch.wash_active_kind == 'weekly' %}text-warning{% else %}text-primary{% endif %} me-5"></i>
+                    <div class="flex-grow-1">
+                        <h4 class="text-gray-900 fw-bold mb-2">
+                            {% trans "AKTİF" %}:
+                            {% if switch.wash_active_kind == 'weekly' %}
+                                {% trans "Haftalık Yıkama" %}
+                            {% else %}
+                                {% trans "Manuel Yıkama" %}
+                            {% endif %}
+                            <span class="badge badge-light-dark fs-7 ms-2">Status #{{ wash_active_status_code }}</span>
+                        </h4>
+                        <div class="text-gray-700 fs-6 mb-1">
+                            {% trans "Başlangıç" %}: <span class="fw-semibold">{{ switch.wash_started_at|date:"H:i:s" }}</span>
+                            &nbsp;·&nbsp;
+                            {% trans "Bitiş" %}: <span class="fw-semibold">{{ switch.wash_ends_at|date:"H:i:s" }}</span>
+                        </div>
+                        <div class="text-gray-900 fs-3 fw-bolder mt-2">
+                            {% trans "Kalan" %}:
+                            <span id="wash-countdown"
+                                  data-ends-at="{{ switch.wash_ends_at|date:'c' }}"
+                                  class="text-{% if switch.wash_active_kind == 'weekly' %}warning{% else %}primary{% endif %}">
+                                — dk —
+                            </span>
+                        </div>
+                        {% if switch.wash_started_by %}
+                            <div class="text-muted fs-7 mt-2">
+                                {% trans "Başlatan" %}: {{ switch.wash_started_by.username }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="d-flex flex-column justify-content-center ms-5">
+                        <form method="post" onsubmit="return confirm('{% trans "Yıkamayı durdurmak istediğinizden emin misiniz?" %}');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="stop_wash">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="ki-outline ki-cross fs-4 me-1"></i>{% trans "Durdur" %}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                {% else %}
+                {# ------- B. Aktif yıkama yoksa: 2 tetikleme bölümü ------- #}
+                <div class="row g-5">
+
+                    {# Manuel Yıkama (status #23) #}
+                    <div class="col-md-6">
+                        <div class="border border-dashed border-gray-300 rounded p-5 h-100">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="ki-outline ki-drop fs-2x text-primary me-3"></i>
+                                <div>
+                                    <div class="fw-bold fs-5 text-gray-900">{% trans "Manuel Yıkama" %}</div>
+                                    <div class="text-muted fs-7">{% trans "Status kodu 23 — operatör tarafından elle tetiklenir." %}</div>
+                                </div>
+                            </div>
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="start_manual_wash">
+                                <label class="form-label fw-semibold text-gray-700">{% trans "Süre (dk)" %}</label>
+                                <div class="input-group mb-3">
+                                    <input type="number" name="manual_wash_minutes"
+                                           class="form-control form-control-solid"
+                                           min="1" max="60"
+                                           value="{{ switch.manual_wash_duration_minutes }}" required>
+                                    <span class="input-group-text">dk</span>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="ki-outline ki-rocket fs-4 me-1"></i>{% trans "Yıkama Başlat" %}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    {# Haftalık Yıkama (status #24) #}
+                    <div class="col-md-6">
+                        <div class="border border-dashed border-gray-300 rounded p-5 h-100">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="ki-outline ki-calendar fs-2x text-warning me-3"></i>
+                                <div>
+                                    <div class="fw-bold fs-5 text-gray-900">{% trans "Haftalık Yıkama" %}</div>
+                                    <div class="text-muted fs-7">{% trans "Status kodu 24 — uzun süreli rutin yıkama." %}</div>
+                                </div>
+                            </div>
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="start_weekly_wash">
+                                <label class="form-label fw-semibold text-gray-700">{% trans "Süre (dk)" %}</label>
+                                <div class="input-group mb-3">
+                                    <input type="number" name="weekly_wash_minutes"
+                                           class="form-control form-control-solid"
+                                           min="1" max="180"
+                                           value="{{ switch.weekly_wash_duration_minutes }}" required>
+                                    <span class="input-group-text">dk</span>
+                                </div>
+                                <button type="submit" class="btn btn-warning w-100">
+                                    <i class="ki-outline ki-rocket fs-4 me-1"></i>{% trans "Haftalık Yıkama Başlat" %}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -228,6 +356,34 @@
         }
 
         setInterval(refresh, POLL_MS);
+    })();
+
+    // ----- Yıkama geri sayım (varsa) -----
+    (function () {
+        const el = document.getElementById("wash-countdown");
+        if (!el) return;
+        const endsAt = el.dataset.endsAt;
+        if (!endsAt) return;
+        const endsMs = new Date(endsAt).getTime();
+        if (!isFinite(endsMs)) return;
+
+        function tick() {
+            const remaining = Math.max(0, Math.floor((endsMs - Date.now()) / 1000));
+            if (remaining <= 0) {
+                el.textContent = "0 sn — {% trans 'sona erdi' %}";
+                // Süre bitti → sayfayı reload et, banner kalksın, normal form gelsin.
+                setTimeout(() => location.reload(), 1500);
+                clearInterval(handle);
+                return;
+            }
+            const m = Math.floor(remaining / 60);
+            const s = remaining % 60;
+            el.textContent = (m > 0)
+                ? `${m} dk ${String(s).padStart(2, "0")} sn`
+                : `${s} sn`;
+        }
+        tick();
+        const handle = setInterval(tick, 1000);
     })();
 </script>
 {% endblock %}

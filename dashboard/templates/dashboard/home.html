@@ -76,12 +76,13 @@
                                 <th>{% trans "Parametre" %}</th>
                                 <th class="text-end">{% trans "Değer" %}</th>
                                 <th>{% trans "Birim" %}</th>
+                                <th>{% trans "Status" %}</th>
                                 <th>{% trans "Kalite" %}</th>
                                 <th class="text-end">{% trans "Son Okuma" %}</th>
                             </tr>
                         </thead>
                         <tbody id="snapshot-body">
-                            <tr><td colspan="6" class="text-center text-muted">{% trans "Yükleniyor..." %}</td></tr>
+                            <tr><td colspan="7" class="text-center text-muted">{% trans "Yükleniyor..." %}</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -157,6 +158,34 @@
         manual:      'badge-light-primary'
     };
 
+    // StatusCode (api/management/commands/seed_initial_data.py) → renk + kısa etiket.
+    // Bilinmeyen kod → status_name fallback'i kullanılır.
+    const STATUS_BADGE = {
+        0:  ['badge-light-secondary', "{% trans 'Veri Yok' %}"],
+        1:  ['badge-light-success',   "{% trans 'Geçerli' %}"],
+        4:  ['badge-light-danger',    "{% trans 'Geçersiz' %}"],
+        8:  ['badge-light-warning',   "{% trans 'İletişim' %}"],
+        12: ['badge-light-danger',    "{% trans 'Alarm' %}"],
+        15: ['badge-light-info',      "{% trans 'Purge' %}"],
+        23: ['badge-light-primary',   "{% trans 'Yıkama' %}"],
+        24: ['badge-light-primary',   "{% trans 'Haftalık Y.' %}"],
+        25: ['badge-light-warning',   "{% trans 'İst. Bakım' %}"],
+        26: ['badge-light-warning',   "{% trans 'Tesis Bakım' %}"],
+        39: ['badge-light-danger',    "{% trans 'Aralık Dışı' %}"]
+    };
+
+    function renderStatusBadge(code, name) {
+        if (code == null) return '<span class="badge badge-light-secondary">—</span>';
+        const known = STATUS_BADGE[code];
+        if (known) {
+            const [cls, label] = known;
+            return `<span class="badge ${cls}" title="#${code}">${label}</span>`;
+        }
+        // Bilinmeyen kod — fallback olarak sunucudan gelen ismi göster.
+        const label = name ? escapeHtml(name) : `#${code}`;
+        return `<span class="badge badge-light-secondary" title="#${code}">${label}</span>`;
+    }
+
     // 5 dakikadan eski okumayı "stale" say.
     const STALE_AGE_MS = 5 * 60 * 1000;
 
@@ -215,7 +244,7 @@
             const data = await fetchJson(URLS.snapshot + '?type=analog');
             const tbody = document.getElementById('snapshot-body');
             if (!data.rows || data.rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">{% trans "Henüz analog sensör verisi yok." %}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">{% trans "Henüz analog sensör verisi yok." %}</td></tr>`;
             } else {
                 tbody.innerHTML = data.rows.map(r => {
                     const badge = QUALITY_BADGE[r.quality] || 'badge-light-secondary';
@@ -223,6 +252,7 @@
                     const valueTxt = formatValue(r.value, 2);
                     const timeTxt = formatTime(r.readtime);
                     const stationTxt = r.station_name ? escapeHtml(r.station_name) : '<span class="text-muted">-</span>';
+                    const statusHtml = renderStatusBadge(r.status_code, r.status_name);
                     const staleBadge = stale
                         ? ` <i class="ki-outline ki-time fs-7 text-warning ms-1" title="{% trans 'Okuma 5 dakikadan eski' %}"></i>`
                         : '';
@@ -231,6 +261,7 @@
                         <td class="fw-semibold text-gray-800">${escapeHtml(r.parameter_name || '-')}</td>
                         <td class="text-end fw-bolder fs-5 text-gray-900">${valueTxt}</td>
                         <td class="text-muted">${escapeHtml(r.unit || '-')}</td>
+                        <td>${statusHtml}</td>
                         <td><span class="badge ${badge}">${escapeHtml(r.quality || '-')}</span></td>
                         <td class="text-end text-muted">${timeTxt}${staleBadge}</td>
                     </tr>`;
