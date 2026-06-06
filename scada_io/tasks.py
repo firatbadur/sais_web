@@ -43,7 +43,16 @@ def dispatch_polls():
     Bir bağlantı 'due' kabul edilir:
       last_polled_at == None  (hiç polling yapılmamış), VEYA
       now - last_polled_at >= poll_interval_sec
+
+    Global `SystemSwitch.polling_enabled` kapalıysa hiçbir bağlantı enqueue
+    edilmez (yönetici dashboard'dan kapatılabilir).
     """
+    # Lazy import — scada_io app sais_domain'a yapısal olarak bağımlı değil;
+    # import cycle ve test izolasyonu için runtime'da yükleniyor.
+    from sais_domain.models import SystemSwitch
+    if not SystemSwitch.load().polling_enabled:
+        return 0
+
     now = timezone.now()
     enqueued = 0
     for conn in Connection.objects.filter(is_enabled=True):

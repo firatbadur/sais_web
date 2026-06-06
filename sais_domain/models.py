@@ -89,3 +89,60 @@ class EnvisoftChannel(models.Model):
 
     def __str__(self):
         return f"{self.parameter} → envi#{self.envi_channel_id}"
+
+
+class SystemSwitch(models.Model):
+    """Sistem geneli aç/kapa bayrakları — singleton (pk=1).
+
+    Yönetici dashboard sayfasından (`/dashboard/admin-pages/system-control/`)
+    toggle edilir; ilgili Celery task'ları (`publish_cabinet_data`,
+    `dispatch_polls`) her tetiklenmede `SystemSwitch.load()` ile bayrakları
+    okur ve kapalıysa no-op yapar. Worker/beat process'i çalışmaya devam
+    eder — yalnız iş akışı sessizce askıya alınır.
+    """
+
+    sim_enabled = models.BooleanField(
+        default=True,
+        verbose_name="SIM Veri İletimi",
+        help_text="Kapalıysa Bakanlık SIM'e SendData çağrıları atlanır.",
+    )
+    envisoft_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Envisoft Veri İletimi",
+        help_text="Kapalıysa Envisoft SendData çağrıları atlanır.",
+    )
+    polling_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Sensör Okuması (Polling)",
+        help_text="Kapalıysa dispatch_polls bağlantı enqueue etmez.",
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Son Güncelleme")
+    updated_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Güncelleyen",
+    )
+
+    class Meta:
+        db_table = "sais_system_switch"
+        verbose_name = "Sistem Anahtarı"
+        verbose_name_plural = "Sistem Anahtarları"
+
+    def __str__(self):
+        return "Sistem Anahtarları"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        # Singleton — silinmez
+        pass
+
+    @classmethod
+    def load(cls):
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj

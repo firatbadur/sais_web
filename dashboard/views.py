@@ -400,6 +400,75 @@ class ApiLogsView(AdminRequiredMixin, ListView):
     ordering = ["-created_at"]
 
 
+class SystemControlView(AdminRequiredMixin, TemplateView):
+    """Yönetici → Sistem Kontrol.
+
+    Üç global aç/kapa: SIM, Envisoft, Polling. Toggle Celery process'lerini
+    etkilemez; ilgili task'lar her tetiklenmede `SystemSwitch.load()` ile
+    bayrağı okuyup kapalıysa no-op yapar. Celery worker/beat durumu canlı
+    gösterilir (broker ping + `PeriodicTask.last_run_at`).
+    """
+    template_name = "dashboard/admin_pages/system_control.html"
+
+    def get_context_data(self, **kwargs):
+        from sais_domain.models import SystemSwitch
+        ctx = super().get_context_data(**kwargs)
+        ctx["switch"] = SystemSwitch.load()
+        ctx["celery_status"] = _celery_status()
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        from sais_domain.models import SystemSwitch
+        switch = SystemSwitch.load()
+        switch.sim_enabled = request.POST.get("sim_enabled") == "on"
+        switch.envisoft_enabled = request.POST.get("envisoft_enabled") == "on"
+        switch.polling_enabled = request.POST.get("polling_enabled") == "on"
+        switch.updated_by = request.user
+        switch.save()
+        messages.success(request, _("Sistem kontrol ayarları kaydedildi."))
+        return redirect("dashboard:admin_system_control")
+
+
+def _celery_status():
+    """Celery worker + beat durumunu özetler.
+
+    Worker: broker üzerinden 1 sn timeout ile `inspect.ping()`. Yanıt veren
+    worker varsa OK + sayıyı döner.
+    Beat: en yeni aktif PeriodicTask'ın `last_run_at`'ı son 2 dk içindeyse
+    beat'in canlı çalıştığı kabul edilir.
+    """
+    from sais_web.celery import app
+    from django_celery_beat.models import PeriodicTask
+
+    worker_count = 0
+    worker_ok = False
+    try:
+        replies = app.control.inspect(timeout=1).ping() or {}
+        worker_count = len(replies)
+        worker_ok = worker_count > 0
+    except Exception:  # noqa: BLE001 — broker erişilemez veya inspect timeout
+        worker_ok = False
+
+    beat_ok = False
+    beat_last_run = None
+    latest = (
+        PeriodicTask.objects.filter(enabled=True)
+        .exclude(last_run_at__isnull=True)
+        .order_by("-last_run_at")
+        .first()
+    )
+    if latest and latest.last_run_at:
+        beat_last_run = latest.last_run_at
+        beat_ok = (timezone.now() - latest.last_run_at).total_seconds() < 120
+
+    return {
+        "worker_ok": worker_ok,
+        "worker_count": worker_count,
+        "beat_ok": beat_ok,
+        "beat_last_run": beat_last_run,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Settings: profile, change password, preferences
 # --------------------------------------------------------------------------- #

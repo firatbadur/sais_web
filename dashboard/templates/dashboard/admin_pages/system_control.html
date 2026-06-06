@@ -1,0 +1,233 @@
+{% extends "dashboard/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Sistem Kontrol" %}{% endblock %}
+{% block page_title %}{% trans "Sistem Kontrol" %}{% endblock %}
+
+{% block content %}
+<div class="row g-5">
+
+    {# ------------------------------------------------------------------ #}
+    {# Sistem Anahtarları kartı                                           #}
+    {# ------------------------------------------------------------------ #}
+    <div class="col-xl-7">
+        <div class="card card-flush h-100">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-setting-3 fs-2 me-2 text-primary"></i>
+                    {% trans "Sistem Anahtarları" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <form method="post" id="switch-form">
+                    {% csrf_token %}
+
+                    {# SIM #}
+                    <div class="d-flex align-items-center border border-dashed border-gray-300 rounded p-5 mb-4">
+                        <div class="d-flex flex-column flex-grow-1">
+                            <span class="fw-bold fs-5 text-gray-900">{% trans "SIM Veri İletimi" %}</span>
+                            <span class="text-muted fs-7 mt-1">
+                                {% trans "Bakanlık SAIS sunucusuna dakikada bir SendData çağrısı." %}
+                            </span>
+                        </div>
+                        <div class="form-check form-switch form-check-custom form-check-solid form-switch-lg">
+                            <input class="form-check-input" type="checkbox" name="sim_enabled"
+                                   id="sim_enabled" {% if switch.sim_enabled %}checked{% endif %}>
+                        </div>
+                    </div>
+
+                    {# Envisoft #}
+                    <div class="d-flex align-items-center border border-dashed border-gray-300 rounded p-5 mb-4">
+                        <div class="d-flex flex-column flex-grow-1">
+                            <span class="fw-bold fs-5 text-gray-900">{% trans "Envisoft Veri İletimi" %}</span>
+                            <span class="text-muted fs-7 mt-1">
+                                {% trans "Envisoft sunucusuna dakikada bir SendData çağrısı." %}
+                            </span>
+                        </div>
+                        <div class="form-check form-switch form-check-custom form-check-solid form-switch-lg">
+                            <input class="form-check-input" type="checkbox" name="envisoft_enabled"
+                                   id="envisoft_enabled" {% if switch.envisoft_enabled %}checked{% endif %}>
+                        </div>
+                    </div>
+
+                    {# Polling #}
+                    <div class="d-flex align-items-center border border-dashed border-gray-300 rounded p-5 mb-4">
+                        <div class="d-flex flex-column flex-grow-1">
+                            <span class="fw-bold fs-5 text-gray-900">{% trans "Sensör Okuması (Polling)" %}</span>
+                            <span class="text-muted fs-7 mt-1">
+                                {% trans "Modbus / ASCII bağlantılarından sensör okuma görevleri." %}
+                            </span>
+                        </div>
+                        <div class="form-check form-switch form-check-custom form-check-solid form-switch-lg">
+                            <input class="form-check-input" type="checkbox" name="polling_enabled"
+                                   id="polling_enabled" {% if switch.polling_enabled %}checked{% endif %}>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-6">
+                        <div class="text-muted fs-7">
+                            {% trans "Son güncelleme" %}:
+                            <span class="text-gray-700 fw-semibold">
+                                {{ switch.updated_at|date:"d.m.Y H:i:s"|default:"—" }}
+                            </span>
+                            {% if switch.updated_by %}
+                                <span class="text-gray-700">— {{ switch.updated_by.username }}</span>
+                            {% endif %}
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="ki-outline ki-check fs-4 me-1"></i>{% trans "Kaydet" %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# ------------------------------------------------------------------ #}
+    {# Celery Durum kartı (readonly, AJAX poll)                           #}
+    {# ------------------------------------------------------------------ #}
+    <div class="col-xl-5">
+        <div class="card card-flush h-100">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-pulse fs-2 me-2 text-success"></i>
+                    {% trans "Celery Durum" %}
+                </h3>
+                <div class="card-toolbar">
+                    <span class="badge badge-light-info" id="status-poll-indicator">
+                        <i class="ki-outline ki-loading fs-7 me-1"></i>{% trans "Otomatik 10sn" %}
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                {# Worker #}
+                <div class="d-flex align-items-center border border-dashed border-gray-300 rounded p-5 mb-4">
+                    <div class="symbol symbol-50px me-4">
+                        <span class="symbol-label bg-light-primary">
+                            <i class="ki-outline ki-abstract-26 fs-1 text-primary"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-column flex-grow-1">
+                        <span class="fw-bold fs-5 text-gray-900">{% trans "Worker" %}</span>
+                        <span class="text-muted fs-7 mt-1" id="worker-detail">
+                            {% if celery_status.worker_ok %}
+                                {% blocktrans count count=celery_status.worker_count %}{{ count }} worker aktif{% plural %}{{ count }} worker aktif{% endblocktrans %}
+                            {% else %}
+                                {% trans "Worker bağlantısı kurulamadı — broker veya process problemi." %}
+                            {% endif %}
+                        </span>
+                    </div>
+                    <span class="badge fs-7 fw-bold {% if celery_status.worker_ok %}badge-light-success{% else %}badge-light-danger{% endif %}"
+                          id="worker-badge">
+                        {% if celery_status.worker_ok %}{% trans "Aktif" %}{% else %}{% trans "Durmuş" %}{% endif %}
+                    </span>
+                </div>
+
+                {# Beat #}
+                <div class="d-flex align-items-center border border-dashed border-gray-300 rounded p-5 mb-4">
+                    <div class="symbol symbol-50px me-4">
+                        <span class="symbol-label bg-light-warning">
+                            <i class="ki-outline ki-time fs-1 text-warning"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-column flex-grow-1">
+                        <span class="fw-bold fs-5 text-gray-900">{% trans "Beat (Zamanlayıcı)" %}</span>
+                        <span class="text-muted fs-7 mt-1" id="beat-detail">
+                            {% if celery_status.beat_ok and celery_status.beat_last_run %}
+                                {% trans "Son tetik" %}: {{ celery_status.beat_last_run|timesince }} {% trans "önce" %}
+                            {% elif celery_status.beat_last_run %}
+                                {% trans "Son tetik" %}: {{ celery_status.beat_last_run|timesince }} {% trans "önce" %} —
+                                {% trans "2 dakikadan eski tetik, beat durmuş olabilir." %}
+                            {% else %}
+                                {% trans "Henüz tetiklenmemiş veya beat çalışmıyor." %}
+                            {% endif %}
+                        </span>
+                    </div>
+                    <span class="badge fs-7 fw-bold {% if celery_status.beat_ok %}badge-light-success{% else %}badge-light-danger{% endif %}"
+                          id="beat-badge">
+                        {% if celery_status.beat_ok %}{% trans "Aktif" %}{% else %}{% trans "Durmuş" %}{% endif %}
+                    </span>
+                </div>
+
+                {# Restart bilgi notu #}
+                <div class="notice d-flex bg-light-primary rounded border-primary border border-dashed p-5 mt-6">
+                    <i class="ki-outline ki-information fs-2x text-primary me-4"></i>
+                    <div class="d-flex flex-column">
+                        <h5 class="text-gray-900 fw-bold mb-2">{% trans "Manuel Restart" %}</h5>
+                        <span class="text-gray-700 fs-7">
+                            {% blocktrans %}Servisler Docker tarafından otomatik yönetilir (<code>restart: unless-stopped</code>). Manuel yeniden başlatma gerekirse sunucu terminalinde:{% endblocktrans %}
+                        </span>
+                        <code class="mt-2 fs-7 text-primary">docker compose restart celery_worker celery_beat</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    (function () {
+        const STATUS_URL = "{% url 'dashboard:api_system_control_status' %}";
+        const POLL_MS = 10000;
+
+        const I18N = {
+            active: "{% trans 'Aktif' %}",
+            stopped: "{% trans 'Durmuş' %}",
+            workerActive: "{% trans 'worker aktif' %}",
+            workerDown: "{% trans 'Worker bağlantısı kurulamadı — broker veya process problemi.' %}",
+            beatNever: "{% trans 'Henüz tetiklenmemiş veya beat çalışmıyor.' %}",
+            beatLastRun: "{% trans 'Son tetik' %}",
+            ago: "{% trans 'önce' %}",
+            beatStale: "{% trans '2 dakikadan eski tetik, beat durmuş olabilir.' %}",
+        };
+
+        function humanAgo(iso) {
+            if (!iso) return null;
+            const t = new Date(iso).getTime();
+            const diff = Math.max(0, Date.now() - t);
+            const s = Math.round(diff / 1000);
+            if (s < 60) return s + " sn";
+            const m = Math.round(s / 60);
+            if (m < 60) return m + " dk";
+            const h = Math.round(m / 60);
+            if (h < 24) return h + " sa";
+            return Math.round(h / 24) + " gün";
+        }
+
+        function setBadge(el, ok) {
+            el.classList.remove("badge-light-success", "badge-light-danger");
+            el.classList.add(ok ? "badge-light-success" : "badge-light-danger");
+            el.textContent = ok ? I18N.active : I18N.stopped;
+        }
+
+        async function refresh() {
+            try {
+                const res = await fetch(STATUS_URL, { credentials: "same-origin" });
+                if (!res.ok) return;
+                const data = await res.json();
+
+                setBadge(document.getElementById("worker-badge"), data.worker_ok);
+                document.getElementById("worker-detail").textContent =
+                    data.worker_ok
+                        ? (data.worker_count + " " + I18N.workerActive)
+                        : I18N.workerDown;
+
+                setBadge(document.getElementById("beat-badge"), data.beat_ok);
+                let beatText;
+                if (data.beat_last_run) {
+                    beatText = I18N.beatLastRun + ": " + humanAgo(data.beat_last_run) + " " + I18N.ago;
+                    if (!data.beat_ok) beatText += " — " + I18N.beatStale;
+                } else {
+                    beatText = I18N.beatNever;
+                }
+                document.getElementById("beat-detail").textContent = beatText;
+            } catch (e) { /* network error — sessizce sıradaki tick'i bekle */ }
+        }
+
+        setInterval(refresh, POLL_MS);
+    })();
+</script>
+{% endblock %}

@@ -45,6 +45,8 @@ urlpatterns = [
     path("admin-pages/users/<int:pk>/reset-password/", views.UserResetPasswordView.as_view(),
          name="admin_user_reset_pw"),
     path("admin-pages/api-logs/", views.ApiLogsView.as_view(), name="admin_api_logs"),
+    path("admin-pages/system-control/", views.SystemControlView.as_view(),
+         name="admin_system_control"),
 
     # --- Settings ---
     path("settings/profile/", views.ProfileView.as_view(), name="profile"),
@@ -59,4 +61,8 @@ urlpatterns = [
 
     # --- AJAX API (raporlar) ---
     path("api/parameters/", api_views.station_parameters, name="api_station_parameters"),
+
+    # --- AJAX API (yönetici) ---
+    path("api/system-control/status/", api_views.system_control_status,
+         name="api_system_control_status"),
 ]

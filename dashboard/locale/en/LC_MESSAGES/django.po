@@ -736,3 +736,76 @@ msgstr "Next"
 
 msgid "Önceki"
 msgstr "Previous"
+
+# ---- Yönetici: Sistem Kontrol ----
+msgid "Sistem Kontrol"
+msgstr "System Control"
+
+msgid "Sistem Anahtarları"
+msgstr "System Switches"
+
+msgid "SIM Veri İletimi"
+msgstr "SIM Data Transmission"
+
+msgid "Envisoft Veri İletimi"
+msgstr "Envisoft Data Transmission"
+
+msgid "Sensör Okuması (Polling)"
+msgstr "Sensor Readings (Polling)"
+
+msgid "Bakanlık SAIS sunucusuna dakikada bir SendData çağrısı."
+msgstr "SendData call to the Ministry SAIS server every minute."
+
+msgid "Envisoft sunucusuna dakikada bir SendData çağrısı."
+msgstr "SendData call to the Envisoft server every minute."
+
+msgid "Modbus / ASCII bağlantılarından sensör okuma görevleri."
+msgstr "Sensor reading jobs over Modbus / ASCII connections."
+
+msgid "Son güncelleme"
+msgstr "Last updated"
+
+msgid "Kaydet"
+msgstr "Save"
+
+msgid "Sistem kontrol ayarları kaydedildi."
+msgstr "System control settings saved."
+
+msgid "Celery Durum"
+msgstr "Celery Status"
+
+msgid "Otomatik 10sn"
+msgstr "Auto 10s"
+
+msgid "Worker"
+msgstr "Worker"
+
+msgid "Beat (Zamanlayıcı)"
+msgstr "Beat (Scheduler)"
+
+msgid "Aktif"
+msgstr "Active"
+
+msgid "Durmuş"
+msgstr "Stopped"
+
+msgid "worker aktif"
+msgstr "worker(s) active"
+
+msgid "Worker bağlantısı kurulamadı — broker veya process problemi."
+msgstr "Cannot reach worker — broker or process issue."
+
+msgid "Son tetik"
+msgstr "Last run"
+
+msgid "önce"
+msgstr "ago"
+
+msgid "2 dakikadan eski tetik, beat durmuş olabilir."
+msgstr "Older than 2 min, beat may be down."
+
+msgid "Henüz tetiklenmemiş veya beat çalışmıyor."
+msgstr "Not yet fired or beat is not running."
+
+msgid "Manuel Restart"
+msgstr "Manual Restart"

@@ -21,7 +21,7 @@ from celery import shared_task
 from django.utils import timezone
 
 from .clients import EnvisoftClient, SaisClientError, SaisSimClient
-from .models import SaisCabinet
+from .models import SaisCabinet, SystemSwitch
 from .services import build_envisoft_rows, build_sim_payload
 
 
@@ -66,13 +66,23 @@ def publish_cabinet_data(cabinet_id: int) -> dict:
     if not cabinet.station_id or not cabinet.station.active:
         return {"cabinet_id": cabinet_id, "skipped": "istasyon pasif"}
 
+    switch = SystemSwitch.load()
     readtime = timezone.localtime()
+
+    sim_result = (
+        _publish_sim(cabinet, readtime) if switch.sim_enabled
+        else {"sent": False, "reason": "sim_disabled"}
+    )
+    envisoft_result = (
+        _publish_envisoft(cabinet, readtime) if switch.envisoft_enabled
+        else {"sent": False, "reason": "envisoft_disabled"}
+    )
 
     return {
         "cabinet_id": cabinet_id,
         "readtime": readtime.strftime("%Y-%m-%dT%H:%M:00"),
-        "sim": _publish_sim(cabinet, readtime),
-        "envisoft": _publish_envisoft(cabinet, readtime),
+        "sim": sim_result,
+        "envisoft": envisoft_result,
     }
 
 

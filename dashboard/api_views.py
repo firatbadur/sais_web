@@ -225,6 +225,25 @@ def home_events(request):
 
 
 @login_required
+def system_control_status(request):
+    """Sistem Kontrol sayfası — Celery durum widget'ı için JSON.
+
+    Sayfa bunu 10 sn'de bir poll'lar; worker ping + beat last_run_at döner.
+    Switch'lerin kendisi POST formla kaydedildiği için burada yok.
+    """
+    from dashboard.views import _celery_status
+    status = _celery_status()
+    return JsonResponse({
+        "worker_ok": status["worker_ok"],
+        "worker_count": status["worker_count"],
+        "beat_ok": status["beat_ok"],
+        "beat_last_run": (
+            status["beat_last_run"].isoformat() if status["beat_last_run"] else None
+        ),
+    })
+
+
+@login_required
 def station_parameters(request):
     """İstasyona ait parametre listesi — rapor formu select2'sini doldurur.
 
