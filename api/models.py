@@ -590,52 +590,71 @@ class Sensor(models.Model):
             return from_dt
         return int(self.quantity or 1)
 
-    def save(self, *args, **kwargs):
-        """Scan group'a bağlı sensörlerde connection_id'yi otomatik senkronize et.
+    def _inherit_from_scan_group(self):
+        """Scan group set ise connection/slave_id/function'ı gruptan miras al.
 
-        `_ScanGroupSensorInline` admin inline formu connection alanını içermiyor
-        (tekrar olmaması için); Django inline `scan_group_id` değerini otomatik
-        dolduruyor ama FK olarak gerekli olan `connection_id`'yi doldurmuyor.
-        Bu override, scan_group mevcutken connection'ı gruptan miras alıyor.
-        Doğrudan Sensor form'unda da (scan_group seçilip connection boş
-        bırakıldıysa) aynı UX kolaylığını sağlar.
+        Kullanıcı bu üç alanı tekrar girmek zorunda değil — scan_group zaten
+        bunları tanımlıyor. Override edilmemişse (None ise) gruptan dolar;
+        mevcut değer scan_group'unkiyle çakışıyorsa **scan_group otoritedir**
+        ve sensör buna göre düzeltilir (UI'da görünmeyen alanlardan gelen
+        eski/yanlış değerleri sessizce normalize eder).
         """
-        if self.scan_group_id and self.connection_id is None:
-            # Tek sorgu — ScanGroup.connection_id'yi al, sensör nesnesini yükleme
-            conn_id = ScanGroup.objects.values_list(
-                "connection_id", flat=True,
-            ).get(pk=self.scan_group_id)
-            self.connection_id = conn_id
+        if not self.scan_group_id:
+            return
+        sg = ScanGroup.objects.only(
+            "connection_id", "slave_id", "function", "start_address", "quantity",
+        ).get(pk=self.scan_group_id)
+        self.connection_id = sg.connection_id
+        self.slave_id = sg.slave_id
+        self.function = sg.function
+
+    def full_clean(self, exclude=None, validate_unique=True, validate_constraints=True):
+        """Field validation öncesi scan_group inheritance'ı uygular.
+
+        Django sıralaması: clean_fields() → clean() → validate_unique() →
+        validate_constraints(). connection_id null=False olduğu için
+        clean_fields() inheritance'tan önce patlatıyordu (inline form'da
+        connection alanı yok). Inheritance'ı en başa alarak field validation'a
+        kadar tüm zorunlu alanlar dolu olur.
+        """
+        self._inherit_from_scan_group()
+        super().full_clean(
+            exclude=exclude,
+            validate_unique=validate_unique,
+            validate_constraints=validate_constraints,
+        )
+
+    def save(self, *args, **kwargs):
+        """Scan group'a bağlı sensörlerde connection/slave_id/function senkronize.
+
+        full_clean()'i bypass eden code path'ler için (örn. management komutları,
+        ORM doğrudan create) güvenlik ağı — inheritance'ı burada da uygular.
+        """
+        self._inherit_from_scan_group()
         super().save(*args, **kwargs)
 
     def clean(self):
-        """scan_group set ise slave/function/address uyumunu doğrula."""
+        """scan_group set ise address sınır doğrulaması.
+
+        connection/slave_id/function inheritance full_clean() başında zaten
+        uygulanmış; burada yalnız address range kontrolü kalır.
+        """
         if not self.scan_group_id:
             return
         sg = self.scan_group
-        errors = {}
-        if sg.connection_id != self.connection_id:
-            errors["scan_group"] = "Scan group bu sensörün connection'ına ait değil."
-        if self.slave_id is not None and self.slave_id != sg.slave_id:
-            errors["slave_id"] = f"Scan group slave_id={sg.slave_id} ile eşleşmeli."
-        if self.function is not None and self.function != sg.function:
-            errors["function"] = f"Scan group function={sg.function} ile eşleşmeli."
+
         if self.address is None:
-            errors["address"] = "Scan group modunda address zorunlu."
-        else:
-            if self.address < sg.start_address:
-                errors["address"] = (
-                    f"Scan group start_address={sg.start_address} değerinden küçük olamaz."
-                )
-            else:
-                count = self.registers_used()
-                if self.address + count > sg.end_address:
-                    errors["address"] = (
-                        f"Sensör aralığı ({self.address}..{self.address + count}) "
-                        f"scan group sınırlarını ({sg.start_address}..{sg.end_address}) aşıyor."
-                    )
-        if errors:
-            raise ValidationError(errors)
+            raise ValidationError({"address": "Scan group modunda address zorunlu."})
+        if self.address < sg.start_address:
+            raise ValidationError({"address": (
+                f"Scan group start_address={sg.start_address} değerinden küçük olamaz."
+            )})
+        count = self.registers_used()
+        if self.address + count > sg.end_address:
+            raise ValidationError({"address": (
+                f"Sensör aralığı ({self.address}..{self.address + count}) "
+                f"scan group sınırlarını ({sg.start_address}..{sg.end_address}) aşıyor."
+            )})
 
 
 QUALITY_CHOICES = (
