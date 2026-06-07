@@ -163,21 +163,27 @@ def poll_connection(self, conn_id: int):
 
             if result.ok:
                 any_success = True
+                fail_status = None
             else:
                 last_sensor_error = f"sensor {sensor.id}: {result.error or 'unknown read error'}"
                 err_lower = (result.error or "").lower()
-                if any(kw in err_lower for kw in (
+                is_conn_err = any(kw in err_lower for kw in (
                     "connection lost", "broken", "reset", "no route",
                     "bağlantı yok", "socket", "disconnected",
-                )):
+                    "timeout", "no response",
+                ))
+                if is_conn_err:
                     connection_level_error = True
+                # 8 = İletişim Hatası (comm/timeout); 4 = Geçersiz Veri
+                # (decode/parse failure — bağlantı ok ama veri yorumlanamadı).
+                fail_status = 8 if is_conn_err else 4
 
             persist_reading(
                 sensor,
                 value=result.value,
                 quality=result.quality,
                 origin="polled",
-                status_code=1 if result.ok else 8,
+                status_code=1 if result.ok else fail_status,
             )
     except Exception as exc:  # noqa: BLE001
         # Reader.read kendi içinde yakalar; buraya düşüyorsa beklenmedik bir hata

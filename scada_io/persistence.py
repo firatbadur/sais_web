@@ -37,6 +37,40 @@ def _apply_decimals(value: Any, decimals: int | None) -> Any:
     return round(float(value), int(decimals))
 
 
+def _derive_range_status(sensor, value: Any) -> int | None:
+    """Değeri Parameter aralıklarına göre değerlendir; uygun StatusCode döner.
+
+    Sadece caller'ın status_code=1 (Geçerli) verdiği başarılı okumalar için
+    çağrılır — comm/decode hatalarında zaten status başka.
+
+    Öncelik sırası:
+      1. value None / bool / numerik olmayan → None (override yok)
+      2. olcum_min/olcum_max dışı → 4 (Geçersiz Veri — sensör fiziksel aralık dışı)
+      3. gec_min/gec_max dışı → 39 (Aralık Dışı — process anormal)
+      4. Aksi → None (kalıcı 1)
+    """
+    if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    param = getattr(sensor, "parameter", None)
+    if param is None:
+        return None
+    v = float(value)
+
+    # Önce "Ölçüm Altı/Üstü" — sensör fiziksel aralık dışı (donanım hatası)
+    if param.olcum_min is not None and v < float(param.olcum_min):
+        return 4
+    if param.olcum_max is not None and v > float(param.olcum_max):
+        return 4
+
+    # Sonra "Geçerli Veri Min/Max" — process anormal ama sensör ok
+    if param.gec_min is not None and v < float(param.gec_min):
+        return 39
+    if param.gec_max is not None and v > float(param.gec_max):
+        return 39
+
+    return None
+
+
 @transaction.atomic
 def persist_reading(
     sensor,
@@ -63,8 +97,21 @@ def persist_reading(
         None — save_interval nedeniyle skip edildiyse (sadece snapshot güncellendi).
     """
     now = timestamp or timezone.now()
-    status = _status(status_code)
     value = _apply_decimals(value, sensor.decimals)
+
+    # Caller başarılı okuma diyorsa (status_code=1) range check uygula:
+    # değer Parameter.olcum_min/max dışında ise 4 (Geçersiz), gec_min/max
+    # dışında ise 39 (Aralık Dışı). Caller başka kod verdiyse (4, 8, 0...)
+    # zaten hata durumu — override etme.
+    if status_code == 1:
+        derived = _derive_range_status(sensor, value)
+        if derived is not None:
+            status_code = derived
+            # "Geçersiz" ya da "Aralık Dışı" durumda kalite de "good" olmasın:
+            # 4 → bad (donanım sorunu), 39 → uncertain (process anormal)
+            quality = "bad" if derived == 4 else "uncertain"
+
+    status = _status(status_code)
 
     latest = SensorLatest.objects.filter(sensor=sensor).first()
 
