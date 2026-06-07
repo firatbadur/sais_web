@@ -114,10 +114,16 @@ def _modbus_read_raw(client, slave_id: int, function: int,
     if rr is None or (hasattr(rr, "isError") and rr.isError()):
         return None, f"Modbus hata: {rr}"
 
-    if hasattr(rr, "registers"):
-        return list(rr.registers), ""
-    if hasattr(rr, "bits"):
-        return [int(b) for b in rr.bits[:count]], ""
+    # pymodbus 3.x'te ReadDiscreteInputsResponse hem `bits` hem `registers`
+    # attribute'larına sahip — discrete input yanıtında `registers=[]` boş ama
+    # `hasattr(rr, "registers")` True döner. Bit/word seçimini function code
+    # üzerinden yapmak zorundayız.
+    if function in (1, 2):  # Read Coils / Read Discrete Inputs → bit
+        if hasattr(rr, "bits"):
+            return [int(b) for b in rr.bits[:count]], ""
+    elif function in (3, 4):  # Read Holding/Input Registers → word
+        if hasattr(rr, "registers"):
+            return list(rr.registers), ""
     return None, f"Anlaşılmaz response: {rr}"
 
 
