@@ -245,7 +245,7 @@
                                 {% if is_raw %}
                                     <td data-order="{{ r.time_iso|date:'U' }}">{{ r.time_iso|date:"d.m.Y H:i:s" }}</td>
                                     <td>{{ r.sensor.parameter.parameter_name|default:r.sensor_id }}</td>
-                                    <td class="text-end fw-semibold" data-order="{{ r.value|default_if_none:'' }}">{{ r.value|default:"—" }}</td>
+                                    <td class="text-end fw-semibold" data-order="{{ r.value|default_if_none:'' }}">{{ r.value|default_if_none:"—" }}</td>
                                     <td class="text-muted">{{ r.sensor.parameter.unit_txt|default:r.sensor.parameter.unit|default:"" }}</td>
                                     <td>
                                         {% if r.status %}
@@ -260,9 +260,9 @@
                                 {% else %}
                                     <td data-order="{{ r.bucket_start|date:'U' }}">{{ r.bucket_start|date:"d.m.Y H:i" }}</td>
                                     <td>{{ r.sensor.parameter.parameter_name|default:r.sensor_id }}</td>
-                                    <td class="text-end fw-semibold" data-order="{{ r.avg_value|default_if_none:'' }}">{{ r.avg_value|default:"—" }}</td>
-                                    <td class="text-end text-muted" data-order="{{ r.min_value|default_if_none:'' }}">{{ r.min_value|default:"—" }}</td>
-                                    <td class="text-end text-muted" data-order="{{ r.max_value|default_if_none:'' }}">{{ r.max_value|default:"—" }}</td>
+                                    <td class="text-end fw-semibold" data-order="{{ r.avg_value|default_if_none:'' }}">{{ r.avg_value|default_if_none:"—" }}</td>
+                                    <td class="text-end text-muted" data-order="{{ r.min_value|default_if_none:'' }}">{{ r.min_value|default_if_none:"—" }}</td>
+                                    <td class="text-end text-muted" data-order="{{ r.max_value|default_if_none:'' }}">{{ r.max_value|default_if_none:"—" }}</td>
                                     <td class="text-muted">{{ r.sensor.parameter.unit_txt|default:r.sensor.parameter.unit|default:"" }}</td>
                                     <td class="text-end">{{ r.count }}</td>
                                     <td class="text-end">{% if r.bad_count %}<span class="text-danger">{{ r.bad_count }}</span>{% else %}0{% endif %}</td>
