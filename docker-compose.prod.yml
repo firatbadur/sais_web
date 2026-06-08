@@ -22,6 +22,13 @@ x-app-env: &app-env
   MSSQL_DRIVER: "ODBC Driver 18 for SQL Server"
 
 services:
+  # Yedek volume izinlerini hazırla (SQL Server yazar, app siler/indirir).
+  backup_init:
+    image: busybox
+    command: sh -c "mkdir -p /backups && chmod 0777 /backups"
+    volumes:
+      - mssql_backups:/backups
+
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     restart: unless-stopped
@@ -31,6 +38,10 @@ services:
       MSSQL_PID: ${MSSQL_PID:-Developer}
     volumes:
       - mssql_data:/var/opt/mssql
+      - mssql_backups:/var/opt/mssql/backups
+    depends_on:
+      backup_init:
+        condition: service_completed_successfully
     ports:
       - "${MSSQL_PORT:-1433}:1433"
     healthcheck:
@@ -72,6 +83,7 @@ services:
     volumes:
       - media_data:/app/media
       - static_data:/app/staticfiles_root
+      - mssql_backups:/var/opt/mssql/backups
     ports:
       - "${WEB_PORT:-8000}:8000"
     labels:
@@ -96,6 +108,8 @@ services:
         condition: service_started
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
+    volumes:
+      - mssql_backups:/var/opt/mssql/backups
     # web migrate'i bitirene kadar bekle (yeni kod eski şemayla çalışmasın).
     command: >
       sh -c "until python manage.py migrate --check; do echo 'migration bekleniyor...'; sleep 3; done &&
@@ -138,6 +152,7 @@ services:
 
 volumes:
   mssql_data:
+  mssql_backups:
   redis_data:
   media_data:
   static_data:

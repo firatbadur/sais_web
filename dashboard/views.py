@@ -532,6 +532,119 @@ def _celery_status():
 
 
 # --------------------------------------------------------------------------- #
+# Yönetici: Veritabanı Yedekleme / Geri Yükleme
+# --------------------------------------------------------------------------- #
+
+class BackupRestoreView(AdminRequiredMixin, TemplateView):
+    """Yönetici → Yedekleme.
+
+    Tier (günlük/haftalık/aylık/yıllık/manuel) politikalarını yönetir, manuel
+    yedek tetikler, geçmiş yedekleri listeler/indirir ve sürüm-bilinçli geri
+    yükleme yapar. POST `action`: save_policies / run_backup / run_restore.
+    """
+    template_name = "dashboard/admin_pages/backups.html"
+    BACKUP_LIST_LIMIT = 100
+    RESTORE_LIST_LIMIT = 30
+
+    def get_context_data(self, **kwargs):
+        import json
+        import os
+
+        from django.conf import settings
+
+        from api.db_admin import compare_schema, database_name
+        from api.models import BackupPolicy, DatabaseBackup, DatabaseRestore
+
+        ctx = super().get_context_data(**kwargs)
+        BackupPolicy.ensure_defaults()
+
+        # Uyumluluk verdict'i pahalı (MigrationLoader) — aynı migration_state için cache'le.
+        verdict_cache: dict[str, dict] = {}
+
+        def verdict_for(state):
+            key = json.dumps(state or {}, sort_keys=True)
+            if key not in verdict_cache:
+                verdict_cache[key] = compare_schema(state)
+            return verdict_cache[key]
+
+        backups = list(
+            DatabaseBackup.objects.all()[: self.BACKUP_LIST_LIMIT]
+        )
+        for b in backups:
+            v = verdict_for(b.migration_state)
+            b.verdict = v["verdict"]
+            b.verdict_message = v["message"]
+            b.can_restore = (b.status == "success" and not b.pruned)
+            b.can_download = (b.status == "success" and not b.pruned)
+
+        ctx["policies"] = BackupPolicy.objects.all()
+        ctx["backups"] = backups
+        ctx["restores"] = list(
+            DatabaseRestore.objects.all()[: self.RESTORE_LIST_LIMIT]
+        )
+        ctx["running"] = (
+            DatabaseBackup.objects.filter(status="running").exists()
+            or DatabaseRestore.objects.filter(status="running").exists()
+        )
+        ctx["backup_dir"] = settings.BACKUP_DIR
+        ctx["backup_dir_ok"] = os.path.isdir(settings.BACKUP_DIR)
+        ctx["db_name"] = database_name()
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        from api.db_admin import compare_schema
+        from api.models import BackupPolicy, DatabaseBackup
+        from api.tasks import backup_database_run, restore_database_run
+
+        action = request.POST.get("action", "")
+
+        if action == "save_policies":
+            BackupPolicy.ensure_defaults()
+            for policy in BackupPolicy.objects.all():
+                policy.enabled = request.POST.get(f"enabled_{policy.tier}") == "on"
+                try:
+                    retention = int(request.POST.get(f"retention_{policy.tier}", policy.retention))
+                    policy.retention = max(1, min(retention, 9999))
+                except (TypeError, ValueError):
+                    pass
+                policy.save()
+            messages.success(request, _("Yedekleme politikaları kaydedildi."))
+
+        elif action == "run_backup":
+            tier = request.POST.get("tier", "manual")
+            valid = {t for t, _label in BackupPolicy._meta.get_field("tier").choices}
+            if tier not in valid:
+                tier = "manual"
+            backup_database_run.delay(tier=tier, force=True, user_id=request.user.id)
+            messages.success(request, _("Yedekleme başlatıldı; birkaç saniye içinde listede görünür."))
+
+        elif action == "run_restore":
+            backup_id = request.POST.get("backup_id")
+            run_migrate = request.POST.get("run_migrate") == "on"
+            backup = DatabaseBackup.objects.filter(pk=backup_id).first()
+            if not backup or backup.status != "success" or backup.pruned:
+                messages.error(request, _("Geri yüklenecek geçerli yedek bulunamadı."))
+            else:
+                verdict = compare_schema(backup.migration_state)
+                if verdict["verdict"] == "block":
+                    messages.error(request, verdict["message"])
+                else:
+                    restore_database_run.delay(
+                        backup_id=backup.id,
+                        run_migrate=run_migrate,
+                        user_id=request.user.id,
+                    )
+                    messages.warning(request, _(
+                        "Geri yükleme başlatıldı. Sistem kısa süre kesintiye uğrayabilir; "
+                        "işlem bitince sayfayı yenileyin."
+                    ))
+        else:
+            messages.error(request, _("Geçersiz işlem."))
+
+        return redirect("dashboard:admin_backups")
+
+
+# --------------------------------------------------------------------------- #
 # Settings: profile, change password, preferences
 # --------------------------------------------------------------------------- #
 

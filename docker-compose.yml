@@ -1,6 +1,14 @@
 name: sais_web
 
 services:
+  # Yedek volume'ünün izinlerini hazırla: SQL Server (uid 10001) yazsın,
+  # app container'ları (farklı uid) listeleyip silebilsin/indirebilsin.
+  backup_init:
+    image: busybox
+    command: sh -c "mkdir -p /backups && chmod 0777 /backups"
+    volumes:
+      - mssql_backups:/backups
+
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     restart: unless-stopped
@@ -10,6 +18,10 @@ services:
       MSSQL_PID: ${MSSQL_PID:-Developer}
     volumes:
       - mssql_data:/var/opt/mssql
+      - mssql_backups:/var/opt/mssql/backups
+    depends_on:
+      backup_init:
+        condition: service_completed_successfully
     ports:
       - "${MSSQL_PORT:-1433}:1433"
     healthcheck:
@@ -58,6 +70,7 @@ services:
     volumes:
       - media_data:/app/media
       - static_data:/app/staticfiles_root
+      - mssql_backups:/var/opt/mssql/backups
     ports:
       - "8000:8000"
     command: >
@@ -86,6 +99,8 @@ services:
         condition: service_healthy
       web:
         condition: service_started
+    volumes:
+      - mssql_backups:/var/opt/mssql/backups
     command: celery -A sais_web worker -l info --concurrency=4
 
   celery_beat:
@@ -112,6 +127,7 @@ services:
 
 volumes:
   mssql_data:
+  mssql_backups:
   redis_data:
   media_data:
   static_data:

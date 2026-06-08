@@ -47,3 +47,25 @@ def prune_readings_task():
     READING_RETENTION_{RAW,15M,HOURLY,DAILY}_DAYS.
     """
     call_command("prune_readings")
+
+
+@shared_task(name="api.tasks.backup_database_run")
+def backup_database_run(tier="manual", force=False, user_id=None):
+    """Bir tier için DB yedeği alır (beat + manuel tetik ortak).
+
+    Beat çağrıları `force=False` gelir → `BackupPolicy.enabled` kapalıysa atlanır.
+    Manuel (dashboard) tetik `force=True` ile gelir.
+    """
+    call_command("backup_database", tier=tier, force=force, user_id=user_id)
+
+
+@shared_task(name="api.tasks.restore_database_run")
+def restore_database_run(backup_id, run_migrate=True, user_id=None):
+    """Bir yedekten DB'yi geri yükler (ağır iş — worker'da çalışır)."""
+    call_command(
+        "restore_database",
+        backup_id=backup_id,
+        no_migrate=not run_migrate,
+        yes=True,
+        user_id=user_id,
+    )

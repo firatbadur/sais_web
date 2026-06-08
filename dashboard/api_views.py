@@ -320,3 +320,76 @@ def station_parameters(request):
     if other:
         groups.append({"text": "Diğer", "children": other})
     return JsonResponse({"results": groups})
+
+
+# --------------------------------------------------------------------------- #
+# Yönetici: Yedekleme (rol=1)
+# --------------------------------------------------------------------------- #
+
+def _require_admin(request):
+    """rol=1 (veya superuser) değilse 403 döndürür; değilse None."""
+    from django.http import HttpResponseForbidden
+
+    user = request.user
+    if user.is_superuser or getattr(user, "rol", None) == 1:
+        return None
+    return HttpResponseForbidden("forbidden")
+
+
+@login_required
+def backup_status(request):
+    """Yedekleme sayfası poll endpoint'i — çalışan iş var mı + kısa özet.
+
+    Sayfa 5 sn'de bir poll'lar; `running` true→false geçince listeyi tazelemek
+    için reload eder.
+    """
+    denied = _require_admin(request)
+    if denied:
+        return denied
+
+    from api.models import DatabaseBackup, DatabaseRestore
+
+    backup_running = DatabaseBackup.objects.filter(status="running").exists()
+    restore_running = DatabaseRestore.objects.filter(status="running").exists()
+    last = DatabaseBackup.objects.order_by("-started_at").first()
+    return JsonResponse({
+        "running": backup_running or restore_running,
+        "backup_running": backup_running,
+        "restore_running": restore_running,
+        "backup_count": DatabaseBackup.objects.filter(status="success", pruned=False).count(),
+        "last_backup": {
+            "filename": last.filename,
+            "status": last.status,
+            "started_at": last.started_at.isoformat(),
+        } if last else None,
+    })
+
+
+@login_required
+def backup_download(request, pk):
+    """Bir .bak dosyasını indirir. Path traversal'a karşı sıkı doğrulama."""
+    denied = _require_admin(request)
+    if denied:
+        return denied
+
+    import os
+
+    from django.conf import settings
+    from django.http import FileResponse, Http404
+
+    from api.models import DatabaseBackup
+
+    backup = DatabaseBackup.objects.filter(pk=pk, status="success", pruned=False).first()
+    if not backup:
+        raise Http404("Yedek bulunamadı.")
+
+    # Güvenlik: sadece BACKUP_DIR altındaki, DB kaydıyla eşleşen dosya.
+    backup_dir = os.path.realpath(settings.BACKUP_DIR)
+    full = os.path.realpath(os.path.join(backup_dir, os.path.basename(backup.filename)))
+    if not full.startswith(backup_dir + os.sep) or not os.path.exists(full):
+        raise Http404("Dosya erişilemez.")
+
+    return FileResponse(
+        open(full, "rb"), as_attachment=True, filename=backup.filename,
+        content_type="application/octet-stream",
+    )

@@ -1,0 +1,389 @@
+{% extends "dashboard/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Yedekleme" %}{% endblock %}
+{% block page_title %}{% trans "Veritabanı Yedekleme" %}{% endblock %}
+
+{% block content %}
+
+{% if not backup_dir_ok %}
+<div class="alert alert-danger d-flex align-items-center mb-5">
+    <i class="ki-outline ki-information-5 fs-2x text-danger me-4"></i>
+    <div>
+        <h4 class="mb-1 text-danger">{% trans "Yedek dizini erişilemez" %}</h4>
+        <span class="fs-7">
+            {% blocktrans %}Yedek dizini ({{ backup_dir }}) bulunamadı. Bu özellik paketlenmiş MSSQL container'ı + <code>mssql_backups</code> volume mount gerektirir. Harici/managed veritabanı kullanıyorsanız bu altyapı geçerli değildir.{% endblocktrans %}
+        </span>
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-5">
+
+    {# ------------------------------------------------------------------ #}
+    {# Politikalar kartı                                                  #}
+    {# ------------------------------------------------------------------ #}
+    <div class="col-xl-7">
+        <div class="card card-flush h-100">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-time fs-2 me-2 text-primary"></i>
+                    {% trans "Zamanlanmış Yedekleme Politikaları" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <p class="text-muted fs-7 mb-5">
+                    {% trans "Her periyodu açıp kapatabilir, kaç adet yedek saklanacağını seçebilirsiniz. Fazla yedekler otomatik silinir (en eskiden). Otomatik yedekler her gece/hafta/ay/yıl Celery beat ile alınır." %}
+                </p>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_policies">
+                    <div class="table-responsive">
+                        <table class="table table-row-bordered align-middle gy-3">
+                            <thead>
+                                <tr class="fw-bold text-muted fs-7 text-uppercase">
+                                    <th>{% trans "Periyot" %}</th>
+                                    <th class="text-center">{% trans "Aktif" %}</th>
+                                    <th style="width:160px">{% trans "Saklanacak Adet" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for p in policies %}
+                                <tr>
+                                    <td class="fw-semibold text-gray-900">{{ p.get_tier_display }}</td>
+                                    <td class="text-center">
+                                        <div class="form-check form-switch form-check-custom form-check-solid d-inline-flex">
+                                            <input class="form-check-input" type="checkbox"
+                                                   name="enabled_{{ p.tier }}" {% if p.enabled %}checked{% endif %}
+                                                   {% if p.tier == 'manual' %}disabled title="{% trans 'Manuel her zaman elle tetiklenir' %}"{% endif %}>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm form-control-solid"
+                                               name="retention_{{ p.tier }}" min="1" max="9999"
+                                               value="{{ p.retention }}">
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-end mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="ki-outline ki-check fs-4 me-1"></i>{% trans "Politikaları Kaydet" %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# ------------------------------------------------------------------ #}
+    {# Manuel yedek kartı                                                 #}
+    {# ------------------------------------------------------------------ #}
+    <div class="col-xl-5">
+        <div class="card card-flush h-100">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-cloud-download fs-2 me-2 text-success"></i>
+                    {% trans "Manuel Yedek" %}
+                </h3>
+                <div class="card-toolbar">
+                    <span class="badge badge-light-info {% if not running %}d-none{% endif %}" id="running-badge">
+                        <i class="ki-outline ki-loading fs-7 me-1"></i>{% trans "İşlem sürüyor…" %}
+                    </span>
+                </div>
+            </div>
+            <div class="card-body d-flex flex-column">
+                <p class="text-muted fs-7 mb-5">
+                    {% trans "Şimdi anlık bir tam yedek alır. Manuel yedekler kendi saklama havuzunda tutulur, zamanlanmış yedekleri etkilemez." %}
+                </p>
+                <form method="post" class="mt-auto">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="run_backup">
+                    <input type="hidden" name="tier" value="manual">
+                    <button type="submit" class="btn btn-success w-100" id="btn-run-backup"
+                            {% if not backup_dir_ok %}disabled{% endif %}>
+                        <i class="ki-outline ki-cloud-download fs-3 me-2"></i>{% trans "Şimdi Yedekle" %}
+                    </button>
+                </form>
+                <div class="separator my-5"></div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted fs-7">{% trans "Veritabanı" %}</span>
+                    <span class="fw-bold text-gray-900 fs-7">{{ db_name }}</span>
+                </div>
+                <div class="d-flex justify-content-between mt-2">
+                    <span class="text-muted fs-7">{% trans "Saklanan yedek" %}</span>
+                    <span class="fw-bold text-gray-900 fs-7" id="backup-count">{{ backups|length }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Yedekler tablosu                                                   #}
+{# ------------------------------------------------------------------ #}
+<div class="row g-5 mt-2">
+    <div class="col-12">
+        <div class="card card-flush">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-archive fs-2 me-2 text-primary"></i>
+                    {% trans "Yedekler" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-row-bordered table-row-gray-300 align-middle gy-3">
+                        <thead>
+                            <tr class="fw-bold text-muted fs-7 text-uppercase">
+                                <th>{% trans "Periyot" %}</th>
+                                <th>{% trans "Tarih" %}</th>
+                                <th>{% trans "Sürüm" %}</th>
+                                <th>{% trans "Boyut" %}</th>
+                                <th>{% trans "Uyumluluk" %}</th>
+                                <th>{% trans "Durum" %}</th>
+                                <th class="text-end">{% trans "İşlem" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for b in backups %}
+                            <tr>
+                                <td><span class="badge badge-light-primary">{{ b.get_tier_display }}</span></td>
+                                <td class="text-gray-800">{{ b.started_at|date:"d.m.Y H:i:s" }}</td>
+                                <td><span class="badge badge-light">{{ b.app_version }}</span></td>
+                                <td class="text-gray-700">
+                                    {% if b.pruned %}<span class="text-muted">{% trans "silindi" %}</span>
+                                    {% else %}{{ b.size_bytes|filesizeformat }}{% endif %}
+                                </td>
+                                <td>
+                                    {% if b.verdict == 'exact' %}
+                                        <span class="badge badge-light-success" title="{{ b.verdict_message }}">{% trans "Birebir" %}</span>
+                                    {% elif b.verdict == 'forward' %}
+                                        <span class="badge badge-light-warning" title="{{ b.verdict_message }}">{% trans "İleri Migrate" %}</span>
+                                    {% else %}
+                                        <span class="badge badge-light-danger" title="{{ b.verdict_message }}">{% trans "Engelli" %}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if b.status == 'success' %}
+                                        <span class="badge badge-light-success">{% trans "Başarılı" %}</span>
+                                    {% elif b.status == 'running' %}
+                                        <span class="badge badge-light-info">{% trans "Alınıyor" %}</span>
+                                    {% else %}
+                                        <span class="badge badge-light-danger" title="{{ b.error }}">{% trans "Başarısız" %}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if b.can_download %}
+                                    <a href="{% url 'dashboard:api_backup_download' b.id %}"
+                                       class="btn btn-sm btn-light-primary btn-icon" title="{% trans 'İndir' %}">
+                                        <i class="ki-outline ki-down fs-4"></i>
+                                    </a>
+                                    {% endif %}
+                                    {% if b.can_restore %}
+                                    <button type="button"
+                                            class="btn btn-sm btn-light-danger btn-restore"
+                                            data-id="{{ b.id }}"
+                                            data-file="{{ b.filename }}"
+                                            data-verdict="{{ b.verdict }}"
+                                            data-message="{{ b.verdict_message }}"
+                                            {% if b.verdict == 'block' %}disabled title="{{ b.verdict_message }}"{% endif %}>
+                                        <i class="ki-outline ki-arrow-circle-left fs-4 me-1"></i>{% trans "Geri Yükle" %}
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center text-muted py-10">{% trans "Henüz yedek alınmadı." %}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Geri yükleme geçmişi                                               #}
+{# ------------------------------------------------------------------ #}
+<div class="row g-5 mt-2">
+    <div class="col-12">
+        <div class="card card-flush">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-arrows-circle fs-2 me-2 text-warning"></i>
+                    {% trans "Geri Yükleme Geçmişi" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-row-bordered align-middle gy-3">
+                        <thead>
+                            <tr class="fw-bold text-muted fs-7 text-uppercase">
+                                <th>{% trans "Tarih" %}</th>
+                                <th>{% trans "Kaynak Dosya" %}</th>
+                                <th>{% trans "Uyumluluk" %}</th>
+                                <th>{% trans "Migrate" %}</th>
+                                <th>{% trans "Durum" %}</th>
+                                <th>{% trans "Kullanıcı" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in restores %}
+                            <tr>
+                                <td class="text-gray-800">{{ r.started_at|date:"d.m.Y H:i:s" }}</td>
+                                <td class="text-gray-700 fs-7">{{ r.source_filename }}</td>
+                                <td><span class="badge badge-light">{{ r.get_compatibility_display }}</span></td>
+                                <td>{% if r.ran_migrate %}<i class="ki-outline ki-check fs-4 text-success"></i>{% else %}—{% endif %}</td>
+                                <td>
+                                    {% if r.status == 'success' %}
+                                        <span class="badge badge-light-success">{% trans "Başarılı" %}</span>
+                                    {% elif r.status == 'running' %}
+                                        <span class="badge badge-light-info">{% trans "Yükleniyor" %}</span>
+                                    {% else %}
+                                        <span class="badge badge-light-danger" title="{{ r.error }}">{% trans "Başarısız" %}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-gray-700 fs-7">{{ r.triggered_by.username|default:"—" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="text-center text-muted py-10">{% trans "Henüz geri yükleme yapılmadı." %}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Geri yükleme onay modal'ı                                          #}
+{# ------------------------------------------------------------------ #}
+<div class="modal fade" tabindex="-1" id="restore-modal">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" id="restore-form">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="run_restore">
+                <input type="hidden" name="backup_id" id="restore-backup-id">
+                <div class="modal-header">
+                    <h3 class="modal-title text-danger">
+                        <i class="ki-outline ki-shield-cross fs-2 me-2"></i>{% trans "Geri Yükleme Onayı" %}
+                    </h3>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning d-flex align-items-center">
+                        <i class="ki-outline ki-information fs-2x text-warning me-3"></i>
+                        <div class="fs-7">
+                            {% trans "Bu işlem mevcut veritabanını seçilen yedekle DEĞİŞTİRİR ve geri alınamaz. Sistem kısa süre kesintiye uğrar." %}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <span class="text-muted fs-7">{% trans "Dosya" %}:</span>
+                        <span class="fw-bold text-gray-900" id="restore-file"></span>
+                    </div>
+                    <div class="mb-3 fs-7" id="restore-verdict"></div>
+                    <div class="form-check form-check-custom form-check-solid mb-4" id="migrate-wrap">
+                        <input class="form-check-input" type="checkbox" name="run_migrate" id="run-migrate" checked>
+                        <label class="form-check-label fs-7" for="run-migrate">
+                            {% trans "Geri yükleme sonrası şemayı çalışan sürüme migrate et (önerilir)" %}
+                        </label>
+                    </div>
+                    <label class="form-label fs-7 fw-semibold">
+                        {% blocktrans %}Onaylamak için veritabanı adını yazın: <code>{{ db_name }}</code>{% endblocktrans %}
+                    </label>
+                    <input type="text" class="form-control form-control-solid" id="restore-confirm"
+                           placeholder="{{ db_name }}" autocomplete="off">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">{% trans "Vazgeç" %}</button>
+                    <button type="submit" class="btn btn-danger" id="restore-submit" disabled>
+                        <i class="ki-outline ki-arrow-circle-left fs-4 me-1"></i>{% trans "Geri Yükle" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    const STATUS_URL = "{% url 'dashboard:api_backup_status' %}";
+    const DB_NAME = "{{ db_name|escapejs }}";
+    const POLL_MS = 5000;
+    let wasRunning = {% if running %}true{% else %}false{% endif %};
+
+    // ---- Canlı durum polling: çalışan iş bitince sayfayı yenile ----
+    async function poll() {
+        try {
+            const res = await fetch(STATUS_URL, { credentials: "same-origin" });
+            if (!res.ok) return;
+            const data = await res.json();
+            const badge = document.getElementById("running-badge");
+            if (data.running) {
+                badge.classList.remove("d-none");
+            } else {
+                badge.classList.add("d-none");
+            }
+            const cnt = document.getElementById("backup-count");
+            if (cnt && typeof data.backup_count === "number") cnt.textContent = data.backup_count;
+            // running true→false geçişi: yeni yedek/restore bitti → tabloyu tazele.
+            if (wasRunning && !data.running) {
+                location.reload();
+            }
+            wasRunning = data.running;
+        } catch (e) { /* ağ hatası — sıradaki tick */ }
+    }
+    setInterval(poll, POLL_MS);
+
+    // ---- Geri yükleme modal'ı ----
+    const modalEl = document.getElementById("restore-modal");
+    const modal = (window.bootstrap && bootstrap.Modal)
+        ? new bootstrap.Modal(modalEl)
+        : { show: function () { modalEl.classList.add("show"); modalEl.style.display = "block"; } };
+    const confirmInput = document.getElementById("restore-confirm");
+    const submitBtn = document.getElementById("restore-submit");
+    const migrateWrap = document.getElementById("migrate-wrap");
+    const migrateCb = document.getElementById("run-migrate");
+
+    document.querySelectorAll(".btn-restore").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            document.getElementById("restore-backup-id").value = btn.dataset.id;
+            document.getElementById("restore-file").textContent = btn.dataset.file;
+            const verdict = btn.dataset.verdict;
+            const msg = btn.dataset.message || "";
+            const vd = document.getElementById("restore-verdict");
+            let cls = "alert-success";
+            if (verdict === "forward") cls = "alert-warning";
+            if (verdict === "block") cls = "alert-danger";
+            vd.className = "alert " + cls + " fs-7 py-3";
+            vd.textContent = msg;
+            // migrate checkbox sadece forward'da anlamlı; exact'te gizle.
+            if (verdict === "forward") {
+                migrateWrap.classList.remove("d-none");
+                migrateCb.checked = true;
+            } else {
+                migrateWrap.classList.add("d-none");
+                migrateCb.checked = false;
+            }
+            confirmInput.value = "";
+            submitBtn.disabled = true;
+            modal.show();
+        });
+    });
+
+    confirmInput.addEventListener("input", function () {
+        submitBtn.disabled = (confirmInput.value.trim() !== DB_NAME);
+    });
+})();
+</script>
+{% endblock %}

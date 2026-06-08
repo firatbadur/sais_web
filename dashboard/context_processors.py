@@ -71,6 +71,8 @@ MENU = [
         "children": [
             {"label": _("Sistem Kontrol"), "url_name": "dashboard:admin_system_control",
              "roles": (ROLE_ADMIN,)},
+            {"label": _("Yedekleme"), "url_name": "dashboard:admin_backups",
+             "roles": (ROLE_ADMIN,)},
             {"label": _("Kullanıcılar"), "url_name": "dashboard:admin_users",
              "roles": (ROLE_ADMIN,)},
             {"label": _("API Logları"), "url_name": "dashboard:admin_api_logs",

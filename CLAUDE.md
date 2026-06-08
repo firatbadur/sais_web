@@ -201,6 +201,39 @@ docker-compose.prod.yml --env-file .env up -d`.
 
 İlgili `.env` değişkenleri: `GHCR_IMAGE`, `IMAGE_TAG`, `WATCHTOWER_POLL_INTERVAL`, `WEB_PORT`.
 
+## Veritabanı yedekleme / geri yükleme (sürüm-bilinçli)
+
+MSSQL native `BACKUP DATABASE`/`RESTORE DATABASE` ile tam yedek (.bak). Generic SCADA altyapısı →
+`api/`. Dosyalar paylaşımlı `mssql_backups` volume'ünde (`settings.BACKUP_DIR`,
+`/var/opt/mssql/backups`); `db` + `web` + `celery_worker` container'larına mount (`backup_init`
+busybox servisi 0777 ile izin verir → SQL yazar, app siler/indirir). **Hedef bundled MSSQL
+container'ı**; `MSSQL_HOST` harici ise dosya uzakta kalır, UI bunu uyarır.
+
+- **Tier'lar**: daily/weekly/monthly/yearly (Celery beat ile otomatik) + manual (sadece UI).
+  Her tier'ın `enabled` + `retention` (GFS saklama adedi) ayarı `BackupPolicy`'de — dashboard
+  Yönetici → **Yedekleme** sayfasından yönetilir. Beat task'ları her zaman tetiklenir ama yedek
+  alıp almamaya `BackupPolicy.enabled` karar verir (tek doğruluk kaynağı).
+- **Modeller** ([api/models.py](api/models.py)): `BackupPolicy`, `DatabaseBackup` (sürüm damgası:
+  `app_version` + `migration_state`), `DatabaseRestore`. **Komutlar**:
+  `backup_database --tier=daily [--force]`, `restore_database --backup-id=N --yes [--no-migrate]`.
+  **Task'lar**: `api.tasks.backup_database_run` / `restore_database_run`. Yardımcılar
+  [api/db_admin.py](api/db_admin.py) (`master_connection`, `compare_schema`).
+- **Sürüm-bilinçli geri yükleme** (kritik — *"eski sürümün veritabanı problemli olabilir"*): her
+  yedek alındığı APP_VERSION + migration durumuyla damgalanır. Geri yüklemede `compare_schema`
+  çalışan kodun migration grafiğiyle karşılaştırır:
+  - **exact** → RESTORE, migrate yok.
+  - **forward** (yedek eski) → RESTORE → otomatik `migrate` (şemayı ileri taşı).
+  - **block** (yedek koddan yeni) → reddedilir. **Filo ile bağ**: önce `.env` `IMAGE_TAG=<yedeğin
+    sürümü>` → `up -d` (sahayı o sürüme indir), sonra geri yükle → exact match.
+- **Geri yükleme yıkıcıdır**: hedef DB `SINGLE_USER WITH ROLLBACK IMMEDIATE` ile izole edilir
+  (açık bağlantılar düşer), RESTORE, `MULTI_USER`. Kısa kesinti olur; sonrasında
+  `celery_worker`/`celery_beat` restart önerilir. UI confirm modal'ı DB adını yazmayı ister.
+- **Web'den**: yedek listesi + boyut + sürüm + uyumluluk rozeti; `.bak` indirme
+  (`api_backup_download`, path-traversal korumalı, rol=1); manuel "Şimdi Yedekle"; geri yükleme
+  geçmişi. Sayfa `api_backup_status`'ı 5 sn'de bir poll'lar, çalışan iş bitince yeniler.
+- Beat task'ları [seed_periodic_tasks.py](scada_io/management/commands/seed_periodic_tasks.py)
+  `BACKUP_TASKS`'ta — yeni sahada `seed_periodic_tasks` ile gelir. `.env`: `BACKUP_DIR`.
+
 ## Önemli çalıştırma davranışları
 
 - **Yapılandırma:** Tüm ayarlar `.env` üzerinden okunur (`python-dotenv`). Sırları asla koda commitlemeyin. Ek env'ler: `API_LOG_*`, `READING_RETENTION_*_DAYS`, `CELERY_BROKER_URL` (default `redis://localhost:6379/2`), `CELERY_RESULT_BACKEND` (default `django-db`).

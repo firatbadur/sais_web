@@ -42,6 +42,10 @@ CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "")
 # (git tag). Lokal/dev'de "dev" kalır. Dashboard footer'ında gösterilir.
 APP_VERSION = os.getenv("APP_VERSION", "dev")
 
+# DB yedek dosyalarının (.bak) yazılacağı dizin. db container'ı ile app
+# container'larına ortak mount edilen mssql_backups volume'ünün yolu.
+BACKUP_DIR = os.getenv("BACKUP_DIR", "/var/opt/mssql/backups")
+
 
 # Application definition
 INSTALLED_APPS = [

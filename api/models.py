@@ -1217,3 +1217,181 @@ class Command(models.Model):
 
     def __str__(self):
         return f"{self.sensor} ← {self.value if self.value_type != 'string' else self.value_text} [{self.status}]"
+
+
+# ---------------------------------------------------------------------------
+# Veritabanı yedekleme / geri yükleme
+# ---------------------------------------------------------------------------
+
+BACKUP_TIERS = (
+    ("daily", "Günlük"),
+    ("weekly", "Haftalık"),
+    ("monthly", "Aylık"),
+    ("yearly", "Yıllık"),
+    ("manual", "Manuel"),
+)
+
+# Tier başına varsayılan saklama adedi (GFS). BackupPolicy ilk yaratılırken kullanılır.
+BACKUP_DEFAULT_RETENTION = {
+    "daily": 7,
+    "weekly": 4,
+    "monthly": 12,
+    "yearly": 5,
+    "manual": 10,
+}
+
+
+class BackupPolicy(models.Model):
+    """Tier başına yedekleme politikası — dashboard'dan yönetilir.
+
+    Celery beat task'ları her tier için sabit cron'da tetiklenir ama yedek alıp
+    almayacağına bu tablodaki `enabled` karar verir (tek doğruluk kaynağı). `retention`
+    o tier'da kaç adet başarılı yedek dosyasının saklanacağını belirler.
+    """
+
+    tier = models.CharField(
+        max_length=10, choices=BACKUP_TIERS, unique=True,
+        verbose_name="Periyot",
+    )
+    enabled = models.BooleanField(
+        default=True, verbose_name="Aktif",
+        help_text="Kapalıysa bu periyotta otomatik yedek alınmaz.",
+    )
+    retention = models.PositiveIntegerField(
+        default=7, verbose_name="Saklanacak Adet",
+        help_text="Bu periyotta tutulacak yedek dosyası sayısı; fazlası silinir.",
+    )
+
+    class Meta:
+        db_table = "backup_policy"
+        verbose_name = "Yedekleme Politikası"
+        verbose_name_plural = "Yedekleme Politikaları"
+        ordering = ["tier"]
+
+    def __str__(self):
+        return f"{self.get_tier_display()} (retention={self.retention}, {'açık' if self.enabled else 'kapalı'})"
+
+    @classmethod
+    def ensure_defaults(cls):
+        """Eksik tier'lar için varsayılan politika satırlarını idempotent yaratır."""
+        for tier, _label in BACKUP_TIERS:
+            cls.objects.get_or_create(
+                tier=tier,
+                defaults={
+                    "enabled": True,
+                    "retention": BACKUP_DEFAULT_RETENTION.get(tier, 7),
+                },
+            )
+
+
+class DatabaseBackup(models.Model):
+    """Alınmış bir veritabanı yedeğinin (.bak) kaydı + sürüm damgası.
+
+    `app_version` ve `migration_state`, geri yüklemede şema uyumluluğunu
+    (exact / forward / block) hesaplamak için kullanılır.
+    """
+
+    STATUS_CHOICES = (
+        ("running", "Alınıyor"),
+        ("success", "Başarılı"),
+        ("failed", "Başarısız"),
+    )
+    TRIGGER_CHOICES = (
+        ("auto", "Otomatik"),
+        ("manual", "Manuel"),
+    )
+
+    tier = models.CharField(max_length=10, choices=BACKUP_TIERS, verbose_name="Periyot")
+    filename = models.CharField(max_length=255, verbose_name="Dosya Adı")
+    path = models.CharField(max_length=500, verbose_name="Tam Yol")
+    size_bytes = models.BigIntegerField(default=0, verbose_name="Boyut (byte)")
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, default="running", verbose_name="Durum",
+    )
+
+    db_name = models.CharField(max_length=128, verbose_name="Veritabanı")
+    app_version = models.CharField(
+        max_length=50, default="dev", verbose_name="Uygulama Sürümü",
+        help_text="Yedek alındığı andaki APP_VERSION.",
+    )
+    migration_state = models.JSONField(
+        blank=True, null=True, verbose_name="Migration Durumu",
+        help_text="{app: son_uygulanan_migration} — geri yüklemede şema uyumu için.",
+    )
+
+    started_at = models.DateTimeField(auto_now_add=True, verbose_name="Başlangıç")
+    finished_at = models.DateTimeField(blank=True, null=True, verbose_name="Bitiş")
+    error = models.TextField(blank=True, default="", verbose_name="Hata")
+
+    trigger = models.CharField(
+        max_length=10, choices=TRIGGER_CHOICES, default="auto", verbose_name="Tetikleyici",
+    )
+    triggered_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="database_backups", verbose_name="Tetikleyen Kullanıcı",
+    )
+    pruned = models.BooleanField(
+        default=False, verbose_name="Dosya Silindi",
+        help_text="Retention politikası gereği .bak dosyası silindi (kayıt audit için kalır).",
+    )
+
+    class Meta:
+        db_table = "database_backup"
+        verbose_name = "Veritabanı Yedeği"
+        verbose_name_plural = "Veritabanı Yedekleri"
+        ordering = ["-started_at"]
+        indexes = [
+            models.Index(fields=["tier", "status", "pruned", "started_at"], name="backup_tier_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.filename} [{self.status}]"
+
+
+class DatabaseRestore(models.Model):
+    """Bir geri yükleme (restore) işleminin kaydı — audit + durum takibi."""
+
+    STATUS_CHOICES = (
+        ("running", "Yükleniyor"),
+        ("success", "Başarılı"),
+        ("failed", "Başarısız"),
+    )
+    COMPATIBILITY_CHOICES = (
+        ("exact", "Birebir"),
+        ("forward", "İleri Migrate"),
+        ("block", "Engellendi"),
+        ("forced", "Zorlandı"),
+    )
+
+    source_backup = models.ForeignKey(
+        DatabaseBackup, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="restores", verbose_name="Kaynak Yedek",
+    )
+    source_filename = models.CharField(max_length=255, verbose_name="Kaynak Dosya")
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, default="running", verbose_name="Durum",
+    )
+    compatibility = models.CharField(
+        max_length=10, choices=COMPATIBILITY_CHOICES, verbose_name="Uyumluluk",
+    )
+    ran_migrate = models.BooleanField(default=False, verbose_name="Migrate Çalıştı")
+    app_version_at_backup = models.CharField(
+        max_length=50, blank=True, default="", verbose_name="Yedek Sürümü",
+    )
+
+    started_at = models.DateTimeField(auto_now_add=True, verbose_name="Başlangıç")
+    finished_at = models.DateTimeField(blank=True, null=True, verbose_name="Bitiş")
+    error = models.TextField(blank=True, default="", verbose_name="Hata")
+    triggered_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="database_restores", verbose_name="Tetikleyen Kullanıcı",
+    )
+
+    class Meta:
+        db_table = "database_restore"
+        verbose_name = "Veritabanı Geri Yükleme"
+        verbose_name_plural = "Veritabanı Geri Yüklemeler"
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"{self.source_filename} → [{self.status}]"

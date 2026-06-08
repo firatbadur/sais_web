@@ -40,11 +40,29 @@ CRONTAB_TASKS = [
     ("sais_domain.tasks.publish_minute_data", "*",   "*", "*", "*", "*"),
 ]
 
+# DB yedekleme — tek task (`backup_database_run`) farklı tier kwargs'ı ile.
+# Her satır ayrı PeriodicTask adı (name) alır; gerçekte yedek alınıp alınmayacağına
+# BackupPolicy.enabled karar verir (dashboard'dan yönetilir). Cron'lar prune
+# (02:30 / 03:00) ile çakışmayacak şekilde seçildi.
+BACKUP_TASKS = [
+    # (name, task, kwargs, minute, hour, dow, dom, moy)
+    ("api.tasks.backup_database_run:daily",   "api.tasks.backup_database_run",
+        {"tier": "daily"},   "0",  "2", "*", "*", "*"),               # her gün 02:00
+    ("api.tasks.backup_database_run:weekly",  "api.tasks.backup_database_run",
+        {"tier": "weekly"},  "15", "2", "0", "*", "*"),               # pazar 02:15
+    ("api.tasks.backup_database_run:monthly", "api.tasks.backup_database_run",
+        {"tier": "monthly"}, "30", "1", "*", "1", "*"),               # ayın 1'i 01:30
+    ("api.tasks.backup_database_run:yearly",  "api.tasks.backup_database_run",
+        {"tier": "yearly"},  "45", "1", "*", "1", "1"),               # 1 Ocak 01:45
+]
+
 
 class Command(BaseCommand):
     help = "Celery beat periyodik task kayıtlarını oluşturur (idempotent)."
 
     def handle(self, *args, **options):
+        import json
+
         from django_celery_beat.models import (
             CrontabSchedule,
             IntervalSchedule,
@@ -91,6 +109,30 @@ class Command(BaseCommand):
                 created += 1
                 self.stdout.write(self.style.SUCCESS(
                     f"  + {task_name} (cron: {minute} {hour} {dom} {moy} {dow})"
+                ))
+            else:
+                updated += 1
+
+        # DB yedekleme task'ları (kwargs ile tier ayrımı)
+        for name, task, kwargs, minute, hour, dow, dom, moy in BACKUP_TASKS:
+            schedule, _ = CrontabSchedule.objects.get_or_create(
+                minute=minute, hour=hour,
+                day_of_week=dow, day_of_month=dom, month_of_year=moy,
+            )
+            obj, was_created = PeriodicTask.objects.update_or_create(
+                name=name,
+                defaults={
+                    "task": task,
+                    "crontab": schedule,
+                    "interval": None,
+                    "kwargs": json.dumps(kwargs),
+                    "enabled": True,
+                },
+            )
+            if was_created:
+                created += 1
+                self.stdout.write(self.style.SUCCESS(
+                    f"  + {name} (cron: {minute} {hour} {dom} {moy} {dow}, kwargs={kwargs})"
                 ))
             else:
                 updated += 1
