@@ -29,6 +29,14 @@ services:
     volumes:
       - mssql_backups:/backups
 
+  # Caddy config volume izinlerini hazırla: web (non-root app) Caddyfile + cert
+  # yazsın, caddy okusun.
+  caddy_config_init:
+    image: busybox
+    command: sh -c "mkdir -p /etc/caddy/certs && chmod -R 0777 /etc/caddy"
+    volumes:
+      - caddy_config:/etc/caddy
+
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     restart: unless-stopped
@@ -80,12 +88,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      caddy_config_init:
+        condition: service_completed_successfully
     volumes:
       - media_data:/app/media
       - static_data:/app/staticfiles_root
       - mssql_backups:/var/opt/mssql/backups
-    ports:
-      - "${WEB_PORT:-8000}:8000"
+      - caddy_config:/etc/caddy
+    # NOT: web artık host'a publish edilmez; ingress Caddy (80/443) üzerinden.
+    expose:
+      - "8000"
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     command: >
@@ -93,7 +105,27 @@ services:
              python manage.py collectstatic --noinput &&
              python manage.py seed_periodic_tasks &&
              (python manage.py refresh_license || true) &&
+             (python manage.py render_caddyfile || true) &&
              gunicorn sais_web.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile - --error-logfile -"
+
+  # Reverse proxy + otomatik HTTPS. Domain/SSL dashboard'dan (WebSettings) yönetilir;
+  # web container Caddyfile'ı caddy_config volume'üne yazar, Caddy --watch ile reload eder.
+  # db/redis gibi Watchtower KAPSAMI DIŞINDA (pinned) — cert verisi caddy_data'da korunur.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_started
+      caddy_config_init:
+        condition: service_completed_successfully
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_config:/etc/caddy
+      - caddy_data:/data
+    command: caddy run --config /etc/caddy/Caddyfile --watch
 
   celery_worker:
     image: *app-image
@@ -157,3 +189,5 @@ volumes:
   redis_data:
   media_data:
   static_data:
+  caddy_config:
+  caddy_data:

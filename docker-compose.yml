@@ -9,6 +9,13 @@ services:
     volumes:
       - mssql_backups:/backups
 
+  # Caddy config volume izinleri (web non-root app yazsın).
+  caddy_config_init:
+    image: busybox
+    command: sh -c "mkdir -p /etc/caddy/certs && chmod -R 0777 /etc/caddy"
+    volumes:
+      - caddy_config:/etc/caddy
+
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     restart: unless-stopped
@@ -67,10 +74,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      caddy_config_init:
+        condition: service_completed_successfully
     volumes:
       - media_data:/app/media
       - static_data:/app/staticfiles_root
       - mssql_backups:/var/opt/mssql/backups
+      - caddy_config:/etc/caddy
+    # Dev'de doğrudan erişim için web :8000 publish KORUNUR; Caddy ayrıca 80/443'te.
     ports:
       - "8000:8000"
     command: >
@@ -78,7 +89,26 @@ services:
              python manage.py collectstatic --noinput &&
              python manage.py seed_periodic_tasks &&
              (python manage.py refresh_license || true) &&
+             (python manage.py render_caddyfile || true) &&
              gunicorn sais_web.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile - --error-logfile -"
+
+  # Dev reverse proxy — lokal doğrulama için (internal/self-signed mod).
+  # Let's Encrypt dev'de çalışmaz; WebSettings tls_mode=internal ile test edin.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_started
+      caddy_config_init:
+        condition: service_completed_successfully
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_config:/etc/caddy
+      - caddy_data:/data
+    command: caddy run --config /etc/caddy/Caddyfile --watch
 
   celery_worker:
     build:
@@ -132,3 +162,5 @@ volumes:
   redis_data:
   media_data:
   static_data:
+  caddy_config:
+  caddy_data:

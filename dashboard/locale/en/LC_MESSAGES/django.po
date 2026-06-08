@@ -1155,3 +1155,154 @@ msgstr "Invalid token: %(e)s"
 
 msgid "Lisans uygulandı."
 msgstr "License applied."
+
+# --- Web Erişim Ayarları (Caddy) ---
+msgid "Web Erişim Ayarları"
+msgstr "Web Access Settings"
+
+msgid "Domain ve SSL"
+msgstr "Domain and SSL"
+
+msgid "Pasif (internal)"
+msgstr "Passive (internal)"
+
+msgid "Dış Erişimi Etkinleştir"
+msgstr "Enable External Access"
+
+msgid "Kapalıyken Caddy güvenli self-signed (internal) moda düşer."
+msgstr "When disabled, Caddy falls back to secure self-signed (internal) mode."
+
+msgid "Domain"
+msgstr "Domain"
+
+msgid "Örn. sais-tesis1.envisoft.com.tr — DNS A kaydı bu sunucunun public IP'sine işaret etmeli."
+msgstr "E.g. sais-tesis1.envisoft.com.tr — a DNS A record must point to this server's public IP."
+
+msgid "TLS Modu"
+msgstr "TLS Mode"
+
+msgid "Let's Encrypt E-postası"
+msgstr "Let's Encrypt Email"
+
+msgid "Sertifika bildirimleri için (zorunlu)."
+msgstr "For certificate notifications (required)."
+
+msgid "HTTP → HTTPS Yönlendir"
+msgstr "Redirect HTTP → HTTPS"
+
+msgid "Port 80'e gelen istekleri 443'e yönlendir."
+msgstr "Redirect requests from port 80 to 443."
+
+msgid "Kaydet ve Uygula"
+msgstr "Save and Apply"
+
+msgid "Manuel Sertifika"
+msgstr "Manual Certificate"
+
+msgid "Süresi doldu"
+msgstr "Expired"
+
+msgid "%(cert_days_remaining)s gün kaldı"
+msgstr "%(cert_days_remaining)s days left"
+
+msgid "Format"
+msgstr "Format"
+
+msgid "Sertifika / PFX Dosyası"
+msgstr "Certificate / PFX File"
+
+msgid "Özel Anahtar (PEM)"
+msgstr "Private Key (PEM)"
+
+msgid "PFX Şifresi"
+msgstr "PFX Password"
+
+msgid "Sertifikayı Yükle"
+msgstr "Upload Certificate"
+
+msgid "Yükleme sonrası TLS modu otomatik 'manuel' olur. PFX şifresi DB'ye kaydedilmez."
+msgstr "After upload the TLS mode becomes 'manual' automatically. The PFX password is not stored in the DB."
+
+msgid "Önkoşullar ve Durum"
+msgstr "Prerequisites and Status"
+
+msgid "Caddyfile yeniden üretilsin mi?"
+msgstr "Regenerate the Caddyfile?"
+
+msgid "Yeniden Üret"
+msgstr "Regenerate"
+
+msgid "Dış erişim için ağ önkoşulları"
+msgstr "Network prerequisites for external access"
+
+msgid "Domain'in çalışması için: (1) DNS sağlayıcınızda bir <b>A kaydı</b> bu sunucunun public IP'sine işaret etmeli; (2) modem/firewall'da <b>80 ve 443</b> portları bu sunucuya yönlendirilmeli. Bunlar panel dışıdır."
+msgstr "For the domain to work: (1) an <b>A record</b> at your DNS provider must point to this server's public IP; (2) ports <b>80 and 443</b> must be forwarded to this server on the modem/firewall. These are outside the panel."
+
+msgid "Caddyfile yolu"
+msgstr "Caddyfile path"
+
+msgid "Son üretim"
+msgstr "Last render"
+
+msgid "Son üretim hatası"
+msgstr "Last render error"
+
+msgid "Not: Windows volume'lerinde Caddy <code>--watch</code> tetiklenmezse, sunucuda <code>docker compose restart caddy</code> çalıştırın."
+msgstr "Note: if Caddy's <code>--watch</code> does not trigger on Windows volumes, run <code>docker compose restart caddy</code> on the server."
+
+msgid "Sertifika Dosyası (PEM)"
+msgstr "Certificate File (PEM)"
+
+msgid "PFX / PKCS#12 Dosyası"
+msgstr "PFX / PKCS#12 File"
+
+msgid "Caddyfile yeniden üretildi."
+msgstr "Caddyfile regenerated."
+
+msgid "Üretim hatası: %(e)s"
+msgstr "Render error: %(e)s"
+
+msgid "Web erişim ayarları kaydedildi ve uygulandı."
+msgstr "Web access settings saved and applied."
+
+msgid "Let's Encrypt sertifikası için DNS A kaydı ve 443 yönlendirmesi gerekir; sertifika alımı birkaç dakika sürebilir."
+msgstr "A Let's Encrypt certificate requires a DNS A record and port 443 forwarding; issuance may take a few minutes."
+
+msgid "Kaydedildi ama üretim hatası: %(e)s"
+msgstr "Saved but render error: %(e)s"
+
+msgid "Sertifika hatası: %(e)s"
+msgstr "Certificate error: %(e)s"
+
+msgid "PEM dosyaları metin (UTF-8) olmalıdır."
+msgstr "PEM files must be text (UTF-8)."
+
+msgid "Sertifika yüklendi (%(cn)s) ve manuel TLS modu uygulandı."
+msgstr "Certificate uploaded (%(cn)s) and manual TLS mode applied."
+
+msgid "Yüklendi ama üretim hatası: %(e)s"
+msgstr "Uploaded but render error: %(e)s"
+
+msgid "Etkin web erişimi için domain zorunludur."
+msgstr "A domain is required for enabled web access."
+
+msgid "Let's Encrypt için domain zorunludur."
+msgstr "A domain is required for Let's Encrypt."
+
+msgid "Let's Encrypt için e-posta zorunludur."
+msgstr "An email is required for Let's Encrypt."
+
+msgid "Manuel mod için önce sertifika + anahtar yükleyin."
+msgstr "For manual mode, upload a certificate + key first."
+
+msgid "Sertifika Formatı"
+msgstr "Certificate Format"
+
+msgid "Dosya çok büyük (en fazla 1 MB)."
+msgstr "File too large (max 1 MB)."
+
+msgid "Sertifika dosyası zorunludur."
+msgstr "Certificate file is required."
+
+msgid "PEM modunda özel anahtar dosyası zorunludur."
+msgstr "In PEM mode the private key file is required."

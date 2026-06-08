@@ -1460,3 +1460,123 @@ class License(models.Model):
         if not self.valid_until:
             return None
         return (self.valid_until - timezone.now()).days
+
+
+# ---------------------------------------------------------------------------
+# Web erişim ayarları (domain + SSL) — Caddy reverse proxy ile yönetilir
+# ---------------------------------------------------------------------------
+
+class WebSettings(models.Model):
+    """Bu kurulumun dış erişim ayarları — singleton (pk=1), License deseni.
+
+    Dashboard'dan domain + TLS yönetilir; `api.web_proxy.apply()` bu kayıttan
+    paylaşılan volume'deki Caddyfile'ı üretir, Caddy `--watch` ile reload eder.
+    Caddyfile tek doğruluk kaynağı DEĞİL — bu kayıt kaynaktır; Caddyfile her
+    `apply()` çağrısında yeniden üretilir (idempotent, restart'a dayanıklı).
+
+    `ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS` burada DEĞİL; fleet-wide `.env`'de
+    wildcard (`.envisoft.com.tr`) tutulur → subdomain değişince Django restart
+    gerekmez. Detay: api/web_proxy.py.
+    """
+
+    TLS_LETSENCRYPT = "letsencrypt"
+    TLS_MANUAL = "manual"
+    TLS_INTERNAL = "internal"
+    TLS_MODE_CHOICES = (
+        (TLS_LETSENCRYPT, "Let's Encrypt (otomatik)"),
+        (TLS_MANUAL, "Manuel Sertifika (PEM/PFX)"),
+        (TLS_INTERNAL, "Self-Signed (LAN/test)"),
+    )
+
+    enabled = models.BooleanField(
+        default=False, verbose_name="Etkin",
+        help_text="Kapalıyken Caddy güvenli internal (self-signed) fallback'e düşer.",
+    )
+    domain = models.CharField(
+        max_length=253, blank=True, default="", verbose_name="Domain",
+        help_text="Örn. sais-tesis1.envisoft.com.tr (DNS A kaydı + 443 yönlendirme gerekir).",
+    )
+    tls_mode = models.CharField(
+        max_length=12, choices=TLS_MODE_CHOICES, default=TLS_INTERNAL,
+        verbose_name="TLS Modu",
+    )
+    http_redirect = models.BooleanField(
+        default=True, verbose_name="HTTP→HTTPS Yönlendir",
+    )
+    letsencrypt_email = models.EmailField(
+        blank=True, default="", verbose_name="Let's Encrypt E-postası",
+        help_text="ACME bildirimleri için; letsencrypt modunda zorunlu.",
+    )
+
+    # Manuel sertifika (DB = audit + source; dosya kopyası Caddy için yazılır)
+    manual_cert_pem = models.TextField(
+        blank=True, default="", verbose_name="Sertifika PEM (zincir dahil)",
+    )
+    manual_key_pem = models.TextField(
+        blank=True, default="", verbose_name="Özel Anahtar PEM (şifresiz)",
+    )
+    manual_cert_uploaded_at = models.DateTimeField(
+        blank=True, null=True, verbose_name="Sertifika Yükleme Tarihi",
+    )
+    manual_cert_subject = models.CharField(
+        max_length=255, blank=True, default="", verbose_name="Sertifika Sahibi (CN)",
+    )
+    manual_cert_not_after = models.DateTimeField(
+        blank=True, null=True, verbose_name="Sertifika Bitiş Tarihi",
+    )
+
+    # Render durumu
+    last_rendered_at = models.DateTimeField(
+        blank=True, null=True, verbose_name="Son Üretim",
+    )
+    last_render_error = models.TextField(
+        blank=True, default="", verbose_name="Son Üretim Hatası",
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Güncelleme")
+    updated_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="+", verbose_name="Güncelleyen Kullanıcı",
+    )
+
+    class Meta:
+        db_table = "web_settings"
+        verbose_name = "Web Erişim Ayarı"
+        verbose_name_plural = "Web Erişim Ayarları"
+
+    def __str__(self):
+        return f"{self.domain or '—'} [{self.tls_mode}]"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # singleton
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass  # singleton — silinmez
+
+    @classmethod
+    def load(cls):
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def clean(self):
+        """tls_mode'a göre koşullu zorunluluk."""
+        from django.core.exceptions import ValidationError
+        errors = {}
+        if self.enabled and not self.domain.strip():
+            errors["domain"] = "Etkin web erişimi için domain zorunludur."
+        if self.tls_mode == self.TLS_LETSENCRYPT:
+            if not self.domain.strip():
+                errors["domain"] = "Let's Encrypt için domain zorunludur."
+            if not self.letsencrypt_email.strip():
+                errors["letsencrypt_email"] = "Let's Encrypt için e-posta zorunludur."
+        elif self.tls_mode == self.TLS_MANUAL:
+            if not self.manual_cert_pem.strip() or not self.manual_key_pem.strip():
+                errors["tls_mode"] = "Manuel mod için önce sertifika + anahtar yükleyin."
+        if errors:
+            raise ValidationError(errors)
+
+    def cert_days_remaining(self):
+        from django.utils import timezone
+        if not self.manual_cert_not_after:
+            return None
+        return (self.manual_cert_not_after - timezone.now()).days

@@ -49,6 +49,8 @@ urlpatterns = [
          name="admin_system_control"),
     path("admin-pages/backups/", views.BackupRestoreView.as_view(), name="admin_backups"),
     path("admin-pages/license/", views.LicenseStatusView.as_view(), name="admin_license"),
+    path("admin-pages/web-settings/", views.WebSettingsView.as_view(),
+         name="admin_web_settings"),
 
     # --- License lock screen (menüsüz; middleware buraya yönlendirir) ---
     path("license-expired/", views.LicenseExpiredView.as_view(), name="license_expired"),

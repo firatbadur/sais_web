@@ -46,6 +46,14 @@ APP_VERSION = os.getenv("APP_VERSION", "dev")
 # container'larına ortak mount edilen mssql_backups volume'ünün yolu.
 BACKUP_DIR = os.getenv("BACKUP_DIR", "/var/opt/mssql/backups")
 
+# ---- Web erişim / Caddy reverse proxy ----
+# WebSettings → api.web_proxy bu yolları kullanarak Caddyfile + manuel cert
+# dosyalarını üretir. caddy_config volume'ü web + caddy container'larına ortak
+# mount edilir; Caddy `--watch` ile dosya değişince reload eder.
+CADDY_CONFIG_PATH = os.getenv("CADDY_CONFIG_PATH", "/etc/caddy/Caddyfile")
+CADDY_CERT_DIR = os.getenv("CADDY_CERT_DIR", "/etc/caddy/certs")
+CADDY_UPSTREAM = os.getenv("CADDY_UPSTREAM", "web:8000")
+
 # ---- Lisanslama ----
 # Lisans bitince app hiçbir iş yapmaz (polling/komut/SIM/Envisoft durur, dashboard
 # kilitlenir). İmzalı (Ed25519) token'lar uzaktan (LICENSE_URL manifest) çekilir,

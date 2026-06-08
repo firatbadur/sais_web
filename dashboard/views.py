@@ -39,9 +39,11 @@ from api.models import (
 from .forms import (
     AdminUserCreateForm,
     AdminUserUpdateForm,
+    CertUploadForm,
     ChangePasswordForm,
     DashboardLoginForm,
     ProfileForm,
+    WebSettingsForm,
 )
 from .permissions import (
     ROLE_ADMIN,
@@ -764,3 +766,110 @@ class ChangePasswordView(LoginRequiredMixin, FormView):
 
 class PreferencesView(LoginRequiredMixin, TemplateView):
     template_name = "dashboard/settings/preferences.html"
+
+
+# --------------------------------------------------------------------------- #
+# Admin: Web Erişim Ayarları (domain + SSL → Caddy)
+# --------------------------------------------------------------------------- #
+
+class WebSettingsView(AdminRequiredMixin, TemplateView):
+    """Yönetici → Web Erişim Ayarları.
+
+    Domain + TLS modu (letsencrypt/manual/internal) yönetilir. Kayıtta
+    `api.web_proxy.apply()` Caddyfile'ı yeniden üretir; Caddy `--watch` ile
+    reload eder. Manuel modda PEM/PFX sertifika yüklenir (PFX→PEM çevrilir).
+
+    POST `action`: save_settings, upload_cert, rerender.
+    """
+    template_name = "dashboard/admin_pages/web_settings.html"
+
+    def get_context_data(self, **kwargs):
+        from api.models import WebSettings
+        ws = WebSettings.load()
+        ctx = super().get_context_data(**kwargs)
+        ctx.setdefault("settings_form", WebSettingsForm(instance=ws))
+        ctx.setdefault("cert_form", CertUploadForm())
+        ctx["ws"] = ws
+        ctx["caddy_config_path"] = settings.CADDY_CONFIG_PATH
+        ctx["cert_days_remaining"] = ws.cert_days_remaining()
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        from api import web_proxy
+        from api.models import WebSettings
+        ws = WebSettings.load()
+        action = request.POST.get("action", "save_settings")
+
+        if action == "upload_cert":
+            return self._handle_upload(request, ws)
+
+        if action == "rerender":
+            ok, error = web_proxy.apply(ws)
+            if ok:
+                messages.success(request, _("Caddyfile yeniden üretildi."))
+            else:
+                messages.error(request, _("Üretim hatası: %(e)s") % {"e": error})
+            return redirect("dashboard:admin_web_settings")
+
+        # save_settings
+        form = WebSettingsForm(request.POST, instance=ws)
+        if not form.is_valid():
+            ctx = self.get_context_data(settings_form=form)
+            return self.render_to_response(ctx)
+        ws = form.save(commit=False)
+        ws.updated_by = request.user
+        ws.save()
+        ok, error = web_proxy.apply(ws)
+        if ok:
+            messages.success(request, _("Web erişim ayarları kaydedildi ve uygulandı."))
+            if ws.tls_mode == ws.TLS_LETSENCRYPT and ws.enabled:
+                messages.info(request, _(
+                    "Let's Encrypt sertifikası için DNS A kaydı ve 443 yönlendirmesi "
+                    "gerekir; sertifika alımı birkaç dakika sürebilir."
+                ))
+        else:
+            messages.error(request, _("Kaydedildi ama üretim hatası: %(e)s") % {"e": error})
+        return redirect("dashboard:admin_web_settings")
+
+    def _handle_upload(self, request, ws):
+        from api import web_proxy
+        form = CertUploadForm(request.POST, request.FILES)
+        if not form.is_valid():
+            ctx = self.get_context_data(cert_form=form)
+            return self.render_to_response(ctx)
+
+        fmt = form.cleaned_data["cert_format"]
+        cert_file = form.cleaned_data["cert_file"]
+        try:
+            if fmt == "pfx":
+                cert_pem, key_pem = web_proxy.pfx_to_pem(
+                    cert_file.read(), form.cleaned_data.get("pfx_password") or None,
+                )
+            else:
+                cert_pem = cert_file.read().decode("utf-8")
+                key_pem = form.cleaned_data["key_file"].read().decode("utf-8")
+                web_proxy.validate_pem(cert_pem, key_pem)
+        except web_proxy.CertError as exc:
+            messages.error(request, _("Sertifika hatası: %(e)s") % {"e": str(exc)})
+            return redirect("dashboard:admin_web_settings")
+        except UnicodeDecodeError:
+            messages.error(request, _("PEM dosyaları metin (UTF-8) olmalıdır."))
+            return redirect("dashboard:admin_web_settings")
+
+        cn, not_after = web_proxy.cert_metadata(cert_pem)
+        ws.manual_cert_pem = cert_pem
+        ws.manual_key_pem = key_pem
+        ws.manual_cert_subject = cn
+        ws.manual_cert_not_after = not_after
+        ws.manual_cert_uploaded_at = timezone.now()
+        ws.tls_mode = ws.TLS_MANUAL
+        ws.updated_by = request.user
+        ws.save()
+        ok, error = web_proxy.apply(ws)
+        if ok:
+            messages.success(request, _(
+                "Sertifika yüklendi (%(cn)s) ve manuel TLS modu uygulandı."
+            ) % {"cn": cn or "—"})
+        else:
+            messages.error(request, _("Yüklendi ama üretim hatası: %(e)s") % {"e": error})
+        return redirect("dashboard:admin_web_settings")

@@ -111,3 +111,90 @@ class ChangePasswordForm(forms.Form):
         self.user.set_password(self.cleaned_data["new_password"])
         self.user.save()
         return self.user
+
+
+class WebSettingsForm(forms.ModelForm):
+    """Yönetici → Web Erişim Ayarları: domain + TLS modu."""
+
+    class Meta:
+        from api.models import WebSettings  # lazy — app yükleme sırası
+        model = WebSettings
+        fields = ("enabled", "domain", "tls_mode", "http_redirect", "letsencrypt_email")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            elif isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select form-select-solid")
+            else:
+                field.widget.attrs.setdefault("class", "form-control form-control-solid")
+
+    def clean(self):
+        cleaned = super().clean()
+        # Model.clean() koşullu zorunlulukları uygular; manuel mod sertifika
+        # kontrolü (yüklenmiş cert) için instance değerlerini kullanır.
+        tls_mode = cleaned.get("tls_mode")
+        domain = (cleaned.get("domain") or "").strip()
+        if cleaned.get("enabled") and not domain:
+            self.add_error("domain", _("Etkin web erişimi için domain zorunludur."))
+        if tls_mode == self.instance.TLS_LETSENCRYPT:
+            if not domain:
+                self.add_error("domain", _("Let's Encrypt için domain zorunludur."))
+            if not (cleaned.get("letsencrypt_email") or "").strip():
+                self.add_error("letsencrypt_email",
+                               _("Let's Encrypt için e-posta zorunludur."))
+        elif tls_mode == self.instance.TLS_MANUAL:
+            if not (self.instance.manual_cert_pem and self.instance.manual_key_pem):
+                self.add_error("tls_mode",
+                               _("Manuel mod için önce sertifika + anahtar yükleyin."))
+        return cleaned
+
+
+class CertUploadForm(forms.Form):
+    """Manuel sertifika yükleme — PEM (cert+key) veya PFX (+ şifre)."""
+
+    MAX_FILE_BYTES = 1 * 1024 * 1024  # 1 MB — DoS koruması
+
+    cert_format = forms.ChoiceField(
+        label=_("Sertifika Formatı"),
+        choices=(("pem", "PEM (cert + key)"), ("pfx", "PFX / PKCS#12")),
+        initial="pem",
+    )
+    cert_file = forms.FileField(label=_("Sertifika / PFX Dosyası"), required=False)
+    key_file = forms.FileField(label=_("Özel Anahtar (PEM)"), required=False)
+    pfx_password = forms.CharField(
+        label=_("PFX Şifresi"), widget=forms.PasswordInput, required=False,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select form-select-solid")
+            elif isinstance(field.widget, forms.ClearableFileInput):
+                field.widget.attrs.setdefault("class", "form-control form-control-solid")
+            else:
+                field.widget.attrs.setdefault("class", "form-control form-control-solid")
+
+    def _check_size(self, f):
+        if f and f.size > self.MAX_FILE_BYTES:
+            raise forms.ValidationError(_("Dosya çok büyük (en fazla 1 MB)."))
+        return f
+
+    def clean_cert_file(self):
+        return self._check_size(self.cleaned_data.get("cert_file"))
+
+    def clean_key_file(self):
+        return self._check_size(self.cleaned_data.get("key_file"))
+
+    def clean(self):
+        cleaned = super().clean()
+        fmt = cleaned.get("cert_format")
+        cert_file = cleaned.get("cert_file")
+        if not cert_file:
+            self.add_error("cert_file", _("Sertifika dosyası zorunludur."))
+        if fmt == "pem" and not cleaned.get("key_file"):
+            self.add_error("key_file", _("PEM modunda özel anahtar dosyası zorunludur."))
+        return cleaned
