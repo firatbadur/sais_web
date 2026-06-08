@@ -4,6 +4,7 @@
         <div class="text-gray-900 order-2 order-md-1">
             <span class="text-muted fw-semibold me-1">{% now "Y" %} ©</span>
             <span class="text-gray-900 fw-bold">SAIS Web SCADA</span>
+            <span class="badge badge-light-secondary fw-semibold ms-2" title="{% trans 'Uygulama sürümü' %}">{{ app_version }}</span>
         </div>
         <ul class="menu menu-gray-600 menu-hover-primary fw-semibold order-1">
             <li class="menu-item"><a href="{% url 'dashboard:home' %}" class="menu-link px-2">{% trans "Anasayfa" %}</a></li>

@@ -37,6 +37,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DJANGO_SETTINGS_MODULE=sais_web.settings \
     ACCEPT_EULA=Y
 
+# Sürüm etiketi — CI build sırasında git tag'inden doldurulur (build-arg).
+# Dashboard footer'ında gösterilir; filo genelinde hangi sahanın hangi
+# sürümde olduğunu görmek için kullanılır.
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
+
 # Microsoft ODBC Driver 18 for SQL Server
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl gnupg ca-certificates \

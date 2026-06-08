@@ -38,6 +38,10 @@ ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "")
 
+# Uygulama sürümü — CI build sırasında Dockerfile build-arg'ından ENV'e yazılır
+# (git tag). Lokal/dev'de "dev" kalır. Dashboard footer'ında gösterilir.
+APP_VERSION = os.getenv("APP_VERSION", "dev")
+
 
 # Application definition
 INSTALLED_APPS = [
@@ -93,6 +97,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "dashboard.context_processors.menu",
                 "dashboard.context_processors.available_languages",
+                "dashboard.context_processors.app_version",
             ],
         },
     },

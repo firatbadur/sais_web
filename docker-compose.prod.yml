@@ -1,0 +1,143 @@
+name: sais_web
+
+# ── SAHA (üretim) compose dosyası ───────────────────────────────────────────
+# Yerel build YOK; image GHCR'dan çekilir. Watchtower :stable etiketini izleyip
+# yeni sürüm geldiğinde SADECE app container'larını (web/worker/beat) yeniler.
+# db (MSSQL) ve redis Watchtower'ın kapsamı DIŞINDA — verileri volume'de korunur.
+#
+# Kullanım (saha):
+#   docker login ghcr.io            # read:packages PAT ile (bir kez)
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d
+#
+# Sürüm dondurma / rollback: .env içinde IMAGE_TAG=v1.1.0 yapıp tekrar `up -d`.
+
+x-app-image: &app-image ${GHCR_IMAGE:-ghcr.io/firatbadur/sais_web}:${IMAGE_TAG:-stable}
+
+x-app-env: &app-env
+  MSSQL_HOST: db
+  MSSQL_PORT: 1433
+  REDIS_URL: redis://redis:6379/1
+  CELERY_BROKER_URL: redis://redis:6379/2
+  CELERY_RESULT_BACKEND: django-db
+  MSSQL_DRIVER: "ODBC Driver 18 for SQL Server"
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_PASSWORD:-Envisoft-21!}
+      MSSQL_PID: ${MSSQL_PID:-Developer}
+    volumes:
+      - mssql_data:/var/opt/mssql
+    ports:
+      - "${MSSQL_PORT:-1433}:1433"
+    healthcheck:
+      test: [
+        "CMD-SHELL",
+        "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\" || exit 1"
+      ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    # NOT: Watchtower label'ı YOK → asla otomatik güncellenmez (veri güvenliği).
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # NOT: Watchtower label'ı YOK → pinned, otomatik güncellenmez.
+
+  web:
+    image: *app-image
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      <<: *app-env
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,web}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - media_data:/app/media
+      - static_data:/app/staticfiles_root
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             python manage.py seed_periodic_tasks &&
+             gunicorn sais_web.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile - --error-logfile -"
+
+  celery_worker:
+    image: *app-image
+    restart: unless-stopped
+    env_file: .env
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    # web migrate'i bitirene kadar bekle (yeni kod eski şemayla çalışmasın).
+    command: >
+      sh -c "until python manage.py migrate --check; do echo 'migration bekleniyor...'; sleep 3; done &&
+             celery -A sais_web worker -l info --concurrency=4"
+
+  celery_beat:
+    image: *app-image
+    restart: unless-stopped
+    env_file: .env
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    command: >
+      sh -c "until python manage.py migrate --check; do echo 'migration bekleniyor...'; sleep 3; done &&
+             celery -A sais_web beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"        # sadece etiketli (app) container'ları güncelle
+      WATCHTOWER_CLEANUP: "true"             # eski image'ları sil
+      WATCHTOWER_POLL_INTERVAL: "${WATCHTOWER_POLL_INTERVAL:-300}"  # 5 dk
+      WATCHTOWER_ROLLING_RESTART: "true"     # container'ları sırayla yeniden başlat
+      # Opsiyonel bildirim (shoutrrr URL — e-posta/Slack/Telegram):
+      #   WATCHTOWER_NOTIFICATION_URL: ${WATCHTOWER_NOTIFICATION_URL}
+      TZ: ${DJANGO_TIME_ZONE:-Europe/Istanbul}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # GHCR private ise sahada `docker login ghcr.io` yapıldıktan sonra bu mount
+      # ile Watchtower aynı kimlikle pull eder:
+      - ${DOCKER_CONFIG_DIR:-~/.docker}/config.json:/config.json:ro
+
+volumes:
+  mssql_data:
+  redis_data:
+  media_data:
+  static_data:

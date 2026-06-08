@@ -163,6 +163,44 @@ Servisler: `web` (Django), `celery_worker`, `celery_beat`, `db` (MSSQL Server 20
 
 > **Yerel geliştirme ön koşulu:** Host Windows'da **Microsoft ODBC Driver 17 veya 18 for SQL Server** kurulu olmalı. Kontrol: `python -c "import pyodbc; print(pyodbc.drivers())"`. Kurulu değilse [Microsoft indirme sayfasından](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server) yüklenir.
 
+## Filo dağıtımı / sürüm güncelleme (çok-sahalı)
+
+SCADA birçok atıksu istasyonuna kurulur. Güncellemeler **pull-based** dağıtılır: sahalar
+NAT/firewall arkasında, içeri erişim yok ama internete çıkıyorlar (zaten Bakanlık SIM'e veri
+gönderiyorlar). İki compose dosyası var:
+
+- `docker-compose.yml` — **dev**, yerel `build:`. Değiştirme.
+- `docker-compose.prod.yml` — **saha**, GHCR'dan `image:` çeker + `watchtower` servisi.
+
+**Mimari:** `git tag vX.Y.Z` push → GitHub Actions ([.github/workflows/release.yml](.github/workflows/release.yml))
+multi-stage build → `ghcr.io/firatbadur/sais_web` iki tag ile:
+`:vX.Y.Z` (değişmez, rollback) + `:stable` (kayan). Her sahadaki Watchtower `:stable` etiketli
+**app** container'larını (web/worker/beat — `com.centurylinklabs.watchtower.enable=true` label'lı)
+5 dk'da bir kontrol eder; yeni digest gelince çeker + recreate eder. `db` (MSSQL) ve `redis`
+**label'sız → asla otomatik güncellenmez**, volume'leri korunur.
+
+- **Saha kimliği state'tir, image değil.** Station / Connection / Sensor / **SaisCabinet (Bakanlık
+  SIM ID)** / SystemSwitch → DB volume'de; `.env` → hostta lokal. Güncelleme bunlara dokunmaz.
+- **Migration yarışı:** `web` `migrate` çalıştırır; `celery_worker`/`celery_beat` komutları başta
+  `until python manage.py migrate --check; do sleep 3; done` ile şema hazır olana dek bekler
+  (yeni kod eski şemayla çalışmasın).
+- **Sürüm görünürlüğü:** Dockerfile `ARG APP_VERSION` → `settings.APP_VERSION` → dashboard footer
+  badge. Lokal/dev'de "dev". Hangi sahanın hangi sürümde olduğunu footer'dan gör.
+
+**Sürüm çıkarma (tek komut, tüm filo):**
+```bash
+git tag v1.2.0 && git push origin v1.2.0   # Actions build+push :stable → sahalar 5 dk'da çeker
+```
+**Rollback / dondurma (tek saha):** o sahanın `.env`'inde `IMAGE_TAG=v1.1.0` → `docker compose -f
+docker-compose.prod.yml --env-file .env up -d`.
+
+**Yeni saha açma:** [scripts/bootstrap-site.ps1](scripts/bootstrap-site.ps1) (Windows) /
+[scripts/bootstrap-site.sh](scripts/bootstrap-site.sh) (Linux) — `docker login ghcr.io`
+(read:packages PAT) + `pull` + `up -d`; `-FirstRun`/`FIRST_RUN=1` ile bir kez
+`seed_initial_data` + `seed_sais_data` + superuser. Sonra admin'den saha-özel kayıtlar girilir.
+
+İlgili `.env` değişkenleri: `GHCR_IMAGE`, `IMAGE_TAG`, `WATCHTOWER_POLL_INTERVAL`, `WEB_PORT`.
+
 ## Önemli çalıştırma davranışları
 
 - **Yapılandırma:** Tüm ayarlar `.env` üzerinden okunur (`python-dotenv`). Sırları asla koda commitlemeyin. Ek env'ler: `API_LOG_*`, `READING_RETENTION_*_DAYS`, `CELERY_BROKER_URL` (default `redis://localhost:6379/2`), `CELERY_RESULT_BACKEND` (default `django-db`).

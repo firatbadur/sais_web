@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+from django.conf import settings
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
@@ -128,3 +129,8 @@ def available_languages(request):
             {"code": "en", "label": "English", "flag": "us.svg"},
         ],
     }
+
+
+def app_version(request):
+    """Footer'da gösterilen uygulama sürümü (CI build'inde git tag'i)."""
+    return {"app_version": settings.APP_VERSION}

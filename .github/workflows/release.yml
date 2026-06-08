@@ -1,0 +1,58 @@
+name: release
+
+# Sürüm çıkarma: bir git tag (vX.Y.Z) push edildiğinde tetiklenir.
+# Her master push'ta DEĞİL — "bilinçli sürüm" kontrolü için sadece tag'ler.
+#
+#   git tag v1.2.0
+#   git push origin v1.2.0
+#
+# Image GHCR'a iki tag ile yazılır:
+#   ghcr.io/firatbadur/sais_web:v1.2.0   (değişmez — rollback için)
+#   ghcr.io/firatbadur/sais_web:stable   (kayan — sahalardaki Watchtower bunu izler)
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=stable
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
