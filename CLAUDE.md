@@ -57,6 +57,7 @@ sais_web/
 │   ├── serializers.py
 │   ├── middleware.py      # ApiLoggingMiddleware — gelen istek auto-log
 │   ├── api_logging.py     # Outbound helper (log_outbound_call decorator + record_outbound_call)
+│   ├── web_proxy.py       # WebSettings → Caddyfile render + PFX→PEM + atomik yazım
 │   ├── signals.py         # SIGTERM/SIGINT yakalar, PowerOff kaydı kapatır
 │   ├── helpers.py         # DataFrame → JSON safe dönüşüm
 │   ├── permissions.py
@@ -64,7 +65,8 @@ sais_web/
 │   │   ├── seed_initial_data.py    # Çekirdek seed: Station, Parameter, StatusCode, RequestType
 │   │   ├── aggregate_readings.py   # 15m / hour / day bucket hesaplama
 │   │   ├── prune_readings.py       # Reading + aggregate retention (raw/15m/hour/day level'lar)
-│   │   └── prune_api_logs.py       # 90 günlük ApiLog retention
+│   │   ├── prune_api_logs.py       # 90 günlük ApiLog retention
+│   │   └── render_caddyfile.py     # WebSettings → Caddyfile üret (startup + panel save)
 │   └── migrations/
 ├── sais_domain/           # SAIS-özel uzantılar (Bakanlık + Envisoft entegrasyonu)
 │   ├── models.py          # SaisCabinet, EnvisoftChannel
@@ -92,7 +94,7 @@ sais_web/
 │   │   ├── reports/       # sensor_readings/aggregates/calibrations/power_offs/commands/system_logs
 │   │   ├── operator/      # sample_trigger, alarms
 │   │   ├── management/    # stations, connections, sensors (readonly)
-│   │   ├── admin_pages/   # user_list, user_form, api_logs (rol=1 only)
+│   │   ├── admin_pages/   # user_list, user_form, api_logs, web_settings (rol=1 only)
 │   │   ├── settings/      # profile, change_password, preferences
 │   │   └── errors/        # 403, 404 (placeholder)
 │   └── migrations/
@@ -110,6 +112,13 @@ sais_web/
 │       ├── poll_once.py             # debug: tek bağlantıyı sync polla
 │       └── execute_command_now.py   # debug: tek komutu sync yürüt
 ├── sais_web/celery.py     # Celery app instance — autodiscover_tasks
+├── users/management/commands/seed_admin_user.py  # non-interactive rol=1 admin (installer)
+├── installer/             # Windows "next-next-next" kurulum paketi (Inno Setup)
+│   ├── sais_setup.iss     # Sihirbaz + gömülü GHCR token (build-time) + reboot/RunOnce
+│   ├── templates/env.template          # .env şablonu (installer doldurur)
+│   ├── scripts/           # install (orkestratör) + 00-ensure-docker..40-register-service
+│   │                      # + sais-stack (NSSM) + uninstall + _common (WSL Docker)
+│   └── payload/           # nssm.exe (build'de çekilir, commit'lenmez)
 ├── templates/             # error-404.html
 ├── static/                # images/logo + css
 ├── manage.py
@@ -270,6 +279,52 @@ modeliyle aynı "pull": lisanslar merkezde (GitHub manifest), sahalar çeker.
   GitHub repo'ya push (imza sayesinde public olabilir). Saha `.env`: `LICENSE_KEY`, `LICENSE_URL`,
   `LICENSE_ENFORCE=1`. Uzatma = manifest'i güncelle; saha sonraki refresh'te alır (veya admin
   "Şimdi Yenile").
+
+## Web erişim / SSL (Caddy reverse proxy)
+
+Dış erişim (`https://sais-tesis1.envisoft.com.tr` gibi) bir **Caddy** servisiyle sağlanır. Caddy
+80/443 dinler, `web:8000`'e `reverse_proxy` yapar, otomatik HTTPS verir. Domain + SSL **dashboard'dan**
+(Yönetici → **Web Erişim Ayarları**) yönetilir. Generic infra → `api/`.
+
+- **Tek doğruluk kaynağı**: `api.models.WebSettings` singleton (pk=1). [api/web_proxy.py](api/web_proxy.py)
+  `apply()` bu kayıttan paylaşılan `caddy_config` volume'ündeki **Caddyfile**'ı atomik üretir; Caddy
+  `--watch` ile dosya değişince reload eder (outbound HTTP yok). `render_caddyfile` komutu container
+  startup'ında (web command zinciri) ve her panel kaydında çağrılır.
+- **3 TLS modu**: `letsencrypt` (otomatik ACME — domain + email + 443 erişimi gerekir), `manual` (PEM
+  veya **PFX/.pfx** yükle → `web_proxy.pfx_to_pem` ile PEM'e çevrilir, `cryptography` pkcs12), `internal`
+  (self-signed; enabled=False/domain yok → güvenli fallback).
+- **ALLOWED_HOSTS/CSRF**: fleet-wide `.env`'de **wildcard** (`.envisoft.com.tr` /
+  `https://*.envisoft.com.tr`) → panelden subdomain değişince **Django restart gerekmez**. Caddy tek-domain
+  gatekeeper; prod'da web host'a publish edilmez (`expose: 8000`), ingress yalnızca Caddy.
+- **Compose**: `caddy` servisi (Watchtower label'sız → pinned, db/redis gibi) + `caddy_config_init`
+  (busybox `chmod 0777`, web non-root yazsın) + `caddy_config`/`caddy_data` volume (cert kalıcılığı →
+  Let's Encrypt rate-limit). Cert dosya izinleri: `key.pem` 0o600 / `cert.pem` 0o644.
+- **Önkoşul (panel dışı)**: DNS A kaydı (public IP) + modem/firewall 80/443 yönlendirme. UI bunları
+  uyarır. Windows volume'de `--watch` tetiklenmezse fallback `docker compose restart caddy`.
+- `.env`: `CADDY_CONFIG_PATH`, `CADDY_CERT_DIR`, `CADDY_UPSTREAM`.
+
+## Windows installer paketi (next-next-next)
+
+Saha kurulumu tek `sais-setup-vX.Y.Z.exe` (Inno Setup) ile yapılır → [installer/](installer/). Sihirbaz
+WSL2 + **Docker CE** kurar (Docker Desktop lisansı GEREKMEZ), GHCR'dan image çeker, compose yığınını
+başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows servisi** kaydeder.
+
+- **Akış**: [sais_setup.iss](installer/sais_setup.iss) sihirbazı (lisans/DB/domain-TLS/admin) →
+  answers JSON → [install.ps1](installer/scripts/install.ps1) orkestratör → `00-ensure-docker`
+  (WSL2+Docker CE; reboot gerekirse RunOnce ile devam) → `10-configure` (env.template → `.env`, secret +
+  MSSQL şifresi üret, domain'den wildcard türet) → `20-up` (gömülü read-only GHCR token ile login → pull
+  → up -d) → `30-firstrun` (seed_initial/sais/admin + WebSettings bootstrap, marker ile idempotent) →
+  `40-register-service` (NSSM `SAISScada` → `sais-stack.ps1`).
+- **Docker erişimi**: tüm `docker compose` çağrıları WSL2 içinde çalışır
+  ([_common.ps1](installer/scripts/_common.ps1) sarmalayıcıları); compose + `.env` Windows'ta `C:\SAIS`,
+  WSL `/mnt/c/SAIS`'ten erişir.
+- **Admin (rol=1)**: [users/seed_admin_user](users/management/commands/seed_admin_user.py) non-interactive
+  (env `DJANGO_SUPERUSER_*`) — `createsuperuser --noinput` CustomUser `rol` alanını set edemediği için.
+- **DB**: lisanslı **SQL Server Standard** (`.env` `MSSQL_PID=Standard`; bundled container, lisans müşteride).
+- **GHCR image private** → installer'a `read:packages` scope'lu token build-time gömülür (release.yml
+  `windows-installer` job, repo secret `INSTALLER_GHCR_TOKEN`). Asıl kullanım gate'i **Ed25519 lisans**,
+  image gizliliği değil. `nssm.exe` build'de [nssm.cc](https://nssm.cc)'den çekilir (repo'ya commitlenmez).
+- **Test**: dev ortamında doğrulanamaz; temiz Windows VM'de manuel (bkz. [installer/README.md](installer/README.md)).
 
 ## Önemli çalıştırma davranışları
 
