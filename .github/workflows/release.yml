@@ -56,3 +56,45 @@ jobs:
             APP_VERSION=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Windows "next-next-next" installer'ı (Inno Setup) derle ve Release'e ekle.
+  # GHCR'daki image private olduğundan installer'a read:packages scope'lu bir PAT
+  # gömülür (repo secret INSTALLER_GHCR_TOKEN). Asıl kullanım gate'i Ed25519 lisans.
+  windows-installer:
+    needs: build-push
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Fetch NSSM
+        shell: pwsh
+        run: |
+          $url = "https://nssm.cc/release/nssm-2.24.zip"
+          Invoke-WebRequest -Uri $url -OutFile nssm.zip
+          Expand-Archive nssm.zip -DestinationPath nssm_extract -Force
+          New-Item -ItemType Directory -Force installer\payload | Out-Null
+          Copy-Item nssm_extract\nssm-2.24\win64\nssm.exe installer\payload\nssm.exe
+
+      - name: Compile installer
+        shell: pwsh
+        env:
+          GHCR_TOKEN: ${{ secrets.INSTALLER_GHCR_TOKEN }}
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc `
+            "/DGHCR_USER=${{ github.repository_owner }}" `
+            "/DGHCR_TOKEN=$env:GHCR_TOKEN" `
+            "/DGHCR_IMAGE=ghcr.io/${{ github.repository }}" `
+            "/DAPP_VERSION=${{ github.ref_name }}" `
+            installer\sais_setup.iss
+
+      - name: Attach installer to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/dist/sais-setup-${{ github.ref_name }}.exe
