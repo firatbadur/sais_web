@@ -904,3 +904,147 @@ msgstr "Plant Maint."
 
 msgid "Aralık Dışı"
 msgstr "Out of Range"
+
+# ---- Veritabanı Yedekleme / Geri Yükleme ----
+msgid "Yedekleme"
+msgstr "Backup"
+
+msgid "Veritabanı Yedekleme"
+msgstr "Database Backup"
+
+msgid "Yedek dizini erişilemez"
+msgstr "Backup directory unavailable"
+
+msgid "Zamanlanmış Yedekleme Politikaları"
+msgstr "Scheduled Backup Policies"
+
+msgid "Her periyodu açıp kapatabilir, kaç adet yedek saklanacağını seçebilirsiniz. Fazla yedekler otomatik silinir (en eskiden). Otomatik yedekler her gece/hafta/ay/yıl Celery beat ile alınır."
+msgstr "You can enable/disable each interval and choose how many backups to keep. Excess backups are deleted automatically (oldest first). Automatic backups run nightly/weekly/monthly/yearly via Celery beat."
+
+msgid "Periyot"
+msgstr "Interval"
+
+msgid "Saklanacak Adet"
+msgstr "Retention Count"
+
+msgid "Manuel her zaman elle tetiklenir"
+msgstr "Manual is always triggered by hand"
+
+msgid "Politikaları Kaydet"
+msgstr "Save Policies"
+
+msgid "Manuel Yedek"
+msgstr "Manual Backup"
+
+msgid "İşlem sürüyor…"
+msgstr "Operation in progress…"
+
+msgid "Şimdi anlık bir tam yedek alır. Manuel yedekler kendi saklama havuzunda tutulur, zamanlanmış yedekleri etkilemez."
+msgstr "Takes an immediate full backup now. Manual backups are kept in their own retention pool and do not affect scheduled backups."
+
+msgid "Şimdi Yedekle"
+msgstr "Back Up Now"
+
+msgid "Veritabanı"
+msgstr "Database"
+
+msgid "Saklanan yedek"
+msgstr "Stored backups"
+
+msgid "Yedekler"
+msgstr "Backups"
+
+msgid "Sürüm"
+msgstr "Version"
+
+msgid "Boyut"
+msgstr "Size"
+
+msgid "Uyumluluk"
+msgstr "Compatibility"
+
+msgid "silindi"
+msgstr "deleted"
+
+msgid "Birebir"
+msgstr "Exact"
+
+msgid "İleri Migrate"
+msgstr "Forward Migrate"
+
+msgid "Engelli"
+msgstr "Blocked"
+
+msgid "Başarılı"
+msgstr "Successful"
+
+msgid "Alınıyor"
+msgstr "Running"
+
+msgid "Başarısız"
+msgstr "Failed"
+
+msgid "İndir"
+msgstr "Download"
+
+msgid "Geri Yükle"
+msgstr "Restore"
+
+msgid "Henüz yedek alınmadı."
+msgstr "No backups taken yet."
+
+msgid "Geri Yükleme Geçmişi"
+msgstr "Restore History"
+
+msgid "Kaynak Dosya"
+msgstr "Source File"
+
+msgid "Migrate"
+msgstr "Migrate"
+
+msgid "Yükleniyor"
+msgstr "Restoring"
+
+msgid "Henüz geri yükleme yapılmadı."
+msgstr "No restores performed yet."
+
+msgid "Geri Yükleme Onayı"
+msgstr "Restore Confirmation"
+
+msgid "Bu işlem mevcut veritabanını seçilen yedekle DEĞİŞTİRİR ve geri alınamaz. Sistem kısa süre kesintiye uğrar."
+msgstr "This replaces the current database with the selected backup and cannot be undone. The system will be briefly interrupted."
+
+msgid "Dosya"
+msgstr "File"
+
+msgid "Geri yükleme sonrası şemayı çalışan sürüme migrate et (önerilir)"
+msgstr "Migrate the schema to the running version after restore (recommended)"
+
+msgid "Vazgeç"
+msgstr "Cancel"
+
+msgid "Yedek dizini (%(backup_dir)s) bulunamadı. Bu özellik paketlenmiş MSSQL container'ı + <code>mssql_backups</code> volume mount gerektirir. Harici/managed veritabanı kullanıyorsanız bu altyapı geçerli değildir."
+msgstr "The backup directory (%(backup_dir)s) was not found. This feature requires the bundled MSSQL container + <code>mssql_backups</code> volume mount. It does not apply when using an external/managed database."
+
+msgid "Onaylamak için veritabanı adını yazın: <code>%(db_name)s</code>"
+msgstr "To confirm, type the database name: <code>%(db_name)s</code>"
+
+# ---- Yedekleme: view mesajları ----
+msgid "Yedekleme politikaları kaydedildi."
+msgstr "Backup policies saved."
+
+msgid "Yedekleme başlatıldı; birkaç saniye içinde listede görünür."
+msgstr "Backup started; it will appear in the list within a few seconds."
+
+msgid "Geri yüklenecek geçerli yedek bulunamadı."
+msgstr "No valid backup found to restore."
+
+msgid "Geri yükleme başlatıldı. Sistem kısa süre kesintiye uğrayabilir; işlem bitince sayfayı yenileyin."
+msgstr "Restore started. The system may be briefly interrupted; refresh the page when it completes."
+
+msgid "Geçersiz işlem."
+msgstr "Invalid action."
+
+# ---- Footer: sürüm rozeti ----
+msgid "Uygulama sürümü"
+msgstr "Application version"
