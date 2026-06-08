@@ -61,6 +61,25 @@ def _apply_decimals(value: Any, decimals: int | None) -> Any:
     return round(float(value), int(decimals))
 
 
+def _cov_changed(new_value: Any, last_saved_value: Any, deadband: Any) -> bool:
+    """save_on_change için: yeni değer kayıt tetikleyecek kadar değişti mi?
+
+    Karşılaştırma referansı son SNAPSHOT değil son KAYIT değeridir
+    (`SensorLatest.last_saved_value`) — yoksa deadband altında kalan yavaş
+    drift birikip hiç tetiklemez.
+
+    - Referans yoksa (None) → True (kaydet).
+    - bool / sayısal olmayan değer → birebir farklıysa True.
+    - sayısal → |yeni - son_kayıt| > (deadband or 0) ise True.
+    """
+    if last_saved_value is None:
+        return True
+    if isinstance(new_value, bool) or not isinstance(new_value, (int, float)):
+        return new_value != last_saved_value
+    db = float(deadband) if deadband else 0.0
+    return abs(float(new_value) - float(last_saved_value)) > db
+
+
 def _derive_range_status(sensor, value: Any) -> int | None:
     """Değeri Parameter aralıklarına göre değerlendir; uygun StatusCode döner.
 
@@ -180,11 +199,17 @@ def persist_reading(
 
     - Değer `sensor.decimals` ile yuvarlanır (numeric ise).
     - `SensorLatest` snapshot'ı HER ZAMAN upsert edilir (HMI için taze değer).
-    - `Reading` insert sadece şu koşulda yapılır:
-        * Connection.save_interval_sec is None (veya 0), VEYA
-        * now - SensorLatest.last_saved_at >= save_interval_sec, VEYA
-        * İlk kayıt (last_saved_at henüz null)
+    - `Reading` insert koşulları:
+        * İlk kayıt (last_saved_at henüz null) → her zaman yazılır.
+        * Connection.save_interval_sec varsa minimum aralık (throttle) olarak
+          uygulanır; bu süre geçmeden yazılmaz.
+        * sensor.save_on_change=True ise (COV/deadband): değer son KAYIT
+          değerinden deadband'i aşacak kadar farklı, ya da status değişmiş, ya
+          da cov_heartbeat_sec dolmuşsa yazılır; aksi halde sadece snapshot
+          güncellenir. save_on_change=False ise throttle dışında her okumada yazılır.
     - Değer önceki snapshot'tan farklıysa `last_change_at` güncellenir.
+    - Reading yazıldığında `last_saved_value` / `last_saved_status` da güncellenir
+      (deadband ve status-değişim karşılaştırmasının referansı).
     - `update_count` her çağrıda artırılır.
 
     Dönen değer:
@@ -220,12 +245,34 @@ def persist_reading(
 
     latest = SensorLatest.objects.filter(sensor=sensor).first()
 
-    # --- Reading insert koşulu: save_interval_sec ile gated ---
-    save_interval = getattr(sensor.connection, "save_interval_sec", None) if sensor.connection_id else None
+    # --- Reading insert koşulu ---
+    # İlk kayıt her zaman yazılır. Sonraki kayıtlar için:
+    #   * save_interval_sec → minimum aralık (throttle): geçmediyse yazma.
+    #   * save_on_change (COV/deadband) → değer deadband'i aştı, status değişti
+    #     veya heartbeat doldu mu? Hiçbiri yoksa yazma (snapshot yine güncellenir).
+    # save_on_change kapalıyken davranış eskisi gibi: throttle dışında her okumada yaz.
+    save_interval = (
+        getattr(sensor.connection, "save_interval_sec", None)
+        if sensor.connection_id else None
+    )
+    first_save = (latest is None) or (latest.last_saved_at is None)
     should_save = True
-    if save_interval and latest and latest.last_saved_at:
+
+    if not first_save:
         elapsed = (now - latest.last_saved_at).total_seconds()
-        if elapsed < save_interval:
+        if sensor.save_on_change:
+            heartbeat = sensor.cov_heartbeat_sec
+            heartbeat_due = bool(heartbeat) and elapsed >= heartbeat
+            cov_changed = _cov_changed(value, latest.last_saved_value, sensor.deadband)
+            status_changed = (
+                (status.pk if status else None) != latest.last_saved_status_id
+            )
+            should_save = heartbeat_due or cov_changed or status_changed
+            # Minimum aralık (throttle) heartbeat dışındaki değişim kayıtlarına uygulanır.
+            if (should_save and not heartbeat_due
+                    and save_interval and elapsed < save_interval):
+                should_save = False
+        elif save_interval and elapsed < save_interval:
             should_save = False
 
     reading = None
@@ -252,6 +299,8 @@ def persist_reading(
         defaults["last_change_at"] = now
     if should_save:
         defaults["last_saved_at"] = now
+        defaults["last_saved_value"] = value
+        defaults["last_saved_status"] = status
 
     SensorLatest.objects.update_or_create(sensor=sensor, defaults=defaults)
     return reading

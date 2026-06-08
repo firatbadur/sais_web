@@ -569,6 +569,37 @@ class Sensor(models.Model):
         help_text="True ise bu sensörün status'ü dış sisteme (Bakanlık) gönderilir",
     )
 
+    # ---- Değişimde kaydet (Change-of-Value / deadband) ----
+    save_on_change = models.BooleanField(
+        default=False, verbose_name="Sadece Değişimde Kaydet",
+        help_text=(
+            "True ise Reading sadece değer değiştiğinde (analogda deadband'i "
+            "aşan değişim, dijitalde herhangi bir değişim) ya da status "
+            "değiştiğinde yazılır. SensorLatest snapshot'ı yine her okumada "
+            "güncellenir (HMI taze kalır). Connection.save_interval_sec minimum "
+            "aralık olarak yine uygulanır."
+        ),
+    )
+    deadband = models.FloatField(
+        blank=True, null=True,
+        verbose_name="Ölü Bant (deadband)",
+        help_text=(
+            "save_on_change=True iken analog için son KAYDEDİLEN değere göre "
+            "izin verilen sapma (mühendislik birimi, mutlak). |yeni - son_kayıt| "
+            "> deadband ise kayıt yapılır. None/0 = her farklı değer kaydedilir. "
+            "Bool/dijital sensörlerde göz ardı edilir (her değişim kaydedilir)."
+        ),
+    )
+    cov_heartbeat_sec = models.IntegerField(
+        blank=True, null=True,
+        verbose_name="Heartbeat (sn)",
+        help_text=(
+            "save_on_change=True iken değer değişmese bile en geç bu sürede bir "
+            "kayıt yapılır (historian'da sonsuz boşluk oluşmasın). None = "
+            "heartbeat yok, değişene kadar hiç yazılmaz."
+        ),
+    )
+
     class Meta:
         db_table = "sensor"
         verbose_name_plural = "Sensörler"
@@ -706,6 +737,20 @@ class SensorLatest(models.Model):
         verbose_name="Son Reading Kayıt Zamanı",
         help_text="Reading tablosuna son insert zamanı. "
                   "Connection.save_interval_sec için kullanılır.",
+    )
+    last_saved_value = models.FloatField(
+        blank=True, null=True,
+        verbose_name="Son Kaydedilen Değer",
+        help_text="Reading tablosuna en son yazılan değer. save_on_change "
+                  "(deadband) karşılaştırmasının referansı — anlık değil son "
+                  "KAYIT değeridir (yavaş drift'in birikip tetiklemesi için).",
+    )
+    last_saved_status = models.ForeignKey(
+        StatusCode, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="+",
+        verbose_name="Son Kaydedilen Status",
+        help_text="Reading tablosuna en son yazılan status. save_on_change "
+                  "modunda status değişimini de kayıt tetikleyicisi yapar.",
     )
     update_count = models.BigIntegerField(
         default=0, verbose_name="Güncelleme Sayısı",

@@ -216,16 +216,27 @@ class SensorAdmin(admin.ModelAdmin):
             "classes": ("collapse",),
             "fields": ("poll_interval_sec", "timeout_ms", "retry_count"),
         }),
+        ("Kayıt / Değişimde Kaydet (COV)", {
+            "classes": ("collapse",),
+            "fields": ("save_on_change", "deadband", "cov_heartbeat_sec"),
+            "description": (
+                "save_on_change açıkken Reading sadece değer deadband'i aşacak "
+                "kadar değiştiğinde, status değiştiğinde veya heartbeat (sn) "
+                "dolduğunda yazılır. Connection.save_interval_sec yine minimum "
+                "aralık olarak uygulanır. Snapshot (HMI) her okumada güncellenir."
+            ),
+        }),
     )
 
 
 @admin.register(SensorLatest)
 class SensorLatestAdmin(admin.ModelAdmin):
     list_display = ("id", "sensor", "value", "status", "quality", "readtime",
-                    "last_change_at", "last_saved_at", "update_count")
+                    "last_change_at", "last_saved_at", "last_saved_value", "update_count")
     list_filter = ("status", "quality")
     search_fields = ("sensor__parameter__parameter_name",)
-    readonly_fields = ("readtime", "last_change_at", "last_saved_at", "update_count")
+    readonly_fields = ("readtime", "last_change_at", "last_saved_at",
+                       "last_saved_value", "last_saved_status", "update_count")
     autocomplete_fields = ("sensor",)
 
 
