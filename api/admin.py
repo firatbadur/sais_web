@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin
 
 from .models import (
@@ -111,13 +112,34 @@ class ParameterAdmin(admin.ModelAdmin):
     ordering = ("station", "id")
 
 
+class _SensorAdminForm(forms.ModelForm):
+    """Hem inline (ScanGroup içi) hem ana Sensor admin formu için ortak form.
+
+    `sensor_type`'ı zorunlu yapar (model `default=0, blank=True` olduğu için
+    Django default form'da required=False çıkıyordu). Yönetici tipi açıkça
+    seçmek zorunda — boş seçenek "— Sensör tipi seçin —" olarak gösterilir
+    ve gönderilirse validation hatası verir.
+    """
+    sensor_type = forms.TypedChoiceField(
+        choices=[("", "— Sensör tipi seçin —")] + list(Sensor.SENSOR_TYPE),
+        coerce=int,
+        required=True,
+        label="Sensör Tipi",
+    )
+
+    class Meta:
+        model = Sensor
+        fields = "__all__"
+
+
 class _ScanGroupSensorInline(admin.TabularInline):
     """ScanGroup detay sayfasında o grubun sensörlerini inline göster."""
     model = Sensor
+    form = _SensorAdminForm
     fk_name = "scan_group"
     extra = 0
     fields = (
-        "parameter", "address", "data_type",
+        "parameter", "sensor_type", "address", "data_type",
         "byte_order", "word_order", "bit_position",
         "scale", "offset", "decimals", "is_active",
     )
@@ -150,6 +172,7 @@ class ScanGroupAdmin(admin.ModelAdmin):
 
 @admin.register(Sensor)
 class SensorAdmin(admin.ModelAdmin):
+    form = _SensorAdminForm
     list_display = (
         "id", "parameter", "connection", "scan_group", "sensor_type", "brand", "model",
         "slave_id", "address", "function", "data_type", "scale", "offset", "decimals",
