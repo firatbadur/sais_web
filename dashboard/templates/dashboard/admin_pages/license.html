@@ -1,0 +1,99 @@
+{% extends "dashboard/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Lisans" %}{% endblock %}
+{% block page_title %}{% trans "Lisans Yönetimi" %}{% endblock %}
+
+{% block content %}
+<div class="row g-5">
+
+    {# Durum kartı #}
+    <div class="col-xl-7">
+        <div class="card card-flush h-100">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-shield-tick fs-2 me-2 text-primary"></i>
+                    {% trans "Lisans Durumu" %}
+                </h3>
+                <div class="card-toolbar">
+                    {% if lic.state == "active" %}
+                        <span class="badge badge-light-success">{% trans "Aktif" %}</span>
+                    {% elif lic.state == "warning" %}
+                        <span class="badge badge-light-warning">{% trans "Yakında Doluyor" %}</span>
+                    {% elif lic.state == "disabled" %}
+                        <span class="badge badge-light">{% trans "Devre Dışı (dev)" %}</span>
+                    {% else %}
+                        <span class="badge badge-light-danger">{% trans "Süresi Doldu" %}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                {% if not lic.enforce %}
+                <div class="alert alert-secondary fs-7">
+                    {% trans "Lisans zorlaması kapalı (DEBUG / LICENSE_ENFORCE=0). Sistem lisanstan bağımsız çalışır." %}
+                </div>
+                {% endif %}
+                <table class="table table-row-dashed align-middle gy-3 mb-0">
+                    <tr><td class="text-muted">{% trans "Müşteri" %}</td>
+                        <td class="text-end fw-bold text-gray-900">{{ lic.customer|default:"—" }}</td></tr>
+                    <tr><td class="text-muted">{% trans "Lisans Anahtarı" %}</td>
+                        <td class="text-end fw-bold text-gray-900">{{ lic.license_key|default:"—" }}</td></tr>
+                    <tr><td class="text-muted">{% trans "Bitiş Tarihi" %}</td>
+                        <td class="text-end fw-bold text-gray-900">{{ lic.valid_until|date:"d.m.Y H:i"|default:"—" }}</td></tr>
+                    <tr><td class="text-muted">{% trans "Kalan Gün" %}</td>
+                        <td class="text-end fw-bold {% if lic.state == 'warning' %}text-warning{% elif lic.state == 'expired' %}text-danger{% else %}text-gray-900{% endif %}">
+                            {{ lic.days_remaining|default:"—" }}</td></tr>
+                    <tr><td class="text-muted">{% trans "İmza" %}</td>
+                        <td class="text-end">
+                            {% if lic.signature_valid %}<span class="badge badge-light-success">{% trans "Geçerli" %}</span>
+                            {% else %}<span class="badge badge-light-danger">{% trans "Doğrulanmadı" %}</span>{% endif %}</td></tr>
+                    <tr><td class="text-muted">{% trans "Son Kontrol" %}</td>
+                        <td class="text-end text-gray-700">
+                            {{ lic.last_checked_at|date:"d.m.Y H:i:s"|default:"—" }}
+                            {% if lic.last_check_ok %}<i class="ki-outline ki-check fs-5 text-success ms-1"></i>{% endif %}
+                        </td></tr>
+                </table>
+                {% if lic.last_error %}
+                <div class="text-danger fs-8 mt-3"><i class="ki-outline ki-information fs-6 me-1"></i>{{ lic.last_error }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# Aksiyon kartı #}
+    <div class="col-xl-5">
+        <div class="card card-flush h-100">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-arrows-circle fs-2 me-2 text-success"></i>
+                    {% trans "İşlemler" %}
+                </h3>
+            </div>
+            <div class="card-body d-flex flex-column">
+                <p class="text-muted fs-7 mb-4">
+                    {% trans "Lisansı sunucudan (manifest) yeniden kontrol eder. Süre uzatıldıysa sistem otomatik açılır." %}
+                </p>
+                <form method="post" class="mb-5">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="refresh">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="ki-outline ki-arrows-circle fs-4 me-1"></i>{% trans "Şimdi Yenile" %}
+                    </button>
+                </form>
+
+                <div class="separator separator-content my-2 text-muted fs-8">{% trans "Elle Token Uygula (offline)" %}</div>
+                <form method="post" class="mt-3">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="apply_token">
+                    <textarea name="token" class="form-control form-control-sm mb-3" rows="6"
+                              placeholder='{"payload": {...}, "signature": "..."}'></textarea>
+                    <button type="submit" class="btn btn-light-primary w-100">
+                        <i class="ki-outline ki-check fs-4 me-1"></i>{% trans "Token Uygula" %}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

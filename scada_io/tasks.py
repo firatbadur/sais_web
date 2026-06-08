@@ -47,6 +47,11 @@ def dispatch_polls():
     Global `SystemSwitch.polling_enabled` kapalıysa hiçbir bağlantı enqueue
     edilmez (yönetici dashboard'dan kapatılabilir).
     """
+    # Lisans bitmişse hiçbir iş yapılmaz (okuma durur).
+    from api.licensing import license_active
+    if not license_active():
+        return 0
+
     # Lazy import — scada_io app sais_domain'a yapısal olarak bağımlı değil;
     # import cycle ve test izolasyonu için runtime'da yükleniyor.
     from sais_domain.models import SystemSwitch
@@ -79,6 +84,11 @@ def poll_connection(self, conn_id: int):
       - Bireysel sensör hatası → o sensör için 'bad' kalite Reading yazılır,
         diğer sensörler okunmaya devam eder.
     """
+    # Defansif: dispatch sonrası lisans bitmiş olabilir.
+    from api.licensing import license_active
+    if not license_active():
+        return
+
     try:
         conn = Connection.objects.get(pk=conn_id)
     except Connection.DoesNotExist:
@@ -266,6 +276,11 @@ def dispatch_commands():
     created_at sırasına göre ilk N kayıt için atomik `pending → queued`
     güncelleme yapar ve `execute_command.delay(cmd_id)` çağırır.
     """
+    # Lisans bitmişse komut çalıştırılmaz.
+    from api.licensing import license_active
+    if not license_active():
+        return 0
+
     now = timezone.now()
     candidate_ids = list(
         Command.objects
@@ -293,6 +308,11 @@ def dispatch_commands():
 )
 def execute_command(self, cmd_id: int):
     """Tek bir Command'ı yürüt: status state machine ile."""
+    # Defansif: lisans bitmişse komut yürütülmez.
+    from api.licensing import license_active
+    if not license_active():
+        return
+
     try:
         cmd = Command.objects.select_related("sensor", "sensor__connection").get(pk=cmd_id)
     except Command.DoesNotExist:

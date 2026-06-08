@@ -1,0 +1,70 @@
+{% extends "dashboard/auth/auth_base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Lisans Süresi Doldu" %}{% endblock %}
+
+{% block auth_content %}
+<div class="text-center mb-10">
+    <i class="ki-outline ki-lock-2 fs-5x text-danger mb-5"></i>
+    <h1 class="text-gray-900 fw-bolder mb-3">{% trans "Lisans Süresi Doldu" %}</h1>
+    <div class="text-gray-600 fw-semibold fs-6">
+        {% trans "Bu kurulumun lisansı sona erdi. Veri okuma ve gönderim işlemleri durduruldu." %}
+    </div>
+</div>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="border border-dashed border-gray-300 rounded p-6 mb-8 bg-light">
+    <div class="d-flex justify-content-between mb-2">
+        <span class="text-muted fw-semibold">{% trans "Müşteri" %}</span>
+        <span class="text-gray-900 fw-bold">{{ lic.customer|default:"—" }}</span>
+    </div>
+    <div class="d-flex justify-content-between mb-2">
+        <span class="text-muted fw-semibold">{% trans "Lisans Anahtarı" %}</span>
+        <span class="text-gray-900 fw-bold">{{ lic.license_key|default:"—" }}</span>
+    </div>
+    <div class="d-flex justify-content-between mb-2">
+        <span class="text-muted fw-semibold">{% trans "Bitiş Tarihi" %}</span>
+        <span class="text-danger fw-bold">{{ lic.valid_until|date:"d.m.Y H:i"|default:"—" }}</span>
+    </div>
+    <div class="d-flex justify-content-between">
+        <span class="text-muted fw-semibold">{% trans "Durum" %}</span>
+        <span class="badge badge-light-danger">{{ lic.status }}</span>
+    </div>
+</div>
+
+<div class="text-center text-gray-600 fs-7 mb-6">
+    {% trans "Lisansı yenilemek için tedarikçinizle/yöneticinizle iletişime geçin. Yenileme tanımlandıktan sonra aşağıdan kontrol edebilirsiniz." %}
+</div>
+
+<form method="post" class="mb-4">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="refresh">
+    <button type="submit" class="btn btn-primary w-100">
+        <i class="ki-outline ki-arrows-circle fs-4 me-1"></i>{% trans "Lisansı Yenile (Sunucudan Kontrol Et)" %}
+    </button>
+</form>
+
+{% if is_admin %}
+<div class="separator separator-content my-6 text-muted fs-8">{% trans "Yönetici: Elle Token Uygula (offline)" %}</div>
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="apply_token">
+    <textarea name="token" class="form-control form-control-sm mb-3" rows="5"
+              placeholder='{"payload": {...}, "signature": "..."}'></textarea>
+    <button type="submit" class="btn btn-light-primary w-100">
+        <i class="ki-outline ki-check fs-4 me-1"></i>{% trans "Token Uygula" %}
+    </button>
+</form>
+{% endif %}
+
+<div class="text-center mt-8">
+    <a href="{% url 'dashboard:logout' %}" class="btn btn-link text-muted">
+        <i class="ki-outline ki-exit-right fs-5 me-1"></i>{% trans "Çıkış Yap" %}
+    </a>
+</div>
+{% endblock %}

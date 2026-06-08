@@ -1395,3 +1395,68 @@ class DatabaseRestore(models.Model):
 
     def __str__(self):
         return f"{self.source_filename} → [{self.status}]"
+
+
+# ---------------------------------------------------------------------------
+# Lisanslama (kurulum/saha bazlı, imzalı)
+# ---------------------------------------------------------------------------
+
+class License(models.Model):
+    """Bu kurulumun lisans durumu — singleton (pk=1), SystemSwitch deseni.
+
+    İmzalı token uzaktan (LICENSE_URL) çekilir, Ed25519 ile doğrulanır ve buraya
+    cache'lenir (`raw_token`). Enforcement `valid_until` tarihine dayanır; gate
+    anında ağ gerekmez. Detay: api/licensing.py.
+    """
+
+    STATUS_CHOICES = (
+        ("active", "Aktif"),
+        ("expired", "Süresi Doldu"),
+        ("invalid", "Geçersiz"),
+        ("missing", "Lisans Yok"),
+    )
+
+    license_key = models.CharField(max_length=120, blank=True, default="", verbose_name="Lisans Anahtarı")
+    customer = models.CharField(max_length=200, blank=True, default="", verbose_name="Müşteri")
+    valid_until = models.DateTimeField(blank=True, null=True, verbose_name="Geçerlilik Bitişi")
+    issued_at = models.DateTimeField(blank=True, null=True, verbose_name="Veriliş Tarihi")
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, default="missing", verbose_name="Durum",
+    )
+    signature_valid = models.BooleanField(default=False, verbose_name="İmza Geçerli")
+    raw_token = models.JSONField(
+        blank=True, null=True, verbose_name="İmzalı Token",
+        help_text="Doğrulanmış son token (restart/offline'da yeniden doğrulanır).",
+    )
+    last_checked_at = models.DateTimeField(blank=True, null=True, verbose_name="Son Kontrol")
+    last_check_ok = models.BooleanField(default=False, verbose_name="Son Kontrol Başarılı")
+    last_error = models.TextField(blank=True, default="", verbose_name="Son Hata")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="İlk Kayıt")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Güncelleme")
+
+    class Meta:
+        db_table = "license"
+        verbose_name = "Lisans"
+        verbose_name_plural = "Lisans"
+
+    def __str__(self):
+        return f"{self.license_key or '—'} [{self.status}] → {self.valid_until}"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # singleton
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass  # singleton — silinmez
+
+    @classmethod
+    def load(cls):
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def days_remaining(self):
+        from django.utils import timezone
+        if not self.valid_until:
+            return None
+        return (self.valid_until - timezone.now()).days

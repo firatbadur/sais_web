@@ -36,6 +36,8 @@ CRONTAB_TASKS = [
     ("api.tasks.aggregate_readings_daily",    "0",   "1", "*", "*", "*"),
     ("api.tasks.prune_readings_task",         "30",  "2", "*", "*", "*"),   # her gece 02:30
     ("api.tasks.prune_api_logs_task",         "0",   "3", "*", "*", "*"),   # her gece 03:00
+    # Lisans manifest'ini uzaktan çek/doğrula — her 6 saatte bir.
+    ("api.tasks.license_refresh_task",        "0",   "*/6", "*", "*", "*"),
     # Bakanlık SIM + Envisoft veri gönderimi — her dakika başında.
     ("sais_domain.tasks.publish_minute_data", "*",   "*", "*", "*", "*"),
 ]

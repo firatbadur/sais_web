@@ -1,0 +1,20 @@
+{% load i18n %}
+{% comment %}
+Lisans yaklaşan-bitiş uyarısı. Sadece lisans AKTİF ama bitişe az kalmışsa (warning)
+gösterilir. Bitmişse zaten middleware kilit ekranına yönlendirir.
+{% endcomment %}
+{% if license_status and license_status.state == "warning" %}
+<div class="app-container container-fluid pt-4">
+    <div class="alert alert-warning d-flex align-items-center mb-0" role="alert">
+        <i class="ki-outline ki-information-5 fs-2x text-warning me-3"></i>
+        <div class="flex-grow-1">
+            <span class="fw-bold">{% trans "Lisans yakında dolacak." %}</span>
+            {% blocktrans with d=license_status.days_remaining %}Kalan süre: {{ d }} gün.{% endblocktrans %}
+            <span class="text-muted">
+                {% trans "Bitiş" %}: {{ license_status.valid_until|date:"d.m.Y" }}.
+                {% trans "Yenileme için yöneticinizle/tedarikçinizle iletişime geçin." %}
+            </span>
+        </div>
+    </div>
+</div>
+{% endif %}

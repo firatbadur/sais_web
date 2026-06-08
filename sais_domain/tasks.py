@@ -35,6 +35,11 @@ def publish_minute_data() -> dict:
     Beat tarafından her dakika başında çağrılır. Tek tek kabinler için
     fan-out — bir kabinin yavaş yanıtı diğerlerini geciktirmez.
     """
+    # Lisans bitmişse veri yayını (SIM + Envisoft) durur.
+    from api.licensing import license_active
+    if not license_active():
+        return {"dispatched": 0, "skipped": "license_inactive"}
+
     cabinet_ids = list(
         SaisCabinet.objects
         .filter(station__active=True)
@@ -54,6 +59,11 @@ def publish_cabinet_data(cabinet_id: int) -> dict:
     fırlatılmaz — bir kabinin patlaması beat'i etkilemez. Her başarısız
     çağrı zaten ``ApiLog`` üstünde error_message ile görünür durumda.
     """
+    # Defansif: lisans bitmişse gönderim yapılmaz.
+    from api.licensing import license_active
+    if not license_active():
+        return {"cabinet_id": cabinet_id, "skipped": "license_inactive"}
+
     cabinet = (
         SaisCabinet.objects
         .select_related("station")

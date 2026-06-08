@@ -69,3 +69,13 @@ def restore_database_run(backup_id, run_migrate=True, user_id=None):
         yes=True,
         user_id=user_id,
     )
+
+
+@shared_task(name="api.tasks.license_refresh_task")
+def license_refresh_task():
+    """Lisans manifest'ini uzaktan çekip doğrular ve uygular (beat: her 6 saat).
+
+    Lisans bitse bile bu task çalışmaya devam eder — yenilenince sistem kendini
+    toparlasın diye.
+    """
+    call_command("refresh_license")

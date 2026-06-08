@@ -234,6 +234,43 @@ container'ı**; `MSSQL_HOST` harici ise dosya uzakta kalır, UI bunu uyarır.
 - Beat task'ları [seed_periodic_tasks.py](scada_io/management/commands/seed_periodic_tasks.py)
   `BACKUP_TASKS`'ta — yeni sahada `seed_periodic_tasks` ile gelir. `.env`: `BACKUP_DIR`.
 
+## Lisanslama (kurulum bazlı, imzalı, uzaktan)
+
+Her kurulum **süreli lisansla** çalışır; lisans bitince **app hiçbir iş yapmaz** (polling + komut +
+SIM/Envisoft yayını durur, dashboard tam kilitlenir). Generic kurulum altyapısı → `api/`. Filo
+modeliyle aynı "pull": lisanslar merkezde (GitHub manifest), sahalar çeker.
+
+- **İmzalı (Ed25519)**: lisanslar issuer'ın **private key**'iyle imzalanır; app gömülü
+  **public key** (`settings.LICENSE_PUBLIC_KEY`) ile doğrular → müşteri yerel `License` kaydını/URL'i
+  değiştirip süre uzatamaz. İmzalama aracı [scripts/license_tool.py](scripts/license_tool.py)
+  (`keygen`/`issue`/`manifest`/`verify`) — **kullanıcının makinesinde**, app dışı. Private key
+  ASLA repo'ya/app'e girmez (`.gitignore`).
+- **Akış**: Celery beat `api.tasks.license_refresh_task` (6 saatte bir) + container startup
+  (`refresh_license`) `LICENSE_URL` manifest'ini çeker → kendi `LICENSE_KEY` entry'sini bulur →
+  imza doğrula → `License` singleton'a yazar. Enforcement **token tarihine** dayanır (ağsız);
+  internet kesintisi süreyi bitirmez, uzatmak için manifest güncellenir.
+- **Çekirdek** [api/licensing.py](api/licensing.py): `verify_token` / `apply_token` /
+  `fetch_and_refresh` / `license_active()` (gate) / `license_status_dict()`. Model:
+  `api.models.License` (singleton, `raw_token` cache + `signature_valid`). Komutlar:
+  `refresh_license` (uzaktan), `apply_license --file=` (offline/elle token).
+- **Enforcement (gate)**: `license_active()` çağrısı `scada_io.tasks.dispatch_polls` /
+  `dispatch_commands` / `poll_connection` / `execute_command` ve `sais_domain.tasks.publish_minute_data`
+  / `publish_cabinet_data` başında. **Çalışmaya devam eden** (kurtarılabilirlik): `license_refresh_task`
+  + housekeeping (aggregate/prune/backup).
+- **Dashboard tam kilit**: [dashboard/middleware.py](dashboard/middleware.py) `LicenseLockMiddleware`
+  lisans aktif değilse `/dashboard/...` isteklerini `dashboard:license_expired` lock ekranına
+  yönlendirir (muaf: login/logout/license-expired). `/admin/` (Jazzmin) superuser kurtarma için
+  açık. Lock ekranı + admin **Lisans** sayfası (`admin_license`): "Şimdi Yenile" + elle token uygula.
+  Aktifken bitişe `LICENSE_WARN_DAYS` (15) kala sarı banner (context processor `license_status` →
+  base.html).
+- **Dev**: `LICENSE_ENFORCE` varsayılanı `not DEBUG` → DEBUG=1'de lisans **bypass** (lokal geliştirme
+  kilitlenmez). Yeni kurulum ilk fetch'e dek `LICENSE_BOOTSTRAP_GRACE_HOURS` (24) çalışır.
+- **Sürüm çıkarma akışı (sen)**: `license_tool.py keygen` (bir kez, public key'i settings default'una
+  koy) → `issue --key <saha> --customer <ad> --expires <tarih>` → `manifest *.json` → ayrı bir
+  GitHub repo'ya push (imza sayesinde public olabilir). Saha `.env`: `LICENSE_KEY`, `LICENSE_URL`,
+  `LICENSE_ENFORCE=1`. Uzatma = manifest'i güncelle; saha sonraki refresh'te alır (veya admin
+  "Şimdi Yenile").
+
 ## Önemli çalıştırma davranışları
 
 - **Yapılandırma:** Tüm ayarlar `.env` üzerinden okunur (`python-dotenv`). Sırları asla koda commitlemeyin. Ek env'ler: `API_LOG_*`, `READING_RETENTION_*_DAYS`, `CELERY_BROKER_URL` (default `redis://localhost:6379/2`), `CELERY_RESULT_BACKEND` (default `django-db`).

@@ -48,6 +48,10 @@ urlpatterns = [
     path("admin-pages/system-control/", views.SystemControlView.as_view(),
          name="admin_system_control"),
     path("admin-pages/backups/", views.BackupRestoreView.as_view(), name="admin_backups"),
+    path("admin-pages/license/", views.LicenseStatusView.as_view(), name="admin_license"),
+
+    # --- License lock screen (menüsüz; middleware buraya yönlendirir) ---
+    path("license-expired/", views.LicenseExpiredView.as_view(), name="license_expired"),
 
     # --- Settings ---
     path("settings/profile/", views.ProfileView.as_view(), name="profile"),

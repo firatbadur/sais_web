@@ -73,6 +73,8 @@ MENU = [
              "roles": (ROLE_ADMIN,)},
             {"label": _("Yedekleme"), "url_name": "dashboard:admin_backups",
              "roles": (ROLE_ADMIN,)},
+            {"label": _("Lisans"), "url_name": "dashboard:admin_license",
+             "roles": (ROLE_ADMIN,)},
             {"label": _("Kullanıcılar"), "url_name": "dashboard:admin_users",
              "roles": (ROLE_ADMIN,)},
             {"label": _("API Logları"), "url_name": "dashboard:admin_api_logs",
@@ -136,3 +138,19 @@ def available_languages(request):
 def app_version(request):
     """Footer'da gösterilen uygulama sürümü (CI build'inde git tag'i)."""
     return {"app_version": settings.APP_VERSION}
+
+
+def license_status(request):
+    """Lisans durumu — base.html'deki uyarı banner'ı için.
+
+    Sadece kimlik doğrulanmış dashboard kullanıcılarında hesaplanır (admin/anonim
+    sayfalarda gereksiz sorgu yapmamak için).
+    """
+    user = getattr(request, "user", None)
+    if not getattr(user, "is_authenticated", False):
+        return {"license_status": None}
+    try:
+        from api.licensing import license_status_dict
+        return {"license_status": license_status_dict()}
+    except Exception:  # noqa: BLE001 — banner asla sayfayı kırmasın
+        return {"license_status": None}

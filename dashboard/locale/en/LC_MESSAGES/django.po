@@ -1048,3 +1048,110 @@ msgstr "Invalid action."
 # ---- Footer: sürüm rozeti ----
 msgid "Uygulama sürümü"
 msgstr "Application version"
+
+# ---- Lisanslama ----
+msgid "Lisans"
+msgstr "License"
+
+msgid "Lisans Süresi Doldu"
+msgstr "License Expired"
+
+msgid "Bu kurulumun lisansı sona erdi. Veri okuma ve gönderim işlemleri durduruldu."
+msgstr "This installation's license has expired. Data reading and publishing have been stopped."
+
+msgid "Müşteri"
+msgstr "Customer"
+
+msgid "Lisans Anahtarı"
+msgstr "License Key"
+
+msgid "Bitiş Tarihi"
+msgstr "Expiry Date"
+
+msgid "Lisansı yenilemek için tedarikçinizle/yöneticinizle iletişime geçin. Yenileme tanımlandıktan sonra aşağıdan kontrol edebilirsiniz."
+msgstr "To renew the license, contact your supplier/administrator. Once renewed, you can check below."
+
+msgid "Lisansı Yenile (Sunucudan Kontrol Et)"
+msgstr "Renew License (Check Server)"
+
+msgid "Yönetici: Elle Token Uygula (offline)"
+msgstr "Admin: Apply Token Manually (offline)"
+
+msgid "Elle Token Uygula (offline)"
+msgstr "Apply Token Manually (offline)"
+
+msgid "Token Uygula"
+msgstr "Apply Token"
+
+msgid "Çıkış Yap"
+msgstr "Logout"
+
+msgid "Lisans Yönetimi"
+msgstr "License Management"
+
+msgid "Lisans Durumu"
+msgstr "License Status"
+
+msgid "Yakında Doluyor"
+msgstr "Expiring Soon"
+
+msgid "Devre Dışı (dev)"
+msgstr "Disabled (dev)"
+
+msgid "Süresi Doldu"
+msgstr "Expired"
+
+msgid "Lisans zorlaması kapalı (DEBUG / LICENSE_ENFORCE=0). Sistem lisanstan bağımsız çalışır."
+msgstr "License enforcement is off (DEBUG / LICENSE_ENFORCE=0). The system runs independently of licensing."
+
+msgid "Kalan Gün"
+msgstr "Days Remaining"
+
+msgid "İmza"
+msgstr "Signature"
+
+msgid "Doğrulanmadı"
+msgstr "Not Verified"
+
+msgid "Son Kontrol"
+msgstr "Last Check"
+
+msgid "İşlemler"
+msgstr "Actions"
+
+msgid "Lisansı sunucudan (manifest) yeniden kontrol eder. Süre uzatıldıysa sistem otomatik açılır."
+msgstr "Re-checks the license from the server (manifest). If extended, the system reopens automatically."
+
+msgid "Şimdi Yenile"
+msgstr "Refresh Now"
+
+# License banner + view messages
+msgid "Lisans yakında dolacak."
+msgstr "License expiring soon."
+
+msgid "Yenileme için yöneticinizle/tedarikçinizle iletişime geçin."
+msgstr "Contact your administrator/supplier to renew."
+
+msgid "Kalan süre: %(d)s gün."
+msgstr "Time remaining: %(d)s days."
+
+msgid "Lisans yenilendi."
+msgstr "License refreshed."
+
+msgid "Lisans çekilemedi: %(e)s"
+msgstr "Could not fetch license: %(e)s"
+
+msgid "Lisans geçersiz: %(e)s"
+msgstr "Invalid license: %(e)s"
+
+msgid "Bu işlem için yetkiniz yok."
+msgstr "You are not authorized for this action."
+
+msgid "Token JSON ayrıştırılamadı."
+msgstr "Could not parse token JSON."
+
+msgid "Token geçersiz: %(e)s"
+msgstr "Invalid token: %(e)s"
+
+msgid "Lisans uygulandı."
+msgstr "License applied."

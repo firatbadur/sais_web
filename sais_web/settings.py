@@ -46,6 +46,28 @@ APP_VERSION = os.getenv("APP_VERSION", "dev")
 # container'larına ortak mount edilen mssql_backups volume'ünün yolu.
 BACKUP_DIR = os.getenv("BACKUP_DIR", "/var/opt/mssql/backups")
 
+# ---- Lisanslama ----
+# Lisans bitince app hiçbir iş yapmaz (polling/komut/SIM/Envisoft durur, dashboard
+# kilitlenir). İmzalı (Ed25519) token'lar uzaktan (LICENSE_URL manifest) çekilir,
+# gömülü public key ile doğrulanır. Detay: api/licensing.py.
+#
+# DEV'de varsayılan KAPALI (DEBUG=True iken enforce yok) — lokal geliştirme kilitlenmez.
+LICENSE_ENFORCE = env_bool("LICENSE_ENFORCE", default=not DEBUG)
+# Saha kimliği — her kurulumda .env ile benzersiz verilir; manifest'teki anahtarla eşleşir.
+LICENSE_KEY = os.getenv("LICENSE_KEY", "")
+# İmzalı lisans manifest'inin URL'i (GitHub raw vb.).
+LICENSE_URL = os.getenv("LICENSE_URL", "")
+# İssuer public key (hex, Ed25519 raw). Default issuer anahtarı gömülü; kendi
+# anahtarınızı üretip (scripts/license_tool.py keygen) burayı/.env'i güncelleyin.
+LICENSE_PUBLIC_KEY = os.getenv(
+    "LICENSE_PUBLIC_KEY",
+    "33f6557b0c8bb50d26843c32f72e16ffc398c5b4600146d1d3a21288d7c633fe",
+)
+# Bitişe bu kadar gün kala dashboard'da sarı uyarı banner'ı.
+LICENSE_WARN_DAYS = int(os.getenv("LICENSE_WARN_DAYS", "15"))
+# Yeni kurulum ilk lisans fetch'ine kadar bu kadar saat çalışabilir (brick olmasın).
+LICENSE_BOOTSTRAP_GRACE_HOURS = int(os.getenv("LICENSE_BOOTSTRAP_GRACE_HOURS", "24"))
+
 
 # Application definition
 INSTALLED_APPS = [
@@ -80,6 +102,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "api.middleware.ApiLoggingMiddleware",
+    "dashboard.middleware.LicenseLockMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -102,6 +125,7 @@ TEMPLATES = [
                 "dashboard.context_processors.menu",
                 "dashboard.context_processors.available_languages",
                 "dashboard.context_processors.app_version",
+                "dashboard.context_processors.license_status",
             ],
         },
     },

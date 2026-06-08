@@ -645,6 +645,90 @@ class BackupRestoreView(AdminRequiredMixin, TemplateView):
 
 
 # --------------------------------------------------------------------------- #
+# Lisanslama: kilit ekranı + admin durum sayfası
+# --------------------------------------------------------------------------- #
+
+def _is_admin(user) -> bool:
+    return bool(getattr(user, "is_superuser", False) or getattr(user, "rol", None) == ROLE_ADMIN)
+
+
+def _handle_license_action(request) -> None:
+    """Lisans 'Yenile' / 'Token Uygula' POST aksiyonlarını işler (mesajlarla)."""
+    import json
+
+    from api.licensing import LicenseError, apply_token, fetch_and_refresh
+
+    action = request.POST.get("action")
+    if action == "refresh":
+        try:
+            lic = fetch_and_refresh()
+            if lic.last_check_ok:
+                messages.success(request, _("Lisans yenilendi."))
+            else:
+                messages.warning(request, _("Lisans çekilemedi: %(e)s") % {"e": lic.last_error})
+        except LicenseError as exc:
+            messages.error(request, _("Lisans geçersiz: %(e)s") % {"e": exc})
+        except Exception as exc:  # noqa: BLE001
+            messages.error(request, _("Lisans çekilemedi: %(e)s") % {"e": exc})
+    elif action == "apply_token":
+        if not _is_admin(request.user):
+            messages.error(request, _("Bu işlem için yetkiniz yok."))
+            return
+        raw = (request.POST.get("token") or "").strip()
+        try:
+            token = json.loads(raw)
+            apply_token(token, source="manual-ui")
+            messages.success(request, _("Lisans uygulandı."))
+        except json.JSONDecodeError:
+            messages.error(request, _("Token JSON ayrıştırılamadı."))
+        except (LicenseError, KeyError, TypeError) as exc:
+            messages.error(request, _("Token geçersiz: %(e)s") % {"e": exc})
+
+
+class LicenseExpiredView(LoginRequiredMixin, TemplateView):
+    """Lisans bitince gösterilen tam-kilit ekranı (menüsüz)."""
+    template_name = "dashboard/license_expired.html"
+    login_url = reverse_lazy("dashboard:login")
+
+    def dispatch(self, request, *args, **kwargs):
+        from api.licensing import license_active
+        if request.user.is_authenticated and license_active():
+            return redirect("dashboard:home")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        from api.licensing import license_status_dict
+        ctx = super().get_context_data(**kwargs)
+        ctx["lic"] = license_status_dict()
+        ctx["is_admin"] = _is_admin(self.request.user)
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        from api.licensing import license_active
+        _handle_license_action(request)
+        if license_active():
+            return redirect("dashboard:home")
+        return redirect("dashboard:license_expired")
+
+
+class LicenseStatusView(AdminRequiredMixin, TemplateView):
+    """Yönetici → Lisans (aktifken proaktif yönetim: durum + yenile + token uygula)."""
+    template_name = "dashboard/admin_pages/license.html"
+
+    def get_context_data(self, **kwargs):
+        from api.licensing import license_status_dict
+        from api.models import License
+        ctx = super().get_context_data(**kwargs)
+        ctx["lic"] = license_status_dict()
+        ctx["raw_token"] = License.load().raw_token
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        _handle_license_action(request)
+        return redirect("dashboard:admin_license")
+
+
+# --------------------------------------------------------------------------- #
 # Settings: profile, change password, preferences
 # --------------------------------------------------------------------------- #
 

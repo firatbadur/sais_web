@@ -86,3 +86,10 @@ redis_data/
 
 # Claude / AI assistant scratch
 .claude/
+
+# Lisans imzalama — private key ve üretilen token'lar ASLA commit'lenmez
+license_private_key.hex
+*license*.hex
+_dev_license.json
+licenses/
+manifest.json
