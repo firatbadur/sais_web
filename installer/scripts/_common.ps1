@@ -52,8 +52,15 @@ function Invoke-Wsl([string]$bash) {
     }
 }
 
+# Docker daemon'ının distro içinde çalıştığından emin ol (systemd yoksa fallback).
+function Assert-Docker {
+    wsl.exe -d $script:WslDistro -u root -- bash -lc `
+        "docker info >/dev/null 2>&1 || service docker start 2>/dev/null || systemctl start docker 2>/dev/null || (pgrep dockerd >/dev/null || (dockerd >/var/log/dockerd.log 2>&1 &)); sleep 2" *> $null
+}
+
 # InstallDir bağlamında `docker compose ...` çalıştır.
 function Invoke-Compose([string]$InstallDir, [string]$composeArgs) {
+    Assert-Docker
     $wslDir = ConvertTo-WslPath $InstallDir
     $cmd = "cd '$wslDir' && docker compose --env-file .env -f $script:ComposeFile $composeArgs"
     wsl.exe -d $script:WslDistro -- bash -lc "$cmd"

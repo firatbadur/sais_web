@@ -46,8 +46,18 @@ otomatik yapılır (`GHCR_TOKEN` repo secret'ından gelir) ve Release'e eklenir.
 - **Panel dışı, önceden yapılmalı:** domain için DNS A kaydı (public IP'ye) +
   modem/firewall'da 80/443 yönlendirmesi (Let's Encrypt ve dış erişim için).
 
-İlk WSL2 kurulumu **reboot** gerektirebilir; installer otomatik yeniden başlatıp
-RunOnce ile kaldığı yerden devam eder.
+**WSL2 önkoşulu:** Makinede WSL2 yoksa installer şu mesajı verir ve durur:
+```
+WSL2 bu makinede kurulu değil. Lütfen:
+  1) Yönetici PowerShell:  wsl --install
+  2) Makineyi YENİDEN BAŞLATIN
+  3) Bu kurulumu tekrar çalıştırın
+```
+WSL2 hazır olduktan sonra installer Docker CE'yi otomatik kurar (systemd ile kalıcı
+docker servisi), image çeker ve yığını başlatır. Sadece WSL özelliklerinin
+etkinleştirilmesi gerekiyorsa installer reboot'u kendi tetikleyip RunOnce ile devam
+eder; ama distro hiç yoksa OS-seviyesi `wsl --install` + reboot kullanıcıya bırakılır
+(daha güvenilir).
 
 ## Kaldırma
 
