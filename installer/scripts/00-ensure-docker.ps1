@@ -64,10 +64,11 @@ if (-not (Test-DistroUsable $Distro)) {
     }
     # WSL2 + distro'yu kur (wsl --install özellikleri de açar). --no-launch ile
     # interaktif Ubuntu kullanıcı kurulumunu atlıyoruz (root olarak kullanacağız).
+    # Çıktılar GİZLENMİYOR — teşhis için görünür olmalı.
     Write-Step "WSL2 + $Distro kuruluyor (wsl --install)..."
-    wsl.exe --update *> $null
-    wsl.exe --set-default-version 2 *> $null
-    wsl.exe --install -d $Distro --no-launch *> $null
+    wsl.exe --update; Write-Host "   wsl --update exit=$LASTEXITCODE"
+    wsl.exe --set-default-version 2; Write-Host "   wsl --set-default-version exit=$LASTEXITCODE"
+    wsl.exe --install -d $Distro --no-launch; Write-Host "   wsl --install exit=$LASTEXITCODE"
     Start-Sleep -Seconds 5
 
     if (-not (Test-DistroUsable $Distro)) {

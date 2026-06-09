@@ -6,17 +6,17 @@
     Inno Setup sihirbazı cevapları bir JSON answers dosyasına yazar ve bu
     script'i -AnswersFile ile çağırır.
 
-    ÖNEMLI: Her adım AYRI bir powershell.exe sürecinde çalıştırılır. PowerShell'de
-    `&` ile çağrılan bir .ps1 içindeki `exit`, çağıran süreci de öldürür; bu yüzden
-    adımları child süreç olarak çalıştırıp yalnızca çıkış kodunu (`$LASTEXITCODE`)
-    okuyoruz. Böylece 00-ensure-docker'ın `exit 10` (reboot) sinyali install.ps1'i
-    öldürmeden yakalanır.
+    GÜVENİLİRLİK: Loglama EN BAŞTA başlar (answers parse'ından önce) → erken
+    hatalar bile loglanır. Tüm gövde try/catch ile sarılı; hata olursa ekrana
+    yazılır ve pencere Enter'a kadar açık kalır (görünür konsolda çalıştığı için
+    kullanıcı sebebi görür). Her adım AYRI powershell.exe sürecinde çalışır
+    (alt-script'teki `exit` orkestratörü öldürmesin).
 
 .PARAMETER AnswersFile
     Tüm kurulum parametrelerini içeren JSON.
 
 .PARAMETER Resume
-    Reboot sonrası RunOnce tarafından verilir; Docker adımından devam eder.
+    Reboot sonrası RunOnce tarafından verilir; kurulum kaldığı yerden devam eder.
 #>
 param(
     [Parameter(Mandatory)] [string]$AnswersFile,
@@ -27,15 +27,14 @@ $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
 $psExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 
-if (-not (Test-Path $AnswersFile)) {
-    throw "Answers dosyası bulunamadı: $AnswersFile"
-}
-$a = Get-Content -Raw $AnswersFile | ConvertFrom-Json
-$InstallDir = $a.InstallDir
-$Distro = if ($a.Distro) { $a.Distro } else { "Ubuntu" }
-$transcript = Join-Path $InstallDir "logs\install.log"
-New-Item -ItemType Directory -Force -Path (Split-Path $transcript) | Out-Null
-Start-Transcript -Path $transcript -Append | Out-Null
+# --- Loglama EN BAŞTA: answers parse'ından önce, garanti var olan kurulum dizinine ---
+$baseDir = Split-Path -Parent $AnswersFile          # = kurulum dizini (ör. C:\SAIS)
+$logDir = Join-Path $baseDir "logs"
+try { New-Item -ItemType Directory -Force -Path $logDir | Out-Null } catch {}
+try { Start-Transcript -Path (Join-Path $logDir "install.log") -Append | Out-Null } catch {}
+
+$rebooting = $false
+$success = $false
 
 # Bir adım script'ini AYRI süreçte çalıştır, çıkış kodunu döndür.
 function Invoke-Step([string]$scriptName, [string[]]$stepArgs) {
@@ -47,23 +46,28 @@ function Invoke-Step([string]$scriptName, [string[]]$stepArgs) {
 
 try {
     Write-Host "==== SAIS Kurulum $([DateTime]::Now) (Resume=$Resume) ====" -ForegroundColor Magenta
+    Write-Host "Answers: $AnswersFile" -ForegroundColor DarkGray
+
+    if (-not (Test-Path $AnswersFile)) {
+        throw "Answers dosyası bulunamadı: $AnswersFile"
+    }
+    $a = Get-Content -Raw $AnswersFile | ConvertFrom-Json
+    $InstallDir = $a.InstallDir
+    $Distro = if ($a.Distro) { $a.Distro } else { "Ubuntu" }
+    Write-Host "InstallDir=$InstallDir  Distro=$Distro  Domain=$($a.Domain)" -ForegroundColor DarkGray
 
     # 1) Docker önkoşulu (WSL2 + Docker CE)
     Write-Host ">> [1/5] Docker (WSL2 + CE) sağlanıyor..." -ForegroundColor Cyan
     $code = Invoke-Step "00-ensure-docker.ps1" @("-Distro", $Distro)
+    Write-Host "   00-ensure-docker exit=$code" -ForegroundColor DarkGray
 
     if ($code -eq 10) {
-        # WSL2 reboot gerektiriyor → RunOnce ile login sonrası OTOMATİK devam et.
-        # Sonsuz döngü guard'ı: en fazla 3 reboot dene.
+        # WSL2 reboot gerektiriyor → RunOnce ile login sonrası devam. Guard: max 3 reboot.
         $counterFile = Join-Path $InstallDir ".reboot-count"
         $count = 0
         if (Test-Path $counterFile) { $count = [int](Get-Content $counterFile -Raw) }
         if ($count -ge 3) {
-            Write-Host "   [X] WSL2 birkaç reboot sonrası hâlâ hazır değil." -ForegroundColor Red
-            Write-Host "       Sanallaştırma (BIOS VT-x/AMD-V) açık mı kontrol edin, sonra:" -ForegroundColor Yellow
-            Write-Host "       'wsl --install' + reboot + installer'ı tekrar çalıştırın." -ForegroundColor Yellow
-            Remove-Item $counterFile -ErrorAction SilentlyContinue
-            throw "WSL2 hazırlanamadı ($count reboot denendi)."
+            throw "WSL2 birkaç reboot sonrası hâlâ hazır değil ($count). Sanallaştırma (BIOS VT-x/AMD-V) açık mı kontrol edin."
         }
         ($count + 1) | Set-Content $counterFile
 
@@ -71,7 +75,6 @@ try {
         Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" `
             -Name "SAISInstallResume" -Value $resumeCmd
 
-        # Kullanıcıya onay sor (installer gizli çalıştığı için GUI penceresi).
         $msg = "SAIS kurulumu için WSL2 etkinleştirildi; devam etmek için Windows'un " +
                "yeniden başlatılması gerekiyor.`n`nŞimdi yeniden başlatılsın mı?`n`n" +
                "• Evet: makine yeniden başlar, tekrar giriş yaptığınızda kurulum OTOMATİK devam eder.`n" +
@@ -79,26 +82,24 @@ try {
         $reboot = $true
         try {
             $wsh = New-Object -ComObject WScript.Shell
-            # 4=YesNo, 32=Question, 256=ikinci buton (Hayır) varsayılan
             $ans = $wsh.Popup($msg, 0, "SAIS SCADA — Yeniden Başlatma", 4 + 32 + 256)
-            $reboot = ($ans -eq 6)   # 6=Evet, 7=Hayır
-        } catch {
-            $reboot = $false   # GUI gösterilemezse otomatik reboot etme, güvenli taraf
-        }
+            $reboot = ($ans -eq 6)
+        } catch { $reboot = $false }
 
-        Stop-Transcript | Out-Null
         if ($reboot) {
+            $rebooting = $true
+            Write-Host "   Yeniden başlatılıyor..." -ForegroundColor Yellow
             Start-Sleep -Seconds 2
             Restart-Computer -Force
+        } else {
+            Write-Host "   Yeniden başlatma ertelendi. Makineyi elle yeniden başlatınca kurulum devam edecek." -ForegroundColor Yellow
         }
-        # Hayır → RunOnce kurulu kaldı; elle reboot'ta kurulum devam edecek.
         return
     }
     elseif ($code -ne 0) {
-        throw "Docker önkoşulu başarısız (exit $code). Log: $transcript"
+        throw "Docker önkoşulu başarısız (exit $code)."
     }
 
-    # Başarılı geçiş → reboot sayacını temizle.
     Remove-Item (Join-Path $InstallDir ".reboot-count") -ErrorAction SilentlyContinue
 
     # 2) .env üret
@@ -128,12 +129,27 @@ try {
     $code = Invoke-Step "40-register-service.ps1" @("-InstallDir", $InstallDir, "-Distro", $Distro)
     if ($code -ne 0) { throw "Servis kaydı başarısız (exit $code)." }
 
-    # Hassas answers dosyasını sil (token/şifreler içerir).
-    Remove-Item -Force $AnswersFile -ErrorAction SilentlyContinue
-
+    $success = $true
+    Write-Host ""
     Write-Host "==== KURULUM TAMAMLANDI ====" -ForegroundColor Green
     Write-Host "Dashboard: https://$($a.Domain)/dashboard/" -ForegroundColor Green
 }
+catch {
+    Write-Host ""
+    Write-Host "================  KURULUM HATASI  ================" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    if ($_.ScriptStackTrace) { Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray }
+    Write-Host "Tam log: $(Join-Path $logDir 'install.log')" -ForegroundColor Yellow
+}
 finally {
-    Stop-Transcript | Out-Null
+    # Reboot sırasında answers gerekli (resume); başarıda token'ı sil.
+    if ($success -and -not $rebooting) {
+        Remove-Item -Force $AnswersFile -ErrorAction SilentlyContinue
+    }
+    try { Stop-Transcript | Out-Null } catch {}
+    # Görünür konsolda çalışır; reboot olmayacaksa pencere kapanmasın ki kullanıcı sonucu okusun.
+    if (-not $rebooting) {
+        Write-Host ""
+        Read-Host "Bu pencereyi kapatmak için Enter'a basın"
+    }
 }
