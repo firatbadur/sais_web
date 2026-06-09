@@ -69,17 +69,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Inno Setup
-        run: choco install innosetup --no-progress -y
+      - name: Install Inno Setup + NSSM (Chocolatey)
+        run: choco install innosetup nssm --no-progress -y
 
-      - name: Fetch NSSM
+      - name: Stage NSSM into payload
         shell: pwsh
         run: |
-          $url = "https://nssm.cc/release/nssm-2.24.zip"
-          Invoke-WebRequest -Uri $url -OutFile nssm.zip
-          Expand-Archive nssm.zip -DestinationPath nssm_extract -Force
+          # nssm.cc istikrarsız (503) → choco paketinden 64-bit nssm.exe'yi al.
+          $cands = Get-ChildItem -Path "C:\ProgramData\chocolatey\lib\NSSM" -Recurse -Filter nssm.exe
+          $src = $cands | Where-Object { $_.FullName -match 'win64' } | Select-Object -First 1
+          if (-not $src) { $src = $cands | Select-Object -First 1 }
+          if (-not $src) { throw "nssm.exe choco paketinde bulunamadı." }
           New-Item -ItemType Directory -Force installer\payload | Out-Null
-          Copy-Item nssm_extract\nssm-2.24\win64\nssm.exe installer\payload\nssm.exe
+          Copy-Item $src.FullName installer\payload\nssm.exe -Force
+          Write-Host "NSSM staged: $($src.FullName)"
 
       - name: Compile installer
         shell: pwsh
