@@ -1,4 +1,4 @@
-; ============================================================================
+﻿; ============================================================================
 ;  SAIS SCADA — Windows Installer (Inno Setup)
 ;
 ;  "next-next-next" kurulum: WSL2 + Docker CE'yi kurar, GHCR'dan image çeker,
@@ -62,8 +62,8 @@ Name: "{group}\SAIS Dashboard"; Filename: "https://{code:GetDomain}/dashboard/"
 Name: "{group}\SAIS Kaldır"; Filename: "{uninstallexe}"
 
 [Run]
-; runhidden YOK — kurulum ilerlemesi ve olası hatalar GÖRÜNÜR konsolda akar
-; (install.ps1 hata olursa pencereyi Enter'a kadar açık tutar).
+; runhidden YOK → kurulum GÖRÜNÜR konsolda akar; install.ps1 sonunda Enter'a
+; kadar bekler. waituntilterminated → Inno kurulum bitene dek bekler.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
   Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\install.ps1"" -AnswersFile ""{app}\install-answers.json"""; \
   StatusMsg: "Docker kuruluyor, image çekiliyor ve yığın başlatılıyor (konsol penceresini izleyin)..."; \

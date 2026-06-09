@@ -84,6 +84,23 @@ jobs:
           Copy-Item $src.FullName installer\payload\nssm.exe -Force
           Write-Host "NSSM staged: $($src.FullName)"
 
+      - name: Validate PowerShell scripts (parse)
+        shell: powershell
+        run: |
+          # Hedef makinedeki Windows PowerShell 5.1 ile (pwsh 7 değil) doğrula:
+          # 5.1, BOM'suz dosyayı ANSI okur → encoding bozulması parse hatası yapar.
+          $bad = $false
+          Get-ChildItem installer\scripts\*.ps1 | ForEach-Object {
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errs) | Out-Null
+            if ($errs) {
+              $bad = $true
+              Write-Host "PARSE HATASI: $($_.Name)" -ForegroundColor Red
+              $errs | ForEach-Object { Write-Host ("  Satir {0}: {1}" -f $_.Extent.StartLineNumber, $_.Message) }
+            } else { Write-Host "OK: $($_.Name)" }
+          }
+          if ($bad) { throw "PowerShell script parse hatalari var (yukariya bakin)." }
+
       - name: Compile installer
         shell: pwsh
         env:

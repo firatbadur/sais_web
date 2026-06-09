@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Installer scriptleri için ortak yardımcılar (dot-source edilir).
 

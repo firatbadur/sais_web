@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     SAIS yığınını açılışta başlatan Windows servisini (NSSM) kaydeder.
 

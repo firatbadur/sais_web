@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     İlk kurulum: veri tohumlama + admin kullanıcı + WebSettings bootstrap.
 

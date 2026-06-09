@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     WSL2 + Docker CE önkoşulunu sağlar (Docker Desktop GEREKMEZ).
 

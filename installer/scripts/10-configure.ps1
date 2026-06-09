@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     env.template'i sihirbaz cevaplarıyla doldurup InstallDir\.env üretir.
 

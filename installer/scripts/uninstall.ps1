@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     SAIS servisini ve container'ları kaldırır. Veriyi varsayılan KORUR.
 

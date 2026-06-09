@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     NSSM Windows servisinin çalıştırdığı uzun-ömürlü süreç.
 

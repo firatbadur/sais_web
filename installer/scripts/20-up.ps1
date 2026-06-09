@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     GHCR'a login olur, image'ları çeker, yığını başlatır, sağlıklı olmasını bekler.
 

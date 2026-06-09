@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     SAIS kurulum orkestratörü — 00→40 adımlarını sırayla çalıştırır.
 
