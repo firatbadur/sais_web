@@ -53,29 +53,53 @@ try {
     $code = Invoke-Step "00-ensure-docker.ps1" @("-Distro", $Distro)
 
     if ($code -eq 10) {
-        # Reboot gerekli → RunOnce ile devam et, yeniden başlat.
+        # WSL2 reboot gerektiriyor → RunOnce ile login sonrası OTOMATİK devam et.
+        # Sonsuz döngü guard'ı: en fazla 3 reboot dene.
+        $counterFile = Join-Path $InstallDir ".reboot-count"
+        $count = 0
+        if (Test-Path $counterFile) { $count = [int](Get-Content $counterFile -Raw) }
+        if ($count -ge 3) {
+            Write-Host "   [X] WSL2 birkaç reboot sonrası hâlâ hazır değil." -ForegroundColor Red
+            Write-Host "       Sanallaştırma (BIOS VT-x/AMD-V) açık mı kontrol edin, sonra:" -ForegroundColor Yellow
+            Write-Host "       'wsl --install' + reboot + installer'ı tekrar çalıştırın." -ForegroundColor Yellow
+            Remove-Item $counterFile -ErrorAction SilentlyContinue
+            throw "WSL2 hazırlanamadı ($count reboot denendi)."
+        }
+        ($count + 1) | Set-Content $counterFile
+
         $resumeCmd = "`"$psExe`" -NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $here 'install.ps1')`" -AnswersFile `"$AnswersFile`" -Resume"
         Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" `
             -Name "SAISInstallResume" -Value $resumeCmd
-        Write-Host "   [!] WSL2 etkinleştirildi — REBOOT gerekiyor. Yeniden başlatma sonrası kurulum otomatik devam edecek." -ForegroundColor Yellow
+
+        # Kullanıcıya onay sor (installer gizli çalıştığı için GUI penceresi).
+        $msg = "SAIS kurulumu için WSL2 etkinleştirildi; devam etmek için Windows'un " +
+               "yeniden başlatılması gerekiyor.`n`nŞimdi yeniden başlatılsın mı?`n`n" +
+               "• Evet: makine yeniden başlar, tekrar giriş yaptığınızda kurulum OTOMATİK devam eder.`n" +
+               "• Hayır: daha sonra makineyi elle yeniden başlatın; kurulum yine kaldığı yerden devam eder."
+        $reboot = $true
+        try {
+            $wsh = New-Object -ComObject WScript.Shell
+            # 4=YesNo, 32=Question, 256=ikinci buton (Hayır) varsayılan
+            $ans = $wsh.Popup($msg, 0, "SAIS SCADA — Yeniden Başlatma", 4 + 32 + 256)
+            $reboot = ($ans -eq 6)   # 6=Evet, 7=Hayır
+        } catch {
+            $reboot = $false   # GUI gösterilemezse otomatik reboot etme, güvenli taraf
+        }
+
         Stop-Transcript | Out-Null
-        Restart-Computer -Force
+        if ($reboot) {
+            Start-Sleep -Seconds 2
+            Restart-Computer -Force
+        }
+        # Hayır → RunOnce kurulu kaldı; elle reboot'ta kurulum devam edecek.
         return
-    }
-    elseif ($code -eq 11) {
-        # WSL hiç kurulu değil → kullanıcı elle kurmalı (otomatik reboot-resume güvenilmez).
-        Write-Host ""
-        Write-Host "  ============================================================" -ForegroundColor Yellow
-        Write-Host "  WSL2 bu makinede kurulu değil. Lütfen şunları yapın:" -ForegroundColor Yellow
-        Write-Host "    1) Yönetici PowerShell:  wsl --install" -ForegroundColor Yellow
-        Write-Host "    2) Makineyi YENİDEN BAŞLATIN" -ForegroundColor Yellow
-        Write-Host "    3) Bu kurulumu (sais-setup .exe) tekrar çalıştırın" -ForegroundColor Yellow
-        Write-Host "  ============================================================" -ForegroundColor Yellow
-        throw "WSL2 önkoşulu eksik (exit 11). Yukarıdaki adımlardan sonra tekrar deneyin."
     }
     elseif ($code -ne 0) {
         throw "Docker önkoşulu başarısız (exit $code). Log: $transcript"
     }
+
+    # Başarılı geçiş → reboot sayacını temizle.
+    Remove-Item (Join-Path $InstallDir ".reboot-count") -ErrorAction SilentlyContinue
 
     # 2) .env üret
     Write-Host ">> [2/5] Yapılandırma (.env) üretiliyor..." -ForegroundColor Cyan

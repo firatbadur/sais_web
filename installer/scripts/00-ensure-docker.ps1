@@ -62,21 +62,19 @@ if (-not (Test-DistroUsable $Distro)) {
             if ($r.RestartNeeded) { $rebootNeeded = $true }
         }
     }
-    if ($rebootNeeded) {
-        Write-WarnLine "WSL2 özellikleri etkinleştirildi — REBOOT gerekiyor."
-        exit 10   # install.ps1 RunOnce + reboot + resume
-    }
-
-    # Özellikler etkin ama distro yok → kurmayı dene (WSL çekirdeği hazırsa çalışır).
-    Write-Step "WSL güncelleniyor + $Distro kuruluyor..."
+    # WSL2 + distro'yu kur (wsl --install özellikleri de açar). --no-launch ile
+    # interaktif Ubuntu kullanıcı kurulumunu atlıyoruz (root olarak kullanacağız).
+    Write-Step "WSL2 + $Distro kuruluyor (wsl --install)..."
     wsl.exe --update *> $null
     wsl.exe --set-default-version 2 *> $null
     wsl.exe --install -d $Distro --no-launch *> $null
     Start-Sleep -Seconds 5
 
     if (-not (Test-DistroUsable $Distro)) {
-        Write-WarnLine "WSL2 otomatik hazırlanamadı (büyük olasılıkla reboot gerekiyor)."
-        exit 11   # kullanıcı: wsl --install + reboot + installer'ı tekrar çalıştır
+        # Çekirdek/distro reboot sonrası aktif olur → install.ps1 RunOnce ile
+        # yeniden başlatıp login sonrası OTOMATİK devam eder.
+        Write-WarnLine "WSL2 kuruldu — etkinleşmesi için REBOOT gerekiyor (otomatik devam edilecek)."
+        exit 10
     }
 }
 
