@@ -3,7 +3,9 @@
 ############################
 # Builder: wheels'leri hazırla
 ############################
-FROM python:3.12-slim AS builder
+# NOT: bookworm'a sabitli — Debian 13 (trixie) için Microsoft ODBC (msodbcsql18)
+# prod.list deposu henüz yok; "slim" trixie'ye kayınca build kırılıyor.
+FROM python:3.12-slim-bookworm AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -28,7 +30,7 @@ RUN pip install --upgrade pip \
 ############################
 # Runtime: ince imaj (MSSQL ODBC Driver 18 ile)
 ############################
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
