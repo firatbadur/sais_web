@@ -244,7 +244,7 @@ LOGOUT_REDIRECT_URL = "/dashboard/login/"
 
 # Email backend (dashboard ForgotPassword için placeholder; admin manuel sıfırlar)
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@sais.local")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@envisoft.local")
 
 
 # Sessions
@@ -392,14 +392,14 @@ LOGGING = {
 
 JAZZMIN_SETTINGS = {
     # Branding
-    "site_title": "SAIS Yönetim",
-    "site_header": "SAIS Yönetim Paneli",
-    "site_brand": "SAIS",
+    "site_title": "Envisoft WebX",
+    "site_header": "Envisoft WebX",
+    "site_brand": "Envisoft WebX",
     "site_icon": "images/logo/icon.png",
     "site_logo": "images/logo/icon.png",
     "login_logo": "images/logo/logo-v1.png",
     "site_logo_classes": "img-circle",
-    "welcome_sign": "SAIS Web SCADA — Yönetim Paneli",
+    "welcome_sign": "Envisoft WebX — Yönetim Paneli",
     "copyright": "Envisoft",
     "user_avatar": None,
 

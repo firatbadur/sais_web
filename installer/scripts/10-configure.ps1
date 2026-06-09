@@ -1,11 +1,13 @@
-﻿<#
+<#
 .SYNOPSIS
-    env.template'i sihirbaz cevaplarıyla doldurup InstallDir\.env üretir.
+    Render env.template with the wizard answers into InstallDir\.env.
 
 .DESCRIPTION
-    Güçlü rastgele DJANGO_SECRET_KEY + (verilmediyse) MSSQL şifresi üretir.
-    ALLOWED_HOSTS/CSRF için domain'den fleet-wide wildcard türetir.
-    Admin kimlik bilgileri .env'e YAZILMAZ (30-firstrun'a parametre geçilir).
+    Generates a strong random DJANGO_SECRET_KEY + (if not supplied) MSSQL
+    password. Derives fleet-wide wildcard ALLOWED_HOSTS/CSRF from the domain.
+    Admin credentials are NOT written to .env (passed to 30-firstrun instead).
+
+    NOTE: ASCII-only (English) on purpose (Windows PowerShell 5.1 encoding).
 #>
 param(
     [Parameter(Mandatory)] [string]$InstallDir,
@@ -30,17 +32,17 @@ function New-RandomSecret([int]$len = 50) {
     -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
 }
 
-Write-Step ".env üretiliyor..."
+Write-Step "Generating .env ..."
 
 $secret = New-RandomSecret 50
 if (-not $MssqlPassword) { $MssqlPassword = (New-RandomSecret 24) + "Aa1!" }
 
-# Domain'den fleet-wide wildcard türet: sais-tesis1.envisoft.com.tr -> .envisoft.com.tr
+# Derive a fleet-wide wildcard from the domain:
+# sais-tesis1.envisoft.com.tr -> .envisoft.com.tr
 $baseDomain = $Domain
 $parts = $Domain.Split(".")
 if ($parts.Count -ge 2) {
-    $baseDomain = "." + ($parts[-($parts.Count - 1)..-1] -join ".")  # son iki+ etiket
-    $baseDomain = "." + ($parts[1..($parts.Count - 1)] -join ".")     # ilk etiketi at
+    $baseDomain = "." + ($parts[1..($parts.Count - 1)] -join ".")  # drop the first label
 }
 $allowedHosts = "localhost,127.0.0.1,web,$baseDomain"
 $csrf = "https://*$baseDomain,https://$Domain"
@@ -67,18 +69,18 @@ foreach ($k in $map.Keys) {
 }
 
 $envPath = Join-Path $InstallDir ".env"
-# Docker/compose .env LF ister; UTF8 (BOM'suz) yaz.
+# Docker/compose .env wants LF; write UTF-8 (no BOM).
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $content = $content -replace "`r`n", "`n"
 [System.IO.File]::WriteAllText($envPath, $content, $utf8NoBom)
 
-Write-Ok ".env üretildi: $envPath"
+Write-Ok ".env generated: $envPath"
 
-# WebSettings'in ilk apply'ı için domain/TLS bilgisini de döndür (firstrun kullanır).
+# Also stash the domain/TLS info for the first-run WebSettings bootstrap.
 $state = @{
     Domain  = $Domain
     TlsMode = $TlsMode
     LeEmail = $LeEmail
 }
 $state | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $InstallDir "web-bootstrap.json")
-Write-Ok "web-bootstrap.json yazıldı (firstrun WebSettings'i dolduracak)."
+Write-Ok "web-bootstrap.json written (first-run will fill WebSettings)."

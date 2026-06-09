@@ -1306,3 +1306,7 @@ msgstr "Certificate file is required."
 
 msgid "PEM modunda özel anahtar dosyası zorunludur."
 msgstr "In PEM mode the private key file is required."
+
+# --- Envisoft WebX rebrand ---
+msgid "Envisoft WebX'e hoş geldiniz"
+msgstr "Welcome to Envisoft WebX"

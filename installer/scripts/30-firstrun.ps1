@@ -1,12 +1,14 @@
-﻿<#
+<#
 .SYNOPSIS
-    İlk kurulum: veri tohumlama + admin kullanıcı + WebSettings bootstrap.
+    First run: seed data + admin user + WebSettings bootstrap.
 
 .DESCRIPTION
-    Idempotent — bir marker dosyasıyla korunur, tekrar çalıştırılırsa atlanır.
+    Idempotent - guarded by a marker file, skipped on re-runs.
     seed_initial_data + seed_sais_data + seed_admin_user (non-interactive).
-    web-bootstrap.json varsa WebSettings'i domain/TLS ile doldurur ve Caddyfile
-    üretir (panel yapılandırması installer'dan gelir).
+    If web-bootstrap.json exists, fills WebSettings with the domain/TLS and
+    renders the Caddyfile (panel config comes from the installer).
+
+    NOTE: ASCII-only (English) on purpose (Windows PowerShell 5.1 encoding).
 #>
 param(
     [Parameter(Mandatory)] [string]$InstallDir,
@@ -20,24 +22,24 @@ $ErrorActionPreference = "Stop"
 
 $marker = Join-Path $InstallDir ".firstrun-done"
 if (Test-Path $marker) {
-    Write-Ok "İlk kurulum daha önce yapılmış (marker var) — atlanıyor."
+    Write-Ok "First run already completed (marker present) - skipping."
     exit 0
 }
 
-Write-Step "Çekirdek veri tohumlanıyor (seed_initial_data)..."
+Write-Step "Seeding core data (seed_initial_data)..."
 Invoke-Manage $InstallDir "seed_initial_data"
 
-Write-Step "SAIS verisi tohumlanıyor (seed_sais_data)..."
+Write-Step "Seeding SAIS data (seed_sais_data)..."
 Invoke-Manage $InstallDir "seed_sais_data"
 
-Write-Step "Admin kullanıcı oluşturuluyor ($AdminUser)..."
+Write-Step "Creating admin user ($AdminUser)..."
 $envInline = "DJANGO_SUPERUSER_USERNAME='$AdminUser' DJANGO_SUPERUSER_EMAIL='$AdminEmail' DJANGO_SUPERUSER_PASSWORD='$AdminPassword'"
 Invoke-Manage $InstallDir "seed_admin_user" $envInline
 
-# WebSettings bootstrap — installer'dan gelen domain/TLS panele yazılır.
+# WebSettings bootstrap - the installer's domain/TLS is written into the panel.
 $bootstrapPath = Join-Path $InstallDir "web-bootstrap.json"
 if (Test-Path $bootstrapPath) {
-    Write-Step "WebSettings (domain + TLS) uygulanıyor..."
+    Write-Step "Applying WebSettings (domain + TLS)..."
     $b = Get-Content -Raw $bootstrapPath | ConvertFrom-Json
     $py = @"
 from api.models import WebSettings
@@ -56,4 +58,4 @@ print('WEBSETTINGS_OK' if ok else ('WEBSETTINGS_ERR ' + err))
 }
 
 New-Item -ItemType File -Path $marker -Force | Out-Null
-Write-Ok "İlk kurulum tamamlandı."
+Write-Ok "First run completed."

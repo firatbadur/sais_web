@@ -117,4 +117,4 @@ jobs:
       - name: Attach installer to release
         uses: softprops/action-gh-release@v2
         with:
-          files: installer/dist/sais-setup-${{ github.ref_name }}.exe
+          files: installer/dist/EnvisoftWebX-Setup-${{ github.ref_name }}.exe

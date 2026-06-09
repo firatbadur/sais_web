@@ -2,9 +2,17 @@
 
 Bu dosya Claude Code için proje rehberidir. Geliştirmeye başlamadan önce okunması önerilir.
 
+> **Ürün/marka adı: "Envisoft WebX".** Kullanıcı-görünür her yerde (dashboard UI, admin başlıkları,
+> Windows installer, masaüstü/başlat menüsü kısayolları, kurulum dizini `C:\EnvisoftWebX`, Windows
+> servisi `EnvisoftWebX`) bu ad kullanılır. **Kod adı `sais_web` ve iç tanımlayıcılar (app `sais_domain`,
+> tablo `sais_*`, GHCR image `sais_web`, komut `seed_sais_data`, `SAIS_SIM_*` Bakanlık API'leri)
+> DEĞİŞMEDİ** — onlar teknik isimler / Bakanlık SAIS rejimine ait, marka değil.
+
 ## Proje amacı
 
-`sais_web`, **atıksu sürekli izleme** istasyonlarından (SAIS) gelen ölçüm verilerini toplayan, saklayan ve REST API ile sunan bir **web SCADA uygulamasıdır**. Django 5.2 + Django REST Framework üzerine kuruludur.
+`sais_web` (ürün adı **Envisoft WebX**), **atıksu sürekli izleme** istasyonlarından (SAIS — Çevre
+Bakanlığı rejimi) gelen ölçüm verilerini toplayan, saklayan ve REST API ile sunan bir **web SCADA
+uygulamasıdır**. Django 5.2 + Django REST Framework üzerine kuruludur.
 
 Mimari üç katmana ayrıldı:
 

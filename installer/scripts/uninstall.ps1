@@ -1,13 +1,15 @@
-﻿<#
+<#
 .SYNOPSIS
-    SAIS servisini ve container'ları kaldırır. Veriyi varsayılan KORUR.
+    Remove the Envisoft WebX service and containers. Keeps data by default.
 
 .PARAMETER PurgeData
-    Verilirse named volume'leri de siler (DB dahil — GERİ ALINAMAZ).
+    If given, also removes named volumes (including the DB - IRREVERSIBLE).
+
+    NOTE: ASCII-only (English) on purpose (Windows PowerShell 5.1 encoding).
 #>
 param(
     [Parameter(Mandatory)] [string]$InstallDir,
-    [string]$ServiceName = "SAISScada",
+    [string]$ServiceName = "EnvisoftWebX",
     [string]$Distro = "Ubuntu",
     [switch]$PurgeData
 )
@@ -18,22 +20,22 @@ $script:WslDistro = $Distro
 
 $nssm = Join-Path $InstallDir "nssm.exe"
 if (Test-Path $nssm) {
-    Write-Step "Servis durduruluyor + kaldırılıyor: $ServiceName"
+    Write-Step "Stopping + removing service: $ServiceName"
     & $nssm stop $ServiceName *> $null
     & $nssm remove $ServiceName confirm *> $null
 }
 
-Write-Step "Container'lar durduruluyor..."
+Write-Step "Stopping containers..."
 try {
     if ($PurgeData) {
-        Write-WarnLine "PurgeData: tüm veriler (DB dahil) siliniyor!"
+        Write-WarnLine "PurgeData: removing all data (including the DB)!"
         Invoke-Compose $InstallDir "down -v"
     } else {
         Invoke-Compose $InstallDir "down"
-        Write-Ok "Container'lar kaldırıldı; volume'ler (DB/redis/cert) KORUNDU."
+        Write-Ok "Containers removed; volumes (DB/redis/cert) were KEPT."
     }
 } catch {
-    Write-WarnLine "compose down başarısız (yığın zaten kapalı olabilir)."
+    Write-WarnLine "compose down failed (stack may already be down)."
 }
 
-Write-Ok "Kaldırma tamamlandı."
+Write-Ok "Uninstall finished."

@@ -1,12 +1,14 @@
-﻿<#
+<#
 .SYNOPSIS
-    NSSM Windows servisinin çalıştırdığı uzun-ömürlü süreç.
+    Long-running process driven by the NSSM Windows service.
 
 .DESCRIPTION
-    Makine açılışında: WSL Docker daemon'ını başlatır (WSL'de systemd yoksa),
-    ardından `docker compose up -d` ile yığını kaldırır ve canlı kalır
-    (NSSM süreç ölmedikçe servisi "çalışıyor" görür). Servis durdurulunca
-    yığını nazikçe durdurur.
+    At boot: starts the WSL Docker daemon (if WSL has no systemd), then brings
+    the stack up with `docker compose up -d` and stays alive (NSSM treats the
+    service as running while this process lives). When the service stops, the
+    stack is stopped gracefully.
+
+    NOTE: ASCII-only (English) on purpose (Windows PowerShell 5.1 encoding).
 #>
 param(
     [Parameter(Mandatory)] [string]$InstallDir,
@@ -17,17 +19,17 @@ param(
 $script:WslDistro = $Distro
 
 try {
-    Write-Step "WSL Docker daemon başlatılıyor..."
+    Write-Step "Starting WSL Docker daemon..."
     wsl.exe -d $Distro -u root -- bash -lc "service docker start || (dockerd >/var/log/dockerd.log 2>&1 &) ; sleep 3" *> $null
 
-    Write-Step "Yığın başlatılıyor (up -d)..."
+    Write-Step "Starting the stack (up -d)..."
     Invoke-Compose $InstallDir "up -d"
-    Write-Ok "SAIS yığını çalışıyor. Servis canlı kalıyor."
+    Write-Ok "Envisoft WebX stack is running. Service stays alive."
 
-    # NSSM süreci canlı tutsun diye blokla. Servis durdurulduğunda finally devreye girer.
+    # Block so NSSM keeps the process alive. finally runs on service stop.
     while ($true) { Start-Sleep -Seconds 3600 }
 }
 finally {
-    Write-Step "Servis durduruluyor — yığın durduruluyor (compose stop)..."
+    Write-Step "Service stopping - stopping the stack (compose stop)..."
     try { Invoke-Compose $InstallDir "stop" } catch { }
 }

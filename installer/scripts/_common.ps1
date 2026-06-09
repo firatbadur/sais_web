@@ -1,12 +1,15 @@
-﻿<#
+<#
 .SYNOPSIS
-    Installer scriptleri için ortak yardımcılar (dot-source edilir).
+    Shared helpers for installer scripts (dot-sourced).
 
 .DESCRIPTION
-    SAIS yığını WSL2 içindeki Docker CE üzerinde çalışır (Docker Desktop
-    lisansı GEREKMEZ). Compose dosyaları + .env Windows tarafında InstallDir'de
-    durur; WSL bunlara /mnt/<sürücü>/... yolundan erişir. Bu modül docker
-    çağrılarını WSL'e yönlendiren sarmalayıcıları sağlar.
+    The Envisoft WebX stack runs on Docker CE inside WSL2 (no Docker Desktop
+    license required). Compose files + .env live on the Windows side under
+    InstallDir; WSL reaches them via /mnt/<drive>/... This module wraps docker
+    calls so they run inside WSL.
+
+    NOTE: This file is intentionally ASCII-only (English). Windows PowerShell 5.1
+    reads BOM-less scripts as ANSI; non-ASCII characters would corrupt parsing.
 #>
 
 $script:WslDistro = "Ubuntu"
@@ -24,7 +27,7 @@ function Write-WarnLine([string]$msg) {
     Write-Host "   [!] $msg" -ForegroundColor Yellow
 }
 
-# C:\SAIS  ->  /mnt/c/SAIS
+# C:\EnvisoftWebX  ->  /mnt/c/EnvisoftWebX
 function ConvertTo-WslPath([string]$winPath) {
     $full = [System.IO.Path]::GetFullPath($winPath)
     $drive = $full.Substring(0, 1).ToLower()
@@ -32,7 +35,7 @@ function ConvertTo-WslPath([string]$winPath) {
     return "/mnt/$drive$rest"
 }
 
-# WSL distro mevcut ve Docker çalışıyor mu?
+# Is the WSL distro present and is Docker running inside it?
 function Test-DockerReady {
     try {
         $distros = (wsl.exe --list --quiet) -replace "`0", ""
@@ -44,32 +47,32 @@ function Test-DockerReady {
     }
 }
 
-# WSL distro içinde keyfi bash komutu çalıştır.
+# Run an arbitrary bash command inside the WSL distro.
 function Invoke-Wsl([string]$bash) {
     wsl.exe -d $script:WslDistro -- bash -lc "$bash"
     if ($LASTEXITCODE -ne 0) {
-        throw "WSL komutu başarısız (exit $LASTEXITCODE): $bash"
+        throw "WSL command failed (exit $LASTEXITCODE): $bash"
     }
 }
 
-# Docker daemon'ının distro içinde çalıştığından emin ol (systemd yoksa fallback).
+# Make sure the Docker daemon is running inside the distro (systemd fallback).
 function Assert-Docker {
     wsl.exe -d $script:WslDistro -u root -- bash -lc `
         "docker info >/dev/null 2>&1 || service docker start 2>/dev/null || systemctl start docker 2>/dev/null || (pgrep dockerd >/dev/null || (dockerd >/var/log/dockerd.log 2>&1 &)); sleep 2" *> $null
 }
 
-# InstallDir bağlamında `docker compose ...` çalıştır.
+# Run `docker compose ...` in the InstallDir context.
 function Invoke-Compose([string]$InstallDir, [string]$composeArgs) {
     Assert-Docker
     $wslDir = ConvertTo-WslPath $InstallDir
     $cmd = "cd '$wslDir' && docker compose --env-file .env -f $script:ComposeFile $composeArgs"
     wsl.exe -d $script:WslDistro -- bash -lc "$cmd"
     if ($LASTEXITCODE -ne 0) {
-        throw "docker compose başarısız (exit $LASTEXITCODE): $composeArgs"
+        throw "docker compose failed (exit $LASTEXITCODE): $composeArgs"
     }
 }
 
-# web container'ında manage.py komutu çalıştır.
+# Run a manage.py command inside the web container.
 function Invoke-Manage([string]$InstallDir, [string]$manageArgs, [string]$envInline = "") {
     $prefix = ""
     if ($envInline) { $prefix = "$envInline " }

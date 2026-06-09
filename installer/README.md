@@ -1,78 +1,71 @@
-# SAIS SCADA — Windows Installer
+# Envisoft WebX - Windows Installer
 
-"next-next-next" kurulum paketi. Inno Setup sihirbazı WSL2 + Docker CE'yi kurar,
-GHCR'dan image çeker, compose yığınını başlatır, ilk veriyi tohumlar ve açılışta
-otomatik kalkan bir Windows servisi (NSSM) kaydeder.
+A "next-next-next" install package. The Inno Setup wizard sets up WSL2 + Docker CE,
+pulls the image from GHCR, starts the compose stack, seeds initial data and
+registers a Windows service (NSSM) that auto-starts at boot.
 
-## Mimari
+## Architecture
 
 ```
-sais-setup-vX.Y.Z.exe (Inno Setup)
-   │  sihirbaz: lisans · DB şifresi · domain/TLS · admin
-   ▼
-install.ps1  (orkestratör; reboot gerekirse RunOnce ile devam)
-   ├─ 00-ensure-docker.ps1   WSL2 + Docker CE (Docker Desktop YOK)
-   ├─ 10-configure.ps1       env.template → .env (+ secret/şifre üret)
-   ├─ 20-up.ps1              GHCR login (gömülü read-only token) → pull → up -d
-   ├─ 30-firstrun.ps1        seed_initial/sais/admin + WebSettings bootstrap
-   └─ 40-register-service.ps1  NSSM "SAISScada" servisi (sais-stack.ps1)
+EnvisoftWebX-Setup-vX.Y.Z.exe (Inno Setup)
+   |  wizard: license - DB password - domain/TLS - admin
+   v
+install.ps1  (orchestrator; resumes via RunOnce if a reboot is needed)
+   |- 00-ensure-docker.ps1   WSL2 + Docker CE (no Docker Desktop)
+   |- 10-configure.ps1       env.template -> .env (+ generates secret/password)
+   |- 20-up.ps1              GHCR login (embedded read-only token) -> pull -> up -d
+   |- 30-firstrun.ps1        seed_initial/sais/admin + WebSettings bootstrap
+   |- 40-register-service.ps1  NSSM "EnvisoftWebX" service (sais-stack.ps1)
 ```
 
-Tüm Docker işlemleri **WSL2 içindeki Docker CE** üzerinde çalışır (Docker Desktop
-lisansı gerekmez). Compose dosyaları + `.env` Windows tarafında `C:\SAIS`'te durur;
-WSL bunlara `/mnt/c/SAIS` üzerinden erişir. Named volume'ler Docker tarafından WSL
-içinde yönetilir.
+All docker work runs on **Docker CE inside WSL2** (no Docker Desktop license).
+Compose files + `.env` live on the Windows side under `C:\EnvisoftWebX`; WSL reaches
+them via `/mnt/c/EnvisoftWebX`. Named volumes are managed by Docker inside WSL.
 
-## Derleme
+The installer is **English / ASCII-only** on purpose: Windows PowerShell 5.1 reads
+BOM-less scripts as ANSI, so non-ASCII characters would corrupt parsing.
 
-Önkoşullar (derleyen makinede):
-- [Inno Setup 6](https://jrsoftware.org/isdl.php) (`iscc` PATH'te).
-- `payload\nssm.exe` — [nssm.cc](https://nssm.cc/download)'den indir, `installer\payload\` içine koy.
+## Build
+
+Prerequisites (on the build machine):
+- [Inno Setup 6](https://jrsoftware.org/isdl.php) (`iscc` on PATH).
+- `payload\nssm.exe` - download from [nssm.cc](https://nssm.cc/download) into `installer\payload\`.
 
 ```powershell
-# GHCR_TOKEN bir read:packages scope'lu PAT; repo'ya commitlenmez, build'de enjekte edilir.
+# GHCR_TOKEN is a read:packages PAT; not committed, injected at build time.
 iscc /DGHCR_USER=firatbadur /DGHCR_TOKEN=<PAT> /DAPP_VERSION=v1.2.0 installer\sais_setup.iss
-# Çıktı: installer\dist\sais-setup-v1.2.0.exe
+# Output: installer\dist\EnvisoftWebX-Setup-v1.2.0.exe
 ```
 
-CI'da bu, GitHub Actions `release.yml` içindeki `windows-installer` job'ı tarafından
-otomatik yapılır (`GHCR_TOKEN` repo secret'ından gelir) ve Release'e eklenir.
+In CI this is done by the `windows-installer` job in GitHub Actions `release.yml`
+(`GHCR_TOKEN` comes from the `INSTALLER_GHCR_TOKEN` repo secret) and attached to the Release.
 
-## Önkoşullar (kurulacak makinede)
+## Prerequisites (on the target machine)
 
-- Windows 10/11 x64, **yönetici** hakları.
-- BIOS'ta sanallaştırma (Intel VT-x / AMD-V) açık — WSL2 için.
-- İnternet erişimi (GHCR pull + WSL/Docker indirme).
-- **Panel dışı, önceden yapılmalı:** domain için DNS A kaydı (public IP'ye) +
-  modem/firewall'da 80/443 yönlendirmesi (Let's Encrypt ve dış erişim için).
+- Windows 10/11 x64, **Administrator** rights.
+- **Virtualization enabled in BIOS** (Intel VT-x / AMD-V) - required for WSL2.
+- Internet access (GHCR pull + WSL/Docker downloads).
+- **Outside the installer, set up beforehand:** a DNS A record for the domain (to the
+  public IP) + 80/443 forwarding on the modem/firewall (for Let's Encrypt and external access).
 
-**WSL2 önkoşulu:** Makinede WSL2 yoksa installer şu mesajı verir ve durur:
-```
-WSL2 bu makinede kurulu değil. Lütfen:
-  1) Yönetici PowerShell:  wsl --install
-  2) Makineyi YENİDEN BAŞLATIN
-  3) Bu kurulumu tekrar çalıştırın
-```
-WSL2 hazır olduktan sonra installer Docker CE'yi otomatik kurar (systemd ile kalıcı
-docker servisi), image çeker ve yığını başlatır. Sadece WSL özelliklerinin
-etkinleştirilmesi gerekiyorsa installer reboot'u kendi tetikleyip RunOnce ile devam
-eder; ama distro hiç yoksa OS-seviyesi `wsl --install` + reboot kullanıcıya bırakılır
-(daha güvenilir).
+The first WSL2 install requires a **reboot**; the installer reboots (with confirmation)
+and resumes automatically via RunOnce after you log back in.
 
-## Kaldırma
+## Uninstall
 
-Denetim Masası → Programlar → "SAIS SCADA" → Kaldır. Servis + container'lar
-kaldırılır; **DB/redis/cert volume'leri korunur**. Tüm veriyi silmek için:
+Control Panel -> Programs -> "Envisoft WebX" -> Uninstall. The service + containers are
+removed; **DB/redis/cert volumes are kept**. To remove all data:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\SAIS\scripts\uninstall.ps1" -InstallDir "C:\SAIS" -PurgeData
+powershell -ExecutionPolicy Bypass -File "C:\EnvisoftWebX\scripts\uninstall.ps1" -InstallDir "C:\EnvisoftWebX" -PurgeData
 ```
 
-## Test (gerçek Windows makinesinde)
+## Test (on a real Windows machine)
 
-Bu paket dev ortamında doğrulanamaz; temiz bir Windows VM'de manuel test edilir:
-1. `sais-setup.exe` çalıştır → sihirbazı doldur.
-2. (Gerekirse reboot) → kurulum otomatik devam eder.
-3. `https://<domain>/dashboard/` → admin ile giriş.
-4. Makineyi reboot et → `SAISScada` servisi yığını otomatik kaldırır.
-5. Loglar: `C:\SAIS\logs\install.log`, `C:\SAIS\logs\service.log`.
+This package cannot be verified in the dev environment; test it manually on a clean
+Windows VM/PC (with virtualization enabled):
+1. Run `EnvisoftWebX-Setup.exe` -> fill in the wizard.
+2. (If needed) reboot -> the install resumes automatically.
+3. `https://<domain>/dashboard/` -> sign in with the admin account.
+4. Reboot the machine -> the `EnvisoftWebX` service brings the stack up automatically.
+5. Logs: `C:\EnvisoftWebX\logs\install.log`, `C:\EnvisoftWebX\logs\service.log`.

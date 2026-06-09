@@ -1,14 +1,15 @@
-﻿; ============================================================================
-;  SAIS SCADA — Windows Installer (Inno Setup)
+; ============================================================================
+;  Envisoft WebX - Windows Installer (Inno Setup)
 ;
-;  "next-next-next" kurulum: WSL2 + Docker CE'yi kurar, GHCR'dan image çeker,
-;  compose yığınını başlatır, ilk veriyi tohumlar, Windows servisi kaydeder.
+;  "next-next-next" install: sets up WSL2 + Docker CE, pulls the image from
+;  GHCR, starts the compose stack, seeds initial data, registers a service.
 ;
-;  Derleme:
-;    iscc /DGHCR_USER=<kullanici> /DGHCR_TOKEN=<read:packages PAT> ^
+;  Build:
+;    iscc /DGHCR_USER=<user> /DGHCR_TOKEN=<read:packages PAT> ^
 ;         /DAPP_VERSION=v1.2.0 installer\sais_setup.iss
 ;
-;  GHCR_TOKEN derleme sırasında enjekte edilir (repo'ya commitlenmez).
+;  GHCR_TOKEN is injected at build time (never committed to the repo).
+;  This file is ASCII-only (English) on purpose to avoid encoding issues.
 ; ============================================================================
 
 #ifndef GHCR_USER
@@ -29,14 +30,14 @@
 #define WSL_DISTRO "Ubuntu"
 
 [Setup]
-AppName=SAIS SCADA
+AppName=Envisoft WebX
 AppVersion={#APP_VERSION}
 AppPublisher=Envisoft
-DefaultDirName=C:\SAIS
-DefaultGroupName=SAIS SCADA
+DefaultDirName=C:\EnvisoftWebX
+DefaultGroupName=Envisoft WebX
 DisableProgramGroupPage=yes
 OutputDir=dist
-OutputBaseFilename=sais-setup-{#APP_VERSION}
+OutputBaseFilename=EnvisoftWebX-Setup-{#APP_VERSION}
 Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -45,34 +46,35 @@ ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 
 [Languages]
-Name: "tr"; MessagesFile: "compiler:Languages\Turkish.isl"
 Name: "en"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-; Installer script'leri ve şablonlar
+; Installer scripts and templates
 Source: "scripts\*";   DestDir: "{app}\scripts";   Flags: recursesubdirs ignoreversion
 Source: "templates\*"; DestDir: "{app}\templates"; Flags: recursesubdirs ignoreversion
-; Saha compose dosyası (repo kökünden)
+; Production compose file (from repo root)
 Source: "..\docker-compose.prod.yml"; DestDir: "{app}"; Flags: ignoreversion
-; NSSM (payload'a derleme öncesi yerleştirilir)
+; NSSM (placed into payload before build)
 Source: "payload\nssm.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\SAIS Dashboard"; Filename: "https://{code:GetDomain}/dashboard/"
-Name: "{group}\SAIS Kaldır"; Filename: "{uninstallexe}"
+Name: "{group}\Envisoft WebX Dashboard"; Filename: "https://{code:GetDomain}/dashboard/"
+Name: "{group}\Uninstall Envisoft WebX"; Filename: "{uninstallexe}"
+; Desktop shortcut that opens the dashboard in the default browser.
+Name: "{commondesktop}\Envisoft WebX"; Filename: "https://{code:GetDomain}/dashboard/"
 
 [Run]
-; runhidden YOK → kurulum GÖRÜNÜR konsolda akar; install.ps1 sonunda Enter'a
-; kadar bekler. waituntilterminated → Inno kurulum bitene dek bekler.
+; No runhidden -> the install runs in a VISIBLE console; install.ps1 keeps the
+; window open until Enter. waituntilterminated -> Inno waits for completion.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
   Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\install.ps1"" -AnswersFile ""{app}\install-answers.json"""; \
-  StatusMsg: "Docker kuruluyor, image çekiliyor ve yığın başlatılıyor (konsol penceresini izleyin)..."; \
+  StatusMsg: "Installing Docker, pulling images and starting the stack (watch the console window)..."; \
   Check: WriteAnswers; Flags: waituntilterminated
 
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
   Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\uninstall.ps1"" -InstallDir ""{app}"""; \
-  Flags: runhidden waituntilterminated; RunOnceId: "SAISDown"
+  Flags: runhidden waituntilterminated; RunOnceId: "EnvisoftWebXDown"
 
 [Code]
 var
@@ -84,28 +86,28 @@ var
 
 procedure InitializeWizard;
 begin
-  { Lisans }
+  { License }
   LicensePage := CreateInputQueryPage(wpSelectDir,
-    'Lisans', 'Kurulum lisans bilgileri',
-    'Bu sahaya ait imzalı lisans bilgilerini girin.');
-  LicensePage.Add('Lisans Anahtarı (LICENSE_KEY):', False);
-  LicensePage.Add('Lisans Manifest URL (LICENSE_URL):', False);
+    'License', 'Installation license information',
+    'Enter the signed license information for this site.');
+  LicensePage.Add('License Key (LICENSE_KEY):', False);
+  LicensePage.Add('License Manifest URL (LICENSE_URL):', False);
 
-  { Veritabanı }
+  { Database }
   DbPage := CreateInputQueryPage(LicensePage.ID,
-    'Veritabanı', 'SQL Server ayarları',
-    'Bundled SQL Server Standard için SA şifresi. Boş bırakılırsa güçlü bir şifre üretilir.');
-  DbPage.Add('SA Şifresi (boş = otomatik):', True);
-  DbPage.Add('SQL Server Edition (MSSQL_PID):', False);
+    'Database', 'SQL Server settings',
+    'SA password for the bundled SQL Server Standard. Leave blank to auto-generate a strong one.');
+  DbPage.Add('SA password (blank = auto):', True);
+  DbPage.Add('SQL Server edition (MSSQL_PID):', False);
   DbPage.Values[1] := 'Standard';
 
-  { Saha / domain }
+  { Site / domain }
   SitePage := CreateInputQueryPage(DbPage.ID,
-    'Web Erişimi', 'Domain ve SSL',
-    'Dışarıdan erişilecek domain. DNS A kaydı + 443 yönlendirmesi önceden yapılmalı.');
-  SitePage.Add('Domain (örn. sais-tesis1.envisoft.com.tr):', False);
-  SitePage.Add('Let''s Encrypt E-postası:', False);
-  { TLS modu için combo box ekle }
+    'Web Access', 'Domain and SSL',
+    'Public domain for external access. A DNS A record + 443 forwarding must be set up beforehand.');
+  SitePage.Add('Domain (e.g. site1.envisoft.com.tr):', False);
+  SitePage.Add('Let''s Encrypt email:', False);
+  { TLS mode combo box }
   TlsCombo := TNewComboBox.Create(SitePage);
   TlsCombo.Parent := SitePage.Surface;
   TlsCombo.Style := csDropDownList;
@@ -117,13 +119,13 @@ begin
   TlsCombo.Left := SitePage.Edits[1].Left;
   TlsCombo.Width := SitePage.Edits[1].Width;
 
-  { Admin kullanıcı }
+  { Admin user }
   AdminPage := CreateInputQueryPage(SitePage.ID,
-    'Yönetici Hesabı', 'İlk admin kullanıcısı',
-    'Dashboard''a giriş için Sistem Yöneticisi (rol=1) hesabı.');
-  AdminPage.Add('Kullanıcı adı:', False);
-  AdminPage.Add('E-posta:', False);
-  AdminPage.Add('Şifre:', True);
+    'Administrator Account', 'First admin user',
+    'System Administrator (role=1) account used to sign in to the dashboard.');
+  AdminPage.Add('Username:', False);
+  AdminPage.Add('Email:', False);
+  AdminPage.Add('Password:', True);
 end;
 
 function GetDomain(Param: String): String;
@@ -141,22 +143,35 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
+
+  { Site page: domain is always required; Let's Encrypt also needs an email. }
   if CurPageID = SitePage.ID then begin
-    if (TlsCombo.Text = 'letsencrypt') and (Trim(SitePage.Values[0]) = '') then begin
-      MsgBox('Let''s Encrypt için domain zorunludur.', mbError, MB_OK);
+    if Trim(SitePage.Values[0]) = '' then begin
+      MsgBox('A domain is required (e.g. site1.envisoft.com.tr).', mbError, MB_OK);
+      Result := False;
+    end else if Pos('.', SitePage.Values[0]) = 0 then begin
+      MsgBox('The domain looks invalid (it must contain a dot).', mbError, MB_OK);
+      Result := False;
+    end else if (TlsCombo.Text = 'letsencrypt') and (Trim(SitePage.Values[1]) = '') then begin
+      MsgBox('A Let''s Encrypt email is required when the TLS mode is letsencrypt.', mbError, MB_OK);
       Result := False;
     end;
   end;
+
+  { Admin page: username and password are required. }
   if CurPageID = AdminPage.ID then begin
-    if (Trim(AdminPage.Values[0]) = '') or (Trim(AdminPage.Values[2]) = '') then begin
-      MsgBox('Yönetici kullanıcı adı ve şifresi zorunludur.', mbError, MB_OK);
+    if Trim(AdminPage.Values[0]) = '' then begin
+      MsgBox('An administrator username is required.', mbError, MB_OK);
+      Result := False;
+    end else if Trim(AdminPage.Values[2]) = '' then begin
+      MsgBox('An administrator password is required.', mbError, MB_OK);
       Result := False;
     end;
   end;
 end;
 
-{ install.ps1 [Run] entry'sinden hemen önce (dosyalar kopyalandıktan sonra)
-  answers JSON'ını yaz. Check fonksiyonu True dönerek entry'nin çalışmasını sağlar. }
+{ Just before the install.ps1 [Run] entry (after files are copied), write the
+  answers JSON. Returning True from the Check lets the entry run. }
 function WriteAnswers: Boolean;
 var
   json: String;
