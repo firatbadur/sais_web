@@ -45,16 +45,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
 
-# Microsoft ODBC Driver 18 for SQL Server
+# Microsoft ODBC Driver 18 for SQL Server (Debian 12 / bookworm).
+# NOT: prod.list'i çekip sed'lemek yerine source satırını DOĞRUDAN yazıyoruz —
+# Microsoft prod.list formatını değiştirdi ve curl+sed "Malformed entry (URI
+# parse)" ile kırılıyordu. Taban imaj bookworm'a sabit olduğundan değerler sabit.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl gnupg ca-certificates \
     && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
         | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
-    && . /etc/os-release \
-    && curl -fsSL "https://packages.microsoft.com/config/debian/${VERSION_ID}/prod.list" \
-        -o /etc/apt/sources.list.d/mssql-release.list \
-    && sed -i 's|deb |deb [signed-by=/usr/share/keyrings/microsoft-prod.gpg] |' \
-        /etc/apt/sources.list.d/mssql-release.list \
+    && echo "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" \
+        > /etc/apt/sources.list.d/mssql-release.list \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends \
         msodbcsql18 \
