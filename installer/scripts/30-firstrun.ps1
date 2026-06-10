@@ -28,6 +28,21 @@ if (Test-Path $marker) {
 
 Assert-Docker
 
+# The web container runs `ensure_database && migrate && ...` on startup; that can
+# take a couple of minutes (SQL Server cold start + migrations). Seeding before
+# it finishes hits a still-initializing/crash-looping container -> exec is killed
+# (exit 137) or tables don't exist yet. Wait until `migrate --check` reports all
+# migrations applied (redirect INSIDE bash so no NativeCommandError under Stop).
+$wslDir = ConvertTo-WslPath $InstallDir
+$checkCmd = "cd '$wslDir' && docker compose --env-file .env -f $script:ComposeFile exec -T web python manage.py migrate --check >/dev/null 2>&1"
+$ready = Wait-WithSpin "Waiting for web to finish migrations" -TimeoutSec 480 -CheckEverySec 5 -Check {
+    wsl.exe -d $script:WslDistro -- bash -lc $checkCmd
+    return ($LASTEXITCODE -eq 0)
+}
+if (-not $ready) {
+    throw "Web container did not finish migrations in time. Check: docker compose logs web"
+}
+
 Invoke-WslSpin "Seeding core data (seed_initial_data)" `
     (Get-ComposeBash $InstallDir "exec -T web python manage.py seed_initial_data")
 
