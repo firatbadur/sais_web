@@ -107,12 +107,20 @@ function Invoke-WslSpin {
     if (-not $LogDir) { $LogDir = $env:TEMP }
     $log = Join-Path $LogDir ("envisoft-step-" + ([guid]::NewGuid().ToString('N').Substring(0, 8)) + ".log")
 
+    # CRLF-safe transport: a multi-line bash script passed straight to `bash -lc`
+    # carries Windows CR (\r) bytes that break bash parsing ("set: usage",
+    # "unexpected end of file from 'if'"). Base64-encode the (CR-stripped) script
+    # and decode inside WSL -> no quoting/newline/CR pitfalls at all.
+    $clean = ($Bash -replace "`r", "")
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($clean))
+    $wrapped = "echo $b64 | base64 --decode | bash"
+
     $job = Start-Job -ScriptBlock {
         param($d, $u, $b, $lg)
         if ($u) { wsl.exe -d $d -u $u -- bash -lc $b *> $lg }
         else    { wsl.exe -d $d -- bash -lc $b *> $lg }
         $LASTEXITCODE
-    } -ArgumentList $Distro, $User, $Bash, $log
+    } -ArgumentList $Distro, $User, $wrapped, $log
 
     $spin = @('|', '/', '-', '\')
     $i = 0
