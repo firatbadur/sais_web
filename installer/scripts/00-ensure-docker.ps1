@@ -93,6 +93,10 @@ if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
   sh /tmp/get-docker.sh
 fi
+# WSL needs iptables-legacy; Ubuntu's default nftables breaks dockerd network
+# init ("failed to start daemon ... iptables") -> daemon never comes up.
+update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
+update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
 systemctl enable docker 2>/dev/null || true
 echo "DOCKER_INSTALLED"
 '@
@@ -105,8 +109,10 @@ wsl.exe --shutdown *> $null
 Start-Sleep -Seconds 4
 
 # Retry until docker is ready (systemd boot + docker.service start).
-$startDocker = "service docker start 2>/dev/null || systemctl start docker 2>/dev/null || (pgrep dockerd >/dev/null || (dockerd >/var/log/dockerd.log 2>&1 &)); sleep 2; docker info >/dev/null 2>&1"
-$ok = Wait-WithSpin "Starting Docker daemon" -TimeoutSec 60 -CheckEverySec 3 -Check {
+# First boot of systemd inside WSL can be slow; ensure iptables-legacy and try
+# both systemd and SysV start paths. Generous timeout (slow disks/CPU on site).
+$startDocker = "update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null; update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null; systemctl start docker 2>/dev/null || service docker start 2>/dev/null || (pgrep dockerd >/dev/null || (dockerd >/var/log/dockerd.log 2>&1 &)); sleep 2; docker info >/dev/null 2>&1"
+$ok = Wait-WithSpin "Starting Docker daemon" -TimeoutSec 180 -CheckEverySec 5 -Check {
     wsl.exe -d $Distro -u root -- bash -lc $startDocker *> $null
     return (Test-DockerReady)
 }
