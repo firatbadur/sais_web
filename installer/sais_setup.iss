@@ -143,7 +143,7 @@ begin
     registry (acceptable on a physically secured SCADA cabinet). }
   WinPage := CreateInputQueryPage(AdminPage.ID,
     'Automatic Startup', 'Windows auto-login (no operator needed)',
-    'Windows account to auto-login at boot so the stack starts unattended (e.g. after a power outage). Leave the password blank to skip auto-login (you would then have to log in manually after a reboot).');
+    'Windows account to auto-login at boot so the stack starts unattended (e.g. after a power outage). Enter this account''s Windows password - leave it blank if the account has no password.');
   WinPage.Add('Windows username (auto, locked):', False);
   WinPage.Add('Windows password:', True);
   { Auto-fill the username with the account running the installer and LOCK it:

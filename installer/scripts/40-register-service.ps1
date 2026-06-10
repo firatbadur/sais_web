@@ -58,16 +58,19 @@ if (Test-Path $nssm) {
 # --- 1) Windows auto-login ----------------------------------------------------
 Write-Step "Configuring Windows auto-login for '$bareUser'..."
 $winlogon = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+# Always enable auto-login. A BLANK password is valid for a passwordless account
+# (common on SCADA boxes): DefaultPassword="" still auto-logs-in. So we don't gate
+# on the password being non-empty.
+Set-ItemProperty -Path $winlogon -Name "AutoAdminLogon"    -Value "1"        -Type String
+Set-ItemProperty -Path $winlogon -Name "DefaultUserName"   -Value $bareUser  -Type String
+Set-ItemProperty -Path $winlogon -Name "DefaultPassword"   -Value $WinPass   -Type String
+Set-ItemProperty -Path $winlogon -Name "DefaultDomainName" -Value $domain    -Type String
+# Don't auto-relock after auto-login.
+Set-ItemProperty -Path $winlogon -Name "ForceAutoLogon"    -Value "0"        -Type String
 if ($WinPass) {
-    Set-ItemProperty -Path $winlogon -Name "AutoAdminLogon"    -Value "1"        -Type String
-    Set-ItemProperty -Path $winlogon -Name "DefaultUserName"   -Value $bareUser  -Type String
-    Set-ItemProperty -Path $winlogon -Name "DefaultPassword"   -Value $WinPass   -Type String
-    Set-ItemProperty -Path $winlogon -Name "DefaultDomainName" -Value $domain    -Type String
-    # Don't auto-relock after auto-login.
-    Set-ItemProperty -Path $winlogon -Name "ForceAutoLogon"    -Value "0"        -Type String
     Write-Ok "Auto-login enabled for $domain\$bareUser."
 } else {
-    Write-WarnLine "No Windows password provided -> auto-login NOT set. After a reboot you must log in manually for the stack to start."
+    Write-Ok "Auto-login enabled for $domain\$bareUser (passwordless account)."
 }
 
 # --- 2) Logon scheduled task that runs the stack keepalive --------------------
