@@ -168,21 +168,23 @@ services:
              celery -A sais_web beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
 
   watchtower:
-    image: containrrr/watchtower
+    # Pinned (eski :latest, yeni Docker daemon API'siyle "client version 1.25 too
+    # old" verip surekli restart oluyordu). 1.7.x modern API ile konusur.
+    image: containrrr/watchtower:1.7.1
     restart: unless-stopped
     environment:
-      WATCHTOWER_LABEL_ENABLE: "true"        # sadece etiketli (app) container'ları güncelle
-      WATCHTOWER_CLEANUP: "true"             # eski image'ları sil
-      WATCHTOWER_POLL_INTERVAL: "${WATCHTOWER_POLL_INTERVAL:-300}"  # 5 dk
-      WATCHTOWER_ROLLING_RESTART: "true"     # container'ları sırayla yeniden başlat
-      # Opsiyonel bildirim (shoutrrr URL — e-posta/Slack/Telegram):
-      #   WATCHTOWER_NOTIFICATION_URL: ${WATCHTOWER_NOTIFICATION_URL}
+      WATCHTOWER_LABEL_ENABLE: "true"        # sadece etiketli (app) container'ları izle
+      # MONITOR_ONLY: OTOMATIK guncelleme YOK. Periyodik kontrol eder + yeni sürüm
+      # gelince loglar, ama recreate ETMEZ. Yukseltme dashboard'dan manuel yapilir
+      # (kullanici karari: oto-check evet, oto-update hayir).
+      WATCHTOWER_MONITOR_ONLY: "true"
+      WATCHTOWER_POLL_INTERVAL: "${WATCHTOWER_POLL_INTERVAL:-3600}"  # 1 saatte bir kontrol
       TZ: ${DJANGO_TIME_ZONE:-Europe/Istanbul}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       # GHCR private ise sahada `docker login ghcr.io` yapıldıktan sonra bu mount
-      # ile Watchtower aynı kimlikle pull eder:
-      - ${DOCKER_CONFIG_DIR:-~/.docker}/config.json:/config.json:ro
+      # ile Watchtower aynı kimlikle kontrol eder:
+      - ${DOCKER_CONFIG_DIR:-/root/.docker}/config.json:/config.json:ro
 
 volumes:
   mssql_data:

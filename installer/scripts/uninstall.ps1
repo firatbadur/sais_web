@@ -18,9 +18,21 @@ $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "_common.ps1")
 $script:WslDistro = $Distro
 
+# Remove the logon scheduled task (current auto-start mechanism).
+Write-Step "Removing auto-start task: $ServiceName"
+Stop-ScheduledTask -TaskName $ServiceName -ErrorAction SilentlyContinue
+Unregister-ScheduledTask -TaskName $ServiceName -Confirm:$false -ErrorAction SilentlyContinue
+
+# Disable Windows auto-login (clear the stored password).
+Write-Step "Disabling Windows auto-login..."
+$winlogon = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+Set-ItemProperty -Path $winlogon -Name "AutoAdminLogon" -Value "0" -ErrorAction SilentlyContinue
+Remove-ItemProperty -Path $winlogon -Name "DefaultPassword" -ErrorAction SilentlyContinue
+
+# Remove any old NSSM service from previous installer versions.
 $nssm = Join-Path $InstallDir "nssm.exe"
 if (Test-Path $nssm) {
-    Write-Step "Stopping + removing service: $ServiceName"
+    Write-Step "Removing legacy NSSM service: $ServiceName"
     & $nssm stop $ServiceName *> $null
     & $nssm remove $ServiceName confirm *> $null
 }

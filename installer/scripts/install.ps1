@@ -146,11 +146,12 @@ try {
         AdminPassword = $a.AdminPassword; AdminEmail = $a.AdminEmail }))
     if ($code -ne 0) { throw "First run failed (exit $code)." }
 
-    # 5) Windows service
-    Write-Host ">> [5/5] Registering Windows service..." -ForegroundColor Cyan
+    # 5) Auto-start (Windows auto-login + logon task; keeps the WSL2 VM alive)
+    Write-Host ">> [5/5] Configuring unattended auto-start..." -ForegroundColor Cyan
     $code = Invoke-Step "40-register-service.ps1" (Build-Args ([ordered]@{
-        InstallDir = $InstallDir; Distro = $Distro }))
-    if ($code -ne 0) { throw "Service registration failed (exit $code)." }
+        InstallDir = $InstallDir; Distro = $Distro;
+        WinUser = $a.WinUser; WinPass = $a.WinPass }))
+    if ($code -ne 0) { throw "Auto-start configuration failed (exit $code)." }
 
     $success = $true
     Write-Host ""
