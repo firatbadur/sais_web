@@ -18,89 +18,26 @@
 
         body#kt_body { background-color: #eef3f9; }
 
-        /* ---- FORM (left) panel ---- */
-        .ev-auth-form-aside {
+        /* ---- full-screen auth surface ---- */
+        .ev-auth-surface {
             position: relative;
             overflow: hidden;
+            min-height: 100vh;
             background: linear-gradient(160deg, #f4f7fb 0%, #e7eef7 100%);
         }
-        /* faint grid echo of the branding side */
-        .ev-auth-form-aside::before {
+        /* faint SCADA monitoring grid */
+        .ev-auth-surface::before {
             content: "";
             position: absolute;
             inset: 0;
             background-image:
-                linear-gradient(rgba(11,53,102,0.035) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(11,53,102,0.035) 1px, transparent 1px);
-            background-size: 42px 42px;
-            -webkit-mask-image: radial-gradient(circle at 35% 35%, #000 20%, transparent 75%);
-            mask-image: radial-gradient(circle at 35% 35%, #000 20%, transparent 75%);
+                linear-gradient(rgba(11,53,102,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(11,53,102,0.04) 1px, transparent 1px);
+            background-size: 46px 46px;
+            -webkit-mask-image: radial-gradient(circle at 50% 38%, #000 30%, transparent 80%);
+            mask-image: radial-gradient(circle at 50% 38%, #000 30%, transparent 80%);
             pointer-events: none;
         }
-
-        /* ---- BRANDING (right) panel ---- */
-        .ev-auth-brand-aside {
-            position: relative;
-            overflow: hidden;
-            background: linear-gradient(150deg, #06223f 0%, var(--ev-navy) 45%, #0f5fb8 100%);
-        }
-        /* subtle SCADA monitoring grid */
-        .ev-auth-brand-aside::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background-image:
-                linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
-            background-size: 42px 42px;
-            -webkit-mask-image: radial-gradient(circle at 60% 40%, #000 35%, transparent 78%);
-            mask-image: radial-gradient(circle at 60% 40%, #000 35%, transparent 78%);
-            pointer-events: none;
-        }
-        /* soft glow accents */
-        .ev-auth-brand-aside::after {
-            content: "";
-            position: absolute;
-            top: -120px; right: -120px;
-            width: 420px; height: 420px;
-            background: radial-gradient(circle, rgba(27,132,255,0.45) 0%, transparent 70%);
-            pointer-events: none;
-        }
-
-        .ev-brand-content { position: relative; z-index: 2; }
-
-        .ev-logo-card {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 22px 34px;
-            border-radius: 18px;
-            background: rgba(255,255,255,0.96);
-            box-shadow: 0 18px 45px rgba(0,0,0,0.28);
-        }
-
-        .ev-feature {
-            display: flex;
-            align-items: flex-start;
-            gap: 14px;
-            padding: 14px 18px;
-            border-radius: 12px;
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.10);
-            backdrop-filter: blur(2px);
-        }
-        .ev-feature + .ev-feature { margin-top: 12px; }
-        .ev-feature .ev-feature-icon {
-            flex: 0 0 auto;
-            width: 42px; height: 42px;
-            display: flex; align-items: center; justify-content: center;
-            border-radius: 10px;
-            background: rgba(27,132,255,0.22);
-            color: #cfe5ff;
-        }
-        .ev-feature .ev-feature-icon i { font-size: 1.35rem; line-height: 1; }
-        .ev-feature .ev-feature-title { color: #ffffff; font-weight: 600; font-size: 0.98rem; }
-        .ev-feature .ev-feature-sub { color: rgba(255,255,255,0.62); font-size: 0.82rem; }
 
         /* ---- form card ---- */
         .ev-form-card {
@@ -174,71 +111,28 @@
     </script>
 
     <div class="d-flex flex-column flex-root" id="kt_app_root">
-        <div class="d-flex flex-column flex-lg-row flex-column-fluid">
+        <div class="ev-auth-surface d-flex flex-column flex-center flex-column-fluid p-10">
 
             <!-- FORM -->
-            <div class="ev-auth-form-aside d-flex flex-column flex-lg-row-fluid w-lg-50 p-10 order-2 order-lg-1">
-                <div class="d-flex flex-center flex-column flex-lg-row-fluid">
-
-                    <div class="ev-form-card p-5 p-sm-10">
-                        {% block auth_content %}{% endblock %}
-                    </div>
-                </div>
-
-                <!-- Auth footer -->
-                <div class="d-flex flex-center flex-column gap-4 px-5 mt-8">
-                    <div class="ev-lang-switch">
-                        {% for lang in dashboard_languages %}
-                            <form method="post" action="{% url 'set_language' %}">
-                                {% csrf_token %}
-                                <input name="next" type="hidden" value="{{ request.get_full_path }}">
-                                <input name="language" type="hidden" value="{{ lang.code }}">
-                                <button type="submit" class="ev-lang-btn {% if LANGUAGE_CODE == lang.code %}active{% endif %}">
-                                    {{ lang.label }}
-                                </button>
-                            </form>
-                        {% endfor %}
-                    </div>
-                    <span class="text-muted fs-7">© {% now "Y" %} Envisoft WebX</span>
-                </div>
+            <div class="ev-form-card p-5 p-sm-10">
+                {% block auth_content %}{% endblock %}
             </div>
 
-            <!-- BRANDING -->
-            <div class="ev-auth-brand-aside d-none d-lg-flex flex-lg-row-fluid w-lg-50 order-1 order-lg-2">
-                <div class="ev-brand-content d-flex flex-column flex-center py-15 px-5 px-md-15 w-100">
-
-                    <h1 class="text-white fs-2qx fw-bold text-center mb-4">
-                        {% trans "Envisoft WebX" %}
-                    </h1>
-                    <div class="text-center fw-semibold mb-12" style="color:rgba(255,255,255,0.72); max-width: 460px;">
-                        {% blocktrans %}Sürekli Atıksu İzleme Sistemi — gerçek zamanlı sensör verileri, aggregate raporlar ve yönetim paneli.{% endblocktrans %}
-                    </div>
-
-                    <div class="w-100" style="max-width: 440px;">
-                        <div class="ev-feature">
-                            <div class="ev-feature-icon"><i class="ki-outline ki-pulse"></i></div>
-                            <div>
-                                <div class="ev-feature-title">{% trans "Gerçek Zamanlı İzleme" %}</div>
-                                <div class="ev-feature-sub">{% trans "Saha sensörlerinden canlı SCADA verisi" %}</div>
-                            </div>
-                        </div>
-                        <div class="ev-feature">
-                            <div class="ev-feature-icon"><i class="ki-outline ki-chart-line-up"></i></div>
-                            <div>
-                                <div class="ev-feature-title">{% trans "Raporlar & Trend" %}</div>
-                                <div class="ev-feature-sub">{% trans "Aggregate raporlar ve geçmiş analizleri" %}</div>
-                            </div>
-                        </div>
-                        <div class="ev-feature">
-                            <div class="ev-feature-icon"><i class="ki-outline ki-shield-tick"></i></div>
-                            <div>
-                                <div class="ev-feature-title">{% trans "Güvenli Erişim" %}</div>
-                                <div class="ev-feature-sub">{% trans "Rol bazlı yetkilendirme ve denetim kaydı" %}</div>
-                            </div>
-                        </div>
-                    </div>
-
+            <!-- Auth footer -->
+            <div class="d-flex flex-center flex-column gap-4 mt-10" style="position:relative; z-index:2;">
+                <div class="ev-lang-switch">
+                    {% for lang in dashboard_languages %}
+                        <form method="post" action="{% url 'set_language' %}">
+                            {% csrf_token %}
+                            <input name="next" type="hidden" value="{{ request.get_full_path }}">
+                            <input name="language" type="hidden" value="{{ lang.code }}">
+                            <button type="submit" class="ev-lang-btn {% if LANGUAGE_CODE == lang.code %}active{% endif %}">
+                                {{ lang.label }}
+                            </button>
+                        </form>
+                    {% endfor %}
                 </div>
+                <span class="text-muted fs-7">© {% now "Y" %} Envisoft WebX</span>
             </div>
 
         </div>
