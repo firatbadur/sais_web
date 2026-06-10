@@ -41,8 +41,8 @@ msgstr "Forgot password?"
 msgid "Şifremi unuttum"
 msgstr "Forgot password?"
 
-msgid "SAIS Dashboard'a hoş geldiniz"
-msgstr "Welcome to SAIS Dashboard"
+msgid "Envisoft WebX'e hoş geldiniz"
+msgstr "Welcome to Envisoft WebX"
 
 msgid "Giriş başarısız"
 msgstr "Login failed"
@@ -142,11 +142,11 @@ msgid "Tercihler"
 msgstr "Preferences"
 
 # ---- Home dashboard ----
-msgid "SAIS Dashboard"
-msgstr "SAIS Dashboard"
+msgid "Envisoft WebX"
+msgstr "Envisoft WebX"
 
 msgid "SAIS Web SCADA"
-msgstr "SAIS Web SCADA"
+msgstr "Envisoft WebX"
 
 msgid "Dashboard"
 msgstr "Dashboard"

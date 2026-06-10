@@ -44,6 +44,11 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
+; Corporate branding (Envisoft WebX)
+SetupIconFile=assets\EnvisoftWebX.ico
+WizardImageFile=assets\WizardImage.bmp
+WizardSmallImageFile=assets\WizardSmallImage.bmp
+UninstallDisplayIcon={app}\EnvisoftWebX.ico
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
@@ -56,12 +61,14 @@ Source: "templates\*"; DestDir: "{app}\templates"; Flags: recursesubdirs ignorev
 Source: "..\docker-compose.prod.yml"; DestDir: "{app}"; Flags: ignoreversion
 ; NSSM (placed into payload before build)
 Source: "payload\nssm.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Brand icon (used by shortcuts + uninstall entry)
+Source: "assets\EnvisoftWebX.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Envisoft WebX Dashboard"; Filename: "https://{code:GetDomain}/dashboard/"
+Name: "{group}\Envisoft WebX Dashboard"; Filename: "https://{code:GetDomain}/dashboard/"; IconFilename: "{app}\EnvisoftWebX.ico"
 Name: "{group}\Uninstall Envisoft WebX"; Filename: "{uninstallexe}"
 ; Desktop shortcut that opens the dashboard in the default browser.
-Name: "{commondesktop}\Envisoft WebX"; Filename: "https://{code:GetDomain}/dashboard/"
+Name: "{commondesktop}\Envisoft WebX"; Filename: "https://{code:GetDomain}/dashboard/"; IconFilename: "{app}\EnvisoftWebX.ico"
 
 [Run]
 ; No runhidden -> the install runs in a VISIBLE console; install.ps1 keeps the
