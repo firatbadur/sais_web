@@ -89,5 +89,17 @@ print('WEBSETTINGS_OK' if ok else ('WEBSETTINGS_ERR ' + err))
     }
 }
 
+# The web container writes the Caddyfile (localhost:80 + domain) to the shared
+# caddy_config volume, but on a Windows bind-mount Caddy's `--watch` frequently
+# does NOT fire - so Caddy keeps serving its stock config (static file server)
+# and http://localhost looks broken. A one-time restart makes Caddy load the
+# rendered config. Non-fatal.
+try {
+    Invoke-WslSpin "Reloading Caddy (load rendered config)" `
+        (Get-ComposeBash $InstallDir "restart caddy") -Retries 2
+} catch {
+    Write-WarnLine "Caddy reload skipped; if http://localhost fails run: docker compose restart caddy"
+}
+
 New-Item -ItemType File -Path $marker -Force | Out-Null
 Write-Ok "First run completed."
