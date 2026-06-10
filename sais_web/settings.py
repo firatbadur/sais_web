@@ -215,7 +215,10 @@ STORAGES = {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        # Prod'da hashed-manifest + brotli/gzip; ama eksik referanslarda (orn.
+        # shippelenmeyen .map dosyalari) collectstatic'i cokertmeyen hosgorulu
+        # surum -> web container'i gunicorn'a ulasir (yoksa Caddy 502).
+        "BACKEND": "sais_web.storage.ForgivingManifestStaticFilesStorage"
         if not DEBUG
         else "whitenoise.storage.CompressedStaticFilesStorage",
     },
