@@ -60,7 +60,6 @@ Invoke-WslSpin "Creating admin user ($AdminUser)" `
 # WebSettings bootstrap - the installer's domain/TLS is written into the panel.
 $bootstrapPath = Join-Path $InstallDir "web-bootstrap.json"
 if (Test-Path $bootstrapPath) {
-    Write-Step "Applying WebSettings (domain + TLS)..."
     $b = Get-Content -Raw $bootstrapPath | ConvertFrom-Json
     $py = @"
 from api.models import WebSettings
@@ -75,7 +74,12 @@ ok, err = web_proxy.apply(ws)
 print('WEBSETTINGS_OK' if ok else ('WEBSETTINGS_ERR ' + err))
 "@
     $oneLine = ($py -replace "`r`n", "; " -replace "`n", "; ")
-    Invoke-Compose $InstallDir "exec -T web python manage.py shell -c `"$oneLine`""
+    # Use Invoke-WslSpin (base64 transport), NOT Invoke-Compose. The python here
+    # is passed to `shell -c "..."` and already contains quotes + parentheses;
+    # routing it through bash -lc "...shell -c "..."..." double-nests the quotes
+    # and bash fails ("syntax error near unexpected token `('"). Base64 avoids it.
+    Invoke-WslSpin "Applying WebSettings (domain + TLS)" `
+        (Get-ComposeBash $InstallDir "exec -T web python manage.py shell -c `"$oneLine`"") -Retries 2
 }
 
 New-Item -ItemType File -Path $marker -Force | Out-Null
