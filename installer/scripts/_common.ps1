@@ -35,15 +35,23 @@ function ConvertTo-WslPath([string]$winPath) {
     return "/mnt/$drive$rest"
 }
 
-# Is the WSL distro present and is Docker running inside it?
+# Is Docker running inside the WSL distro?
+# IMPORTANT: redirect docker's stderr INSIDE bash (docker info >/dev/null 2>&1),
+# never via a PowerShell-side `*>`/`2>`. Under ErrorActionPreference='Stop' a
+# PowerShell redirect of a native command's stderr raises NativeCommandError,
+# so this would wrongly return $false even when the daemon is UP (docker info
+# always prints warnings to stderr). That false-negative made the installer
+# loop on "Starting Docker daemon" until timeout although Docker was running.
 function Test-DockerReady {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
     try {
-        $distros = (wsl.exe --list --quiet) -replace "`0", ""
-        if ($distros -notmatch [regex]::Escape($script:WslDistro)) { return $false }
-        wsl.exe -d $script:WslDistro -- bash -lc "docker info" *> $null
+        wsl.exe -d $script:WslDistro -- bash -lc "docker info >/dev/null 2>&1" | Out-Null
         return ($LASTEXITCODE -eq 0)
     } catch {
         return $false
+    } finally {
+        $ErrorActionPreference = $prev
     }
 }
 
