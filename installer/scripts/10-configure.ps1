@@ -50,7 +50,11 @@ $csrf = "https://*$baseDomain,https://$Domain"
 $templatePath = Join-Path $PSScriptRoot "..\templates\env.template"
 $content = Get-Content -Raw -Encoding UTF8 $templatePath
 
-$dockerConfigDir = Join-Path $env:USERPROFILE ".docker"
+# Docker runs inside WSL and the installer runs `docker login` there as root, so
+# the GHCR registry creds live at /root/.docker/config.json. Watchtower must
+# mount THAT (a WSL path), NOT the Windows %USERPROFILE%\.docker - mounting a
+# Windows path fails with "invalid volume specification".
+$dockerConfigDir = "/root/.docker"
 
 $map = @{
     "__GHCR_IMAGE__"          = $GhcrImage
