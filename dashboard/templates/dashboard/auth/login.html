@@ -9,7 +9,7 @@
 
     <div class="text-center mb-11">
         <h1 class="text-gray-900 fw-bolder mb-3">{% trans "Giriş Yap" %}</h1>
-        <div class="text-gray-500 fw-semibold fs-6">{% trans "Envisoft WebX'e hoş geldiniz" %}</div>
+        <div class="text-gray-500 fw-semibold fs-6">{% trans "Devam etmek için hesabınıza giriş yapın" %}</div>
     </div>
 
     {% if form.non_field_errors %}
@@ -26,20 +26,34 @@
 
     <div class="fv-row mb-8">
         <label class="form-label fs-6 fw-bolder text-dark">{% trans "Kullanıcı Adı" %}</label>
-        <input type="text" name="{{ form.username.name }}"
-               autocomplete="username"
-               placeholder="{% trans 'Kullanıcı adı' %}"
-               class="form-control bg-transparent"
-               value="{{ form.username.value|default:'' }}" autofocus required>
+        <div class="position-relative">
+            <span class="position-absolute top-50 start-0 translate-middle-y ms-4 text-gray-500">
+                <i class="ki-outline ki-user fs-3"></i>
+            </span>
+            <input type="text" name="{{ form.username.name }}"
+                   autocomplete="username"
+                   placeholder="{% trans 'Kullanıcı adı' %}"
+                   class="form-control bg-transparent ps-12"
+                   value="{{ form.username.value|default:'' }}" autofocus required>
+        </div>
         {% if form.username.errors %}<div class="text-danger small mt-1">{{ form.username.errors.0 }}</div>{% endif %}
     </div>
 
     <div class="fv-row mb-3">
         <label class="form-label fs-6 fw-bolder text-dark">{% trans "Şifre" %}</label>
-        <input type="password" name="{{ form.password.name }}"
-               autocomplete="current-password"
-               placeholder="{% trans 'Şifre' %}"
-               class="form-control bg-transparent" required>
+        <div class="position-relative">
+            <span class="position-absolute top-50 start-0 translate-middle-y ms-4 text-gray-500">
+                <i class="ki-outline ki-lock-2 fs-3"></i>
+            </span>
+            <input type="password" id="ev-password" name="{{ form.password.name }}"
+                   autocomplete="current-password"
+                   placeholder="{% trans 'Şifre' %}"
+                   class="form-control bg-transparent ps-12 pe-12" required>
+            <span class="position-absolute top-50 end-0 translate-middle-y me-4 text-gray-500 cursor-pointer"
+                  id="ev-password-toggle" role="button" aria-label="{% trans 'Şifreyi göster' %}">
+                <i class="ki-outline ki-eye fs-2"></i>
+            </span>
+        </div>
         {% if form.password.errors %}<div class="text-danger small mt-1">{{ form.password.errors.0 }}</div>{% endif %}
     </div>
 
@@ -58,10 +72,31 @@
 
     <div class="d-grid mb-10">
         <button type="submit" class="btn btn-primary">
-            <span class="indicator-label">{% trans "Giriş Yap" %}</span>
+            <span class="indicator-label">
+                <i class="ki-outline ki-entrance-right fs-3 me-2"></i>{% trans "Giriş Yap" %}
+            </span>
         </button>
     </div>
 
     {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
 </form>
+
+<script>
+(function () {
+    var toggle = document.getElementById('ev-password-toggle');
+    var input = document.getElementById('ev-password');
+    if (toggle && input) {
+        toggle.addEventListener('click', function () {
+            var icon = toggle.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.replace('ki-eye', 'ki-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.replace('ki-eye-slash', 'ki-eye');
+            }
+        });
+    }
+})();
+</script>
 {% endblock %}

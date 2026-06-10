@@ -1310,3 +1310,30 @@ msgstr "In PEM mode the private key file is required."
 # --- Envisoft WebX rebrand ---
 msgid "Envisoft WebX'e hoş geldiniz"
 msgstr "Welcome to Envisoft WebX"
+
+
+# --- Login screen redesign ---
+msgid "Devam etmek için hesabınıza giriş yapın"
+msgstr "Sign in to your account to continue"
+
+msgid "Şifreyi göster"
+msgstr "Show password"
+
+msgid "Gerçek Zamanlı İzleme"
+msgstr "Real-Time Monitoring"
+
+msgid "Saha sensörlerinden canlı SCADA verisi"
+msgstr "Live SCADA data from field sensors"
+
+msgid "Raporlar & Trend"
+msgstr "Reports & Trends"
+
+msgid "Aggregate raporlar ve geçmiş analizleri"
+msgstr "Aggregate reports and historical analysis"
+
+msgid "Güvenli Erişim"
+msgstr "Secure Access"
+
+msgid "Rol bazlı yetkilendirme ve denetim kaydı"
+msgstr "Role-based authorization and audit logging"
+
