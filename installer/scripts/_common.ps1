@@ -15,6 +15,28 @@
 $script:WslDistro = "Ubuntu"
 $script:ComposeFile = "docker-compose.prod.yml"
 
+# True when our stdout is a pipe (e.g. a step running as a child process whose
+# output the installer captures via `| Out-Host`). In that case an in-place `\r`
+# spinner does NOT rewrite the line - it floods the console one line per frame.
+# When redirected we fall back to a throttled "still working (Ns)" heartbeat.
+$script:SpinRedirected = $false
+try { $script:SpinRedirected = [Console]::IsOutputRedirected } catch {}
+
+# Draw one progress frame (in-place spinner on a real console; nothing here for
+# the redirected case - the caller throttles heartbeats itself).
+function Write-SpinFrame([string]$Char, [string]$Label, [int]$Elapsed) {
+    if (-not $script:SpinRedirected) {
+        Write-Host ("`r   [{0}] {1}  ({2}s)     " -f $Char, $Label, $Elapsed) -NoNewline -ForegroundColor Cyan
+    }
+}
+
+# Final status line for a spinner section (OK / X / !), redirection-aware.
+function Write-SpinEnd([string]$Tag, [string]$Label, [int]$Elapsed, [string]$Color) {
+    $msg = "   [{0}] {1}  ({2}s)             " -f $Tag, $Label, $Elapsed
+    if (-not $script:SpinRedirected) { $msg = "`r" + $msg }
+    Write-Host $msg -ForegroundColor $Color
+}
+
 function Write-Step([string]$msg) {
     Write-Host ">> $msg" -ForegroundColor Cyan
 }
@@ -133,9 +155,18 @@ function Invoke-WslSpin {
     $spin = @('|', '/', '-', '\')
     $i = 0
     $t0 = Get-Date
+    $lastBeat = -999
+    if ($script:SpinRedirected) { Write-Host ("   ... {0} ..." -f $Label) -ForegroundColor Cyan }
     while ($job.State -eq 'Running') {
         $el = [int]((Get-Date) - $t0).TotalSeconds
-        Write-Host ("`r   [{0}] {1}  ({2}s)     " -f $spin[$i % 4], $Label, $el) -NoNewline -ForegroundColor Cyan
+        if ($script:SpinRedirected) {
+            if (($el - $lastBeat) -ge 12) {
+                Write-Host ("   ... {0} ({1}s)" -f $Label, $el) -ForegroundColor DarkCyan
+                $lastBeat = $el
+            }
+        } else {
+            Write-SpinFrame $spin[$i % 4] $Label $el
+        }
         Start-Sleep -Milliseconds 200
         $i++
     }
@@ -147,7 +178,7 @@ function Invoke-WslSpin {
     $el = [int]((Get-Date) - $t0).TotalSeconds
 
     if ($exit -ne 0) {
-        Write-Host ("`r   [X] {0}  ({1}s) FAILED        " -f $Label, $el) -ForegroundColor Red
+        Write-SpinEnd "X" "$Label FAILED" $el "Red"
         if (Test-Path $log) {
             Write-Host "      ---- last lines of step log ($log) ----" -ForegroundColor DarkGray
             Get-Content $log -Tail 25 -ErrorAction SilentlyContinue | ForEach-Object {
@@ -156,7 +187,7 @@ function Invoke-WslSpin {
         }
         throw "$Label failed (exit $exit). Full log: $log"
     }
-    Write-Host ("`r   [OK] {0}  ({1}s)             " -f $Label, $el) -ForegroundColor Green
+    Write-SpinEnd "OK" $Label $el "Green"
 }
 
 # Spinner-driven wait: poll $Check (a scriptblock returning $true when ready)
@@ -174,6 +205,8 @@ function Wait-WithSpin {
     $deadline = $t0.AddSeconds($TimeoutSec)
     $nextCheck = $t0
     $ready = $false
+    $lastBeat = -999
+    if ($script:SpinRedirected) { Write-Host ("   ... {0} ..." -f $Label) -ForegroundColor Cyan }
     while ((Get-Date) -lt $deadline) {
         if ((Get-Date) -ge $nextCheck) {
             try { $ready = [bool](& $Check) } catch { $ready = $false }
@@ -181,15 +214,22 @@ function Wait-WithSpin {
             $nextCheck = (Get-Date).AddSeconds($CheckEverySec)
         }
         $el = [int]((Get-Date) - $t0).TotalSeconds
-        Write-Host ("`r   [{0}] {1}  ({2}s)     " -f $spin[$i % 4], $Label, $el) -NoNewline -ForegroundColor Cyan
+        if ($script:SpinRedirected) {
+            if (($el - $lastBeat) -ge 12) {
+                Write-Host ("   ... {0} ({1}s)" -f $Label, $el) -ForegroundColor DarkCyan
+                $lastBeat = $el
+            }
+        } else {
+            Write-SpinFrame $spin[$i % 4] $Label $el
+        }
         Start-Sleep -Milliseconds 250
         $i++
     }
     $el = [int]((Get-Date) - $t0).TotalSeconds
     if ($ready) {
-        Write-Host ("`r   [OK] {0}  ({1}s)             " -f $Label, $el) -ForegroundColor Green
+        Write-SpinEnd "OK" $Label $el "Green"
     } else {
-        Write-Host ("`r   [!] {0} - timed out ({1}s)        " -f $Label, $el) -ForegroundColor Yellow
+        Write-SpinEnd "!" "$Label - timed out" $el "Yellow"
     }
     return $ready
 }
