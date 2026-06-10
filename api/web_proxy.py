@@ -70,6 +70,21 @@ def _reverse_proxy_block(indent: str = "    ") -> str:
     )
 
 
+def _local_http_block() -> str:
+    """Her zaman açık, düz-HTTP yerel erişim (:80).
+
+    Makinedeki operatör domain/SSL hazır olmasa bile dashboard'a
+    `http://localhost`/`http://127.0.0.1` ile ulaşabilsin. Caddy host'a göre
+    yönlendirir: domain 443'te (HTTPS) kalırken localhost 80'de düz HTTP sunulur
+    (Django güvenli-çerez ayarı `DJANGO_COOKIE_SECURE` ile HTTP login'e izin verir).
+    """
+    return (
+        "http://localhost, http://127.0.0.1 {\n"
+        + _reverse_proxy_block()
+        + "}\n\n"
+    )
+
+
 def render_caddyfile_text(ws) -> str:
     """WebSettings → Caddyfile metni. 3 TLS modu + güvenli internal fallback."""
     domain = (ws.domain or "").strip()
@@ -100,6 +115,7 @@ def render_caddyfile_text(ws) -> str:
             globals_block = "{\n" + "\n".join(opts) + "\n}\n\n"
         return (
             header + globals_block
+            + _local_http_block()
             + f"{domain} {{\n"
             + proxy
             + "}\n"
@@ -111,6 +127,7 @@ def render_caddyfile_text(ws) -> str:
         key = posixpath.join(cert_dir, "key.pem")
         return (
             header
+            + _local_http_block()
             + f"{domain} {{\n"
             + f"    tls {cert} {key}\n"
             + proxy
@@ -120,6 +137,7 @@ def render_caddyfile_text(ws) -> str:
     # internal (self-signed)
     return (
         header
+        + _local_http_block()
         + f"{domain} {{\n"
         + "    tls internal\n"
         + proxy

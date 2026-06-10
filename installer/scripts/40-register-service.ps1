@@ -29,9 +29,15 @@ $stackScript = Join-Path $InstallDir "scripts\sais-stack.ps1"
 $psExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 $psArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$stackScript`" -InstallDir `"$InstallDir`" -Distro `"$Distro`""
 
-# Clean up any existing service (idempotent re-install).
-& $NssmPath stop $ServiceName *> $null
-& $NssmPath remove $ServiceName confirm *> $null
+# Clean up any existing service (idempotent re-install). When the service does
+# not exist yet, nssm prints "Can't open service!" to stderr; under
+# ErrorActionPreference='Stop' that native stderr raises NativeCommandError and
+# would abort BEFORE we install the service. Make the cleanup non-fatal.
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = "SilentlyContinue"
+& $NssmPath stop $ServiceName 2>&1 | Out-Null
+& $NssmPath remove $ServiceName confirm 2>&1 | Out-Null
+$ErrorActionPreference = $prevEAP
 
 Write-Step "Registering Windows service: $ServiceName"
 & $NssmPath install $ServiceName $psExe $psArgs

@@ -363,8 +363,13 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    # Güvenli çerez: True olursa çerezler yalnız HTTPS'te taşınır -> makinedeki
+    # operatör `http://localhost` (:80) ile login OLAMAZ. Varsayılan False, böylece
+    # yerel düz-HTTP erişim çalışır; domain yine Caddy ile HTTPS + HSTS sunulur.
+    # Sıkı HTTPS-only çerez isteyen sahalar DJANGO_COOKIE_SECURE=1 yapar (o zaman
+    # yerel erişim https://localhost - self-signed - üzerinden olmalı).
+    SESSION_COOKIE_SECURE = env_bool("DJANGO_COOKIE_SECURE", default=False)
+    CSRF_COOKIE_SECURE = env_bool("DJANGO_COOKIE_SECURE", default=False)
     SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", default=False)
 
 
