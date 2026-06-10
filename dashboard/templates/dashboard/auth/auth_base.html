@@ -136,6 +136,36 @@
             transform: translateY(-1px);
             box-shadow: 0 14px 30px rgba(27,132,255,0.40);
         }
+
+        /* ---- language segmented switch ---- */
+        .ev-lang-switch {
+            display: inline-flex;
+            padding: 4px;
+            gap: 2px;
+            border-radius: 999px;
+            background: rgba(11,53,102,0.06);
+            border: 1px solid rgba(11,53,102,0.08);
+        }
+        .ev-lang-switch form { margin: 0; }
+        .ev-lang-switch .ev-lang-btn {
+            border: none;
+            background: transparent;
+            color: #5a6a7e;
+            font-weight: 600;
+            font-size: 0.82rem;
+            line-height: 1;
+            padding: 7px 16px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all .15s ease;
+        }
+        .ev-lang-switch .ev-lang-btn:hover { color: var(--ev-navy); }
+        .ev-lang-switch .ev-lang-btn.active {
+            background: #ffffff;
+            color: var(--ev-blue);
+            box-shadow: 0 2px 6px rgba(11,53,102,0.12);
+            cursor: default;
+        }
     </style>
 </head>
 <body id="kt_body" class="app-blank">
@@ -156,20 +186,19 @@
                 </div>
 
                 <!-- Auth footer -->
-                <div class="d-flex flex-center flex-wrap gap-3 px-5 mt-5">
-                    <div class="d-flex align-items-center fs-base">
+                <div class="d-flex flex-center flex-column gap-4 px-5 mt-8">
+                    <div class="ev-lang-switch">
                         {% for lang in dashboard_languages %}
-                            <form method="post" action="{% url 'set_language' %}" class="d-inline m-0">
+                            <form method="post" action="{% url 'set_language' %}">
                                 {% csrf_token %}
                                 <input name="next" type="hidden" value="{{ request.get_full_path }}">
                                 <input name="language" type="hidden" value="{{ lang.code }}">
-                                <button type="submit" class="btn btn-link {% if LANGUAGE_CODE == lang.code %}fw-bold text-dark{% else %}text-muted{% endif %} px-2" style="text-decoration:none;">
+                                <button type="submit" class="ev-lang-btn {% if LANGUAGE_CODE == lang.code %}active{% endif %}">
                                     {{ lang.label }}
                                 </button>
                             </form>
                         {% endfor %}
                     </div>
-                    <span class="text-muted fs-7">·</span>
                     <span class="text-muted fs-7">© {% now "Y" %} Envisoft WebX</span>
                 </div>
             </div>
