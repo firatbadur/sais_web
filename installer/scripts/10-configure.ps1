@@ -45,7 +45,10 @@ if ($parts.Count -ge 2) {
     $baseDomain = "." + ($parts[1..($parts.Count - 1)] -join ".")  # drop the first label
 }
 $allowedHosts = "localhost,127.0.0.1,web,$baseDomain"
-$csrf = "https://*$baseDomain,https://$Domain"
+# CSRF: domain (HTTPS, 443) + local HTTP access (http://localhost - 80). Without
+# the http://localhost origins the dashboard login POST fails CSRF over local
+# HTTP even though the page renders.
+$csrf = "https://*$baseDomain,https://$Domain,http://localhost,http://127.0.0.1"
 
 $templatePath = Join-Path $PSScriptRoot "..\templates\env.template"
 $content = Get-Content -Raw -Encoding UTF8 $templatePath
