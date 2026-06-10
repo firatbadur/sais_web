@@ -136,10 +136,6 @@
             transform: translateY(-1px);
             box-shadow: 0 14px 30px rgba(27,132,255,0.40);
         }
-        .ev-mobile-logo { display: none; }
-        @media (max-width: 991.98px) {
-            .ev-mobile-logo { display: block; }
-        }
     </style>
 </head>
 <body id="kt_body" class="app-blank">
@@ -153,11 +149,6 @@
             <!-- FORM -->
             <div class="ev-auth-form-aside d-flex flex-column flex-lg-row-fluid w-lg-50 p-10 order-2 order-lg-1">
                 <div class="d-flex flex-center flex-column flex-lg-row-fluid">
-
-                    <!-- mobile logo (branding panel hidden on small screens) -->
-                    <div class="ev-mobile-logo text-center mb-10">
-                        <img alt="Envisoft WebX" src="{% static 'images/logo/logo-v1.png' %}" class="h-45px">
-                    </div>
 
                     <div class="ev-form-card p-5 p-sm-10">
                         {% block auth_content %}{% endblock %}
@@ -186,10 +177,6 @@
             <!-- BRANDING -->
             <div class="ev-auth-brand-aside d-none d-lg-flex flex-lg-row-fluid w-lg-50 order-1 order-lg-2">
                 <div class="ev-brand-content d-flex flex-column flex-center py-15 px-5 px-md-15 w-100">
-
-                    <div class="ev-logo-card mb-12">
-                        <img alt="Envisoft WebX" src="{% static 'images/logo/logo-v1.png' %}" class="h-60px">
-                    </div>
 
                     <h1 class="text-white fs-2qx fw-bold text-center mb-4">
                         {% trans "Envisoft WebX" %}

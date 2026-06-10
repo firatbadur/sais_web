@@ -1,5 +1,5 @@
 {% extends "dashboard/auth/auth_base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{% trans "Giriş" %}{% endblock %}
 
@@ -8,6 +8,7 @@
     {% csrf_token %}
 
     <div class="text-center mb-11">
+        <img alt="Envisoft WebX" src="{% static 'images/logo/logo-v1.png' %}" class="h-45px mb-8">
         <h1 class="text-gray-900 fw-bolder mb-3">{% trans "Giriş Yap" %}</h1>
         <div class="text-gray-500 fw-semibold fs-6">{% trans "Devam etmek için hesabınıza giriş yapın" %}</div>
     </div>
