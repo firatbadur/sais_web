@@ -101,7 +101,8 @@ services:
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     command: >
-      sh -c "python manage.py migrate --noinput &&
+      sh -c "python manage.py ensure_database &&
+             python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
              python manage.py seed_periodic_tasks &&
              (python manage.py refresh_license || true) &&
