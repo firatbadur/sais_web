@@ -51,6 +51,20 @@ function Invoke-Step([string]$scriptName, [string[]]$stepArgs) {
     return $LASTEXITCODE
 }
 
+# Build a -Name Value argument array, OMITTING any param whose value is empty/
+# null. Windows PowerShell drops empty-string arguments when invoking a native
+# exe (& powershell.exe -File ... -LeEmail '' ...), which leaves the parameter
+# without a value -> "Missing an argument for parameter". The step scripts give
+# these optional params sane defaults, so omitting an empty one is correct.
+function Build-Args([System.Collections.Specialized.OrderedDictionary]$params) {
+    $a = @()
+    foreach ($k in $params.Keys) {
+        $v = $params[$k]
+        if ($null -ne $v -and "$v" -ne "") { $a += @("-$k", "$v") }
+    }
+    return ,$a
+}
+
 try {
     Write-Host "==== Envisoft WebX Setup $([DateTime]::Now) (Resume=$Resume) ====" -ForegroundColor Magenta
     Write-Host "Answers: $AnswersFile" -ForegroundColor DarkGray
@@ -112,29 +126,30 @@ try {
 
     # 2) Generate .env
     Write-Host ">> [2/5] Generating configuration (.env)..." -ForegroundColor Cyan
-    $code = Invoke-Step "10-configure.ps1" @(
-        "-InstallDir", $InstallDir, "-Domain", $a.Domain, "-TlsMode", $a.TlsMode,
-        "-LeEmail", $a.LeEmail, "-MssqlPassword", $a.MssqlPassword, "-MssqlPid", $a.MssqlPid,
-        "-LicenseKey", $a.LicenseKey, "-LicenseUrl", $a.LicenseUrl,
-        "-GhcrImage", $a.GhcrImage, "-ImageTag", $a.ImageTag)
+    $code = Invoke-Step "10-configure.ps1" (Build-Args ([ordered]@{
+        InstallDir = $InstallDir; Domain = $a.Domain; TlsMode = $a.TlsMode;
+        LeEmail = $a.LeEmail; MssqlPassword = $a.MssqlPassword; MssqlPid = $a.MssqlPid;
+        LicenseKey = $a.LicenseKey; LicenseUrl = $a.LicenseUrl;
+        GhcrImage = $a.GhcrImage; ImageTag = $a.ImageTag }))
     if ($code -ne 0) { throw "Configuration failed (exit $code)." }
 
     # 3) Pull + start
     Write-Host ">> [3/5] Pulling images + starting..." -ForegroundColor Cyan
-    $code = Invoke-Step "20-up.ps1" @(
-        "-InstallDir", $InstallDir, "-GhcrUser", $a.GhcrUser, "-GhcrToken", $a.GhcrToken)
+    $code = Invoke-Step "20-up.ps1" (Build-Args ([ordered]@{
+        InstallDir = $InstallDir; GhcrUser = $a.GhcrUser; GhcrToken = $a.GhcrToken }))
     if ($code -ne 0) { throw "Pull/start failed (exit $code)." }
 
     # 4) First run (seed + admin + WebSettings)
     Write-Host ">> [4/5] First run (seed + admin)..." -ForegroundColor Cyan
-    $code = Invoke-Step "30-firstrun.ps1" @(
-        "-InstallDir", $InstallDir, "-AdminUser", $a.AdminUser,
-        "-AdminPassword", $a.AdminPassword, "-AdminEmail", $a.AdminEmail)
+    $code = Invoke-Step "30-firstrun.ps1" (Build-Args ([ordered]@{
+        InstallDir = $InstallDir; AdminUser = $a.AdminUser;
+        AdminPassword = $a.AdminPassword; AdminEmail = $a.AdminEmail }))
     if ($code -ne 0) { throw "First run failed (exit $code)." }
 
     # 5) Windows service
     Write-Host ">> [5/5] Registering Windows service..." -ForegroundColor Cyan
-    $code = Invoke-Step "40-register-service.ps1" @("-InstallDir", $InstallDir, "-Distro", $Distro)
+    $code = Invoke-Step "40-register-service.ps1" (Build-Args ([ordered]@{
+        InstallDir = $InstallDir; Distro = $Distro }))
     if ($code -ne 0) { throw "Service registration failed (exit $code)." }
 
     $success = $true
