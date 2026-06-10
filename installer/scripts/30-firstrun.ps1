@@ -26,15 +26,17 @@ if (Test-Path $marker) {
     exit 0
 }
 
-Write-Step "Seeding core data (seed_initial_data)..."
-Invoke-Manage $InstallDir "seed_initial_data"
+Assert-Docker
 
-Write-Step "Seeding SAIS data (seed_sais_data)..."
-Invoke-Manage $InstallDir "seed_sais_data"
+Invoke-WslSpin "Seeding core data (seed_initial_data)" `
+    (Get-ComposeBash $InstallDir "exec -T web python manage.py seed_initial_data")
 
-Write-Step "Creating admin user ($AdminUser)..."
+Invoke-WslSpin "Seeding SAIS data (seed_sais_data)" `
+    (Get-ComposeBash $InstallDir "exec -T web python manage.py seed_sais_data")
+
 $envInline = "DJANGO_SUPERUSER_USERNAME='$AdminUser' DJANGO_SUPERUSER_EMAIL='$AdminEmail' DJANGO_SUPERUSER_PASSWORD='$AdminPassword'"
-Invoke-Manage $InstallDir "seed_admin_user" $envInline
+Invoke-WslSpin "Creating admin user ($AdminUser)" `
+    (Get-ComposeBash $InstallDir "exec -T web env $envInline python manage.py seed_admin_user")
 
 # WebSettings bootstrap - the installer's domain/TLS is written into the panel.
 $bootstrapPath = Join-Path $InstallDir "web-bootstrap.json"

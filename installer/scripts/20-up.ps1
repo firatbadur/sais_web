@@ -18,33 +18,25 @@ param(
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "_common.ps1")
 
-Write-Step "Logging in to GHCR ($GhcrUser)..."
+Assert-Docker
+
 # Pass the token to WSL securely via stdin.
 $login = "echo '$GhcrToken' | docker login ghcr.io -u '$GhcrUser' --password-stdin"
-Invoke-Wsl $login
-Write-Ok "GHCR login OK."
+Invoke-WslSpin "Logging in to GHCR ($GhcrUser)" $login
 
-Write-Step "Pulling images (docker compose pull)..."
-Invoke-Compose $InstallDir "pull"
+Invoke-WslSpin "Pulling images (web/db/redis/caddy - this can take several minutes)" `
+    (Get-ComposeBash $InstallDir "pull")
 
-Write-Step "Starting the stack (docker compose up -d)..."
-Invoke-Compose $InstallDir "up -d"
+Invoke-WslSpin "Starting the stack (docker compose up -d)" `
+    (Get-ComposeBash $InstallDir "up -d")
 
-Write-Step "Waiting for services to become healthy (max $HealthTimeoutSec s)..."
 $wslDir = ConvertTo-WslPath $InstallDir
-$deadline = (Get-Date).AddSeconds($HealthTimeoutSec)
-$healthy = $false
-while ((Get-Date) -lt $deadline) {
-    $ps = wsl.exe -d $script:WslDistro -- bash -lc "cd '$wslDir' && docker compose -f $script:ComposeFile ps --format '{{.Service}} {{.State}}'"
-    if ($ps -match "web\s+running" -and $ps -match "db\s+running") {
-        $healthy = $true
-        break
-    }
-    Start-Sleep -Seconds 5
+$psBash = "cd '$wslDir' && docker compose -f $script:ComposeFile ps --format '{{.Service}} {{.State}}'"
+$healthy = Wait-WithSpin "Waiting for services to become healthy" -TimeoutSec $HealthTimeoutSec -Check {
+    try { $ps = wsl.exe -d $script:WslDistro -- bash -lc $psBash 2>$null } catch { $ps = "" }
+    return ($ps -match "web\s+running" -and $ps -match "db\s+running")
 }
 
-if ($healthy) {
-    Write-Ok "Stack is running."
-} else {
+if (-not $healthy) {
     Write-WarnLine "Health wait timed out; check logs: docker compose logs"
 }

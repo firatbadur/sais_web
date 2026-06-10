@@ -82,7 +82,6 @@ if (-not (Test-DistroUsable $Distro)) {
 
 Write-Ok "WSL2 + $Distro is usable."
 
-Write-Step "Installing Docker CE inside the distro (persistent service via systemd)..."
 $dockerInstall = @'
 set -e
 # Enable systemd so the docker service auto-starts on every distro boot
@@ -97,7 +96,8 @@ fi
 systemctl enable docker 2>/dev/null || true
 echo "DOCKER_INSTALLED"
 '@
-wsl.exe -d $Distro -u root -- bash -lc "$dockerInstall"
+Invoke-WslSpin "Installing Docker CE inside the distro (downloading from get.docker.com)" `
+    $dockerInstall -User "root" -Distro $Distro
 
 # Shut the distro down so systemd takes effect; next launch starts systemd+docker.
 Write-Step "Restarting WSL (so systemd takes effect)..."
@@ -105,11 +105,10 @@ wsl.exe --shutdown *> $null
 Start-Sleep -Seconds 4
 
 # Retry until docker is ready (systemd boot + docker.service start).
-$ok = $false
-for ($i = 0; $i -lt 12; $i++) {
-    wsl.exe -d $Distro -u root -- bash -lc "service docker start 2>/dev/null || systemctl start docker 2>/dev/null || (pgrep dockerd >/dev/null || (dockerd >/var/log/dockerd.log 2>&1 &)); sleep 2; docker info >/dev/null 2>&1" *> $null
-    if (Test-DockerReady) { $ok = $true; break }
-    Start-Sleep -Seconds 3
+$startDocker = "service docker start 2>/dev/null || systemctl start docker 2>/dev/null || (pgrep dockerd >/dev/null || (dockerd >/var/log/dockerd.log 2>&1 &)); sleep 2; docker info >/dev/null 2>&1"
+$ok = Wait-WithSpin "Starting Docker daemon" -TimeoutSec 60 -CheckEverySec 3 -Check {
+    wsl.exe -d $Distro -u root -- bash -lc $startDocker *> $null
+    return (Test-DockerReady)
 }
 
 if ($ok) {
