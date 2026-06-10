@@ -78,8 +78,15 @@ print('WEBSETTINGS_OK' if ok else ('WEBSETTINGS_ERR ' + err))
     # is passed to `shell -c "..."` and already contains quotes + parentheses;
     # routing it through bash -lc "...shell -c "..."..." double-nests the quotes
     # and bash fails ("syntax error near unexpected token `('"). Base64 avoids it.
-    Invoke-WslSpin "Applying WebSettings (domain + TLS)" `
-        (Get-ComposeBash $InstallDir "exec -T web python manage.py shell -c `"$oneLine`"") -Retries 2
+    # NON-FATAL: this only pre-fills the domain/TLS in the panel. Local access
+    # (http://localhost) works without it (Caddy :80 fallback), and the domain
+    # can be set from the dashboard later. Don't fail the whole install for it.
+    try {
+        Invoke-WslSpin "Applying WebSettings (domain + TLS)" `
+            (Get-ComposeBash $InstallDir "exec -T web python manage.py shell -c `"$oneLine`"") -Retries 2
+    } catch {
+        Write-WarnLine "WebSettings bootstrap skipped (non-fatal). Set domain/TLS from the dashboard: Yonetici -> Web Erisim Ayarlari."
+    }
 }
 
 New-Item -ItemType File -Path $marker -Force | Out-Null
