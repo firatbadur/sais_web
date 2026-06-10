@@ -16,11 +16,26 @@
             --ev-blue: #1B84FF;
         }
 
-        body#kt_body { background-color: #ffffff; }
+        body#kt_body { background-color: #eef3f9; }
 
         /* ---- FORM (left) panel ---- */
         .ev-auth-form-aside {
-            background-color: #ffffff;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(160deg, #f4f7fb 0%, #e7eef7 100%);
+        }
+        /* faint grid echo of the branding side */
+        .ev-auth-form-aside::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(11,53,102,0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(11,53,102,0.035) 1px, transparent 1px);
+            background-size: 42px 42px;
+            -webkit-mask-image: radial-gradient(circle at 35% 35%, #000 20%, transparent 75%);
+            mask-image: radial-gradient(circle at 35% 35%, #000 20%, transparent 75%);
+            pointer-events: none;
         }
 
         /* ---- BRANDING (right) panel ---- */
@@ -87,18 +102,57 @@
         .ev-feature .ev-feature-title { color: #ffffff; font-weight: 600; font-size: 0.98rem; }
         .ev-feature .ev-feature-sub { color: rgba(255,255,255,0.62); font-size: 0.82rem; }
 
-        /* ---- form polish ---- */
+        /* ---- form card ---- */
         .ev-form-card {
+            position: relative;
+            z-index: 2;
             width: 100%;
-            max-width: 440px;
+            max-width: 480px;
+            background: #ffffff;
+            border: 1px solid rgba(11,53,102,0.07);
+            border-radius: 20px;
+            box-shadow: 0 24px 60px rgba(11,53,102,0.12), 0 4px 14px rgba(11,53,102,0.06);
+        }
+        /* top accent bar harmonised with the branding gradient */
+        .ev-form-card::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 5px;
+            border-radius: 20px 20px 0 0;
+            background: linear-gradient(90deg, var(--ev-navy) 0%, var(--ev-blue) 100%);
         }
         .ev-form-card .form-control {
             height: calc(1.5em + 1.55rem + 2px);
             border-radius: 10px;
+            background: #f6f9fd;
+            border-color: #e3eaf3;
         }
         .ev-form-card .form-control:focus {
+            background: #ffffff;
             border-color: var(--ev-blue);
             box-shadow: 0 0 0 0.2rem rgba(27,132,255,0.15);
+        }
+        /* form brand badge */
+        .ev-form-badge {
+            width: 60px; height: 60px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 16px;
+            background: linear-gradient(150deg, var(--ev-navy) 0%, var(--ev-blue) 100%);
+            box-shadow: 0 10px 24px rgba(27,132,255,0.35);
+        }
+        .ev-form-badge i { color: #fff; font-size: 1.7rem; }
+        /* gradient submit button */
+        .ev-form-card .btn-primary {
+            background: linear-gradient(150deg, var(--ev-navy) 0%, var(--ev-blue) 100%);
+            border: none;
+            padding-top: 0.85rem; padding-bottom: 0.85rem;
+            box-shadow: 0 10px 24px rgba(27,132,255,0.30);
+            transition: transform .12s ease, box-shadow .12s ease;
+        }
+        .ev-form-card .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 30px rgba(27,132,255,0.40);
         }
         .ev-mobile-logo { display: none; }
         @media (max-width: 991.98px) {
