@@ -131,7 +131,10 @@ function Invoke-WslSpin {
         [Parameter(Mandatory)][string]$Bash,
         [string]$User = "",
         [string]$Distro = "",
-        [string]$LogDir = ""
+        [string]$LogDir = "",
+        [int]$Retries = 0          # transient docker/runc exec failures (e.g.
+                                   # "write init-p: broken pipe", exit 128) ->
+                                   # retry. Only use for idempotent commands.
     )
     if (-not $Distro) { $Distro = $script:WslDistro }
     if (-not $LogDir) { $LogDir = $env:TEMP }
@@ -145,40 +148,52 @@ function Invoke-WslSpin {
     $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($clean))
     $wrapped = "echo $b64 | base64 --decode | bash"
 
-    $job = Start-Job -ScriptBlock {
-        param($d, $u, $b, $lg)
-        if ($u) { wsl.exe -d $d -u $u -- bash -lc $b *> $lg }
-        else    { wsl.exe -d $d -- bash -lc $b *> $lg }
-        $LASTEXITCODE
-    } -ArgumentList $Distro, $User, $wrapped, $log
+    for ($attempt = 0; $attempt -le $Retries; $attempt++) {
+        $lbl = if ($attempt -gt 0) { "$Label (retry $attempt/$Retries)" } else { $Label }
+        $job = Start-Job -ScriptBlock {
+            param($d, $u, $b, $lg)
+            if ($u) { wsl.exe -d $d -u $u -- bash -lc $b *> $lg }
+            else    { wsl.exe -d $d -- bash -lc $b *> $lg }
+            $LASTEXITCODE
+        } -ArgumentList $Distro, $User, $wrapped, $log
 
-    $spin = @('|', '/', '-', '\')
-    $i = 0
-    $t0 = Get-Date
-    $lastBeat = -999
-    if ($script:SpinRedirected) { Write-Host ("   ... {0} ..." -f $Label) -ForegroundColor Cyan }
-    while ($job.State -eq 'Running') {
-        $el = [int]((Get-Date) - $t0).TotalSeconds
-        if ($script:SpinRedirected) {
-            if (($el - $lastBeat) -ge 12) {
-                Write-Host ("   ... {0} ({1}s)" -f $Label, $el) -ForegroundColor DarkCyan
-                $lastBeat = $el
+        $spin = @('|', '/', '-', '\')
+        $i = 0
+        $t0 = Get-Date
+        $lastBeat = -999
+        if ($script:SpinRedirected) { Write-Host ("   ... {0} ..." -f $lbl) -ForegroundColor Cyan }
+        while ($job.State -eq 'Running') {
+            $el = [int]((Get-Date) - $t0).TotalSeconds
+            if ($script:SpinRedirected) {
+                if (($el - $lastBeat) -ge 12) {
+                    Write-Host ("   ... {0} ({1}s)" -f $lbl, $el) -ForegroundColor DarkCyan
+                    $lastBeat = $el
+                }
+            } else {
+                Write-SpinFrame $spin[$i % 4] $lbl $el
             }
-        } else {
-            Write-SpinFrame $spin[$i % 4] $Label $el
+            Start-Sleep -Milliseconds 200
+            $i++
         }
-        Start-Sleep -Milliseconds 200
-        $i++
-    }
 
-    $jobOut = Receive-Job $job
-    Remove-Job $job -Force -ErrorAction SilentlyContinue
-    $exit = 0
-    if ($null -ne $jobOut) { try { $exit = [int]($jobOut | Select-Object -Last 1) } catch { $exit = 1 } }
-    $el = [int]((Get-Date) - $t0).TotalSeconds
+        $jobOut = Receive-Job $job
+        Remove-Job $job -Force -ErrorAction SilentlyContinue
+        $exit = 0
+        if ($null -ne $jobOut) { try { $exit = [int]($jobOut | Select-Object -Last 1) } catch { $exit = 1 } }
+        $el = [int]((Get-Date) - $t0).TotalSeconds
 
-    if ($exit -ne 0) {
-        Write-SpinEnd "X" "$Label FAILED" $el "Red"
+        if ($exit -eq 0) {
+            Write-SpinEnd "OK" $lbl $el "Green"
+            return
+        }
+
+        if ($attempt -lt $Retries) {
+            Write-SpinEnd "!" "$lbl failed (exit $exit) - retrying" $el "Yellow"
+            Start-Sleep -Seconds 3
+            continue
+        }
+
+        Write-SpinEnd "X" "$lbl FAILED" $el "Red"
         if (Test-Path $log) {
             Write-Host "      ---- last lines of step log ($log) ----" -ForegroundColor DarkGray
             Get-Content $log -Tail 25 -ErrorAction SilentlyContinue | ForEach-Object {
@@ -187,7 +202,6 @@ function Invoke-WslSpin {
         }
         throw "$Label failed (exit $exit). Full log: $log"
     }
-    Write-SpinEnd "OK" $Label $el "Green"
 }
 
 # Spinner-driven wait: poll $Check (a scriptblock returning $true when ready)

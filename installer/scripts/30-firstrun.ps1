@@ -43,15 +43,19 @@ if (-not $ready) {
     throw "Web container did not finish migrations in time. Check: docker compose logs web"
 }
 
+# These exec into the web container; a freshly started container occasionally
+# fails the FIRST docker/runc exec ("write init-p: broken pipe", exit 128).
+# All three commands are idempotent (get_or_create / update_or_create), so a
+# few retries make the step robust against that transient failure.
 Invoke-WslSpin "Seeding core data (seed_initial_data)" `
-    (Get-ComposeBash $InstallDir "exec -T web python manage.py seed_initial_data")
+    (Get-ComposeBash $InstallDir "exec -T web python manage.py seed_initial_data") -Retries 3
 
 Invoke-WslSpin "Seeding SAIS data (seed_sais_data)" `
-    (Get-ComposeBash $InstallDir "exec -T web python manage.py seed_sais_data")
+    (Get-ComposeBash $InstallDir "exec -T web python manage.py seed_sais_data") -Retries 3
 
 $envInline = "DJANGO_SUPERUSER_USERNAME='$AdminUser' DJANGO_SUPERUSER_EMAIL='$AdminEmail' DJANGO_SUPERUSER_PASSWORD='$AdminPassword'"
 Invoke-WslSpin "Creating admin user ($AdminUser)" `
-    (Get-ComposeBash $InstallDir "exec -T web env $envInline python manage.py seed_admin_user")
+    (Get-ComposeBash $InstallDir "exec -T web env $envInline python manage.py seed_admin_user") -Retries 3
 
 # WebSettings bootstrap - the installer's domain/TLS is written into the panel.
 $bootstrapPath = Join-Path $InstallDir "web-bootstrap.json"
