@@ -40,10 +40,14 @@ $rebooting = $false
 $success = $false
 
 # Run a step script in a SEPARATE process and return its exit code.
+# NOTE: pipe the child's output to Out-Host. Without it, the child's stdout
+# (every Write-Host line) is returned alongside the exit code, so the caller's
+# $code becomes an array like @("   [OK] ...", 0) and `$code -ne 0` wrongly
+# reports failure even when the step succeeded with exit 0.
 function Invoke-Step([string]$scriptName, [string[]]$stepArgs) {
     $script = Join-Path $here $scriptName
     $allArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $script) + $stepArgs
-    & $psExe @allArgs
+    & $psExe @allArgs | Out-Host
     return $LASTEXITCODE
 }
 
