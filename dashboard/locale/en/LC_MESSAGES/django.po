@@ -1337,3 +1337,7 @@ msgstr "Secure Access"
 msgid "Rol bazlı yetkilendirme ve denetim kaydı"
 msgstr "Role-based authorization and audit logging"
 
+
+
+msgid "Sürekli Atıksu İzleme Sistemi"
+msgstr "Continuous Wastewater Monitoring System"
