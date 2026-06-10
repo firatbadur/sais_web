@@ -103,18 +103,41 @@ echo "DOCKER_INSTALLED"
 Invoke-WslSpin "Installing Docker CE inside the distro (downloading from get.docker.com)" `
     $dockerInstall -User "root" -Distro $Distro
 
-# Shut the distro down so systemd takes effect; next launch starts systemd+docker.
+# Shut the distro down so the systemd=true setting takes effect on next launch.
 Write-Step "Restarting WSL (so systemd takes effect)..."
 wsl.exe --shutdown *> $null
-Start-Sleep -Seconds 4
+Start-Sleep -Seconds 5
 
-# Retry until docker is ready (systemd boot + docker.service start).
-# First boot of systemd inside WSL can be slow; ensure iptables-legacy and try
-# both systemd and SysV start paths. Generous timeout (slow disks/CPU on site).
-$startDocker = "update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null; update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null; systemctl start docker 2>/dev/null || service docker start 2>/dev/null || (pgrep dockerd >/dev/null || (dockerd >/var/log/dockerd.log 2>&1 &)); sleep 2; docker info >/dev/null 2>&1"
-$ok = Wait-WithSpin "Starting Docker daemon" -TimeoutSec 180 -CheckEverySec 5 -Check {
-    wsl.exe -d $Distro -u root -- bash -lc $startDocker *> $null
-    return (Test-DockerReady)
+# Docker's service is socket-activated; on a cold systemd boot (slow disks on
+# site) it can take a while to answer. Do the whole wait INSIDE one persistent
+# WSL session: wait for systemd to finish booting, start docker.socket+service,
+# then poll `docker info` until the daemon answers. Far more reliable than
+# repeated external `wsl` calls racing a still-booting systemd.
+$startDocker = @'
+set +e
+# 1) Wait for systemd to finish booting (running or degraded = usable).
+for i in $(seq 1 45); do
+  s=$(systemctl is-system-running 2>/dev/null)
+  { [ "$s" = "running" ] || [ "$s" = "degraded" ]; } && break
+  sleep 2
+done
+# 2) Start docker (socket-activated; fall back to SysV / raw dockerd).
+systemctl reset-failed docker docker.socket 2>/dev/null
+systemctl enable --now docker.socket 2>/dev/null
+systemctl start docker 2>/dev/null || service docker start 2>/dev/null || (pgrep dockerd >/dev/null || (dockerd >/var/log/dockerd.log 2>&1 &))
+# 3) Wait until the daemon actually answers (up to ~150s).
+for i in $(seq 1 75); do
+  docker info >/dev/null 2>&1 && { echo DOCKER_READY; exit 0; }
+  sleep 2
+done
+echo DOCKER_NOT_READY
+exit 1
+'@
+$ok = $true
+try {
+    Invoke-WslSpin "Starting Docker daemon (waiting for systemd + daemon)" $startDocker -User "root" -Distro $Distro
+} catch {
+    $ok = $false
 }
 
 if ($ok) {
