@@ -13,6 +13,7 @@ Bu komut beat scheduler'ın okuyacağı periyodik task'ları DB'ye yazar:
   - api.tasks.aggregate_readings_daily       (cron: 0 1 * * *)
   - api.tasks.prune_readings_task            (cron: 30 2 * * *)  — her gece 02:30
   - api.tasks.prune_api_logs_task            (cron: 0 3 * * *)   — her gece 03:00
+  - api.tasks.record_public_ip_task          (cron: 17 * * * *)  — public IP değişimini izle
   - sais_domain.tasks.publish_minute_data    (cron: * * * * *)   — her dakika SIM + Envisoft gönderimi
 
 Tüm kayıtlar `enabled=True` ile yaratılır; istemediğiniz task'ı admin'den
@@ -38,6 +39,8 @@ CRONTAB_TASKS = [
     ("api.tasks.prune_api_logs_task",         "0",   "3", "*", "*", "*"),   # her gece 03:00
     # Lisans manifest'ini uzaktan çek/doğrula — her 6 saatte bir.
     ("api.tasks.license_refresh_task",        "0",   "*/6", "*", "*", "*"),
+    # Public IP'yi kaydet (değişimi izle) — her saat başı (17. dk).
+    ("api.tasks.record_public_ip_task",       "17",  "*", "*", "*", "*"),
     # Bakanlık SIM + Envisoft veri gönderimi — her dakika başında.
     ("sais_domain.tasks.publish_minute_data", "*",   "*", "*", "*", "*"),
 ]

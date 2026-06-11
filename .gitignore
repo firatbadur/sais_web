@@ -91,6 +91,8 @@ redis_data/
 license_private_key.hex
 *license*.hex
 _dev_license.json
+*-license.json
+*license*.json
 licenses/
 manifest.json
 

@@ -169,6 +169,64 @@
 </div>
 
 {# ------------------------------------------------------------------ #}
+{#  Sunucu Bilgileri — public IP + değişim geçmişi                     #}
+{# ------------------------------------------------------------------ #}
+<div class="row g-5 mt-2">
+    <div class="col-12">
+        <div class="card card-flush">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-cloud fs-2 me-2 text-primary"></i>
+                    {% trans "Sunucu Bilgileri" %}
+                </h3>
+                <div class="card-toolbar">
+                    <button type="button" id="btn-server-refresh" class="btn btn-sm btn-light">
+                        <i class="ki-outline ki-arrows-circle fs-5 me-1"></i>{% trans "Yenile" %}
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-5 align-items-center">
+                    {# Güncel public IP #}
+                    <div class="col-md-5">
+                        <div class="d-flex flex-column border border-dashed border-gray-300 rounded p-5">
+                            <span class="text-muted fs-8 mb-1">{% trans "Güncel Public IP" %}</span>
+                            <span id="server-public-ip" class="fs-2 fw-bold text-gray-900">
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            </span>
+                            <span class="text-muted fs-8 mt-2" id="server-domain"></span>
+                            <span class="text-muted fs-8 mt-1">
+                                {% trans "DNS A kaydı ve modem/firewall 443 yönlendirmesi bu IP'ye olmalı. IP değişirse aşağıdaki geçmişte yeni satır oluşur." %}
+                            </span>
+                        </div>
+                    </div>
+                    {# Değişim geçmişi #}
+                    <div class="col-md-7">
+                        <div class="table-responsive">
+                            <table class="table table-row-bordered table-row-gray-200 align-middle gs-0 gy-2 mb-0">
+                                <thead>
+                                    <tr class="fw-bold text-muted fs-8 text-uppercase">
+                                        <th>{% trans "Public IP" %}</th>
+                                        <th>{% trans "İlk görülme" %}</th>
+                                        <th>{% trans "Son görülme" %}</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="server-ip-history">
+                                    <tr><td colspan="4" class="text-muted fs-8 py-3">
+                                        <span class="spinner-border spinner-border-sm me-2"></span>{% trans "Yükleniyor..." %}
+                                    </td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
 {#  Sürüm / Güncelleme + Dış Erişim (443) — yıkamaların ÜSTÜNDE        #}
 {# ------------------------------------------------------------------ #}
 <div class="row g-5 mt-2">
@@ -492,6 +550,61 @@
                     .catch(e => { btnUp.disabled = false; upRes.innerHTML = '<div class="alert alert-danger">' + e + '</div>'; });
             });
         }
+
+        // --- Sunucu Bilgileri: public IP + değişim geçmişi ---------------
+        const elIp = document.getElementById('server-public-ip');
+        const elDomain = document.getElementById('server-domain');
+        const elHist = document.getElementById('server-ip-history');
+        const btnSrvRefresh = document.getElementById('btn-server-refresh');
+
+        function fmtDate(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return '—';
+            const p = n => String(n).padStart(2, '0');
+            return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+        }
+
+        const I18N_SRV = {
+            current: "{% trans 'Güncel' %}",
+            unreachable: "{% trans 'Belirlenemedi' %}",
+            domainLabel: "{% trans 'Domain' %}",
+            none: "{% trans 'Kayıt yok' %}",
+            error: "{% trans 'Sunucu bilgisi alınamadı' %}",
+        };
+
+        function loadServerInfo() {
+            if (elIp) elIp.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>';
+            if (elHist) elHist.innerHTML = '<tr><td colspan="4" class="text-muted fs-8 py-3"><span class="spinner-border spinner-border-sm me-2"></span></td></tr>';
+            fetch("{% url 'dashboard:api_server_info' %}")
+                .then(r => r.json())
+                .then(d => {
+                    if (elIp) elIp.textContent = d.public_ip || I18N_SRV.unreachable;
+                    if (elDomain) elDomain.textContent = d.domain ? (I18N_SRV.domainLabel + ': ' + d.domain) : '';
+                    if (elHist) {
+                        const rows = (d.history || []);
+                        if (!rows.length) {
+                            elHist.innerHTML = '<tr><td colspan="4" class="text-muted fs-8 py-3">' + I18N_SRV.none + '</td></tr>';
+                        } else {
+                            elHist.innerHTML = rows.map(function (h) {
+                                const badge = h.is_current
+                                    ? ' <span class="badge badge-light-success fs-9 ms-1">' + I18N_SRV.current + '</span>'
+                                    : '';
+                                return '<tr><td class="fw-semibold text-gray-800">' + h.ip + badge + '</td>'
+                                     + '<td class="text-muted fs-8">' + fmtDate(h.first_seen) + '</td>'
+                                     + '<td class="text-muted fs-8">' + fmtDate(h.last_seen) + '</td>'
+                                     + '<td></td></tr>';
+                            }).join('');
+                        }
+                    }
+                })
+                .catch(function () {
+                    if (elIp) elIp.textContent = I18N_SRV.unreachable;
+                    if (elHist) elHist.innerHTML = '<tr><td colspan="4" class="text-danger fs-8 py-3">' + I18N_SRV.error + '</td></tr>';
+                });
+        }
+        if (elIp) loadServerInfo();
+        if (btnSrvRefresh) btnSrvRefresh.addEventListener('click', loadServerInfo);
 
         const btnPort = document.getElementById('btn-port-check');
         const portRes = document.getElementById('port-result');

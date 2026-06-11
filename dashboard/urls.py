@@ -77,4 +77,5 @@ urlpatterns = [
     path("api/version/", api_views.version_info, name="api_version_info"),
     path("api/version/update/", api_views.trigger_update, name="api_trigger_update"),
     path("api/port-check/", api_views.port_check, name="api_port_check"),
+    path("api/server-info/", api_views.server_info, name="api_server_info"),
 ]

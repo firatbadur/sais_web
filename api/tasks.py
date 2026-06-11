@@ -79,3 +79,32 @@ def license_refresh_task():
     toparlasın diye.
     """
     call_command("refresh_license")
+
+
+def fetch_public_ip():
+    """Sunucunun dış (public) IP adresini bir public servisten döndürür; hata/
+    erişimsizlikte None. ApiLog'u şişirmemek için bilinçli olarak
+    `log_outbound_call` ile sarılmadı (port_check ile tutarlı)."""
+    import urllib.request
+
+    for svc in ("https://api.ipify.org", "https://ifconfig.me/ip"):
+        try:
+            with urllib.request.urlopen(svc, timeout=5) as r:
+                ip = r.read().decode("utf-8", "replace").strip()
+                if ip:
+                    return ip
+        except Exception:  # noqa: BLE001 — ağ hatası -> diğer servisi dene
+            continue
+    return None
+
+
+@shared_task(name="api.tasks.record_public_ip_task")
+def record_public_ip_task():
+    """Public IP'yi periyodik kontrol eder; değişmişse `PublicIpRecord`'a yeni
+    satır yazar (saha dinamik IP'li olabilir — değişimi izleyebilmek için)."""
+    from api.models import PublicIpRecord
+
+    ip = fetch_public_ip()
+    if ip:
+        PublicIpRecord.record(ip)
+    return ip

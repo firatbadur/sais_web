@@ -503,6 +503,51 @@ def trigger_update(request):
 
 
 @login_required
+def server_info(request):
+    """Sunucu bilgileri kartı — güncel public IP + değişim geçmişi.
+
+    Her çağrıda dış IP taze çekilir ve `PublicIpRecord.record` ile kaydedilir
+    (değişmişse yeni satır). Beat task'ı (`record_public_ip_task`) operatör
+    sayfayı açmasa da değişimi yakalar; bu endpoint anlık görünüm + geçmiş verir.
+    """
+    denied = _require_admin(request)
+    if denied:
+        return denied
+
+    from api.models import PublicIpRecord
+    from api.tasks import fetch_public_ip
+
+    ip = fetch_public_ip()
+    if ip:
+        PublicIpRecord.record(ip)
+
+    current = PublicIpRecord.objects.filter(is_current=True).order_by("-last_seen").first()
+    history = list(PublicIpRecord.objects.order_by("-last_seen")[:10])
+
+    domain = ""
+    try:
+        from api.models import WebSettings
+        domain = (WebSettings.load().domain or "").strip()
+    except Exception:  # noqa: BLE001
+        pass
+
+    return JsonResponse({
+        "public_ip": (current.ip_address if current else ip),
+        "reachable": ip is not None,   # dış IP servisine ulaşılabildi mi
+        "domain": domain,
+        "history": [
+            {
+                "ip": h.ip_address,
+                "first_seen": h.first_seen.isoformat() if h.first_seen else None,
+                "last_seen": h.last_seen.isoformat() if h.last_seen else None,
+                "is_current": h.is_current,
+            }
+            for h in history
+        ],
+    })
+
+
+@login_required
 def port_check(request):
     """Sunucu dıştan 443'te erişilebilir mi? Public IP + yerel Caddy 443 +
     (best-effort) public IP:443 bağlantı denemesi + harici doğrulama linki."""
@@ -511,7 +556,9 @@ def port_check(request):
         return denied
 
     import socket
-    import urllib.request
+
+    from api.models import PublicIpRecord
+    from api.tasks import fetch_public_ip
 
     result = {
         "public_ip": None,
@@ -521,16 +568,10 @@ def port_check(request):
         "external_url": None,    # kesin doğrulama icin harici arac linki
     }
 
-    # 1) Public IP
-    for svc in ("https://api.ipify.org", "https://ifconfig.me/ip"):
-        try:
-            with urllib.request.urlopen(svc, timeout=5) as r:
-                ip = r.read().decode("utf-8", "replace").strip()
-                if ip:
-                    result["public_ip"] = ip
-                    break
-        except Exception:  # noqa: BLE001
-            continue
+    # 1) Public IP — çek + değişim geçmişine kaydet
+    result["public_ip"] = fetch_public_ip()
+    if result["public_ip"]:
+        PublicIpRecord.record(result["public_ip"])
 
     # 2) Yerel: Caddy 443 dinliyor mu (compose iç ağından)
     try:

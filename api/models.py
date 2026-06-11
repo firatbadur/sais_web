@@ -1581,3 +1581,43 @@ class WebSettings(models.Model):
         if not self.manual_cert_not_after:
             return None
         return (self.manual_cert_not_after - timezone.now()).days
+
+
+class PublicIpRecord(models.Model):
+    """Sunucunun dış (public) IP adresi geçmişi.
+
+    Saha çoğunlukla dinamik IP'li bir hatta bağlı; public IP değişince DNS A
+    kaydı / port yönlendirmesi bozulur. Operatörün "şu an public IP neydi"
+    sorusuna yanıt verebilmek ve değişimi izleyebilmek için her **farklı** IP
+    yeni bir satır olarak kaydedilir; aynı IP tekrar görüldükçe yalnız
+    `last_seen` tazelenir. `is_current` en son görülen IP'yi işaretler.
+    """
+
+    ip_address = models.GenericIPAddressField(verbose_name="Public IP")
+    first_seen = models.DateTimeField(auto_now_add=True, verbose_name="İlk görülme")
+    last_seen = models.DateTimeField(auto_now=True, verbose_name="Son görülme")
+    is_current = models.BooleanField(default=True, verbose_name="Güncel")
+
+    class Meta:
+        db_table = "public_ip_record"
+        verbose_name = "Public IP Kaydı"
+        verbose_name_plural = "Public IP Kayıtları"
+        ordering = ["-last_seen"]
+
+    def __str__(self):
+        return f"{self.ip_address} ({'güncel' if self.is_current else 'eski'})"
+
+    @classmethod
+    def record(cls, ip):
+        """Verilen public IP'yi kaydet. Aynıysa `last_seen` tazelenir, farklıysa
+        eski 'güncel' kayıt(lar) pasifleştirilip yeni satır açılır. Boş/None ip
+        görmezden gelinir. Kaydedilen (veya güncellenen) satırı döndürür."""
+        ip = (ip or "").strip()
+        if not ip:
+            return None
+        current = cls.objects.filter(is_current=True).order_by("-last_seen").first()
+        if current and current.ip_address == ip:
+            current.save(update_fields=["last_seen"])  # auto_now -> last_seen tazelenir
+            return current
+        cls.objects.filter(is_current=True).update(is_current=False)
+        return cls.objects.create(ip_address=ip, is_current=True)
