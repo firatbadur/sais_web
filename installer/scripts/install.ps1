@@ -130,7 +130,7 @@ try {
         InstallDir = $InstallDir; Domain = $a.Domain; TlsMode = $a.TlsMode;
         LeEmail = $a.LeEmail; MssqlPassword = $a.MssqlPassword; MssqlPid = $a.MssqlPid;
         LicenseKey = $a.LicenseKey; LicenseUrl = $a.LicenseUrl;
-        GhcrImage = $a.GhcrImage; ImageTag = $a.ImageTag }))
+        GhcrImage = $a.GhcrImage; ImageTag = $a.ImageTag; GhcrToken = $a.GhcrToken }))
     if ($code -ne 0) { throw "Configuration failed (exit $code)." }
 
     # 3) Pull + start

@@ -19,7 +19,8 @@ param(
     [string]$LicenseKey = "",
     [string]$LicenseUrl = "",
     [string]$GhcrImage = "ghcr.io/firatbadur/sais_web",
-    [string]$ImageTag = "stable"
+    [string]$ImageTag = "stable",
+    [string]$GhcrToken = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -62,6 +63,7 @@ $dockerConfigDir = "/root/.docker"
 $map = @{
     "__GHCR_IMAGE__"          = $GhcrImage
     "__IMAGE_TAG__"           = $ImageTag
+    "__GHCR_TOKEN__"          = $GhcrToken
     "__DOCKER_CONFIG_DIR__"   = ($dockerConfigDir -replace '\\', '/')
     "__SECRET_KEY__"          = $secret
     "__ALLOWED_HOSTS__"       = $allowedHosts

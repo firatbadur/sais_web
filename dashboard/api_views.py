@@ -399,14 +399,65 @@ def backup_download(request, pk):
 # Sürüm / güncelleme + 443 port kontrolü (Sistem Kontrol sayfası)
 # ---------------------------------------------------------------------------
 
+def _parse_semver(value):
+    """'v0.2.22' / '0.2.22' -> (0,2,22); eşleşmezse None."""
+    import re
+    m = re.match(r"^v?(\d+)\.(\d+)\.(\d+)$", str(value or "").strip())
+    return tuple(int(x) for x in m.groups()) if m else None
+
+
 @login_required
 def version_info(request):
-    """Çalışan sürüm (APP_VERSION). Manuel güncelleme kararı kullanıcıda."""
+    """Çalışan sürüm + GHCR'daki en son sürüm. update_available=False ise
+    'Güncelle' butonu kapatılır. GHCR_TOKEN yoksa/erişilemezse checked=False
+    döner ve buton açık kalır (fallback — yine de elle yükseltilebilir)."""
     denied = _require_admin(request)
     if denied:
         return denied
+
+    import base64
+    import json
+    import os
+    import urllib.request
+
     from django.conf import settings
-    return JsonResponse({"current": getattr(settings, "APP_VERSION", "dev")})
+
+    current = getattr(settings, "APP_VERSION", "dev")
+    out = {"current": current, "latest": None, "update_available": None, "checked": False}
+
+    image = os.getenv("GHCR_IMAGE", "ghcr.io/firatbadur/sais_web")
+    token = (os.getenv("GHCR_TOKEN", "") or "").strip()
+    repo = image.split("ghcr.io/", 1)[-1].strip("/")
+    if not token or "/" not in repo:
+        return JsonResponse(out)  # kontrol yapılamıyor -> buton açık kalsın
+
+    user = repo.split("/", 1)[0]
+    try:
+        auth = base64.b64encode(f"{user}:{token}".encode()).decode()
+        treq = urllib.request.Request(
+            f"https://ghcr.io/token?service=ghcr.io&scope=repository:{repo}:pull",
+            headers={"Authorization": f"Basic {auth}"},
+        )
+        tok = json.load(urllib.request.urlopen(treq, timeout=8)).get("token")
+        lreq = urllib.request.Request(
+            f"https://ghcr.io/v2/{repo}/tags/list",
+            headers={"Authorization": f"Bearer {tok}"},
+        )
+        tags = json.load(urllib.request.urlopen(lreq, timeout=8)).get("tags", []) or []
+    except Exception:  # noqa: BLE001 — ağ/auth hatası -> fallback (buton açık)
+        return JsonResponse(out)
+
+    versions = [t for t in tags if _parse_semver(t)]
+    if not versions:
+        return JsonResponse(out)
+
+    latest = max(versions, key=_parse_semver)
+    out["latest"] = latest
+    out["checked"] = True
+    cur = _parse_semver(current)
+    # current parse edilemiyorsa (dev) güncellemeye izin ver; aksi halde latest > current.
+    out["update_available"] = (cur is None) or (_parse_semver(latest) > cur)
+    return JsonResponse(out)
 
 
 @login_required
