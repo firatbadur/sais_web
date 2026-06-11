@@ -144,6 +144,10 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"
     volumes:
       - mssql_backups:/var/opt/mssql/backups
+    # Image'in HEALTHCHECK'i web (localhost:8000) icindir; celery HTTP sunmaz ->
+    # devre disi (yoksa container "unhealthy" gorunur).
+    healthcheck:
+      disable: true
     # web migrate'i bitirene kadar bekle (yeni kod eski şemayla çalışmasın).
     command: >
       sh -c "until python manage.py migrate --check; do echo 'migration bekleniyor...'; sleep 3; done &&
@@ -163,6 +167,8 @@ services:
         condition: service_started
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
+    healthcheck:
+      disable: true
     command: >
       sh -c "until python manage.py migrate --check; do echo 'migration bekleniyor...'; sleep 3; done &&
              celery -A sais_web beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
@@ -173,6 +179,9 @@ services:
     image: containrrr/watchtower:1.7.1
     restart: unless-stopped
     environment:
+      # Yeni Docker daemon (v28+, WSL) min API 1.40 istiyor; watchtower istemcisi
+      # 1.25 deniyordu -> "client version too old" -> surekli restart. Sabitle.
+      DOCKER_API_VERSION: "1.43"
       WATCHTOWER_LABEL_ENABLE: "true"        # sadece etiketli (app) container'ları izle
       # MONITOR_ONLY: OTOMATIK guncelleme YOK. Periyodik kontrol eder + yeni sürüm
       # gelince loglar, ama recreate ETMEZ. Yukseltme dashboard'dan manuel yapilir
