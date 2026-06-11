@@ -29,6 +29,17 @@ services:
     volumes:
       - mssql_backups:/backups
 
+  # SQL Server .bak dosyalarını app (non-root, uid 100) okuyabilsin diye sürekli
+  # okunabilir yapar. MSSQL backup'ları mssql-owned 0660 yazıyor; app okuyamıyor
+  # -> dashboard'dan İNDİRME 500 veriyordu (download = app'in ilk okuması).
+  # Bu sidecar (root) a+r yapar -> indirme çalışır.
+  backup_perms:
+    image: busybox
+    restart: unless-stopped
+    command: sh -c "while true; do chmod -R a+rX /backups 2>/dev/null; sleep 10; done"
+    volumes:
+      - mssql_backups:/backups
+
   # Caddy config volume izinlerini hazırla: web (non-root app) Caddyfile + cert
   # yazsın, caddy okusun.
   caddy_config_init:
