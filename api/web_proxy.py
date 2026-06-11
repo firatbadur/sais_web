@@ -61,10 +61,13 @@ def _atomic_write(path: str, content: str, mode: int = 0o644) -> None:
 
 def _reverse_proxy_block(indent: str = "    ") -> str:
     upstream = settings.CADDY_UPSTREAM
+    # Caddy reverse_proxy X-Forwarded-Proto / X-Forwarded-Host / X-Forwarded-For'u
+    # ZATEN varsayılan olarak yukarı geçirir. Bunları ayrıca header_up ile yazmak
+    # Caddy'de "Unnecessary header_up ..." uyarısı doğuruyor ve her config
+    # değerlendirmesinde log'u dolduruyordu. Yalnız varsayılanda olmayan
+    # X-Real-IP elle eklenir (Django X-Forwarded-Proto'yu zaten Caddy'den alır).
     return (
         f"{indent}reverse_proxy {upstream} {{\n"
-        f"{indent}    header_up X-Forwarded-Proto {{scheme}}\n"
-        f"{indent}    header_up X-Forwarded-Host {{host}}\n"
         f"{indent}    header_up X-Real-IP {{remote_host}}\n"
         f"{indent}}}\n"
     )

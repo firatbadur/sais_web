@@ -309,6 +309,15 @@ Dış erişim (`https://sais-tesis1.envisoft.com.tr` gibi) bir **Caddy** servisi
   Let's Encrypt rate-limit). Cert dosya izinleri: `key.pem` 0o600 / `cert.pem` 0o644.
 - **Önkoşul (panel dışı)**: DNS A kaydı (public IP) + modem/firewall 80/443 yönlendirme. UI bunları
   uyarır. Windows volume'de `--watch` tetiklenmezse fallback `docker compose restart caddy`.
+- **WSL2 port forwarding (kritik — dış erişim)**: Docker WSL2 içinde çalışır; WSL2 NAT modu publish
+  edilen portları host'ta yalnız `127.0.0.1`'e yansıtır, LAN/public arayüze **değil** → dışarıdan
+  80/443 timeout (modem doğru yönlendirse bile). [sais-stack.ps1](installer/scripts/sais-stack.ps1)
+  her açılış döngüsünde `Set-PortProxy` ile `netsh interface portproxy` (host dış-arayüz IP →
+  güncel WSL2 IP, 80+443) + Windows Firewall inbound kuralı kurar. WSL IP reboot'ta değiştiği için
+  her `up -d` sonrası tazelenir. Bkz. memory `[[site-external-access-wsl-portproxy]]`.
+- **Reverse proxy header'ları**: `_reverse_proxy_block` yalnız `X-Real-IP` yazar; Caddy
+  `X-Forwarded-Proto/Host/For`'u zaten varsayılan geçirir (fazladan `header_up` "Unnecessary"
+  uyarısı + log spam'i üretiyordu).
 - `.env`: `CADDY_CONFIG_PATH`, `CADDY_CERT_DIR`, `CADDY_UPSTREAM`.
 
 ## Windows installer paketi (next-next-next)
