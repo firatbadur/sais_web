@@ -107,9 +107,19 @@ def build_sim_payload(
     engineering değerler korunur (yıkama esnasında okumaya devam ediyoruz,
     sadece status etiketi değişir).
 
+    ``SimStatusPolicy`` (yönetici → Sistem Kontrol → SIM Status Filtresi) ile
+    Bakanlık'a iletilmeyecek statuslar bastırılır: engellenen kod yerine
+    ``fallback_status_code`` (varsayılan 1) yazılır. Yıkama override'ı bu
+    filtreden muaftır (force_status zaten operasyonel bir koddur).
+
     Aynı parametreye birden fazla sensör eşleşirse — pratik olmasa da —
     iteration sırasında son okunan kazanır.
     """
+    from .models import SimStatusPolicy
+    policy = SimStatusPolicy.load()
+    blocked = policy.blocked_code_set()
+    fallback = policy.fallback_status_code
+
     values: dict[str, Any] = {}
     qs = _cabinet_sensor_snapshots(cabinet).filter(
         sensor__sensor_type__in=(0, 1),
@@ -124,6 +134,9 @@ def build_sim_payload(
             status_code = force_status
         else:
             status_code = snap.status.code if snap.status_id and snap.status.code is not None else 0
+            # SIM status politikası: engellenen statusları fallback ile değiştir.
+            if blocked and status_code in blocked:
+                status_code = fallback
         values[param_name] = value
         values[f"{param_name}_Status"] = status_code
 

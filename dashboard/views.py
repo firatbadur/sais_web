@@ -419,7 +419,9 @@ class SystemControlView(AdminRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         from django.conf import settings
-        from sais_domain.models import SystemSwitch
+
+        from api.models import StatusCode
+        from sais_domain.models import SimStatusPolicy, SystemSwitch
         ctx = super().get_context_data(**kwargs)
         switch = SystemSwitch.load()
         ctx["switch"] = switch
@@ -427,12 +429,39 @@ class SystemControlView(AdminRequiredMixin, TemplateView):
         ctx["wash_remaining_seconds"] = switch.wash_remaining_seconds()
         ctx["wash_active_status_code"] = switch.active_wash_status_code()
         ctx["app_version"] = getattr(settings, "APP_VERSION", "dev")
+
+        # --- SIM status filtresi ---
+        policy = SimStatusPolicy.load()
+        blocked = (
+            set(policy.blocked_statuses.values_list("code", flat=True))
+            if policy.configured else None
+        )
+        status_codes = list(StatusCode.objects.order_by("code"))
+        rows = []
+        for sc in status_codes:
+            if policy.configured:
+                send = sc.code not in blocked
+            else:  # öneri: yalnız operasyonel statuslar gönderilsin
+                send = sc.code in SimStatusPolicy.OPERATIONAL_CODES
+            rows.append({
+                "code": sc.code,
+                "name": sc.name,
+                "send": send,
+                "operational": sc.code in SimStatusPolicy.OPERATIONAL_CODES,
+            })
+        ctx["sim_policy"] = policy
+        ctx["sim_status_rows"] = rows
+        ctx["sim_fallback_choices"] = status_codes
         return ctx
 
     def post(self, request, *args, **kwargs):
         from sais_domain.models import SystemSwitch
         switch = SystemSwitch.load()
         action = request.POST.get("action", "save_switches")
+
+        if action == "save_sim_status_policy":
+            self._save_sim_status_policy(request)
+            return redirect("dashboard:admin_system_control")
 
         if action == "start_manual_wash":
             minutes = self._parse_minutes(
@@ -476,6 +505,41 @@ class SystemControlView(AdminRequiredMixin, TemplateView):
             messages.success(request, _("Sistem kontrol ayarları kaydedildi."))
 
         return redirect("dashboard:admin_system_control")
+
+    def _save_sim_status_policy(self, request) -> None:
+        """SIM status filtresini kaydeder: işaretli ('SIM'e Gönder') statuslar
+        haricindeki tüm statuslar engellenir (fallback ile değiştirilir)."""
+        from api.models import StatusCode
+        from sais_domain.models import SimStatusPolicy
+
+        sent_codes = set()
+        for raw in request.POST.getlist("send_status"):
+            try:
+                sent_codes.add(int(raw))
+            except (TypeError, ValueError):
+                continue
+
+        try:
+            fallback = int(request.POST.get("fallback_status_code") or 1)
+        except (TypeError, ValueError):
+            fallback = 1
+
+        all_codes = set(StatusCode.objects.values_list("code", flat=True))
+        blocked_codes = all_codes - sent_codes
+        blocked_qs = StatusCode.objects.filter(code__in=blocked_codes)
+
+        policy = SimStatusPolicy.load()
+        policy.fallback_status_code = fallback
+        policy.configured = True
+        policy.updated_by = request.user
+        policy.save()
+        policy.blocked_statuses.set(blocked_qs)
+
+        messages.success(
+            request,
+            _("SIM status filtresi kaydedildi: %(n)d status engellendi.")
+            % {"n": len(blocked_codes)},
+        )
 
     @staticmethod
     def _parse_minutes(raw, *, default: int, lo: int, hi: int) -> int:

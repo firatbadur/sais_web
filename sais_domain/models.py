@@ -164,6 +164,18 @@ class SystemSwitch(models.Model):
         verbose_name="Yıkamayı Başlatan",
     )
 
+    # --- Bakanlık SIM'e başarıyla iletilen son veri (HTTP 200) ---
+    last_sim_success_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name="SIM'e Son İletim Zamanı",
+        help_text="Bakanlık SendData çağrısının en son 200 (kabul) döndüğü an.",
+    )
+    last_sim_success_readtime = models.CharField(
+        max_length=25, null=True, blank=True,
+        verbose_name="SIM'e İletilen Son Veri Tarihi",
+        help_text="Bakanlık'ın 200 ile kabul ettiği verinin dakika damgası.",
+    )
+
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Son Güncelleme")
     updated_by = models.ForeignKey(
         CustomUser,
@@ -216,3 +228,86 @@ class SystemSwitch(models.Model):
             return None
         remaining = (self.wash_ends_at - timezone.now()).total_seconds()
         return max(0, int(remaining))
+
+    @classmethod
+    def mark_sim_success(cls, readtime):
+        """Bakanlık SendData'sı 200 ile kabul edince çağrılır — singleton'a
+        son başarılı iletim zamanını + veri dakikasını yazar (hafif update)."""
+        from django.utils import timezone
+        cls.objects.filter(pk=1).update(
+            last_sim_success_at=timezone.now(),
+            last_sim_success_readtime=(readtime or "")[:25] or None,
+        )
+
+
+class SimStatusPolicy(models.Model):
+    """Bakanlık SIM'e hangi status kodlarının iletileceğini belirleyen tekil
+    politika (singleton, pk=1).
+
+    Saha pratiği: Bakanlık'a yalnız **operasyonel** statuslar (Yıkama 23,
+    Haftalık Yıkama 24, İstasyon Bakımda 25, Tesis Bakımda 26) raporlanmak
+    istenir; diğer (alarm, iletişim hatası, ölçüm aralığı dışı vb.) statuslar
+    Bakanlık tarafında gereksiz ihlal/uyarı doğurmasın diye **bastırılır** —
+    SendData payload'unda `fallback_status_code` (varsayılan 1 = Veri Geçerli)
+    ile değiştirilir.
+
+    `blocked_statuses` boş + `configured=False` iken davranış değişmez (tüm
+    statuslar olduğu gibi gider) — yönetici sayfadan kaydedene dek mevcut
+    raporlama korunur. Yıkama override'ı (force_status) bu politikadan
+    bağımsızdır; aktif yıkamada zaten tüm statuslar 23/24 ile zorlanır.
+    """
+
+    # Bakanlık'a her zaman raporlanması beklenen operasyonel status kodları.
+    OPERATIONAL_CODES = (23, 24, 25, 26)
+
+    blocked_statuses = models.ManyToManyField(
+        "api.StatusCode",
+        blank=True,
+        related_name="+",
+        verbose_name="SIM'e Gönderilmeyen Statuslar",
+        help_text="İşaretli statuslar Bakanlık'a iletilmez; yerine fallback kod gönderilir.",
+    )
+    fallback_status_code = models.IntegerField(
+        default=1,
+        verbose_name="Yerine Gönderilecek Kod",
+        help_text="Engellenen statusların yerine yazılacak StatusCode.code (varsayılan 1 = Veri Geçerli).",
+    )
+    configured = models.BooleanField(
+        default=False,
+        verbose_name="Yapılandırıldı",
+        help_text="Yönetici en az bir kez kaydetti mi? False iken filtre uygulanmaz.",
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Son Güncelleme")
+    updated_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="+",
+        verbose_name="Güncelleyen",
+    )
+
+    class Meta:
+        db_table = "sais_sim_status_policy"
+        verbose_name = "SIM Status Politikası"
+        verbose_name_plural = "SIM Status Politikaları"
+
+    def __str__(self):
+        return "SIM Status Politikası"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # singleton
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass  # singleton — silinmez
+
+    @classmethod
+    def load(cls):
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def blocked_code_set(self):
+        """Engellenen status kodlarının kümesi. `configured=False` ise boş küme
+        (filtre uygulanmaz — mevcut davranış korunur)."""
+        if not self.configured:
+            return set()
+        return set(self.blocked_statuses.values_list("code", flat=True))

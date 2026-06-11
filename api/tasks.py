@@ -84,16 +84,35 @@ def license_refresh_task():
 def fetch_public_ip():
     """Sunucunun dış (public) IP adresini bir public servisten döndürür; hata/
     erişimsizlikte None. ApiLog'u şişirmemek için bilinçli olarak
-    `log_outbound_call` ile sarılmadı (port_check ile tutarlı)."""
+    `log_outbound_call` ile sarılmadı (port_check ile tutarlı).
+
+    Birden çok servis denenir (biri saha firewall'ında bloklanmış/yavaş
+    olabilir); ilk geçerli IPv4/IPv6 yanıtı döner. Bazı servisler default
+    `Python-urllib` UA'sını reddettiği için tarayıcı benzeri UA gönderilir.
+    """
+    import ipaddress
     import urllib.request
 
-    for svc in ("https://api.ipify.org", "https://ifconfig.me/ip"):
+    services = (
+        "https://api.ipify.org",
+        "https://checkip.amazonaws.com",
+        "https://icanhazip.com",
+        "https://ifconfig.me/ip",
+        "https://ipinfo.io/ip",
+        "https://api64.ipify.org",
+    )
+    headers = {"User-Agent": "Mozilla/5.0 (EnvisoftWebX)"}
+    for svc in services:
         try:
-            with urllib.request.urlopen(svc, timeout=5) as r:
+            req = urllib.request.Request(svc, headers=headers)
+            with urllib.request.urlopen(req, timeout=6) as r:
                 ip = r.read().decode("utf-8", "replace").strip()
-                if ip:
-                    return ip
-        except Exception:  # noqa: BLE001 — ağ hatası -> diğer servisi dene
+            if not ip:
+                continue
+            # Yanıt gerçekten bir IP adresi mi? (HTML hata sayfası vb. ele)
+            ipaddress.ip_address(ip)
+            return ip
+        except Exception:  # noqa: BLE001 — ağ/parse hatası -> diğer servisi dene
             continue
     return None
 

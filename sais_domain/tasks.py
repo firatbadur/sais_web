@@ -121,6 +121,12 @@ def _publish_sim(cabinet: SaisCabinet, readtime, *, force_status: int | None = N
                 values=payload.values,
                 period=payload.period,
             )
+        # Bakanlık 200 + result:true ile kabul ettiyse son iletim damgasını yaz.
+        accepted = True
+        if isinstance(result, dict) and "result" in result:
+            accepted = bool(result["result"])
+        if accepted:
+            SystemSwitch.mark_sim_success(payload.readtime)
         return {"sent": True, "values": len(payload.values), "result": result}
     except SaisClientError as exc:
         logger.warning(

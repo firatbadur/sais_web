@@ -5,6 +5,34 @@
 {% block page_title %}{% trans "Sistem Kontrol" %}{% endblock %}
 
 {% block content %}
+
+{# ================================================================== #}
+{#  Sekmeler                                                          #}
+{# ================================================================== #}
+<ul class="nav nav-tabs nav-line-tabs nav-line-tabs-2x fs-5 fw-semibold mb-5">
+    <li class="nav-item">
+        <a class="nav-link active" data-bs-toggle="tab" href="#tab-genel">
+            <i class="ki-outline ki-setting-3 fs-4 me-1"></i>{% trans "Genel" %}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#tab-sunucu">
+            <i class="ki-outline ki-cloud fs-4 me-1"></i>{% trans "Sunucu ve Sürüm" %}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#tab-sim">
+            <i class="ki-outline ki-filter fs-4 me-1"></i>{% trans "SIM Status Filtresi" %}
+        </a>
+    </li>
+</ul>
+
+<div class="tab-content">
+
+{# ================================================================== #}
+{#  SEKME: Genel                                                      #}
+{# ================================================================== #}
+<div class="tab-pane fade show active" id="tab-genel" role="tabpanel">
 <div class="row g-5">
 
     {# ------------------------------------------------------------------ #}
@@ -169,119 +197,54 @@
 </div>
 
 {# ------------------------------------------------------------------ #}
-{#  Sunucu Bilgileri — public IP + değişim geçmişi                     #}
+{#  SIM'e iletilen son veri (200 ile kabul edilen)                    #}
 {# ------------------------------------------------------------------ #}
 <div class="row g-5 mt-2">
     <div class="col-12">
         <div class="card card-flush">
             <div class="card-header">
                 <h3 class="card-title">
-                    <i class="ki-outline ki-cloud fs-2 me-2 text-primary"></i>
-                    {% trans "Sunucu Bilgileri" %}
+                    <i class="ki-outline ki-cloud-change fs-2 me-2 text-success"></i>
+                    {% trans "Bakanlık SIM — Son İletim" %}
                 </h3>
                 <div class="card-toolbar">
-                    <button type="button" id="btn-server-refresh" class="btn btn-sm btn-light">
-                        <i class="ki-outline ki-arrows-circle fs-5 me-1"></i>{% trans "Yenile" %}
-                    </button>
+                    {% if switch.sim_enabled %}
+                        <span class="badge badge-light-success">{% trans "SIM İletimi Açık" %}</span>
+                    {% else %}
+                        <span class="badge badge-light-warning">{% trans "SIM İletimi Kapalı" %}</span>
+                    {% endif %}
                 </div>
             </div>
             <div class="card-body">
-                <div class="row g-5 align-items-center">
-                    {# Güncel public IP #}
-                    <div class="col-md-5">
+                <div class="row g-5">
+                    <div class="col-md-6">
                         <div class="d-flex flex-column border border-dashed border-gray-300 rounded p-5">
-                            <span class="text-muted fs-8 mb-1">{% trans "Güncel Public IP" %}</span>
-                            <span id="server-public-ip" class="fs-2 fw-bold text-gray-900">
-                                <span class="spinner-border spinner-border-sm me-2"></span>
-                            </span>
-                            <span class="text-muted fs-8 mt-2" id="server-domain"></span>
-                            <span class="text-muted fs-8 mt-1">
-                                {% trans "DNS A kaydı ve modem/firewall 443 yönlendirmesi bu IP'ye olmalı. IP değişirse aşağıdaki geçmişte yeni satır oluşur." %}
+                            <span class="text-muted fs-8 mb-1">{% trans "Bakanlık'ın 200 ile kabul ettiği son veri tarihi" %}</span>
+                            <span class="fs-2 fw-bold text-gray-900">
+                                {{ switch.last_sim_success_readtime|default:"—" }}
                             </span>
                         </div>
                     </div>
-                    {# Değişim geçmişi #}
-                    <div class="col-md-7">
-                        <div class="table-responsive">
-                            <table class="table table-row-bordered table-row-gray-200 align-middle gs-0 gy-2 mb-0">
-                                <thead>
-                                    <tr class="fw-bold text-muted fs-8 text-uppercase">
-                                        <th>{% trans "Public IP" %}</th>
-                                        <th>{% trans "İlk görülme" %}</th>
-                                        <th>{% trans "Son görülme" %}</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="server-ip-history">
-                                    <tr><td colspan="4" class="text-muted fs-8 py-3">
-                                        <span class="spinner-border spinner-border-sm me-2"></span>{% trans "Yükleniyor..." %}
-                                    </td></tr>
-                                </tbody>
-                            </table>
+                    <div class="col-md-6">
+                        <div class="d-flex flex-column border border-dashed border-gray-300 rounded p-5">
+                            <span class="text-muted fs-8 mb-1">{% trans "Son başarılı iletim anı" %}</span>
+                            <span class="fs-4 fw-semibold text-gray-800">
+                                {% if switch.last_sim_success_at %}
+                                    {{ switch.last_sim_success_at|date:"d.m.Y H:i:s" }}
+                                    <span class="text-muted fs-7">({{ switch.last_sim_success_at|timesince }} {% trans "önce" %})</span>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </span>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-{# ------------------------------------------------------------------ #}
-{#  Sürüm / Güncelleme + Dış Erişim (443) — yıkamaların ÜSTÜNDE        #}
-{# ------------------------------------------------------------------ #}
-<div class="row g-5 mt-2">
-
-    {# Sürüm / Güncelleme #}
-    <div class="col-xl-6">
-        <div class="card card-flush h-100">
-            <div class="card-header">
-                <h3 class="card-title">
-                    <i class="ki-outline ki-rocket fs-2 me-2 text-primary"></i>
-                    {% trans "Sürüm / Güncelleme" %}
-                </h3>
-            </div>
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between border border-dashed border-gray-300 rounded p-5 mb-4">
-                    <span class="fw-bold fs-5 text-gray-900">{% trans "Çalışan sürüm" %}</span>
-                    <span class="badge badge-light-primary fs-5">{{ app_version }}</span>
+                <div class="text-muted fs-8 mt-4">
+                    {% trans "Bu değerler, SendData çağrısı Bakanlık tarafından 200 (kabul) ile yanıtlandığında güncellenir. '—' ise henüz başarılı bir iletim kaydedilmemiştir." %}
                 </div>
-                <div id="version-status" class="mb-4 fs-7 text-muted">
-                    <span class="spinner-border spinner-border-sm me-2"></span>{% trans "Sürüm kontrol ediliyor..." %}
-                </div>
-                <p class="text-muted fs-7">
-                    {% trans "Otomatik güncelleme kapalıdır. Yeni sürüm varsa buradan elle yükseltirsiniz: en son sürüm çekilir ve uygulama container'ları yeniden başlatılır (birkaç dakika kısa kesinti)." %}
-                </p>
-                <button type="button" id="btn-update" class="btn btn-primary" disabled>
-                    <i class="ki-outline ki-cloud-download fs-3 me-1"></i>
-                    {% trans "Şimdi Güncelle ve Yeniden Başlat" %}
-                </button>
-                <div id="update-result" class="mt-4"></div>
             </div>
         </div>
     </div>
-
-    {# Dış Erişim (443) #}
-    <div class="col-xl-6">
-        <div class="card card-flush h-100">
-            <div class="card-header">
-                <h3 class="card-title">
-                    <i class="ki-outline ki-shield-tick fs-2 me-2 text-primary"></i>
-                    {% trans "Dış Erişim (443)" %}
-                </h3>
-            </div>
-            <div class="card-body">
-                <p class="text-muted fs-7">
-                    {% trans "Sunucu dışarıdan HTTPS (443) ile erişilebilir mi kontrol eder. Domain + DNS A kaydı + modem/firewall 443 yönlendirmesi gerekir." %}
-                </p>
-                <button type="button" id="btn-port-check" class="btn btn-light-primary">
-                    <i class="ki-outline ki-wifi fs-3 me-1"></i>
-                    {% trans "443 Portunu Kontrol Et" %}
-                </button>
-                <div id="port-result" class="mt-4"></div>
-            </div>
-        </div>
-    </div>
-
 </div>
 
 {# =============================================================== #}
@@ -409,6 +372,242 @@
         </div>
     </div>
 </div>
+</div>{# /tab-genel #}
+
+{# ================================================================== #}
+{#  SEKME: Sunucu ve Sürüm                                            #}
+{# ================================================================== #}
+<div class="tab-pane fade" id="tab-sunucu" role="tabpanel">
+
+{# ------------------------------------------------------------------ #}
+{#  Sunucu Bilgileri — public IP + değişim geçmişi                     #}
+{# ------------------------------------------------------------------ #}
+<div class="row g-5">
+    <div class="col-12">
+        <div class="card card-flush">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-cloud fs-2 me-2 text-primary"></i>
+                    {% trans "Sunucu Bilgileri" %}
+                </h3>
+                <div class="card-toolbar">
+                    <button type="button" id="btn-server-refresh" class="btn btn-sm btn-light">
+                        <i class="ki-outline ki-arrows-circle fs-5 me-1"></i>{% trans "Yenile" %}
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-5 align-items-center">
+                    {# Güncel public IP #}
+                    <div class="col-md-5">
+                        <div class="d-flex flex-column border border-dashed border-gray-300 rounded p-5">
+                            <span class="text-muted fs-8 mb-1">{% trans "Güncel Public IP" %}</span>
+                            <span id="server-public-ip" class="fs-2 fw-bold text-gray-900">
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            </span>
+                            <span class="text-muted fs-8 mt-2" id="server-domain"></span>
+                            <span class="text-muted fs-8 mt-1">
+                                {% trans "DNS A kaydı ve modem/firewall 443 yönlendirmesi bu IP'ye olmalı. IP değişirse aşağıdaki geçmişte yeni satır oluşur." %}
+                            </span>
+                        </div>
+                    </div>
+                    {# Değişim geçmişi #}
+                    <div class="col-md-7">
+                        <div class="table-responsive">
+                            <table class="table table-row-bordered table-row-gray-200 align-middle gs-0 gy-2 mb-0">
+                                <thead>
+                                    <tr class="fw-bold text-muted fs-8 text-uppercase">
+                                        <th>{% trans "Public IP" %}</th>
+                                        <th>{% trans "İlk görülme" %}</th>
+                                        <th>{% trans "Son görülme" %}</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="server-ip-history">
+                                    <tr><td colspan="4" class="text-muted fs-8 py-3">
+                                        <span class="spinner-border spinner-border-sm me-2"></span>{% trans "Yükleniyor..." %}
+                                    </td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{#  Sürüm / Güncelleme + Dış Erişim (443)                              #}
+{# ------------------------------------------------------------------ #}
+<div class="row g-5 mt-2">
+
+    {# Sürüm / Güncelleme #}
+    <div class="col-xl-6">
+        <div class="card card-flush h-100">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-rocket fs-2 me-2 text-primary"></i>
+                    {% trans "Sürüm / Güncelleme" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between border border-dashed border-gray-300 rounded p-5 mb-4">
+                    <span class="fw-bold fs-5 text-gray-900">{% trans "Çalışan sürüm" %}</span>
+                    <span class="badge badge-light-primary fs-5">{{ app_version }}</span>
+                </div>
+                <div id="version-status" class="mb-4 fs-7 text-muted">
+                    <span class="spinner-border spinner-border-sm me-2"></span>{% trans "Sürüm kontrol ediliyor..." %}
+                </div>
+                <p class="text-muted fs-7">
+                    {% trans "Otomatik güncelleme kapalıdır. Yeni sürüm varsa buradan elle yükseltirsiniz: en son sürüm çekilir ve uygulama container'ları yeniden başlatılır (birkaç dakika kısa kesinti)." %}
+                </p>
+                <button type="button" id="btn-update" class="btn btn-primary" disabled>
+                    <i class="ki-outline ki-cloud-download fs-3 me-1"></i>
+                    {% trans "Şimdi Güncelle ve Yeniden Başlat" %}
+                </button>
+                <div id="update-result" class="mt-4"></div>
+            </div>
+        </div>
+    </div>
+
+    {# Dış Erişim (443) #}
+    <div class="col-xl-6">
+        <div class="card card-flush h-100">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-shield-tick fs-2 me-2 text-primary"></i>
+                    {% trans "Dış Erişim (443)" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <p class="text-muted fs-7">
+                    {% trans "Sunucu dışarıdan HTTPS (443) ile erişilebilir mi kontrol eder. Domain + DNS A kaydı + modem/firewall 443 yönlendirmesi gerekir." %}
+                </p>
+                <button type="button" id="btn-port-check" class="btn btn-light-primary">
+                    <i class="ki-outline ki-wifi fs-3 me-1"></i>
+                    {% trans "443 Portunu Kontrol Et" %}
+                </button>
+                <div id="port-result" class="mt-4"></div>
+            </div>
+        </div>
+    </div>
+
+</div>
+</div>{# /tab-sunucu #}
+
+{# ================================================================== #}
+{#  SEKME: SIM Status Filtresi                                        #}
+{# ================================================================== #}
+<div class="tab-pane fade" id="tab-sim" role="tabpanel">
+<div class="row g-5">
+    <div class="col-12">
+        <div class="card card-flush">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-filter fs-2 me-2 text-primary"></i>
+                    {% trans "Bakanlık SIM'e İletilecek Statuslar" %}
+                </h3>
+                <div class="card-toolbar">
+                    {% if sim_policy.configured %}
+                        <span class="badge badge-light-success">{% trans "Etkin" %}</span>
+                    {% else %}
+                        <span class="badge badge-light-warning">{% trans "Henüz kaydedilmedi" %}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+
+                <div class="notice d-flex bg-light-primary rounded border-primary border border-dashed p-5 mb-5">
+                    <i class="ki-outline ki-information-5 fs-2x text-primary me-4"></i>
+                    <div class="d-flex flex-column">
+                        <h5 class="text-gray-900 fw-bold mb-2">{% trans "Nasıl çalışır?" %}</h5>
+                        <span class="text-gray-700 fs-7">
+                            {% blocktrans %}İşaretli ("SIM'e Gönder") statuslar Bakanlık'a olduğu gibi raporlanır. İşaretsiz statuslar <b>bastırılır</b>: SendData payload'unda yerlerine aşağıdaki "yerine gönderilecek kod" yazılır. Tipik kullanım: yalnız <b>Yıkama, Haftalık Yıkama, İstasyon Bakımda, Tesis Bakımda</b> statuslarını ilet; alarm / iletişim hatası / ölçüm aralığı dışı gibi statusları bastır.{% endblocktrans %}
+                        </span>
+                        {% if not sim_policy.configured %}
+                        <span class="text-warning fw-semibold fs-7 mt-2">
+                            <i class="ki-outline ki-information-5 fs-6 me-1"></i>{% trans "Henüz kaydedilmedi — aşağıda önerilen seçim yüklendi (yalnız operasyonel statuslar). Etkinleştirmek için Kaydet'e basın. Kaydedilene kadar mevcut davranış korunur (tüm statuslar olduğu gibi gider)." %}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_sim_status_policy">
+
+                    {# Fallback kod #}
+                    <div class="row mb-5">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">{% trans "Engellenen statusların yerine gönderilecek kod" %}</label>
+                            <select name="fallback_status_code" class="form-select form-select-solid">
+                                {% for sc in sim_fallback_choices %}
+                                    <option value="{{ sc.code }}" {% if sc.code == sim_policy.fallback_status_code %}selected{% endif %}>
+                                        {{ sc.code }} — {{ sc.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">{% trans "Varsayılan 1 = Veri Geçerli." %}</div>
+                        </div>
+                    </div>
+
+                    {# Status tablosu #}
+                    <div class="table-responsive mb-5">
+                        <table class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3">
+                            <thead>
+                                <tr class="fw-bold text-muted fs-7 text-uppercase">
+                                    <th style="width:90px;">{% trans "Kod" %}</th>
+                                    <th>{% trans "Status Adı" %}</th>
+                                    <th class="text-center" style="width:160px;">{% trans "SIM'e Gönder" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in sim_status_rows %}
+                                <tr class="{% if row.operational %}bg-light-success{% endif %}">
+                                    <td class="fw-bold text-gray-800">{{ row.code }}</td>
+                                    <td class="text-gray-800">
+                                        {{ row.name }}
+                                        {% if row.operational %}
+                                            <span class="badge badge-light-success fs-9 ms-1">{% trans "Operasyonel" %}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="form-check form-check-custom form-check-solid form-switch d-inline-flex">
+                                            <input class="form-check-input" type="checkbox"
+                                                   name="send_status" value="{{ row.code }}"
+                                                   {% if row.send %}checked{% endif %}>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="3" class="text-muted">{% trans "Hiç status kodu tanımlı değil." %}</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="text-muted fs-7">
+                            {% if sim_policy.configured %}
+                                {% trans "Son güncelleme" %}:
+                                <span class="text-gray-700 fw-semibold">{{ sim_policy.updated_at|date:"d.m.Y H:i:s"|default:"—" }}</span>
+                                {% if sim_policy.updated_by %}<span class="text-gray-700">— {{ sim_policy.updated_by.username }}</span>{% endif %}
+                            {% endif %}
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="ki-outline ki-check fs-4 me-1"></i>{% trans "Filtreyi Kaydet" %}
+                        </button>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+    </div>
+</div>
+</div>{# /tab-sim #}
+
+</div>{# /tab-content #}
 {% endblock %}
 
 {% block extra_scripts %}
@@ -502,7 +701,7 @@
         const handle = setInterval(tick, 1000);
     })();
 
-    // --- Sürüm güncelleme + 443 port kontrolü ---------------------------------
+    // --- Sürüm güncelleme + 443 port kontrolü + sunucu bilgileri ---------------
     (function () {
         function csrf() {
             const el = document.querySelector('[name=csrfmiddlewaretoken]');
