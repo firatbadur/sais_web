@@ -98,6 +98,19 @@
     min-width: 220px;
 }
 
+/* -- Tabular inline: "Başka bir Sensör ekle" linkini EN SOLA al ----------- */
+/* Jazzmin varsayılanında inline "Add another" linki en sağda duruyordu;
+   kullanıcı isteğiyle sola alındı. */
+.inline-group .tabular tr.add-row td,
+.inline-group tr.add-row td,
+.inline-related tr.add-row td {
+    text-align: left !important;
+}
+.inline-group tr.add-row td a,
+.inline-related tr.add-row td a {
+    float: left !important;
+}
+
 
 /* -- Navbar user / language menu her zaman görünür ------------------------ */
 /* Problem: Jazzmin 3.x "flatly" + navbar-dark + bg-body kombinasyonunda sağ

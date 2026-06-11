@@ -516,9 +516,10 @@ class Sensor(models.Model):
         help_text="engineering_value = raw * scale + offset",
     )
     decimals = models.IntegerField(
-        blank=True, null=True,
+        blank=True, null=True, default=2,
         verbose_name="Ondalık Hassasiyet",
-        help_text="Kayıt öncesi kaç basamağa yuvarlanacak. None = yuvarlama yok. "
+        help_text="Kayıt öncesi kaç basamağa yuvarlanacak. Varsayılan 2. "
+                  "Boş bırakılırsa yuvarlama yapılmaz. "
                   "Örn: 2 → 12.3456 → 12.35. Sadece sayısal (float/int) değerlere uygulanır.",
     )
 
