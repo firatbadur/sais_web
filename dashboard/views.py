@@ -418,6 +418,7 @@ class SystemControlView(AdminRequiredMixin, TemplateView):
     WEEKLY_WASH_MAX_MIN = 180
 
     def get_context_data(self, **kwargs):
+        from django.conf import settings
         from sais_domain.models import SystemSwitch
         ctx = super().get_context_data(**kwargs)
         switch = SystemSwitch.load()
@@ -425,6 +426,7 @@ class SystemControlView(AdminRequiredMixin, TemplateView):
         ctx["celery_status"] = _celery_status()
         ctx["wash_remaining_seconds"] = switch.wash_remaining_seconds()
         ctx["wash_active_status_code"] = switch.active_wash_status_code()
+        ctx["app_version"] = getattr(settings, "APP_VERSION", "dev")
         return ctx
 
     def post(self, request, *args, **kwargs):

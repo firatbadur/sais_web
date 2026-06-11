@@ -293,6 +293,61 @@
         </div>
     </div>
 </div>
+
+{# ------------------------------------------------------------------ #}
+{# Sürüm / Güncelleme + Dış Erişim (443) kartları                     #}
+{# ------------------------------------------------------------------ #}
+<div class="row g-5 mt-2">
+
+    {# Sürüm / Güncelleme #}
+    <div class="col-xl-6">
+        <div class="card card-flush h-100">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-rocket fs-2 me-2 text-primary"></i>
+                    {% trans "Sürüm / Güncelleme" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between border border-dashed border-gray-300 rounded p-5 mb-4">
+                    <span class="fw-bold fs-5 text-gray-900">{% trans "Çalışan sürüm" %}</span>
+                    <span class="badge badge-light-primary fs-5">{{ app_version }}</span>
+                </div>
+                <p class="text-muted fs-7">
+                    {% trans "Otomatik güncelleme kapalıdır. Yeni sürümü buradan elle yükseltebilirsiniz: en son sürüm çekilir ve uygulama container'ları yeniden başlatılır (birkaç dakika kısa kesinti)." %}
+                </p>
+                <button type="button" id="btn-update" class="btn btn-primary">
+                    <i class="ki-outline ki-cloud-download fs-3 me-1"></i>
+                    {% trans "Şimdi Güncelle ve Yeniden Başlat" %}
+                </button>
+                <div id="update-result" class="mt-4"></div>
+            </div>
+        </div>
+    </div>
+
+    {# Dış Erişim (443) #}
+    <div class="col-xl-6">
+        <div class="card card-flush h-100">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-shield-tick fs-2 me-2 text-primary"></i>
+                    {% trans "Dış Erişim (443)" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <p class="text-muted fs-7">
+                    {% trans "Sunucu dışarıdan HTTPS (443) ile erişilebilir mi kontrol eder. Domain + DNS A kaydı + modem/firewall 443 yönlendirmesi gerekir." %}
+                </p>
+                <button type="button" id="btn-port-check" class="btn btn-light-primary">
+                    <i class="ki-outline ki-wifi fs-3 me-1"></i>
+                    {% trans "443 Portunu Kontrol Et" %}
+                </button>
+                <div id="port-result" class="mt-4"></div>
+            </div>
+        </div>
+    </div>
+
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -384,6 +439,62 @@
         }
         tick();
         const handle = setInterval(tick, 1000);
+    })();
+
+    // --- Sürüm güncelleme + 443 port kontrolü ---------------------------------
+    (function () {
+        function csrf() {
+            const el = document.querySelector('[name=csrfmiddlewaretoken]');
+            return el ? el.value : '';
+        }
+
+        const btnUp = document.getElementById('btn-update');
+        const upRes = document.getElementById('update-result');
+        if (btnUp) {
+            btnUp.addEventListener('click', function () {
+                if (!confirm("{% trans 'En son sürüme güncellenecek ve uygulama yeniden başlatılacak. Birkaç dakika kısa kesinti olur. Devam edilsin mi?' %}")) return;
+                btnUp.disabled = true;
+                upRes.innerHTML = '<div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>{% trans "Güncelleme tetikleniyor..." %}</div>';
+                fetch("{% url 'dashboard:api_trigger_update' %}", { method: 'POST', headers: { 'X-CSRFToken': csrf() } })
+                    .then(r => r.json())
+                    .then(d => {
+                        btnUp.disabled = false;
+                        upRes.innerHTML = d.ok
+                            ? '<div class="alert alert-success">' + (d.message || 'OK') + '</div>'
+                            : '<div class="alert alert-danger">' + (d.error || 'Hata') + '</div>';
+                    })
+                    .catch(e => { btnUp.disabled = false; upRes.innerHTML = '<div class="alert alert-danger">' + e + '</div>'; });
+            });
+        }
+
+        const btnPort = document.getElementById('btn-port-check');
+        const portRes = document.getElementById('port-result');
+        if (btnPort) {
+            btnPort.addEventListener('click', function () {
+                btnPort.disabled = true;
+                portRes.innerHTML = '<div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>{% trans "Kontrol ediliyor..." %}</div>';
+                fetch("{% url 'dashboard:api_port_check' %}")
+                    .then(r => r.json())
+                    .then(d => {
+                        btnPort.disabled = false;
+                        function rowItem(label, val, ok) {
+                            const badge = ok === true ? '<span class="badge badge-light-success">{% trans "Evet" %}</span>'
+                                        : ok === false ? '<span class="badge badge-light-danger">{% trans "Hayir" %}</span>'
+                                        : '<span class="badge badge-light">' + (val || '—') + '</span>';
+                            return '<div class="d-flex justify-content-between border-bottom border-gray-200 py-2"><span class="text-gray-700">' + label + '</span>' + badge + '</div>';
+                        }
+                        let html = '';
+                        html += rowItem("{% trans 'Public IP' %}", d.public_ip, null);
+                        if (d.domain) html += rowItem("{% trans 'Domain' %}", d.domain, null);
+                        html += rowItem("{% trans 'Caddy 443 (yerel)' %}", null, d.local_443);
+                        html += rowItem("{% trans 'Dis 443 (sunucudan)' %}", null, d.external_443);
+                        html += '<div class="mt-3 text-muted fs-8">{% trans "Kesin sonuc icin disaridan test edin:" %}</div>';
+                        if (d.external_url) html += '<a href="' + d.external_url + '" target="_blank" class="btn btn-sm btn-light-info mt-2"><i class="ki-outline ki-exit-up-right fs-5 me-1"></i>{% trans "Harici port testi" %}</a>';
+                        portRes.innerHTML = html;
+                    })
+                    .catch(e => { btnPort.disabled = false; portRes.innerHTML = '<div class="alert alert-danger">' + e + '</div>'; });
+            });
+        }
     })();
 </script>
 {% endblock %}

@@ -393,3 +393,121 @@ def backup_download(request, pk):
         open(full, "rb"), as_attachment=True, filename=backup.filename,
         content_type="application/octet-stream",
     )
+
+
+# ---------------------------------------------------------------------------
+# Sürüm / güncelleme + 443 port kontrolü (Sistem Kontrol sayfası)
+# ---------------------------------------------------------------------------
+
+@login_required
+def version_info(request):
+    """Çalışan sürüm (APP_VERSION). Manuel güncelleme kararı kullanıcıda."""
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    from django.conf import settings
+    return JsonResponse({"current": getattr(settings, "APP_VERSION", "dev")})
+
+
+@login_required
+def trigger_update(request):
+    """Manuel sürüm yükseltme: Watchtower HTTP API'sine update isteği gönderir.
+
+    Watchtower :stable etiketli app container'larını (web/worker/beat) en son
+    image'a çeker + (yeni sürüm varsa) yeniden başlatır. Otomatik güncelleme
+    KAPALI; yükseltme yalnız buradan tetiklenir.
+    """
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    import os
+    import urllib.request
+
+    token = (os.getenv("WATCHTOWER_API_TOKEN", "") or "").strip()
+    if not token:
+        return JsonResponse({
+            "ok": False,
+            "error": "Güncelleme servisi yapılandırılmamış (WATCHTOWER_API_TOKEN yok).",
+        })
+
+    req = urllib.request.Request(
+        "http://watchtower:8080/v1/update",
+        method="POST",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            body = resp.read().decode("utf-8", "replace")
+        return JsonResponse({
+            "ok": True,
+            "message": "Güncelleme tetiklendi. Yeni sürüm varsa container'lar "
+                       "yeniden başlatılır (birkaç dakika).",
+            "detail": body[:1000],
+        })
+    except Exception as exc:  # noqa: BLE001
+        return JsonResponse({"ok": False, "error": f"Güncelleme tetiklenemedi: {exc}"})
+
+
+@login_required
+def port_check(request):
+    """Sunucu dıştan 443'te erişilebilir mi? Public IP + yerel Caddy 443 +
+    (best-effort) public IP:443 bağlantı denemesi + harici doğrulama linki."""
+    denied = _require_admin(request)
+    if denied:
+        return denied
+
+    import socket
+    import urllib.request
+
+    result = {
+        "public_ip": None,
+        "local_443": False,      # Caddy container'ı 443 dinliyor mu (iç ağ)
+        "external_443": None,    # public IP:443 dışarıdan açık mı (best-effort)
+        "domain": "",
+        "external_url": None,    # kesin doğrulama icin harici arac linki
+    }
+
+    # 1) Public IP
+    for svc in ("https://api.ipify.org", "https://ifconfig.me/ip"):
+        try:
+            with urllib.request.urlopen(svc, timeout=5) as r:
+                ip = r.read().decode("utf-8", "replace").strip()
+                if ip:
+                    result["public_ip"] = ip
+                    break
+        except Exception:  # noqa: BLE001
+            continue
+
+    # 2) Yerel: Caddy 443 dinliyor mu (compose iç ağından)
+    try:
+        s = socket.create_connection(("caddy", 443), timeout=3)
+        s.close()
+        result["local_443"] = True
+    except Exception:  # noqa: BLE001
+        result["local_443"] = False
+
+    # 3) Best-effort dış erişim: public IP:443'e bağlanmayı dene (NAT hairpin
+    #    desteklenmezse sunucu kendi public IP'sine ulaşamayabilir -> kesin değil).
+    if result["public_ip"]:
+        try:
+            s = socket.create_connection((result["public_ip"], 443), timeout=4)
+            s.close()
+            result["external_443"] = True
+        except Exception:  # noqa: BLE001
+            result["external_443"] = False
+        result["external_url"] = (
+            "https://www.yougetsignal.com/tools/open-ports/"
+            f"?remoteAddress={result['public_ip']}&portNumber=443"
+        )
+
+    # 4) Domain (panelde tanımlıysa)
+    try:
+        from api.models import WebSettings
+        result["domain"] = (WebSettings.load().domain or "").strip()
+    except Exception:  # noqa: BLE001
+        pass
+
+    return JsonResponse(result)

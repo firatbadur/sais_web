@@ -74,4 +74,7 @@ urlpatterns = [
          name="api_system_control_status"),
     path("api/backups/status/", api_views.backup_status, name="api_backup_status"),
     path("api/backups/<int:pk>/download/", api_views.backup_download, name="api_backup_download"),
+    path("api/version/", api_views.version_info, name="api_version_info"),
+    path("api/version/update/", api_views.trigger_update, name="api_trigger_update"),
+    path("api/port-check/", api_views.port_check, name="api_port_check"),
 ]

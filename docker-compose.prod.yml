@@ -20,6 +20,8 @@ x-app-env: &app-env
   CELERY_BROKER_URL: redis://redis:6379/2
   CELERY_RESULT_BACKEND: django-db
   MSSQL_DRIVER: "ODBC Driver 18 for SQL Server"
+  # Dashboard "Şimdi Güncelle" butonu Watchtower HTTP API'sini bu token'la çağırır.
+  WATCHTOWER_API_TOKEN: "${WATCHTOWER_API_TOKEN:-envisoft-update-token}"
 
 services:
   # Yedek volume izinlerini hazırla (SQL Server yazar, app siler/indirir).
@@ -193,12 +195,12 @@ services:
       # Yeni Docker daemon (v28+, WSL) min API 1.40 istiyor; watchtower istemcisi
       # 1.25 deniyordu -> "client version too old" -> surekli restart. Sabitle.
       DOCKER_API_VERSION: "1.43"
-      WATCHTOWER_LABEL_ENABLE: "true"        # sadece etiketli (app) container'ları izle
-      # MONITOR_ONLY: OTOMATIK guncelleme YOK. Periyodik kontrol eder + yeni sürüm
-      # gelince loglar, ama recreate ETMEZ. Yukseltme dashboard'dan manuel yapilir
-      # (kullanici karari: oto-check evet, oto-update hayir).
-      WATCHTOWER_MONITOR_ONLY: "true"
-      WATCHTOWER_POLL_INTERVAL: "${WATCHTOWER_POLL_INTERVAL:-3600}"  # 1 saatte bir kontrol
+      WATCHTOWER_LABEL_ENABLE: "true"        # sadece etiketli (app) container'ları
+      WATCHTOWER_CLEANUP: "true"             # eski image'ları sil
+      # OTOMATIK guncelleme YOK. Periyodik tarama kapali; yukseltme yalnizca
+      # HTTP API ile (dashboard "Simdi Guncelle" butonu) tetiklenir.
+      WATCHTOWER_HTTP_API_UPDATE: "true"
+      WATCHTOWER_HTTP_API_TOKEN: "${WATCHTOWER_API_TOKEN:-envisoft-update-token}"
       TZ: ${DJANGO_TIME_ZONE:-Europe/Istanbul}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
