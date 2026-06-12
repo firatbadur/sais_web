@@ -28,6 +28,20 @@ from .services import build_envisoft_rows, build_sim_payload
 logger = logging.getLogger("sais_domain.tasks")
 
 
+@shared_task(name="sais_domain.tasks.run_scenarios")
+def run_scenarios() -> dict:
+    """Aktif numune alma senaryolarını değerlendirir + açık run'ları ilerletir.
+
+    Lisans bitmişse senaryo motoru da durur (polling/yayın gibi) — fiziksel
+    numune alıcı tetiği ve SIM bildirimleri yapılmaz.
+    """
+    from api.licensing import license_active
+    if not license_active():
+        return {"skipped": "license_inactive"}
+    from .scenario_engine import run
+    return run()
+
+
 @shared_task(name="sais_domain.tasks.publish_minute_data")
 def publish_minute_data() -> dict:
     """Aktif kabinler için per-cabinet publish task'ları enqueue eder.

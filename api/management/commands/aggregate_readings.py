@@ -1,15 +1,18 @@
 """
 Reading aggregation komutu — raw `Reading` satırlarından
-`ReadingFifteenMin`, `ReadingHourly`, `ReadingDaily` tablolarını doldurur.
+`ReadingFiveMin`, `ReadingFifteenMin`, `ReadingHourly`, `ReadingDaily`
+tablolarını doldurur.
 
 Kullanım:
-    python manage.py aggregate_readings                 # son 24 saat, üç bucket
+    python manage.py aggregate_readings                 # son 24 saat, tüm bucket'lar
     python manage.py aggregate_readings --hours=72      # son 72 saat
+    python manage.py aggregate_readings --bucket=5m     # sadece 5 dakikalık
     python manage.py aggregate_readings --bucket=15m    # sadece 15 dakikalık
     python manage.py aggregate_readings --bucket=hour   # sadece saatlik
     python manage.py aggregate_readings --bucket=day    # sadece günlük
 
-Cron örneği (her 5 dakikada 15dk bucket; her saat başı saatlik; her gece 01:00 günlük):
+Cron örneği (her dakika 5dk bucket; her 5 dakikada 15dk; saat başı saatlik; gece 01:00 günlük):
+    *   * * * *  python manage.py aggregate_readings --bucket=5m   --hours=2
     */5 * * * *  python manage.py aggregate_readings --bucket=15m  --hours=2
     5   * * * *  python manage.py aggregate_readings --bucket=hour --hours=6
     0   1 * * *  python manage.py aggregate_readings --bucket=day  --hours=48
@@ -27,10 +30,22 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from api.models import Reading, ReadingDaily, ReadingFifteenMin, ReadingHourly
+from api.models import (
+    Reading,
+    ReadingDaily,
+    ReadingFifteenMin,
+    ReadingFiveMin,
+    ReadingHourly,
+)
 
 
-BUCKETS = ("15m", "hour", "day")
+BUCKETS = ("5m", "15m", "hour", "day")
+
+
+def floor_5m(dt: datetime) -> datetime:
+    """En yakın 5 dakikalık bucket'a yuvarla (aşağı)."""
+    minute = (dt.minute // 5) * 5
+    return dt.replace(minute=minute, second=0, microsecond=0)
 
 
 def floor_15m(dt: datetime) -> datetime:
@@ -48,12 +63,14 @@ def floor_day(dt: datetime) -> datetime:
 
 
 BUCKET_FLOORS = {
+    "5m": floor_5m,
     "15m": floor_15m,
     "hour": floor_hour,
     "day": floor_day,
 }
 
 BUCKET_MODELS = {
+    "5m": ReadingFiveMin,
     "15m": ReadingFifteenMin,
     "hour": ReadingHourly,
     "day": ReadingDaily,

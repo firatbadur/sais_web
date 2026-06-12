@@ -609,8 +609,35 @@ class AlarmReportsView(OperatorRequiredMixin, ListView):
 # Operator pages
 # --------------------------------------------------------------------------- #
 
-class SampleTriggerView(OperatorRequiredMixin, TemplateView):
-    template_name = "dashboard/operator/sample_trigger.html"
+class ScenarioBuilderView(OperatorRequiredMixin, TemplateView):
+    """Operatör/Yönetici → Numune Senaryosu (4 sekme: Senaryolar / Kurucu /
+    Durum / Geçmiş).
+
+    No-code senaryo kütüphanesi: tetik kombinasyonu + adım + aksiyon kurucu;
+    canlı durum izleme + Bakanlık talep tetiği. Yürütme `run_scenarios` task'ı
+    tarafından yapılır.
+    """
+    template_name = "dashboard/operator/scenario_builder.html"
+
+    def get_context_data(self, **kwargs):
+        from sais_domain.models import Scenario
+        ctx = super().get_context_data(**kwargs)
+        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        ctx["default_station_id"] = default_station_id()
+        ctx["kind_choices"] = Scenario.KIND_CHOICES
+        ctx["window_choices"] = Scenario.WINDOW_CHOICES
+        ctx["trigger_choices"] = Scenario.TRIGGER_CHOICES
+        ctx["action_types"] = [
+            ("notify", _("Bildirim Gönder")),
+            ("sampler_on", _("Numune Alıcıyı Aç")),
+            ("sampler_off", _("Numune Alıcıyı Kapat")),
+            ("ministry_get_code", _("Bakanlık'tan Numune Kodu Al")),
+            ("sim_sample_start", _("SIM: Numune Başladı")),
+            ("sim_sample_complete", _("SIM: Numune Tamamlandı")),
+            ("sim_sample_error", _("SIM: Numune Hatası")),
+            ("send_diagnostic", _("Diagnostik Gönder (701/702)")),
+        ]
+        return ctx
 
 
 class AlarmsView(OperatorRequiredMixin, TemplateView):

@@ -1,0 +1,733 @@
+{% extends "dashboard/base.html" %}
+{% load i18n dashboard_extras %}
+
+{% block title %}{% trans "Numune Senaryosu" %}{% endblock %}
+{% block page_title %}{% trans "Numune Senaryosu" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    #kt_app_content_container { opacity: 0; }
+    body.page-ready #kt_app_content_container { opacity: 1; transition: opacity 0.18s ease-in-out; }
+    .sc-card .form-label { color: var(--bs-text-muted); font-weight: 600; }
+    .sc-results .dt-buttons .btn { margin-right: 0.35rem; padding: 0.45rem 0.85rem; }
+    .sc-step { border: 1px dashed var(--bs-gray-300); border-radius: 0.65rem; padding: 1rem; margin-bottom: 1rem; background: var(--bs-gray-100); }
+    .sc-action { border: 1px solid var(--bs-gray-300); border-radius: 0.5rem; padding: 0.65rem; margin-bottom: 0.6rem; background: var(--bs-body-bg); }
+    .sc-param-row, .sc-action-fields { align-items: end; }
+    .sc-step-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .sc-timeline { list-style: none; padding-left: 0; }
+    .sc-timeline li { padding: 0.4rem 0; border-bottom: 1px solid var(--bs-gray-200); }
+    .sc-status-grid .kpi { background: var(--bs-gray-100); border-radius: 0.65rem; padding: 1rem; height: 100%; }
+    .sc-status-grid .kpi .lbl { color: var(--bs-text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }
+    .sc-status-grid .kpi .val { font-size: 1.25rem; font-weight: 700; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+
+<ul class="nav nav-tabs nav-line-tabs nav-line-tabs-2x fs-5 fw-semibold mb-6">
+    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-library">
+        <i class="ki-outline ki-data fs-3 me-2"></i>{% trans "Senaryolar" %}</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-builder">
+        <i class="ki-outline ki-setting-3 fs-3 me-2"></i>{% trans "Kurucu" %}</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-status">
+        <i class="ki-outline ki-pulse fs-3 me-2"></i>{% trans "Durum" %}</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-history">
+        <i class="ki-outline ki-time fs-3 me-2"></i>{% trans "Geçmiş" %}</a></li>
+</ul>
+
+<div class="tab-content">
+
+    <!-- ===================== SENARYOLAR ===================== -->
+    <div class="tab-pane fade show active" id="tab-library" role="tabpanel">
+        <div class="card sc-results">
+            <div class="card-header border-0 pt-6">
+                <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Senaryo Kütüphanesi" %}</h3>
+                <div class="card-toolbar">
+                    <button type="button" class="btn btn-primary" id="btn-new-scenario">
+                        <i class="ki-outline ki-plus fs-4"></i>{% trans "Yeni Senaryo" %}</button>
+                </div>
+            </div>
+            <div class="card-body pt-2">
+                <div class="table-responsive">
+                    <table id="tbl-scenarios" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
+                        <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
+                            <th>{% trans "Ad" %}</th><th>{% trans "Tür" %}</th><th>{% trans "İstasyon" %}</th>
+                            <th>{% trans "Aktif" %}</th><th>{% trans "Etkin" %}</th><th>{% trans "Yerleşik" %}</th>
+                            <th class="text-end">{% trans "İşlem" %}</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== KURUCU ===================== -->
+    <div class="tab-pane fade" id="tab-builder" role="tabpanel">
+        <!-- Meta -->
+        <div class="card mb-5 sc-card">
+            <div class="card-header border-0 pt-6">
+                <h3 class="card-title fw-bold text-gray-800 text-uppercase" id="builder-title">{% trans "Yeni Senaryo" %}</h3>
+            </div>
+            <div class="card-body pt-2">
+                <div class="row g-5">
+                    <div class="col-md-6">
+                        <label class="form-label">{% trans "Senaryo Adı" %}</label>
+                        <input type="text" class="form-control" id="sc-name" placeholder="{% trans 'Örn. Atıksu Limit Senaryosu' %}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{% trans "İstasyon" %}</label>
+                        <select class="form-select" id="sc-station" data-control="select2"
+                                data-placeholder='{% trans "İstasyon seçiniz" %}' data-allow-clear="true">
+                            <option></option>
+                            {% for s in stations %}<option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{% trans "Tür" %}</label>
+                        <select class="form-select" id="sc-kind" data-control="select2" data-hide-search="true">
+                            {% for v, lbl in kind_choices %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{% trans "Ortalama Penceresi" %}</label>
+                        <select class="form-select" id="sc-window" data-control="select2" data-hide-search="true">
+                            {% for v, lbl in window_choices %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 sc-auto-only">
+                        <label class="form-label">{% trans "Tetik Kombinasyonu" %}</label>
+                        <select class="form-select" id="sc-trigger" data-control="select2" data-hide-search="true">
+                            {% for v, lbl in trigger_choices %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 sc-auto-only" id="sc-n-wrap">
+                        <label class="form-label">{% trans "N (en az kaç parametre)" %}</label>
+                        <input type="number" min="1" class="form-control" id="sc-n" value="1">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">{% trans "Numune Alıcı Sensör (override)" %}</label>
+                        <select class="form-select" id="sc-sampler" data-control="select2"
+                                data-placeholder='{% trans "Varsayılan: istasyon numune sensörü" %}' data-allow-clear="true">
+                            <option></option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end gap-4">
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            <input class="form-check-input" type="checkbox" id="sc-enabled" checked>
+                            <span class="form-check-label fw-semibold">{% trans "Etkin" %}</span>
+                        </label>
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            <input class="form-check-input" type="checkbox" id="sc-active">
+                            <span class="form-check-label fw-semibold">{% trans "Aktif (varsayılan senaryo yap)" %}</span>
+                        </label>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">{% trans "Açıklama" %}</label>
+                        <textarea class="form-control" id="sc-desc" rows="2"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Parametreler -->
+        <div class="card mb-5 sc-card sc-auto-only">
+            <div class="card-header border-0 pt-6">
+                <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "İzlenen Parametreler ve Eşikler" %}</h3>
+                <div class="card-toolbar">
+                    <button type="button" class="btn btn-light-primary btn-sm" id="btn-add-param">
+                        <i class="ki-outline ki-plus fs-5"></i>{% trans "Parametre Ekle" %}</button>
+                </div>
+            </div>
+            <div class="card-body pt-2">
+                <div id="param-list"></div>
+                <div class="form-text">{% trans "Önce istasyon seçin; en az bir parametreye Min ve/veya Max eşik girin." %}</div>
+            </div>
+        </div>
+
+        <!-- Adımlar -->
+        <div class="card mb-5 sc-card">
+            <div class="card-header border-0 pt-6">
+                <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Adımlar (sıralı)" %}</h3>
+                <div class="card-toolbar">
+                    <button type="button" class="btn btn-light-primary btn-sm" id="btn-add-step">
+                        <i class="ki-outline ki-plus fs-5"></i>{% trans "Adım Ekle" %}</button>
+                </div>
+            </div>
+            <div class="card-body pt-2">
+                <div id="step-list"></div>
+                <div class="form-text">{% trans "Her adım tetik anından girilen süre sonra çalışır; aksiyonları seçin." %}</div>
+            </div>
+        </div>
+
+        <div class="card sc-card">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div class="alert alert-warning d-none mb-0 flex-grow-1 me-4" id="builder-alert">
+                    <i class="ki-outline ki-information-5 fs-2 me-2"></i><span></span>
+                </div>
+                <button type="button" class="btn btn-primary" id="btn-save-scenario">
+                    <i class="ki-outline ki-save-2 fs-4"></i>{% trans "Senaryoyu Kaydet" %}</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== DURUM ===================== -->
+    <div class="tab-pane fade" id="tab-status" role="tabpanel">
+        <div class="card mb-5 sc-card">
+            <div class="card-header border-0 pt-6">
+                <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Bakanlık Numune Talebi" %}</h3>
+            </div>
+            <div class="card-body pt-2">
+                <div class="row g-5 align-items-end">
+                    <div class="col-md-5">
+                        <label class="form-label">{% trans "İstasyon" %}</label>
+                        <select class="form-select" id="min-station" data-control="select2" data-hide-search="true">
+                            {% for s in stations %}<option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">{% trans "Numune Kodu" %}</label>
+                        <input type="text" class="form-control" id="min-code" placeholder="{% trans 'Bakanlık talep kodu' %}">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-light-danger w-100" id="btn-ministry">
+                            <i class="ki-outline ki-flask fs-4"></i>{% trans "Talebi Başlat" %}</button>
+                    </div>
+                    <div class="col-12"><div class="alert alert-info d-none mb-0" id="min-alert"><span></span></div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-5 sc-card">
+            <div class="card-header border-0 pt-6">
+                <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Aktif Senaryolar" %}</h3>
+                <div class="card-toolbar text-muted fs-7" id="status-updated"></div>
+            </div>
+            <div class="card-body pt-2">
+                <div id="active-scenarios" class="text-muted">{% trans "Yükleniyor..." %}</div>
+            </div>
+        </div>
+
+        <div class="card sc-card">
+            <div class="card-header border-0 pt-6">
+                <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Devam Eden Çalışmalar" %}</h3>
+            </div>
+            <div class="card-body pt-2">
+                <div id="open-runs" class="text-muted">{% trans "Devam eden senaryo çalışması yok." %}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== GEÇMİŞ ===================== -->
+    <div class="tab-pane fade" id="tab-history" role="tabpanel">
+        <div class="card sc-results">
+            <div class="card-header border-0 pt-6">
+                <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Senaryo Geçmişi" %}</h3>
+            </div>
+            <div class="card-body pt-2">
+                <div class="table-responsive">
+                    <table id="tbl-history" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
+                        <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
+                            <th>{% trans "Zaman" %}</th><th>{% trans "Senaryo" %}</th><th>{% trans "Tür" %}</th>
+                            <th>{% trans "Adım" %}</th><th>{% trans "Ortalamalar" %}</th><th>{% trans "Mesaj" %}</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    const URLS = {
+        list: "{% url 'dashboard:api_scenario_list' %}",
+        detail: "{% url 'dashboard:api_scenario_detail' %}",
+        save: "{% url 'dashboard:api_scenario_save' %}",
+        del: "{% url 'dashboard:api_scenario_delete' %}",
+        activate: "{% url 'dashboard:api_scenario_activate' %}",
+        status: "{% url 'dashboard:api_scenario_status' %}",
+        history: "{% url 'dashboard:api_scenario_history' %}",
+        ministry: "{% url 'dashboard:api_scenario_ministry' %}",
+        params: "{% url 'dashboard:api_station_parameters' %}",
+        digital: "{% url 'dashboard:api_scenario_digital_sensors' %}",
+    };
+    const ACTION_TYPES = [
+        {% for v, lbl in action_types %}{ v: "{{ v }}", lbl: "{{ lbl|escapejs }}" },{% endfor %}
+    ];
+    const I18N = {
+        netErr: "{% trans 'Ağ hatası' %}", needName: "{% trans 'Senaryo adı zorunlu.' %}",
+        needCode: "{% trans 'Numune kodu zorunlu.' %}", confirmDel: "{% trans 'Bu senaryo silinsin mi?' %}",
+        saved: "{% trans 'Senaryo kaydedildi.' %}", builtin: "{% trans 'Yerleşik' %}",
+        yes: "{% trans 'Evet' %}", no: "{% trans 'Hayır' %}", none: "{% trans 'Yok' %}",
+        active: "{% trans 'Aktif' %}", passive: "{% trans 'Pasif' %}",
+        msgLabel: "{% trans 'Mesaj' %}", diagLabel: "{% trans 'Diagnostik Tip No (701/702)' %}",
+        detailLabel: "{% trans 'Detay' %}", sms: "SMS", email: "{% trans 'E-posta' %}",
+        step: "{% trans 'Adım' %}", remove: "{% trans 'Kaldır' %}",
+        ministryOk: "{% trans 'Bakanlık talebi başlatıldı.' %}",
+        paramPlaceholder: "{% trans 'Parametre seçiniz' %}",
+        noRuns: "{% trans 'Devam eden senaryo çalışması yok.' %}",
+        noActive: "{% trans 'Aktif senaryo yok.' %}",
+    };
+
+    function csrf() { const el = document.querySelector('[name=csrfmiddlewaretoken]'); return el ? el.value : ''; }
+    function j(url, body, method) {
+        return fetch(url, { method: method || 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+            body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+    }
+    function gj(url) { return fetch(url, { credentials: 'same-origin' }).then(r => r.json()); }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+    // ---- Süre dönüşümü ----
+    function splitSeconds(sec) {
+        sec = Number(sec) || 0;
+        if (sec && sec % 86400 === 0) return { v: sec / 86400, u: 86400 };
+        if (sec && sec % 3600 === 0) return { v: sec / 3600, u: 3600 };
+        if (sec && sec % 60 === 0) return { v: sec / 60, u: 60 };
+        return { v: sec, u: 1 };
+    }
+
+    // ===================================================================== //
+    // Builder state
+    // ===================================================================== //
+    let analogParams = [];   // [{id, text}]
+    let editingId = null;
+
+    function setAutoVisible() {
+        const isAuto = document.getElementById('sc-kind').value === 'auto';
+        document.querySelectorAll('.sc-auto-only').forEach(el => el.style.display = isAuto ? '' : 'none');
+        toggleNWrap();
+    }
+    function toggleNWrap() {
+        const show = document.getElementById('sc-trigger').value === 'n_of_m';
+        document.getElementById('sc-n-wrap').style.display =
+            (document.getElementById('sc-kind').value === 'auto' && show) ? '' : 'none';
+    }
+
+    // ---- Parametre satırı ----
+    function paramOptionsHtml(selectedId) {
+        let h = '<option></option>';
+        analogParams.forEach(p => {
+            h += `<option value="${p.id}" ${String(p.id) === String(selectedId) ? 'selected' : ''}>${esc(p.text)}</option>`;
+        });
+        return h;
+    }
+    function addParamRow(data) {
+        data = data || {};
+        const row = document.createElement('div');
+        row.className = 'row g-3 sc-param-row mb-3';
+        row.innerHTML =
+            `<div class="col-md-4"><select class="form-select p-param">${paramOptionsHtml(data.parameter_id)}</select></div>
+             <div class="col-md-2"><input type="number" step="any" class="form-control p-min" placeholder="Min" value="${data.min_value != null ? data.min_value : ''}"></div>
+             <div class="col-md-2"><input type="number" step="any" class="form-control p-max" placeholder="Max" value="${data.max_value != null ? data.max_value : ''}"></div>
+             <div class="col-md-2"><input type="text" class="form-control p-mcode" placeholder="{% trans 'Bakanlık kodu' %}" value="${esc(data.ministry_param_code || '')}"></div>
+             <div class="col-md-1 d-flex align-items-center"><label class="form-check form-switch form-check-custom form-check-solid"><input class="form-check-input p-en" type="checkbox" ${data.enabled === false ? '' : 'checked'}></label></div>
+             <div class="col-md-1 text-end"><button type="button" class="btn btn-icon btn-sm btn-light-danger p-del"><i class="ki-outline ki-trash fs-5"></i></button></div>`;
+        document.getElementById('param-list').appendChild(row);
+        $(row.querySelector('.p-param')).select2({ width: '100%', placeholder: I18N.paramPlaceholder });
+        row.querySelector('.p-del').addEventListener('click', () => row.remove());
+    }
+
+    // ---- Aksiyon ----
+    function actionTypeOptions(sel) {
+        return ACTION_TYPES.map(a => `<option value="${a.v}" ${a.v === sel ? 'selected' : ''}>${esc(a.lbl)}</option>`).join('');
+    }
+    function renderActionFields(wrap, action) {
+        const type = wrap.querySelector('.a-type').value;
+        const f = wrap.querySelector('.a-fields');
+        action = action || {};
+        if (type === 'notify') {
+            f.innerHTML =
+                `<div class="col-md-6"><input type="text" class="form-control a-message" placeholder="${I18N.msgLabel}" value="${esc(action.message || '')}"></div>
+                 <div class="col-md-3 d-flex align-items-center"><label class="form-check form-check-custom form-check-solid me-3"><input class="form-check-input a-sms" type="checkbox" ${action.sms === false ? '' : 'checked'}><span class="form-check-label">${I18N.sms}</span></label>
+                 <label class="form-check form-check-custom form-check-solid"><input class="form-check-input a-email" type="checkbox" ${action.email === false ? '' : 'checked'}><span class="form-check-label">${I18N.email}</span></label></div>`;
+        } else if (type === 'send_diagnostic') {
+            f.innerHTML =
+                `<div class="col-md-3"><input type="number" class="form-control a-typeno" placeholder="${I18N.diagLabel}" value="${action.type_no != null ? action.type_no : 701}"></div>
+                 <div class="col-md-6"><input type="text" class="form-control a-details" placeholder="${I18N.detailLabel}" value="${esc(action.details || '')}"></div>`;
+        } else {
+            f.innerHTML = '';
+        }
+    }
+    function addActionRow(stepEl, action) {
+        action = action || {};
+        const wrap = document.createElement('div');
+        wrap.className = 'sc-action';
+        wrap.innerHTML =
+            `<div class="row g-3 sc-action-fields">
+                 <div class="col-md-3"><select class="form-select form-select-sm a-type">${actionTypeOptions(action.type)}</select></div>
+                 <div class="a-fields col d-flex gap-2 flex-wrap"></div>
+                 <div class="col-md-1 text-end"><button type="button" class="btn btn-icon btn-sm btn-light-danger a-del"><i class="ki-outline ki-cross fs-4"></i></button></div>
+             </div>`;
+        stepEl.querySelector('.action-list').appendChild(wrap);
+        renderActionFields(wrap, action);
+        wrap.querySelector('.a-type').addEventListener('change', () => renderActionFields(wrap, {}));
+        wrap.querySelector('.a-del').addEventListener('click', () => wrap.remove());
+    }
+
+    // ---- Adım ----
+    function addStepRow(step) {
+        step = step || { actions: [] };
+        const t = splitSeconds(step.after_seconds);
+        const el = document.createElement('div');
+        el.className = 'sc-step';
+        el.innerHTML =
+            `<div class="sc-step-head">
+                <span class="badge badge-light-primary fs-7 step-no"></span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-icon btn-sm btn-light step-up" title="↑"><i class="ki-outline ki-up fs-5"></i></button>
+                    <button type="button" class="btn btn-icon btn-sm btn-light step-down" title="↓"><i class="ki-outline ki-down fs-5"></i></button>
+                    <button type="button" class="btn btn-icon btn-sm btn-light-danger step-del" title="${I18N.remove}"><i class="ki-outline ki-trash fs-5"></i></button>
+                </div>
+             </div>
+             <div class="row g-3 mb-3">
+                <div class="col-md-4"><label class="form-label">${esc('{% trans "Adım Adı" %}')}</label><input type="text" class="form-control s-label" value="${esc(step.label || '')}"></div>
+                <div class="col-md-2"><label class="form-label">${esc('{% trans "Süre" %}')}</label><input type="number" min="0" class="form-control s-tval" value="${t.v}"></div>
+                <div class="col-md-3"><label class="form-label">${esc('{% trans "Birim" %}')}</label>
+                    <select class="form-select s-tunit">
+                        <option value="1" ${t.u===1?'selected':''}>{% trans "Saniye" %}</option>
+                        <option value="60" ${t.u===60?'selected':''}>{% trans "Dakika" %}</option>
+                        <option value="3600" ${t.u===3600?'selected':''}>{% trans "Saat" %}</option>
+                        <option value="86400" ${t.u===86400?'selected':''}>{% trans "Gün" %}</option>
+                    </select></div>
+                <div class="col-md-3 d-flex align-items-end"><label class="form-check form-switch form-check-custom form-check-solid"><input class="form-check-input s-still" type="checkbox" ${step.require_still_exceeded ? 'checked' : ''}><span class="form-check-label fw-semibold">{% trans "Koşul hâlâ sağlanmalı" %}</span></label></div>
+             </div>
+             <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted fw-semibold">{% trans "Aksiyonlar" %}</span>
+                <button type="button" class="btn btn-sm btn-light-primary a-add"><i class="ki-outline ki-plus fs-6"></i>{% trans "Aksiyon Ekle" %}</button>
+             </div>
+             <div class="action-list"></div>`;
+        document.getElementById('step-list').appendChild(el);
+        (step.actions || []).forEach(a => addActionRow(el, a));
+        el.querySelector('.a-add').addEventListener('click', () => addActionRow(el, {}));
+        el.querySelector('.step-del').addEventListener('click', () => { el.remove(); renumberSteps(); });
+        el.querySelector('.step-up').addEventListener('click', () => { if (el.previousElementSibling) el.parentNode.insertBefore(el, el.previousElementSibling); renumberSteps(); });
+        el.querySelector('.step-down').addEventListener('click', () => { if (el.nextElementSibling) el.parentNode.insertBefore(el.nextElementSibling, el); renumberSteps(); });
+        renumberSteps();
+    }
+    function renumberSteps() {
+        document.querySelectorAll('#step-list .sc-step').forEach((el, i) => {
+            el.querySelector('.step-no').textContent = I18N.step + ' #' + (i + 1);
+        });
+    }
+
+    // ---- Sampler dropdown (istasyon dijital sensörleri) ----
+    function loadSampler(stationId, selectedId) {
+        const $s = $('#sc-sampler');
+        $s.empty().append('<option></option>');
+        if (!stationId) { $s.trigger('change'); return; }
+        gj(URLS.digital + '?station=' + stationId).then(d => {
+            (d.results || []).forEach(i => {
+                const o = new Option(i.text, i.id, false, String(i.id) === String(selectedId));
+                $s.append(o);
+            });
+            $s.trigger('change');
+        }).catch(() => {});
+    }
+    // ---- Analog parametreler (istasyon) ----
+    function loadParams(stationId) {
+        return gj(URLS.params + '?station=' + (stationId || 0)).then(d => {
+            const g = (d.results || []).find(x => x.text === 'Analog');
+            analogParams = (g && g.children) || [];
+        }).catch(() => { analogParams = []; });
+    }
+
+    // ===================================================================== //
+    // Builder: yükle / temizle / kaydet
+    // ===================================================================== //
+    function resetBuilder() {
+        editingId = null;
+        document.getElementById('builder-title').textContent = '{% trans "Yeni Senaryo" %}';
+        document.getElementById('sc-name').value = '';
+        document.getElementById('sc-desc').value = '';
+        $('#sc-kind').val('auto').trigger('change');
+        $('#sc-window').val('15m').trigger('change');
+        $('#sc-trigger').val('any').trigger('change');
+        document.getElementById('sc-n').value = 1;
+        document.getElementById('sc-enabled').checked = true;
+        document.getElementById('sc-active').checked = false;
+        document.getElementById('param-list').innerHTML = '';
+        document.getElementById('step-list').innerHTML = '';
+        const st = document.getElementById('sc-station').value;
+        loadParams(st).then(() => {});
+        loadSampler(st, null);
+        setAutoVisible();
+    }
+
+    function loadScenario(id) {
+        gj(URLS.detail + '?id=' + id).then(d => {
+            if (!d.ok) { alert(d.error || I18N.netErr); return; }
+            const sc = d.scenario;
+            editingId = sc.id;
+            document.getElementById('builder-title').textContent = sc.name;
+            document.getElementById('sc-name').value = sc.name;
+            document.getElementById('sc-desc').value = sc.description || '';
+            $('#sc-station').val(sc.station_id ? String(sc.station_id) : '').trigger('change');
+            $('#sc-kind').val(sc.kind).trigger('change');
+            $('#sc-window').val(sc.avg_window).trigger('change');
+            $('#sc-trigger').val(sc.trigger_mode).trigger('change');
+            document.getElementById('sc-n').value = sc.trigger_n || 1;
+            document.getElementById('sc-enabled').checked = !!sc.enabled;
+            document.getElementById('sc-active').checked = !!sc.is_active;
+            document.getElementById('param-list').innerHTML = '';
+            document.getElementById('step-list').innerHTML = '';
+            loadParams(sc.station_id).then(() => {
+                (sc.parameters || []).forEach(p => addParamRow(p));
+            });
+            loadSampler(sc.station_id, sc.sampler_sensor_id);
+            (sc.steps || []).forEach(s => addStepRow(s));
+            setAutoVisible();
+            $('a[href="#tab-builder"]').tab('show');
+        }).catch(() => alert(I18N.netErr));
+    }
+
+    function collectScenario() {
+        const params = [];
+        document.querySelectorAll('#param-list .sc-param-row').forEach(r => {
+            const pid = r.querySelector('.p-param').value;
+            if (!pid) return;
+            params.push({
+                parameter_id: Number(pid),
+                min_value: r.querySelector('.p-min').value.trim(),
+                max_value: r.querySelector('.p-max').value.trim(),
+                ministry_param_code: r.querySelector('.p-mcode').value.trim(),
+                enabled: r.querySelector('.p-en').checked,
+            });
+        });
+        const steps = [];
+        document.querySelectorAll('#step-list .sc-step').forEach(el => {
+            const after = (Number(el.querySelector('.s-tval').value) || 0) * Number(el.querySelector('.s-tunit').value);
+            const actions = [];
+            el.querySelectorAll('.action-list .sc-action').forEach(w => {
+                const type = w.querySelector('.a-type').value;
+                const a = { type: type };
+                if (type === 'notify') {
+                    a.message = (w.querySelector('.a-message').value || '').trim();
+                    a.sms = w.querySelector('.a-sms').checked;
+                    a.email = w.querySelector('.a-email').checked;
+                } else if (type === 'send_diagnostic') {
+                    a.type_no = Number(w.querySelector('.a-typeno').value) || 0;
+                    a.details = (w.querySelector('.a-details').value || '').trim();
+                }
+                actions.push(a);
+            });
+            steps.push({
+                label: el.querySelector('.s-label').value.trim(),
+                after_seconds: after,
+                require_still_exceeded: el.querySelector('.s-still').checked,
+                actions: actions,
+            });
+        });
+        return {
+            id: editingId,
+            name: document.getElementById('sc-name').value.trim(),
+            description: document.getElementById('sc-desc').value.trim(),
+            kind: document.getElementById('sc-kind').value,
+            station_id: document.getElementById('sc-station').value || null,
+            enabled: document.getElementById('sc-enabled').checked,
+            is_active: document.getElementById('sc-active').checked,
+            avg_window: document.getElementById('sc-window').value,
+            trigger_mode: document.getElementById('sc-trigger').value,
+            trigger_n: Number(document.getElementById('sc-n').value) || 1,
+            sampler_sensor_id: document.getElementById('sc-sampler').value || null,
+            parameters: params,
+            steps: steps,
+        };
+    }
+    function builderAlert(msg) {
+        const box = document.getElementById('builder-alert');
+        if (msg) { box.querySelector('span').textContent = msg; box.classList.remove('d-none'); }
+        else box.classList.add('d-none');
+    }
+
+    document.getElementById('btn-save-scenario').addEventListener('click', function () {
+        const payload = collectScenario();
+        if (!payload.name) { builderAlert(I18N.needName); return; }
+        builderAlert('');
+        j(URLS.save, payload).then(d => {
+            if (!d.ok) { builderAlert(d.error || I18N.netErr); return; }
+            editingId = d.id;
+            loadLibrary();
+            $('a[href="#tab-library"]').tab('show');
+        }).catch(() => builderAlert(I18N.netErr));
+    });
+
+    document.getElementById('btn-new-scenario').addEventListener('click', function () {
+        resetBuilder(); $('a[href="#tab-builder"]').tab('show');
+    });
+    document.getElementById('btn-add-param').addEventListener('click', () => addParamRow({}));
+    document.getElementById('btn-add-step').addEventListener('click', () => addStepRow({ actions: [] }));
+
+    $('#sc-kind').on('change', setAutoVisible);
+    $('#sc-trigger').on('change', toggleNWrap);
+    $('#sc-station').on('change', function () {
+        const st = this.value;
+        loadParams(st);
+        loadSampler(st, null);
+    });
+
+    // ===================================================================== //
+    // Library
+    // ===================================================================== //
+    function loadLibrary() {
+        gj(URLS.list).then(d => {
+            const tb = document.querySelector('#tbl-scenarios tbody');
+            if ($.fn.dataTable.isDataTable('#tbl-scenarios')) $('#tbl-scenarios').DataTable().destroy();
+            tb.innerHTML = '';
+            (d.results || []).forEach(sc => {
+                const tr = document.createElement('tr');
+                tr.innerHTML =
+                    `<td>${esc(sc.name)}</td>
+                     <td>${esc(sc.kind_label)}</td>
+                     <td>${esc(sc.station_name) || '—'}</td>
+                     <td>${sc.is_active ? '<span class="badge badge-light-success">'+I18N.active+'</span>' : '<span class="badge badge-light-secondary">'+I18N.passive+'</span>'}</td>
+                     <td>${sc.enabled ? I18N.yes : I18N.no}</td>
+                     <td>${sc.is_builtin ? '<span class="badge badge-light-info">'+I18N.builtin+'</span>' : '—'}</td>
+                     <td class="text-end text-nowrap">
+                        <button class="btn btn-icon btn-sm btn-light-primary sc-edit" data-id="${sc.id}" title="{% trans 'Düzenle' %}"><i class="ki-outline ki-pencil fs-5"></i></button>
+                        <button class="btn btn-icon btn-sm btn-light-success sc-activate" data-id="${sc.id}" title="{% trans 'Aktif Yap' %}" ${sc.is_active ? 'disabled' : ''}><i class="ki-outline ki-check fs-5"></i></button>
+                        <button class="btn btn-icon btn-sm btn-light-warning sc-dup" data-id="${sc.id}" title="{% trans 'Çoğalt' %}"><i class="ki-outline ki-copy fs-5"></i></button>
+                        <button class="btn btn-icon btn-sm btn-light-danger sc-del" data-id="${sc.id}" title="{% trans 'Sil' %}" ${sc.is_builtin ? 'disabled' : ''}><i class="ki-outline ki-trash fs-5"></i></button>
+                     </td>`;
+                tb.appendChild(tr);
+            });
+            initLibraryDT();
+        }).catch(() => {});
+    }
+    function initLibraryDT() {
+        if (typeof $.fn.dataTable === 'undefined') return;
+        $('#tbl-scenarios').DataTable({
+            dom: "<'row mb-3'<'col-sm-6 d-flex align-items-center'l><'col-sm-6 d-flex justify-content-end'f>>" +
+                 "<'row'<'col-sm-12'tr>><'row mt-3'<'col-sm-6'i><'col-sm-6 d-flex justify-content-end'p>>",
+            order: [], pageLength: 10,
+            lengthMenu: [[10, 25, 50, -1], [10, 25, 50, '{% trans "Hepsi" %}']],
+            language: {
+                "lengthMenu": '{% trans "Sayfada _MENU_ kayıt göster" %}', "zeroRecords": '{% trans "Senaryo bulunamadı." %}',
+                "info": '{% trans "_TOTAL_ kayıttan _START_ - _END_ arası" %}', "infoEmpty": '{% trans "Kayıt yok" %}',
+                "search": '{% trans "Ara:" %}', "emptyTable": '{% trans "Henüz senaryo yok." %}',
+                "paginate": { "next": '{% trans "Sonraki" %}', "previous": '{% trans "Önceki" %}' }
+            }
+        });
+    }
+    document.querySelector('#tbl-scenarios').addEventListener('click', function (e) {
+        const edit = e.target.closest('.sc-edit');
+        const act = e.target.closest('.sc-activate');
+        const dup = e.target.closest('.sc-dup');
+        const del = e.target.closest('.sc-del');
+        if (edit) loadScenario(edit.dataset.id);
+        else if (act) j(URLS.activate, { id: Number(act.dataset.id) }).then(d => { if (!d.ok) alert(d.error || I18N.netErr); loadLibrary(); });
+        else if (dup) gj(URLS.detail + '?id=' + dup.dataset.id).then(d => {
+            if (!d.ok) return;
+            loadScenario(dup.dataset.id);
+            setTimeout(() => { editingId = null; document.getElementById('sc-active').checked = false;
+                document.getElementById('sc-name').value = d.scenario.name + ' (kopya)';
+                document.getElementById('builder-title').textContent = '{% trans "Yeni Senaryo" %}'; }, 400);
+        });
+        else if (del) { if (!confirm(I18N.confirmDel)) return; j(URLS.del, { id: Number(del.dataset.id) }).then(d => { if (!d.ok) alert(d.error || I18N.netErr); loadLibrary(); }); }
+    });
+
+    // ===================================================================== //
+    // Durum (poll)
+    // ===================================================================== //
+    function renderStatus(d) {
+        const act = document.getElementById('active-scenarios');
+        if (!d.active_scenarios || !d.active_scenarios.length) { act.innerHTML = I18N.noActive; }
+        else {
+            act.innerHTML = d.active_scenarios.map(s =>
+                `<span class="badge badge-light-success me-2 mb-2 fs-7">${esc(s.name)} · ${esc(s.kind_label)} · ${esc(s.station_name)}</span>`).join('');
+        }
+        const avg = Object.entries(d.latest_averages || {}).map(([k, v]) =>
+            `<div class="col-md-2"><div class="kpi"><div class="lbl">${esc(k)}</div><div class="val">${v == null ? '—' : esc(v)}</div></div></div>`).join('');
+        const runs = document.getElementById('open-runs');
+        if (!d.open_runs || !d.open_runs.length) {
+            runs.innerHTML = (avg ? '<div class="row g-3 mb-4 sc-status-grid">' + avg + '</div>' : '') + '<div class="text-muted">' + I18N.noRuns + '</div>';
+        } else {
+            runs.innerHTML = (avg ? '<div class="row g-3 mb-4 sc-status-grid">' + avg + '</div>' : '') +
+                d.open_runs.map(r =>
+                `<div class="card mb-3"><div class="card-body py-4">
+                    <div class="d-flex justify-content-between flex-wrap">
+                        <div><span class="fw-bold fs-5">${esc(r.scenario)}</span>
+                          ${r.is_ministry ? '<span class="badge badge-light-danger ms-2">Bakanlık</span>' : '<span class="badge badge-light-primary ms-2">Otomatik</span>'}</div>
+                        <div class="text-muted">${esc(r.trigger_at)}</div>
+                    </div>
+                    <div class="mt-2 row g-3 sc-status-grid">
+                        <div class="col-md-3"><div class="kpi"><div class="lbl">{% trans "İstasyon" %}</div><div class="val">${esc(r.station)}</div></div></div>
+                        <div class="col-md-3"><div class="kpi"><div class="lbl">{% trans "Adım" %}</div><div class="val">${r.last_step_order + 1} / ${r.total_steps}</div></div></div>
+                        <div class="col-md-3"><div class="kpi"><div class="lbl">{% trans "Sıradaki" %}</div><div class="val fs-6">${esc(r.current_step) || '—'}</div></div></div>
+                        <div class="col-md-3"><div class="kpi"><div class="lbl">{% trans "Numune Kodu" %}</div><div class="val fs-6">${esc(r.sample_code) || '—'}</div></div></div>
+                    </div>
+                    ${(r.triggered_parameters && r.triggered_parameters.length) ? '<div class="mt-2 text-muted">{% trans "Tetikleyen" %}: ' + esc(r.triggered_parameters.join(', ')) + '</div>' : ''}
+                </div></div>`).join('');
+        }
+        document.getElementById('status-updated').textContent = d.latest_eval_at ? ('{% trans "Son değerlendirme" %}: ' + d.latest_eval_at) : '';
+    }
+    let statusTimer = null;
+    function pollStatus() { gj(URLS.status).then(renderStatus).catch(() => {}); }
+
+    document.getElementById('btn-ministry').addEventListener('click', function () {
+        const code = document.getElementById('min-code').value.trim();
+        const box = document.getElementById('min-alert');
+        if (!code) { box.querySelector('span').textContent = I18N.needCode; box.className = 'alert alert-warning'; return; }
+        j(URLS.ministry, { code: code, station_id: Number(document.getElementById('min-station').value) }).then(d => {
+            box.classList.remove('d-none');
+            if (!d.ok) { box.querySelector('span').textContent = d.error || I18N.netErr; box.className = 'alert alert-danger'; return; }
+            box.querySelector('span').textContent = I18N.ministryOk; box.className = 'alert alert-success';
+            document.getElementById('min-code').value = '';
+            pollStatus();
+        }).catch(() => {});
+    });
+
+    // ===================================================================== //
+    // Geçmiş
+    // ===================================================================== //
+    let historyLoaded = false;
+    function loadHistory() {
+        gj(URLS.history).then(d => {
+            const tb = document.querySelector('#tbl-history tbody');
+            if ($.fn.dataTable.isDataTable('#tbl-history')) $('#tbl-history').DataTable().destroy();
+            tb.innerHTML = '';
+            (d.results || []).forEach(r => {
+                const avg = Object.entries(r.averages || {}).map(([k, v]) => k + ': ' + (v == null ? '—' : v)).join(', ');
+                const tr = document.createElement('tr');
+                tr.innerHTML =
+                    `<td data-order="${r.ts}">${esc(r.created_at)}</td><td>${esc(r.scenario)}</td><td>${esc(r.kind)}</td>
+                     <td>${r.step_order === '' ? '—' : esc(r.step_order)}</td><td>${esc(avg)}</td>
+                     <td>${esc(r.message)}${r.skipped_reason ? ' <span class="text-muted">(' + esc(r.skipped_reason) + ')</span>' : ''}</td>`;
+                tb.appendChild(tr);
+            });
+            $('#tbl-history').DataTable({
+                order: [[0, 'desc']], pageLength: 25,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, '{% trans "Hepsi" %}']],
+                language: {
+                    "lengthMenu": '{% trans "Sayfada _MENU_ kayıt göster" %}', "zeroRecords": '{% trans "Kayıt bulunamadı." %}',
+                    "info": '{% trans "_TOTAL_ kayıttan _START_ - _END_ arası" %}', "infoEmpty": '{% trans "Kayıt yok" %}',
+                    "search": '{% trans "Ara:" %}', "emptyTable": '{% trans "Henüz log yok." %}',
+                    "paginate": { "next": '{% trans "Sonraki" %}', "previous": '{% trans "Önceki" %}' }
+                }
+            });
+        }).catch(() => {});
+    }
+
+    // ---- Tab geçişleri ----
+    $('a[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
+        const target = e.target.getAttribute('href');
+        if (target === '#tab-status') { pollStatus(); if (!statusTimer) statusTimer = setInterval(pollStatus, 5000); }
+        else { if (statusTimer) { clearInterval(statusTimer); statusTimer = null; } }
+        if (target === '#tab-history') loadHistory();
+    });
+
+    // ---- Init ----
+    resetBuilder();
+    loadLibrary();
+
+    function reveal() { if (!document.body.classList.contains('page-ready')) requestAnimationFrame(() => document.body.classList.add('page-ready')); }
+    if (document.readyState === 'complete') reveal(); else window.addEventListener('load', reveal);
+    setTimeout(reveal, 1200);
+})();
+</script>
+{% endblock %}

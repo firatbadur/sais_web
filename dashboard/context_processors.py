@@ -49,7 +49,7 @@ MENU = [
         "icon": "ki-notification-bing",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR),
         "children": [
-            {"label": _("Numune Başlat"), "url_name": "dashboard:operator_sample",
+            {"label": _("Numune Senaryosu"), "url_name": "dashboard:operator_sample",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Alarmlar"), "url_name": "dashboard:operator_alarms",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},

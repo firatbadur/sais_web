@@ -1,6 +1,16 @@
 from django.contrib import admin
 
-from .models import EnvisoftChannel, SaisCabinet, SimStatusPolicy, SystemSwitch
+from .models import (
+    EnvisoftChannel,
+    SaisCabinet,
+    Scenario,
+    ScenarioParameter,
+    ScenarioRun,
+    ScenarioRunLog,
+    ScenarioStep,
+    SimStatusPolicy,
+    SystemSwitch,
+)
 
 
 @admin.register(SaisCabinet)
@@ -73,3 +83,56 @@ class SimStatusPolicyAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         obj.updated_by = request.user
         super().save_model(request, obj, form, change)
+
+
+# ---- Numune senaryosu admin ------------------------------------------------
+
+class ScenarioParameterInline(admin.TabularInline):
+    model = ScenarioParameter
+    extra = 0
+    autocomplete_fields = ("parameter",)
+
+
+class ScenarioStepInline(admin.TabularInline):
+    model = ScenarioStep
+    extra = 0
+
+
+@admin.register(Scenario)
+class ScenarioAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "kind", "station", "is_active", "enabled",
+                    "is_builtin", "avg_window", "trigger_mode", "updated_at")
+    list_filter = ("kind", "is_active", "enabled", "is_builtin", "station")
+    search_fields = ("name", "description", "station__name")
+    autocomplete_fields = ("station", "sampler_sensor", "created_by")
+    readonly_fields = ("created_at", "updated_at")
+    inlines = (ScenarioParameterInline, ScenarioStepInline)
+
+    def has_delete_permission(self, request, obj=None):
+        # Yerleşik şablonlar silinemez.
+        if obj is not None and obj.is_builtin:
+            return False
+        return super().has_delete_permission(request, obj)
+
+
+@admin.register(ScenarioRun)
+class ScenarioRunAdmin(admin.ModelAdmin):
+    list_display = ("id", "scenario", "station", "run_date", "status",
+                    "is_ministry", "last_step_order", "sample_code", "trigger_at", "completed_at")
+    list_filter = ("status", "is_ministry", "station", "run_date")
+    search_fields = ("scenario__name", "sample_code", "station__name")
+    readonly_fields = [f.name for f in ScenarioRun._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(ScenarioRunLog)
+class ScenarioRunLogAdmin(admin.ModelAdmin):
+    list_display = ("id", "created_at", "station", "run", "kind", "step_order", "message")
+    list_filter = ("kind", "station")
+    search_fields = ("message", "skipped_reason", "station__name")
+    readonly_fields = [f.name for f in ScenarioRunLog._meta.fields]
+
+    def has_add_permission(self, request):
+        return False

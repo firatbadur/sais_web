@@ -1709,3 +1709,209 @@ msgstr "Daily"
 
 msgid "Rapor oluşturmak için filtreleri seçip 'Rapor Getir' butonuna basın."
 msgstr "Select filters and press 'Generate Report' to create a report."
+
+# --- Numune Senaryosu (otomatik eklendi) ---
+
+msgid "Numune Senaryosu"
+msgstr "Sample Scenario"
+
+msgid "Senaryolar"
+msgstr "Scenarios"
+
+msgid "Kurucu"
+msgstr "Builder"
+
+msgid "Geçmiş"
+msgstr "History"
+
+msgid "Senaryo Kütüphanesi"
+msgstr "Scenario Library"
+
+msgid "Yeni Senaryo"
+msgstr "New Scenario"
+
+msgid "Yerleşik"
+msgstr "Built-in"
+
+msgid "Senaryo Adı"
+msgstr "Scenario Name"
+
+msgid "Örn. Atıksu Limit Senaryosu"
+msgstr "e.g. Wastewater Limit Scenario"
+
+msgid "Ortalama Penceresi"
+msgstr "Averaging Window"
+
+msgid "Tetik Kombinasyonu"
+msgstr "Trigger Combination"
+
+msgid "N (en az kaç parametre)"
+msgstr "N (minimum parameters)"
+
+msgid "Numune Alıcı Sensör (override)"
+msgstr "Sampler Sensor (override)"
+
+msgid "Varsayılan: istasyon numune sensörü"
+msgstr "Default: station sampler sensor"
+
+msgid "Aktif (varsayılan senaryo yap)"
+msgstr "Active (make default scenario)"
+
+msgid "İzlenen Parametreler ve Eşikler"
+msgstr "Monitored Parameters and Thresholds"
+
+msgid "Parametre Ekle"
+msgstr "Add Parameter"
+
+msgid "Önce istasyon seçin; en az bir parametreye Min ve/veya Max eşik girin."
+msgstr "Select a station first; enter Min and/or Max threshold for at least one parameter."
+
+msgid "Bakanlık kodu"
+msgstr "Ministry code"
+
+msgid "Adımlar (sıralı)"
+msgstr "Steps (ordered)"
+
+msgid "Adım Ekle"
+msgstr "Add Step"
+
+msgid "Her adım tetik anından girilen süre sonra çalışır; aksiyonları seçin."
+msgstr "Each step runs the entered duration after trigger; choose its actions."
+
+msgid "Adım Adı"
+msgstr "Step Name"
+
+msgid "Saniye"
+msgstr "Seconds"
+
+msgid "Dakika"
+msgstr "Minutes"
+
+msgid "Saat"
+msgstr "Hours"
+
+msgid "Gün"
+msgstr "Days"
+
+msgid "Koşul hâlâ sağlanmalı"
+msgstr "Condition must still hold"
+
+msgid "Aksiyonlar"
+msgstr "Actions"
+
+msgid "Aksiyon Ekle"
+msgstr "Add Action"
+
+msgid "Senaryoyu Kaydet"
+msgstr "Save Scenario"
+
+msgid "Bakanlık Numune Talebi"
+msgstr "Ministry Sample Request"
+
+msgid "Numune Kodu"
+msgstr "Sample Code"
+
+msgid "Bakanlık talep kodu"
+msgstr "Ministry request code"
+
+msgid "Talebi Başlat"
+msgstr "Start Request"
+
+msgid "Aktif Senaryolar"
+msgstr "Active Scenarios"
+
+msgid "Devam Eden Çalışmalar"
+msgstr "Ongoing Runs"
+
+msgid "Devam eden senaryo çalışması yok."
+msgstr "No ongoing scenario run."
+
+msgid "Senaryo Geçmişi"
+msgstr "Scenario History"
+
+msgid "Senaryo"
+msgstr "Scenario"
+
+msgid "Adım"
+msgstr "Step"
+
+msgid "Ortalamalar"
+msgstr "Averages"
+
+msgid "Mesaj"
+msgstr "Message"
+
+msgid "Aktif Yap"
+msgstr "Activate"
+
+msgid "Çoğalt"
+msgstr "Duplicate"
+
+msgid "Sıradaki"
+msgstr "Next step"
+
+msgid "Tetikleyen"
+msgstr "Triggered by"
+
+msgid "Son değerlendirme"
+msgstr "Last evaluation"
+
+msgid "Aktif senaryo yok."
+msgstr "No active scenario."
+
+msgid "Henüz senaryo yok."
+msgstr "No scenarios yet."
+
+msgid "Henüz log yok."
+msgstr "No logs yet."
+
+msgid "Senaryo bulunamadı."
+msgstr "Scenario not found."
+
+msgid "Bu senaryo silinsin mi?"
+msgstr "Delete this scenario?"
+
+msgid "Senaryo adı zorunlu."
+msgstr "Scenario name is required."
+
+msgid "Numune kodu zorunlu."
+msgstr "Sample code is required."
+
+msgid "Senaryo kaydedildi."
+msgstr "Scenario saved."
+
+msgid "Bakanlık talebi başlatıldı."
+msgstr "Ministry request started."
+
+msgid "Diagnostik Tip No (701/702)"
+msgstr "Diagnostic Type No (701/702)"
+
+msgid "Detay"
+msgstr "Detail"
+
+msgid "Kaldır"
+msgstr "Remove"
+
+msgid "Bildirim Gönder"
+msgstr "Send Notification"
+
+msgid "Numune Alıcıyı Aç"
+msgstr "Turn Sampler On"
+
+msgid "Numune Alıcıyı Kapat"
+msgstr "Turn Sampler Off"
+
+msgid "Bakanlık'tan Numune Kodu Al"
+msgstr "Get Sample Code from Ministry"
+
+msgid "SIM: Numune Başladı"
+msgstr "SIM: Sample Started"
+
+msgid "SIM: Numune Tamamlandı"
+msgstr "SIM: Sample Completed"
+
+msgid "SIM: Numune Hatası"
+msgstr "SIM: Sample Error"
+
+msgid "Diagnostik Gönder (701/702)"
+msgstr "Send Diagnostic (701/702)"

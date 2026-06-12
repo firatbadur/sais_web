@@ -311,3 +311,302 @@ class SimStatusPolicy(models.Model):
         if not self.configured:
             return set()
         return set(self.blocked_statuses.values_list("code", flat=True))
+
+
+# ---------------------------------------------------------------------------
+# Numune alma senaryosu — no-code kurucu + yürütme motoru
+# ---------------------------------------------------------------------------
+#
+# Eski yazılımdaki sabit-kodlu `controlSampleValues` akışı (3 kademeli alarm +
+# 24s tamamlama + Bakanlık talepli yol) jenerik bir "senaryo yorumlayıcı" haline
+# getirildi: kullanıcı tetik kombinasyonunu, adımların sürelerini ve aksiyonlarını
+# dashboard'dan kurar; `sais_domain.scenario_engine` her dakika değerlendirir.
+
+
+class Scenario(models.Model):
+    """Numune alma senaryosu — kütüphane satırı.
+
+    Bir senaryo izlenecek parametreleri/eşikleri (`ScenarioParameter`) ve
+    zamanlanmış aksiyon adımlarını (`ScenarioStep`) bir araya getirir. Aynı
+    `(station, kind)` için en çok bir senaryo `is_active` olur; motor yalnız
+    aktif senaryoyu yürütür. `is_builtin` senaryolar (varsayılan otomatik +
+    Bakanlık talepli şablonlar) `seed_sais_data` ile gelir ve silinemez.
+    """
+
+    KIND_AUTO = "auto"
+    KIND_MINISTRY = "ministry"
+    KIND_CHOICES = (
+        (KIND_AUTO, "Otomatik (eşik tetikli)"),
+        (KIND_MINISTRY, "Bakanlık Talepli"),
+    )
+
+    TRIGGER_ANY = "any"
+    TRIGGER_ALL = "all"
+    TRIGGER_N = "n_of_m"
+    TRIGGER_CHOICES = (
+        (TRIGGER_ANY, "Herhangi biri aşınca"),
+        (TRIGGER_ALL, "Hepsi birlikte aşınca"),
+        (TRIGGER_N, "En az N tanesi aşınca"),
+    )
+
+    WINDOW_5M = "5m"
+    WINDOW_15M = "15m"
+    WINDOW_CHOICES = (
+        (WINDOW_5M, "Son 5 dakika ortalaması"),
+        (WINDOW_15M, "Son 15 dakika ortalaması"),
+    )
+
+    name = models.CharField(max_length=150, verbose_name="Senaryo Adı")
+    description = models.TextField(blank=True, default="", verbose_name="Açıklama")
+    kind = models.CharField(
+        max_length=10, choices=KIND_CHOICES, default=KIND_AUTO,
+        verbose_name="Senaryo Türü",
+    )
+    is_builtin = models.BooleanField(
+        default=False, verbose_name="Yerleşik Şablon",
+        help_text="Yerleşik şablonlar silinemez (çoğaltılıp düzenlenebilir).",
+    )
+    is_active = models.BooleanField(
+        default=False, verbose_name="Aktif",
+        help_text="Aynı istasyon + tür için yalnız bir senaryo aktif olabilir.",
+    )
+    enabled = models.BooleanField(default=True, verbose_name="Etkin")
+    station = models.ForeignKey(
+        "api.Station", on_delete=models.CASCADE,
+        blank=True, null=True,
+        related_name="sample_scenarios", verbose_name="İstasyon",
+        help_text="Boş senaryolar şablondur; aktif edilmeden önce istasyon atanır.",
+    )
+    avg_window = models.CharField(
+        max_length=4, choices=WINDOW_CHOICES, default=WINDOW_15M,
+        verbose_name="Ortalama Penceresi",
+    )
+    trigger_mode = models.CharField(
+        max_length=10, choices=TRIGGER_CHOICES, default=TRIGGER_ANY,
+        verbose_name="Tetik Kombinasyonu",
+    )
+    trigger_n = models.IntegerField(
+        default=1, verbose_name="N (en az kaç parametre)",
+        help_text="trigger_mode='n_of_m' ise kaç parametrenin aşması gerektiği.",
+    )
+    sampler_sensor = models.ForeignKey(
+        "api.Sensor", on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="+", verbose_name="Numune Alıcı Sensör (override)",
+        help_text="Boşsa istasyonun sample_request_sensor'ı kullanılır.",
+    )
+    created_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True, related_name="+",
+        verbose_name="Oluşturan",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Oluşturma")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Son Güncelleme")
+
+    class Meta:
+        db_table = "sais_scenario"
+        verbose_name = "Numune Senaryosu"
+        verbose_name_plural = "Numune Senaryoları"
+        ordering = ["station", "kind", "-is_active", "name"]
+
+    def __str__(self):
+        return self.name
+
+    def effective_sampler_sensor(self):
+        """Override sensör veya istasyonun sample_request_sensor'ı."""
+        if self.sampler_sensor_id:
+            return self.sampler_sensor
+        return self.station.sample_request_sensor if self.station_id else None
+
+    def cabinet(self):
+        """SIM bildirimleri için bağlı Bakanlık kabini (tek-kabin varsayımı)."""
+        if not self.station_id:
+            return None
+        return self.station.sais_cabinets.first()
+
+    def aggregate_model(self):
+        """avg_window'a karşılık gelen aggregate modeli."""
+        from api.models import ReadingFifteenMin, ReadingFiveMin
+        return ReadingFiveMin if self.avg_window == self.WINDOW_5M else ReadingFifteenMin
+
+    def activate(self):
+        """Bu senaryoyu aktif yap, aynı (istasyon, tür) içindeki diğerlerini pasifle."""
+        Scenario.objects.filter(
+            station_id=self.station_id, kind=self.kind,
+        ).exclude(pk=self.pk).update(is_active=False)
+        if not self.is_active:
+            self.is_active = True
+            self.save(update_fields=["is_active", "updated_at"])
+
+
+class ScenarioParameter(models.Model):
+    """Senaryoda izlenen parametre + eşik değerleri."""
+
+    scenario = models.ForeignKey(
+        Scenario, on_delete=models.CASCADE, related_name="parameters",
+        verbose_name="Senaryo",
+    )
+    parameter = models.ForeignKey(
+        "api.Parameter", on_delete=models.CASCADE, related_name="+",
+        verbose_name="Parametre",
+    )
+    min_value = models.FloatField(blank=True, null=True, verbose_name="Alt Sınır")
+    max_value = models.FloatField(blank=True, null=True, verbose_name="Üst Sınır")
+    ministry_param_code = models.CharField(
+        max_length=50, blank=True, default="",
+        verbose_name="Bakanlık Parametre Kodu",
+        help_text="GetSampleCode için; boşsa parametre adı kullanılır.",
+    )
+    enabled = models.BooleanField(default=True, verbose_name="Etkin")
+
+    class Meta:
+        db_table = "sais_scenario_parameter"
+        verbose_name = "Senaryo Parametresi"
+        verbose_name_plural = "Senaryo Parametreleri"
+        ordering = ["scenario", "parameter"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["scenario", "parameter"], name="sais_scenario_param_unique",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.scenario} / {self.parameter}"
+
+    def ministry_code(self):
+        return self.ministry_param_code or (self.parameter.parameter_name or "")
+
+
+class ScenarioStep(models.Model):
+    """Senaryonun sıralı bir adımı: tetikten N saniye sonra çalışan aksiyonlar.
+
+    `after_seconds` tetik anından (run.trigger_at) itibaren mutlak offset'tir;
+    motor `after_seconds <= geçen_süre` olunca adımı işler (monoton — kaçan bir
+    dakikalık tick adımı atlamaz). `actions` JSON listesidir; her eleman
+    ``{"type": "...", ...}`` biçiminde (bkz. scenario_engine._execute_step).
+    """
+
+    scenario = models.ForeignKey(
+        Scenario, on_delete=models.CASCADE, related_name="steps",
+        verbose_name="Senaryo",
+    )
+    order = models.IntegerField(default=0, verbose_name="Sıra")
+    label = models.CharField(max_length=150, blank=True, default="", verbose_name="Adım Adı")
+    after_seconds = models.IntegerField(
+        default=0, verbose_name="Tetikten Sonra (sn)",
+        help_text="Tetik anından bu kadar saniye sonra adım işlenir.",
+    )
+    require_still_exceeded = models.BooleanField(
+        default=False, verbose_name="Koşul Hâlâ Sağlanmalı",
+        help_text="Açıksa, vade geldiğinde tetik koşulu hâlâ geçerliyse çalışır.",
+    )
+    actions = models.JSONField(
+        default=list, blank=True, verbose_name="Aksiyonlar",
+        help_text="Aksiyon listesi: notify / sampler_on / sampler_off / "
+                  "ministry_get_code / sim_sample_start / sim_sample_complete / "
+                  "sim_sample_error / send_diagnostic.",
+    )
+
+    class Meta:
+        db_table = "sais_scenario_step"
+        verbose_name = "Senaryo Adımı"
+        verbose_name_plural = "Senaryo Adımları"
+        ordering = ["scenario", "order"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["scenario", "order"], name="sais_scenario_step_unique",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.scenario} #{self.order} {self.label}".strip()
+
+
+class ScenarioRun(models.Model):
+    """Bir senaryonun çalışan/yürütülen örneği (eski `samplealarm` karşılığı).
+
+    Tetik gerçekleşince oluşturulur; `last_step_order` cursor'ı ilerledikçe
+    adımlar işlenir. Tüm ilerleme burada kalıcıdır → motor tick'ler arası
+    stateless'tir, restart güvenlidir.
+    """
+
+    STATUS_IN_PROGRESS = "in_progress"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = (
+        (STATUS_IN_PROGRESS, "Devam Ediyor"),
+        (STATUS_COMPLETED, "Tamamlandı"),
+        (STATUS_FAILED, "Başarısız"),
+        (STATUS_CANCELLED, "İptal Edildi"),
+    )
+
+    scenario = models.ForeignKey(
+        Scenario, on_delete=models.CASCADE, related_name="runs", verbose_name="Senaryo",
+    )
+    station = models.ForeignKey(
+        "api.Station", on_delete=models.CASCADE, related_name="+", verbose_name="İstasyon",
+    )
+    run_date = models.DateField(db_index=True, verbose_name="Tarih")
+    status = models.CharField(
+        max_length=12, choices=STATUS_CHOICES, default=STATUS_IN_PROGRESS,
+        verbose_name="Durum",
+    )
+    is_ministry = models.BooleanField(default=False, verbose_name="Bakanlık Talepli")
+    trigger_at = models.DateTimeField(verbose_name="Tetik Zamanı")
+    last_step_order = models.IntegerField(default=-1, verbose_name="İşlenen Son Adım")
+    triggered_parameters = models.JSONField(
+        default=list, blank=True, verbose_name="Tetikleyen Parametreler",
+    )
+    sample_code = models.CharField(max_length=100, blank=True, default="", verbose_name="Numune Kodu")
+    completed_at = models.DateTimeField(blank=True, null=True, verbose_name="Tamamlanma")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Son Güncelleme")
+
+    class Meta:
+        db_table = "sais_scenario_run"
+        verbose_name = "Senaryo Çalışması"
+        verbose_name_plural = "Senaryo Çalışmaları"
+        ordering = ["-trigger_at"]
+        indexes = [
+            models.Index(fields=["station", "-run_date"], name="sais_run_station_date_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.scenario} @ {self.trigger_at:%Y-%m-%d %H:%M}"
+
+
+class ScenarioRunLog(models.Model):
+    """Senaryo değerlendirme/adım denetim kaydı (eski `sample_dynamic` karşılığı)."""
+
+    KIND_EVAL = "eval"
+    KIND_STEP = "step"
+    KIND_SKIP = "skip"
+    KIND_CHOICES = (
+        (KIND_EVAL, "Değerlendirme"),
+        (KIND_STEP, "Adım"),
+        (KIND_SKIP, "Atlandı"),
+    )
+
+    run = models.ForeignKey(
+        ScenarioRun, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="logs", verbose_name="Çalışma",
+    )
+    station = models.ForeignKey(
+        "api.Station", on_delete=models.CASCADE, related_name="+", verbose_name="İstasyon",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="Zaman")
+    kind = models.CharField(max_length=8, choices=KIND_CHOICES, default=KIND_EVAL, verbose_name="Tür")
+    step_order = models.IntegerField(blank=True, null=True, verbose_name="Adım Sırası")
+    averages = models.JSONField(default=dict, blank=True, verbose_name="Ortalamalar")
+    message = models.CharField(max_length=500, blank=True, default="", verbose_name="Mesaj")
+    skipped_reason = models.CharField(max_length=200, blank=True, default="", verbose_name="Atlanma Nedeni")
+
+    class Meta:
+        db_table = "sais_scenario_run_log"
+        verbose_name = "Senaryo Log"
+        verbose_name_plural = "Senaryo Logları"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["station", "-created_at"], name="sais_runlog_station_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} @ {self.created_at:%Y-%m-%d %H:%M}"

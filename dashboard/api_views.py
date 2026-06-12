@@ -1054,3 +1054,391 @@ def alarm_rules(request):
     })
 
 
+# --------------------------------------------------------------------------- #
+# Numune Senaryosu (no-code kurucu) AJAX endpoint'leri
+# --------------------------------------------------------------------------- #
+
+def _serialize_scenario(sc, *, full=False):
+    data = {
+        "id": sc.pk,
+        "name": sc.name,
+        "description": sc.description,
+        "kind": sc.kind,
+        "kind_label": sc.get_kind_display(),
+        "is_builtin": sc.is_builtin,
+        "is_active": sc.is_active,
+        "enabled": sc.enabled,
+        "station_id": sc.station_id,
+        "station_name": sc.station.name if sc.station_id else "",
+        "avg_window": sc.avg_window,
+        "trigger_mode": sc.trigger_mode,
+        "trigger_n": sc.trigger_n,
+        "sampler_sensor_id": sc.sampler_sensor_id,
+    }
+    if full:
+        data["parameters"] = [{
+            "parameter_id": p.parameter_id,
+            "parameter_name": p.parameter.parameter_name if p.parameter_id else "",
+            "min_value": p.min_value,
+            "max_value": p.max_value,
+            "ministry_param_code": p.ministry_param_code,
+            "enabled": p.enabled,
+        } for p in sc.parameters.select_related("parameter").all()]
+        data["steps"] = [{
+            "order": s.order,
+            "label": s.label,
+            "after_seconds": s.after_seconds,
+            "require_still_exceeded": s.require_still_exceeded,
+            "actions": s.actions or [],
+        } for s in sc.steps.order_by("order")]
+    return data
+
+
+@login_required
+def scenario_list(request):
+    """Senaryo kütüphanesi — özet liste."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    from sais_domain.models import Scenario
+
+    items = [
+        _serialize_scenario(sc)
+        for sc in Scenario.objects.select_related("station").all()
+    ]
+    return JsonResponse({"results": items})
+
+
+@login_required
+def scenario_detail(request):
+    """Tek senaryonun tam tanımı (meta + parametreler + adımlar)."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    from sais_domain.models import Scenario
+
+    sc = (
+        Scenario.objects
+        .select_related("station")
+        .filter(pk=request.GET.get("id"))
+        .first()
+    )
+    if sc is None:
+        return JsonResponse({"ok": False, "error": "Senaryo bulunamadı."}, status=404)
+    return JsonResponse({"ok": True, "scenario": _serialize_scenario(sc, full=True)})
+
+
+@login_required
+def scenario_save(request):
+    """Senaryo oluştur/güncelle — meta + parametreler + adımlar tek payload.
+
+    Parametre ve adım setleri tamamen yeniden yazılır (sil + yeniden oluştur).
+    """
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from django.db import transaction
+
+    from api.models import Parameter as P, Sensor as S, Station as St
+    from sais_domain.models import Scenario, ScenarioParameter, ScenarioStep
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    name = (data.get("name") or "").strip()
+    if not name:
+        return JsonResponse({"ok": False, "error": "Senaryo adı zorunlu."}, status=400)
+
+    kind = data.get("kind") or Scenario.KIND_AUTO
+    if kind not in (Scenario.KIND_AUTO, Scenario.KIND_MINISTRY):
+        return JsonResponse({"ok": False, "error": "Geçersiz senaryo türü."}, status=400)
+
+    station = None
+    if data.get("station_id"):
+        station = St.objects.filter(pk=data.get("station_id")).first()
+        if station is None:
+            return JsonResponse({"ok": False, "error": "İstasyon bulunamadı."}, status=400)
+
+    want_active = bool(data.get("is_active"))
+    if want_active and station is None:
+        return JsonResponse({"ok": False, "error": "Aktif etmek için istasyon seçin."}, status=400)
+
+    sampler_sensor = None
+    if data.get("sampler_sensor_id"):
+        sampler_sensor = S.objects.filter(pk=data.get("sampler_sensor_id")).first()
+
+    try:
+        trigger_n = int(data.get("trigger_n") or 1)
+    except (TypeError, ValueError):
+        trigger_n = 1
+
+    sc_id = data.get("id")
+    with transaction.atomic():
+        if sc_id:
+            sc = Scenario.objects.filter(pk=sc_id).first()
+            if sc is None:
+                return JsonResponse({"ok": False, "error": "Senaryo bulunamadı."}, status=404)
+        else:
+            sc = Scenario(created_by=request.user)
+
+        sc.name = name
+        sc.description = (data.get("description") or "").strip()
+        sc.kind = kind
+        sc.station = station
+        sc.enabled = bool(data.get("enabled", True))
+        sc.avg_window = data.get("avg_window") or Scenario.WINDOW_15M
+        sc.trigger_mode = data.get("trigger_mode") or Scenario.TRIGGER_ANY
+        sc.trigger_n = trigger_n
+        sc.sampler_sensor = sampler_sensor
+        sc.save()
+
+        # Parametreleri yeniden yaz (yalnız auto için anlamlı, ama her durumda set'i uygula).
+        sc.parameters.all().delete()
+        for prow in (data.get("parameters") or []):
+            pid = prow.get("parameter_id")
+            param = P.objects.filter(pk=pid).first() if pid else None
+            if param is None:
+                continue
+            mn, mx = prow.get("min_value"), prow.get("max_value")
+            has_min = mn not in ("", None)
+            has_max = mx not in ("", None)
+            if sc.kind == Scenario.KIND_AUTO and not has_min and not has_max:
+                return JsonResponse(
+                    {"ok": False, "error": f"{param.parameter_name}: Min veya Max zorunlu."},
+                    status=400,
+                )
+            ScenarioParameter.objects.create(
+                scenario=sc, parameter=param,
+                min_value=float(mn) if has_min else None,
+                max_value=float(mx) if has_max else None,
+                ministry_param_code=(prow.get("ministry_param_code") or "").strip(),
+                enabled=bool(prow.get("enabled", True)),
+            )
+
+        # Adımları yeniden yaz.
+        sc.steps.all().delete()
+        for i, srow in enumerate(data.get("steps") or []):
+            try:
+                after = int(srow.get("after_seconds") or 0)
+            except (TypeError, ValueError):
+                after = 0
+            ScenarioStep.objects.create(
+                scenario=sc,
+                order=i,
+                label=(srow.get("label") or "").strip(),
+                after_seconds=after,
+                require_still_exceeded=bool(srow.get("require_still_exceeded")),
+                actions=srow.get("actions") or [],
+            )
+
+        if want_active:
+            sc.activate()
+
+    return JsonResponse({"ok": True, "id": sc.pk})
+
+
+@login_required
+def scenario_delete(request):
+    """Senaryo sil — yerleşik şablonlar silinemez."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method not in ("POST", "DELETE"):
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from sais_domain.models import Scenario
+
+    sc_id = request.GET.get("id")
+    if request.method == "POST":
+        import json
+        try:
+            sc_id = json.loads(request.body or "{}").get("id", sc_id)
+        except (ValueError, TypeError):
+            pass
+
+    sc = Scenario.objects.filter(pk=sc_id).first()
+    if sc is None:
+        return JsonResponse({"ok": False, "error": "Senaryo bulunamadı."}, status=404)
+    if sc.is_builtin:
+        return JsonResponse({"ok": False, "error": "Yerleşik şablon silinemez."}, status=400)
+    sc.delete()
+    return JsonResponse({"ok": True})
+
+
+@login_required
+def scenario_activate(request):
+    """Senaryoyu aktif yap (aynı istasyon+tür için diğerlerini pasifler)."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from sais_domain.models import Scenario
+
+    try:
+        sc_id = json.loads(request.body or "{}").get("id")
+    except (ValueError, TypeError):
+        sc_id = None
+
+    sc = Scenario.objects.filter(pk=sc_id).first()
+    if sc is None:
+        return JsonResponse({"ok": False, "error": "Senaryo bulunamadı."}, status=404)
+    if sc.station_id is None:
+        return JsonResponse({"ok": False, "error": "Aktif etmeden önce istasyon atayın."}, status=400)
+    sc.activate()
+    return JsonResponse({"ok": True})
+
+
+@login_required
+def scenario_status(request):
+    """Canlı durum — aktif senaryolar + açık run'lar + güncel ortalamalar."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    from sais_domain.models import Scenario, ScenarioRun, ScenarioRunLog
+
+    runs = []
+    open_runs = (
+        ScenarioRun.objects
+        .filter(status=ScenarioRun.STATUS_IN_PROGRESS)
+        .select_related("scenario", "station")
+        .order_by("-trigger_at")
+    )
+    for r in open_runs:
+        steps = list(r.scenario.steps.order_by("order"))
+        total = len(steps)
+        current = next((s for s in steps if s.order > r.last_step_order), None)
+        runs.append({
+            "id": r.pk,
+            "scenario": r.scenario.name,
+            "kind": r.scenario.kind,
+            "is_ministry": r.is_ministry,
+            "station": r.station.name if r.station_id else "",
+            "trigger_at": timezone.localtime(r.trigger_at).strftime("%d.%m.%Y %H:%M:%S"),
+            "last_step_order": r.last_step_order,
+            "total_steps": total,
+            "current_step": current.label if current else "",
+            "sample_code": r.sample_code,
+            "triggered_parameters": r.triggered_parameters,
+        })
+
+    active = [
+        _serialize_scenario(sc)
+        for sc in Scenario.objects.select_related("station").filter(is_active=True)
+    ]
+    last_eval = (
+        ScenarioRunLog.objects.filter(kind=ScenarioRunLog.KIND_EVAL)
+        .order_by("-created_at").first()
+    )
+    return JsonResponse({
+        "ok": True,
+        "active_scenarios": active,
+        "open_runs": runs,
+        "latest_averages": last_eval.averages if last_eval else {},
+        "latest_eval_at": (
+            timezone.localtime(last_eval.created_at).strftime("%d.%m.%Y %H:%M:%S")
+            if last_eval else None
+        ),
+    })
+
+
+@login_required
+def scenario_history(request):
+    """Son senaryo log kayıtları (DataTables)."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    from sais_domain.models import ScenarioRunLog
+
+    qs = (
+        ScenarioRunLog.objects
+        .select_related("run", "run__scenario", "station")
+        .order_by("-created_at")[:1000]
+    )
+    items = [{
+        "created_at": timezone.localtime(l.created_at).strftime("%d.%m.%Y %H:%M:%S"),
+        "ts": int(timezone.localtime(l.created_at).timestamp()),
+        "station": l.station.name if l.station_id else "",
+        "scenario": l.run.scenario.name if (l.run_id and l.run.scenario_id) else "",
+        "kind": l.get_kind_display(),
+        "step_order": l.step_order if l.step_order is not None else "",
+        "averages": l.averages or {},
+        "message": l.message,
+        "skipped_reason": l.skipped_reason,
+    } for l in qs]
+    return JsonResponse({"results": items})
+
+
+@login_required
+def scenario_request_ministry(request):
+    """Bakanlık numune talebini başlat (aktif ministry senaryosu için run açar)."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from api.models import Station as St
+    from sais_domain.scenario_engine import request_ministry
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    code = (data.get("code") or "").strip()
+    if not code:
+        return JsonResponse({"ok": False, "error": "Numune kodu zorunlu."}, status=400)
+
+    station = St.objects.filter(pk=data.get("station_id")).first()
+    if station is None:
+        return JsonResponse({"ok": False, "error": "İstasyon seçin."}, status=400)
+
+    run = request_ministry(station, code)
+    if run is None:
+        return JsonResponse(
+            {"ok": False, "error": "Bu istasyon için aktif Bakanlık senaryosu yok."},
+            status=400,
+        )
+    return JsonResponse({"ok": True, "run_id": run.pk})
+
+
+@login_required
+def scenario_digital_sensors(request):
+    """İstasyonun dijital çıkış sensörleri — numune alıcı override dropdown'u."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    try:
+        station_id = int(request.GET.get("station") or 0) or None
+    except (TypeError, ValueError):
+        station_id = None
+    if not station_id:
+        return JsonResponse({"results": []})
+
+    sensors = (
+        Sensor.objects
+        .filter(connection__station_id=station_id, sensor_type__in=(2, 3))
+        .select_related("parameter")
+        .order_by("parameter__parameter_name", "id")
+    )
+    items = [{
+        "id": s.id,
+        "text": (s.parameter.parameter_name if s.parameter_id else None) or f"Sensör {s.id}",
+    } for s in sensors]
+    return JsonResponse({"results": items})
+
+

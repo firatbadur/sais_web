@@ -8,8 +8,13 @@ Kullanım:
 """
 from django.core.management.base import BaseCommand
 
-from api.models import Parameter, RequestType, StationType
-from sais_domain.models import EnvisoftChannel
+from api.models import Parameter, RequestType, Station, StationType
+from sais_domain.models import (
+    EnvisoftChannel,
+    Scenario,
+    ScenarioParameter,
+    ScenarioStep,
+)
 
 
 SAIS_STATION_TYPES = [
@@ -21,6 +26,67 @@ SAIS_STATION_TYPES = [
 
 SAIS_REQUEST_TYPES = [
     ("ministry_sample", "Bakanlık Numune Talebi"),
+    ("auto_scenario", "Otomatik Numune Senaryosu"),
+]
+
+
+# Yerleşik şablon senaryolar — eski sabit-kodlu akışın no-code karşılığı.
+# `seed_built_in_scenarios` bunları (varsa) ilk aktif istasyona bağlar ve aktif eder;
+# istasyon yoksa şablon olarak (station=None, pasif) bırakır.
+BUILTIN_AUTO_PARAMS = ["pH", "KOi", "AKM"]  # izlenen parametreler (gec_min/gec_max eşik)
+
+BUILTIN_AUTO_STEPS = [
+    {
+        "order": 0, "after_seconds": 0, "label": "1. Limit Aşımı",
+        "require_still_exceeded": False,
+        "actions": [{"type": "notify", "message": "Numune senaryosu başladı — 1. limit aşımı."}],
+    },
+    {
+        "order": 1, "after_seconds": 300, "label": "2. Alarm",
+        "require_still_exceeded": True,
+        "actions": [{"type": "notify", "message": "2. alarm — limit aşımı sürüyor."}],
+    },
+    {
+        "order": 2, "after_seconds": 600, "label": "3. Alarm — Numune Al",
+        "require_still_exceeded": True,
+        "actions": [
+            {"type": "ministry_get_code"},
+            {"type": "sampler_on"},
+            {"type": "send_diagnostic", "type_no": 701, "details": "Numune alınıyor"},
+            {"type": "notify", "message": "Numune alınıyor — tetik gönderildi."},
+        ],
+    },
+    {
+        "order": 3, "after_seconds": 86400, "label": "Tamamla (24s)",
+        "require_still_exceeded": False,
+        "actions": [
+            {"type": "sim_sample_complete"},
+            {"type": "send_diagnostic", "type_no": 702, "details": "Numune alındı"},
+            {"type": "sampler_off"},
+        ],
+    },
+]
+
+BUILTIN_MINISTRY_STEPS = [
+    {
+        "order": 0, "after_seconds": 0, "label": "Numune Al + Bildir",
+        "require_still_exceeded": False,
+        "actions": [
+            {"type": "sampler_on"},
+            {"type": "sim_sample_start"},
+            {"type": "send_diagnostic", "type_no": 701, "details": "Bakanlık talebi — numune alınıyor"},
+            {"type": "notify", "message": "Bakanlık numune talebi — numune alınıyor."},
+        ],
+    },
+    {
+        "order": 1, "after_seconds": 3600, "label": "Tamamla (1s)",
+        "require_still_exceeded": False,
+        "actions": [
+            {"type": "sim_sample_complete"},
+            {"type": "send_diagnostic", "type_no": 702, "details": "Numune alındı"},
+            {"type": "sampler_off"},
+        ],
+    },
 ]
 
 
@@ -107,8 +173,82 @@ class Command(BaseCommand):
             )
             env_created += int(created)
 
+        sc_created = self.seed_built_in_scenarios()
+
         self.stdout.write(self.style.SUCCESS(
             f"İstasyon Tipleri: {st_created} yeni, "
             f"Talep Tipleri: {rt_created} yeni, "
-            f"Envisoft Eşleme: {env_created} yeni."
+            f"Envisoft Eşleme: {env_created} yeni, "
+            f"Yerleşik Senaryo: {sc_created} yeni."
         ))
+
+    def seed_built_in_scenarios(self):
+        """İki yerleşik şablon senaryoyu oluşturur (idempotent, kendi-kendini onarır).
+
+        İlk aktif istasyon varsa senaryolara bağlanır ve aktif edilir; yoksa
+        şablon (station=None, pasif) bırakılır. Sonraki çalıştırmada istasyon
+        oluşmuşsa station=None şablonlar bağlanıp aktif edilir.
+        """
+        station = Station.objects.filter(active=True).order_by("id").first()
+        created = 0
+
+        # --- Otomatik senaryo ---
+        auto, was_created = Scenario.objects.get_or_create(
+            name="Varsayılan Otomatik Senaryo", is_builtin=True,
+            defaults=dict(
+                kind=Scenario.KIND_AUTO, enabled=True,
+                avg_window=Scenario.WINDOW_15M, trigger_mode=Scenario.TRIGGER_ANY,
+                description="Eşik aşımında 3 kademeli alarm + numune alımı (yerleşik şablon).",
+            ),
+        )
+        created += int(was_created)
+        if was_created:
+            self._seed_auto_params(auto)
+            self._seed_steps(auto, BUILTIN_AUTO_STEPS)
+
+        # --- Bakanlık talepli senaryo ---
+        ministry, m_created = Scenario.objects.get_or_create(
+            name="Bakanlık Talepli Senaryo", is_builtin=True,
+            defaults=dict(
+                kind=Scenario.KIND_MINISTRY, enabled=True,
+                description="Bakanlık talebinde numune al + Start/Complete bildir (yerleşik şablon).",
+            ),
+        )
+        created += int(m_created)
+        if m_created:
+            self._seed_steps(ministry, BUILTIN_MINISTRY_STEPS)
+
+        # İstasyon varsa bağla + aktif et (station=None kalmış şablonları onar).
+        if station is not None:
+            for sc in (auto, ministry):
+                if sc.station_id is None:
+                    sc.station = station
+                    sc.save(update_fields=["station", "updated_at"])
+                if not Scenario.objects.filter(
+                    station=station, kind=sc.kind, is_active=True,
+                ).exists():
+                    sc.activate()
+
+        return created
+
+    def _seed_auto_params(self, scenario):
+        for name in BUILTIN_AUTO_PARAMS:
+            param = Parameter.objects.filter(parameter_name=name).first()
+            if not param:
+                continue
+            ScenarioParameter.objects.get_or_create(
+                scenario=scenario, parameter=param,
+                defaults=dict(min_value=param.gec_min, max_value=param.gec_max, enabled=True),
+            )
+
+    def _seed_steps(self, scenario, steps):
+        for s in steps:
+            ScenarioStep.objects.get_or_create(
+                scenario=scenario, order=s["order"],
+                defaults=dict(
+                    label=s["label"],
+                    after_seconds=s["after_seconds"],
+                    require_still_exceeded=s["require_still_exceeded"],
+                    actions=s["actions"],
+                ),
+            )

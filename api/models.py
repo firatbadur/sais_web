@@ -888,6 +888,26 @@ class ReadingAggregateBase(models.Model):
         ordering = ["-bucket_start", "sensor"]
 
 
+class ReadingFiveMin(ReadingAggregateBase):
+    """Sensör başına 5 dakikalık aggregate.
+
+    Numune senaryosu motoru gibi kısa-pencere ortalama tüketicileri için —
+    poll sıklığından bağımsız, oturmuş 5 dakikalık bucket avg/min/max.
+    """
+
+    class Meta(ReadingAggregateBase.Meta):
+        db_table = "reading_five_min"
+        verbose_name_plural = "5 Dakikalık Aggregate"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sensor", "bucket_start"], name="reading_5m_unique_bucket",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["sensor", "-bucket_start"], name="r5m_sensor_bucket_idx"),
+        ]
+
+
 class ReadingFifteenMin(ReadingAggregateBase):
     """Sensör başına 15 dakikalık aggregate."""
 

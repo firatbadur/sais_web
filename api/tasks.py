@@ -28,6 +28,16 @@ def run_alarms():
     return alarms.run()
 
 
+@shared_task(name="api.tasks.aggregate_readings_5m")
+def aggregate_readings_5m():
+    """5 dakikalık aggregate — son 2 saatlik aralığı yeniden hesaplar.
+
+    Numune senaryosu motorunun poll-sıklığından bağımsız kısa-pencere
+    ortalamasını beslemek için her dakika çalışır.
+    """
+    call_command("aggregate_readings", bucket="5m", hours=2)
+
+
 @shared_task(name="api.tasks.aggregate_readings_15m")
 def aggregate_readings_15m():
     """15 dakikalık aggregate — son 2 saatlik aralığı yeniden hesaplar."""

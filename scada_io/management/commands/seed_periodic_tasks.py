@@ -8,6 +8,7 @@ Bu komut beat scheduler'ın okuyacağı periyodik task'ları DB'ye yazar:
   - scada_io.tasks.dispatch_polls            (her 5 sn)
   - scada_io.tasks.dispatch_commands         (her 3 sn)
   - scada_io.tasks.expire_commands           (her 60 sn)
+  - api.tasks.aggregate_readings_5m          (cron: * * * * *)
   - api.tasks.aggregate_readings_15m         (cron: */5 * * * *)
   - api.tasks.aggregate_readings_hourly      (cron: 5 * * * *)
   - api.tasks.aggregate_readings_daily       (cron: 0 1 * * *)
@@ -15,6 +16,7 @@ Bu komut beat scheduler'ın okuyacağı periyodik task'ları DB'ye yazar:
   - api.tasks.prune_api_logs_task            (cron: 0 3 * * *)   — her gece 03:00
   - api.tasks.record_public_ip_task          (cron: 17 * * * *)  — public IP değişimini izle
   - sais_domain.tasks.publish_minute_data    (cron: * * * * *)   — her dakika SIM + Envisoft gönderimi
+  - sais_domain.tasks.run_scenarios          (cron: * * * * *)   — her dakika numune senaryosu değerlendirme
 
 Tüm kayıtlar `enabled=True` ile yaratılır; istemediğiniz task'ı admin'den
 disable edebilirsiniz. Komut idempotenttir — aynı task adıyla mevcut kayıt
@@ -34,6 +36,7 @@ INTERVAL_TASKS = [
 
 CRONTAB_TASKS = [
     # (task name, minute, hour, day_of_week, day_of_month, month_of_year)
+    ("api.tasks.aggregate_readings_5m",       "*",   "*", "*", "*", "*"),
     ("api.tasks.aggregate_readings_15m",      "*/5", "*", "*", "*", "*"),
     ("api.tasks.aggregate_readings_hourly",   "5",   "*", "*", "*", "*"),
     ("api.tasks.aggregate_readings_daily",    "0",   "1", "*", "*", "*"),
@@ -45,6 +48,8 @@ CRONTAB_TASKS = [
     ("api.tasks.record_public_ip_task",       "17",  "*", "*", "*", "*"),
     # Bakanlık SIM + Envisoft veri gönderimi — her dakika başında.
     ("sais_domain.tasks.publish_minute_data", "*",   "*", "*", "*", "*"),
+    # Numune alma senaryolarını değerlendir (eşik/kademe + Bakanlık talebi) — her dakika.
+    ("sais_domain.tasks.run_scenarios",       "*",   "*", "*", "*", "*"),
 ]
 
 # DB yedekleme — tek task (`backup_database_run`) farklı tier kwargs'ı ile.

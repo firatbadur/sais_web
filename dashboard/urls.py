@@ -31,7 +31,7 @@ urlpatterns = [
     path("reports/alarms/", views.AlarmReportsView.as_view(), name="reports_alarms"),
 
     # --- Operator ---
-    path("operator/sample-trigger/", views.SampleTriggerView.as_view(), name="operator_sample"),
+    path("operator/sample-trigger/", views.ScenarioBuilderView.as_view(), name="operator_sample"),
     path("operator/alarms/", views.AlarmsView.as_view(), name="operator_alarms"),
 
     # --- Management (readonly) ---
@@ -96,4 +96,16 @@ urlpatterns = [
     # --- AJAX API (Alarm Yönetimi) ---
     path("api/alarms/io/", api_views.alarm_io, name="api_alarm_io"),
     path("api/alarms/rules/", api_views.alarm_rules, name="api_alarm_rules"),
+
+    # --- AJAX API (Numune Senaryosu) ---
+    path("api/scenario/list/", api_views.scenario_list, name="api_scenario_list"),
+    path("api/scenario/detail/", api_views.scenario_detail, name="api_scenario_detail"),
+    path("api/scenario/save/", api_views.scenario_save, name="api_scenario_save"),
+    path("api/scenario/delete/", api_views.scenario_delete, name="api_scenario_delete"),
+    path("api/scenario/activate/", api_views.scenario_activate, name="api_scenario_activate"),
+    path("api/scenario/status/", api_views.scenario_status, name="api_scenario_status"),
+    path("api/scenario/history/", api_views.scenario_history, name="api_scenario_history"),
+    path("api/scenario/ministry/", api_views.scenario_request_ministry, name="api_scenario_ministry"),
+    path("api/scenario/digital-sensors/", api_views.scenario_digital_sensors,
+         name="api_scenario_digital_sensors"),
 ]
