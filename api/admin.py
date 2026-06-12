@@ -426,7 +426,7 @@ class AlarmRuleAdmin(admin.ModelAdmin):
     fieldsets = (
         ("Genel", {"fields": ("station", "rule_type", "period_minutes", "message", "enabled")}),
         ("Ölçüm (Analog)", {"fields": ("parameter", "condition", "min_value", "max_value")}),
-        ("Diagnostik / Offline", {"fields": ("sensor", "offline_seconds")}),
+        ("Dijital / Offline", {"fields": ("sensor", "trigger_state", "offline_seconds")}),
         ("Bildirim", {"fields": ("notify_all", "send_sms", "send_email")}),
         ("Audit", {"fields": ("created_by", "created_at", "last_triggered_at")}),
     )

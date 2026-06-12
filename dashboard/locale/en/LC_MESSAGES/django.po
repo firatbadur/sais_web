@@ -1579,3 +1579,43 @@ msgstr "Active/Inactive"
 
 msgid "Henüz alarm tanımlanmadı."
 msgstr "No alarms defined yet."
+
+# ---- Alarm Yonetimi v3 (analog/dijital + on-off) ----
+msgid "Analog Ölçüm Alarmları"
+msgstr "Analog Measurement Alarms"
+
+msgid "Dijital Ölçüm Alarmları"
+msgstr "Digital Measurement Alarms"
+
+msgid "Yeni Analog Alarm"
+msgstr "New Analog Alarm"
+
+msgid "Yeni Dijital Alarm"
+msgstr "New Digital Alarm"
+
+msgid "Tanımlı Analog Alarmlar"
+msgstr "Defined Analog Alarms"
+
+msgid "Tanımlı Dijital Alarmlar"
+msgstr "Defined Digital Alarms"
+
+msgid "Dijital Sensör"
+msgstr "Digital Sensor"
+
+msgid "Aktif olduğunda (ON)"
+msgstr "When Active (ON)"
+
+msgid "Pasif olduğunda (OFF)"
+msgstr "When Inactive (OFF)"
+
+msgid "Aktif (ON)"
+msgstr "Active (ON)"
+
+msgid "Pasif (OFF)"
+msgstr "Inactive (OFF)"
+
+msgid "Dijital sensör seçiniz"
+msgstr "Select a digital sensor"
+
+msgid "Dijital sensör seçin."
+msgstr "Select a digital sensor."

@@ -1835,11 +1835,15 @@ class AlarmRule(models.Model):
     min_value = models.FloatField(null=True, blank=True, verbose_name="Min Değer")
     max_value = models.FloatField(null=True, blank=True, verbose_name="Max Değer")
 
-    # --- Diagnostik (dijital kanal) ---
+    # --- Dijital (durum değişimi) ---
     sensor = models.ForeignKey(
         Sensor, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="+", verbose_name="Dijital Kanal",
-        help_text="Aktif (1) olduğunda alarm üreten dijital input sensörü.",
+        related_name="+", verbose_name="Dijital Sensör",
+        help_text="Durumu seçilen değere geçtiğinde alarm üreten dijital sensör (DI/DO).",
+    )
+    trigger_state = models.BooleanField(
+        default=True, verbose_name="Tetikleme Durumu",
+        help_text="True = sensör Aktif (ON) olunca; False = Pasif (OFF) olunca alarm.",
     )
 
     # --- İstasyon offline ---
@@ -1881,10 +1885,20 @@ class AlarmRule(models.Model):
         return f"{self.station} · {self.get_rule_type_display()}"
 
     @property
+    def sensor_label(self):
+        if self.sensor and self.sensor.parameter and self.sensor.parameter.parameter_name:
+            return self.sensor.parameter.parameter_name
+        return str(self.sensor) if self.sensor else "—"
+
+    @property
+    def state_label(self):
+        return "Aktif (ON)" if self.trigger_state else "Pasif (OFF)"
+
+    @property
     def type_label(self):
         """Tabloda gösterilecek okunur alarm tipi."""
         if self.rule_type == self.RULE_ANALOG:
             return dict(self.COND_CHOICES).get(self.condition, "Ölçüm")
         if self.rule_type == self.RULE_DIGITAL:
-            return self.sensor.parameter.parameter_name if (self.sensor and self.sensor.parameter) else "Dijital"
+            return f"{self.sensor_label}: {self.state_label}"
         return "İstasyon Offline"

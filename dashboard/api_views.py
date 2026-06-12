@@ -925,7 +925,7 @@ def alarm_io(request):
     ]
     digital = [
         {"id": s.id, "text": _sensor_label(s)}
-        for s in Sensor.objects.filter(connection__station_id=station_id, sensor_type=2)
+        for s in Sensor.objects.filter(connection__station_id=station_id, sensor_type__in=(2, 3))
         .select_related("parameter").order_by("address")
     ]
     return JsonResponse({"analog": analog, "digital": digital})
@@ -1019,9 +1019,10 @@ def alarm_rules(request):
         rule.max_value = data.get("max_value") if data.get("max_value") not in ("", None) else None
     elif rule_type == AlarmRule.RULE_DIGITAL:
         sid = data.get("sensor_id")
-        rule.sensor = S.objects.filter(pk=sid, sensor_type=2).first()
+        rule.sensor = S.objects.filter(pk=sid, sensor_type__in=(2, 3)).first()
         if rule.sensor is None:
-            return JsonResponse({"ok": False, "error": "Dijital kanal seçin."}, status=400)
+            return JsonResponse({"ok": False, "error": "Dijital sensör seçin."}, status=400)
+        rule.trigger_state = bool(data.get("trigger_state", True))
     elif rule_type == AlarmRule.RULE_OFFLINE:
         try:
             rule.offline_seconds = int(data.get("offline_seconds") or 900)

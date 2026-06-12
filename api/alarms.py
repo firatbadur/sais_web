@@ -18,7 +18,7 @@ import logging
 from django.db.models import Max
 from django.utils import timezone
 
-logger = logging.getLogger("sais_domain.alarms")
+logger = logging.getLogger("api.alarms")
 
 # Analog değer bu statuslarda değerlendirilmez (yıkama/bakım/iletişim hatası).
 SKIP_STATUS_CODES = {8, 23, 24, 25, 26}
@@ -99,6 +99,7 @@ def _analog_triggered(rule) -> bool:
 
 
 def _digital_triggered(rule) -> bool:
+    """Sensörün mantıksal durumu kuralın hedef durumuna (trigger_state) eşitse tetiklenir."""
     from api.models import SensorLatest
 
     if not rule.sensor_id:
@@ -109,7 +110,7 @@ def _digital_triggered(rule) -> bool:
     raw = bool(sl.value)
     if sl.sensor and sl.sensor.digital_inverse:
         raw = not raw
-    return raw
+    return raw == rule.trigger_state
 
 
 def _offline_triggered(rule, now) -> bool:
@@ -178,7 +179,7 @@ def run() -> dict:
     now = timezone.now()
     rules = list(
         AlarmRule.objects.filter(enabled=True, station__active=True)
-        .select_related("station", "parameter", "sensor", "trigger_output")
+        .select_related("station", "parameter", "sensor")
     )
     fired = 0
     for rule in rules:

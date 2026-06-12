@@ -103,16 +103,27 @@ DEFAULT_REQUEST_TYPES = [
 
 
 # Hazır bildirim mesajları (alarm + SMS/mail test panelinde kullanılır).
+# Kurumsal, parametre/olay-bazlı şablonlar — kullanıcı ayrıca kendi mesajını ekleyebilir.
 DEFAULT_MESSAGE_TEMPLATES = [
-    ("Ölçüm Limit Dışı", "Ölçüm değeri belirlenen limit dışında. Lütfen kontrol ediniz."),
-    ("İstasyon Offline", "İstasyon ile iletişim kesildi (offline). Lütfen kontrol ediniz."),
-    ("Cihaz İletişim Hatası", "Cihaz iletişim hatası tespit edildi. Lütfen kontrol ediniz."),
-    ("Sıcaklık Alarmı", "Sıcaklık alarmı devrede. Lütfen kontrol ediniz."),
-    ("Enerji Kesintisi", "Enerji kesintisi tespit edildi. UPS devrede; lütfen kontrol ediniz."),
-    ("Su Baskını", "Su baskını sensörü aktif. Lütfen acil kontrol ediniz."),
-    ("Acil Stop", "Acil stop aktif edildi. Lütfen kontrol ediniz."),
-    ("Sürücü Hatası", "Sürücü hatası tespit edildi. Lütfen kontrol ediniz."),
-    ("Genel Alarm", "İstasyonda alarm durumu oluştu. Lütfen kontrol ediniz."),
+    # --- Analog ölçüm (limit aşımı) ---
+    ("pH Limit Aşımı", "pH değeri belirlenen limit değerlerinin dışına çıkmıştır. Lütfen tesisi kontrol ediniz."),
+    ("İletkenlik Limit Aşımı", "İletkenlik değeri belirlenen limit değerlerinin dışına çıkmıştır. Lütfen kontrol ediniz."),
+    ("Çözünmüş Oksijen Limit Aşımı", "Çözünmüş oksijen değeri belirlenen limit değerlerinin dışına çıkmıştır. Lütfen kontrol ediniz."),
+    ("Debi Limit Aşımı", "Debi değeri belirlenen limit değerlerinin dışına çıkmıştır. Lütfen kontrol ediniz."),
+    ("Sıcaklık Limit Aşımı", "Sıcaklık değeri belirlenen limit değerlerinin dışına çıkmıştır. Lütfen kontrol ediniz."),
+    ("Akış Hızı Limit Aşımı", "Akış hızı belirlenen limit değerlerinin dışına çıkmıştır. Lütfen kontrol ediniz."),
+    ("KOİ Limit Aşımı", "KOİ değeri belirlenen limit değerlerinin dışına çıkmıştır. Lütfen kontrol ediniz."),
+    ("AKM Limit Aşımı", "AKM değeri belirlenen limit değerlerinin dışına çıkmıştır. Lütfen kontrol ediniz."),
+    # --- Dijital / olay ---
+    ("Enerji Kesintisi", "İstasyonda enerji kesintisi tespit edilmiştir. UPS devrede; lütfen kontrol ediniz."),
+    ("Su Baskını", "Su baskını sensörü aktif olmuştur. Lütfen acil müdahale ediniz."),
+    ("Duman Algılandı", "Duman sensörü aktif olmuştur. Lütfen acil kontrol ediniz."),
+    ("Acil Stop", "Acil stop devreye girmiştir. Lütfen kontrol ediniz."),
+    ("Sürücü Hatası", "Sürücü hatası tespit edilmiştir. Lütfen kontrol ediniz."),
+    ("Pompa Arızası", "Pompa arızası tespit edilmiştir. Lütfen kontrol ediniz."),
+    ("Kapı Açık", "İstasyon kapısı açık konuma geçmiştir. Lütfen kontrol ediniz."),
+    ("İstasyon Offline", "İstasyon ile iletişim kesilmiştir (offline). Lütfen kontrol ediniz."),
+    ("Cihaz İletişim Hatası", "Cihaz iletişim hatası tespit edilmiştir. Lütfen kontrol ediniz."),
 ]
 
 
