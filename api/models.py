@@ -644,6 +644,15 @@ class Sensor(models.Model):
         self.slave_id = sg.slave_id
         self.function = sg.function
 
+        # Dijital I/O (DI=2 / DO=3) bit-tabanlı bir grupta (coils=1 / discrete=2)
+        # ise data_type otomatik "bool" olur: okuma tarafı bit decode eder,
+        # yazma tarafı (dijital output Start/Stop) write_coil yapar. Aksi halde
+        # data_type=int16 kalıp write_register'a düşer ve coil'e yazmaz.
+        # Register tabanlı gruplarda (holding=3 / input=4) kullanıcının
+        # data_type'ına (bit/uint16 vb.) dokunulmaz.
+        if self.sensor_type in (2, 3) and sg.function in (1, 2):
+            self.data_type = "bool"
+
     def full_clean(self, exclude=None, validate_unique=True, validate_constraints=True):
         """Field validation öncesi scan_group inheritance'ı uygular.
 

@@ -198,6 +198,13 @@
     const SVG_STOP = '<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>';
     // Sürükleme tutamacı — 2x3 nokta ızgarası (drag indicator).
     const SVG_DRAG = '<span class="drag-handle text-primary me-3" style="cursor:grab;display:inline-flex;vertical-align:middle"><svg width="12" height="18" viewBox="0 0 12 18" fill="currentColor"><circle cx="3" cy="3" r="1.7"/><circle cx="9" cy="3" r="1.7"/><circle cx="3" cy="9" r="1.7"/><circle cx="9" cy="9" r="1.7"/><circle cx="3" cy="15" r="1.7"/><circle cx="9" cy="15" r="1.7"/></svg></span>';
+    // Tetik gönderilen DO komutu için loader: butona basınca komut tamamlanıp
+    // veri güncellenene (is_active beklenen duruma ulaşana) kadar pasif + spinner.
+    // sensor_id -> {expected: bool, ts: ms}. Çift basmayı önler.
+    const SPINNER_INNER = '<span class="spinner-border spinner-border-sm align-middle"></span>';
+    const SPINNER_BTN = `<button class="btn btn-icon btn-sm btn-light-primary" disabled>${SPINNER_INNER}</button>`;
+    const pendingDO = {};
+    const DO_WAIT_MS = 45000;  // güvenlik: veri bu sürede gelmezse loader bırakılır
 
     const QUALITY_BADGE = {
         good:        'badge-light-success',
@@ -384,11 +391,23 @@
                     let actionCell = '';
                     if (CAN_CONTROL) {
                         if (r.sensor_type === 3) {
-                            // Tek toggle: çalışıyorsa Durdur (kırmızı), değilse Başlat (yeşil).
-                            const btn = isActive
-                                ? `<button class="btn btn-icon btn-sm btn-light-danger do-cmd" data-sid="${r.sensor_id}" data-action="stop" title="${I18N.stop}">${SVG_STOP}</button>`
-                                : `<button class="btn btn-icon btn-sm btn-light-success do-cmd" data-sid="${r.sensor_id}" data-action="start" title="${I18N.start}">${SVG_PLAY}</button>`;
-                            actionCell = `<td class="text-end">${btn}</td>`;
+                            // Bekleyen komut: veri beklenen duruma ulaştıysa ya da
+                            // güvenlik süresi dolduysa loader'ı kaldır.
+                            let pend = pendingDO[r.sensor_id];
+                            if (pend && (isActive === pend.expected || (Date.now() - pend.ts) > DO_WAIT_MS)) {
+                                delete pendingDO[r.sensor_id];
+                                pend = undefined;
+                            }
+                            if (pend) {
+                                // Komut işleniyor → pasif buton + spinner.
+                                actionCell = `<td class="text-end">${SPINNER_BTN}</td>`;
+                            } else {
+                                // Tek toggle: çalışıyorsa Durdur (kırmızı), değilse Başlat (yeşil).
+                                const btn = isActive
+                                    ? `<button class="btn btn-icon btn-sm btn-light-danger do-cmd" data-sid="${r.sensor_id}" data-action="stop" title="${I18N.stop}">${SVG_STOP}</button>`
+                                    : `<button class="btn btn-icon btn-sm btn-light-success do-cmd" data-sid="${r.sensor_id}" data-action="start" title="${I18N.start}">${SVG_PLAY}</button>`;
+                                actionCell = `<td class="text-end">${btn}</td>`;
+                            }
                         } else {
                             actionCell = '<td></td>';
                         }
@@ -456,7 +475,11 @@
             const sid = Number(btn.dataset.sid);
             const msg = action === 'start' ? I18N.startConfirm : I18N.stopConfirm;
             if (!window.confirm(msg)) return;   // Endüstriyel güvenlik onayı
+            // Çift basmayı önle: komut tamamlanıp veri güncellenene kadar
+            // pasif + spinner. expected = start→aktif, stop→pasif.
+            pendingDO[sid] = { expected: (action === 'start'), ts: Date.now() };
             btn.disabled = true;
+            btn.innerHTML = SPINNER_INNER;
             try {
                 const r = await fetch(URL_DIGITAL_CMD, {
                     method: 'POST', credentials: 'same-origin',
@@ -465,13 +488,17 @@
                 });
                 const d = await r.json().catch(() => ({}));
                 if (!r.ok || !d.ok) {
+                    // Hata → loader'ı kaldır, butonu geri getir.
+                    delete pendingDO[sid];
                     alert(d.error || d.message || I18N.cmdFail);
-                    btn.disabled = false;
+                    refreshDigital();
                 }
-                // Başarılı: disabled bırak; sonraki poll buton durumunu uzlaştırır.
+                // Başarılı: pendingDO'da kalsın; spinner veri güncellenene
+                // (is_active beklenen duruma ulaşana) kadar refreshDigital'de korunur.
             } catch (err) {
+                delete pendingDO[sid];
                 alert(I18N.netError);
-                btn.disabled = false;
+                refreshDigital();
             }
         });
     }
