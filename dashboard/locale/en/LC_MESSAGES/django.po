@@ -2130,3 +2130,6 @@ msgstr "Document deleted: %(t)s"
 
 msgid "Doküman bulunamadı."
 msgstr "Document not found."
+
+msgid "Tüm Türler"
+msgstr "All Types"

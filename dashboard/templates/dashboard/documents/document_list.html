@@ -20,55 +20,18 @@
 
 {% block content %}
 <!-- Filtre kartı -->
-<div class="card mb-5 mb-xl-8">
-    <div class="card-header border-0 pt-6">
-        <div class="card-title">
-            <h3 class="fw-bold m-0">{% trans "Filtre" %}</h3>
-        </div>
-        {% if can_manage %}
-        <div class="card-toolbar">
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal"
-                    data-bs-target="#upload-modal">
-                <i class="ki-outline ki-plus fs-2"></i>{% trans "Doküman Yükle" %}
-            </button>
-        </div>
-        {% endif %}
-    </div>
-    <div class="card-body pt-3 pb-6">
-        <form method="get" id="filter-form" class="row g-5 align-items-end">
-            <div class="col-md-6 col-lg-5">
-                <label class="form-label fw-semibold">{% trans "Belge Türü" %}</label>
-                <select name="doc_type" class="form-select form-select-solid"
-                        data-control="select2" data-allow-clear="true"
-                        data-placeholder="{% trans 'Tümü' %}">
-                    <option value=""></option>
-                    {% for value, label in doc_types %}
-                        <option value="{{ value }}" {% if value == selected_type %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-6 col-lg-7">
-                <button type="submit" class="btn btn-primary">
-                    <i class="ki-outline ki-filter fs-3"></i>{% trans "Filtrele" %}
-                </button>
-                {% if selected_type %}
-                <a href="{% url 'dashboard:documents' %}" class="btn btn-light-warning">
-                    <i class="ki-outline ki-arrows-circle fs-3"></i>{% trans "Sıfırla" %}
-                </a>
-                {% endif %}
-            </div>
-        </form>
-    </div>
-</div>
+<!-- Tür filtresi — DataTables araç çubuğuna JS ile taşınır (başta gizli) -->
+<select id="type-filter" class="form-select form-select-sm form-select-solid w-auto d-none"
+        data-placeholder="{% trans 'Tüm Türler' %}" aria-label="{% trans 'Belge Türü' %}">
+    <option value="">{% trans "Tüm Türler" %}</option>
+    {% for value, label in doc_types %}
+        <option value="{{ label }}">{{ label }}</option>
+    {% endfor %}
+</select>
 
 <!-- Doküman listesi -->
 <div class="card" id="documents-card">
-    <div class="card-header border-0 pt-6">
-        <div class="card-title">
-            <h3 class="fw-bold m-0">{% trans "Dokümanlar" %}</h3>
-        </div>
-    </div>
-    <div class="card-body pt-3">
+    <div class="card-body pt-6">
         <table id="documents-table"
                class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
             <thead>
@@ -182,10 +145,13 @@
 (function () {
     "use strict";
 
+    const CAN_MANAGE = {{ can_manage|yesno:"true,false" }};
+
     // --- DataTables init (client-side) ---
+    let dt = null;
     const tableEl = document.getElementById('documents-table');
     if (tableEl && typeof $.fn.dataTable !== 'undefined') {
-        $('#documents-table').DataTable({
+        dt = $('#documents-table').DataTable({
             dom:
                 "<'row mb-3'<'col-sm-12 col-md-6 d-flex align-items-center'B><'col-sm-12 col-md-6 d-flex justify-content-md-end align-items-center'f>>" +
                 "<'row'<'col-sm-12'tr>>" +
@@ -216,6 +182,35 @@
                 }
             }
         });
+    }
+
+    if (dt) {
+        const $btns = $('#documents-table_wrapper .dt-buttons');
+
+        // "Doküman Yükle" butonu — export butonlarının yanında (sadece yetkili).
+        if (CAN_MANAGE) {
+            const $upload = $('<button type="button" class="btn btn-sm btn-primary me-2">' +
+                '<i class="ki-outline ki-plus fs-3"></i> {% trans "Doküman Yükle" %}</button>');
+            $upload.on('click', function () {
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('upload-modal')).show();
+            });
+            $btns.prepend($upload);
+        }
+
+        // Tür filtresi — araç çubuğuna taşı, client-side kolon araması yap.
+        const $typeFilter = $('#type-filter');
+        if ($typeFilter.length) {
+            $typeFilter.removeClass('d-none').appendTo($btns);
+            $typeFilter.on('change', function () {
+                const val = this.value;
+                if (val) {
+                    const esc = val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    dt.column(1).search('^' + esc + '$', true, false).draw();
+                } else {
+                    dt.column(1).search('').draw();
+                }
+            });
+        }
     }
 
     // --- Silme onayı ---
