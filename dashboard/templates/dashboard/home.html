@@ -146,7 +146,7 @@
             <div class="card-header pt-5">
                 <h3 class="card-title fw-bold text-gray-800">{% trans "Son Olaylar" %}</h3>
             </div>
-            <div class="card-body pt-4" style="max-height:500px; overflow-y:auto;">
+            <div class="card-body pt-4">
                 <div class="timeline timeline-border-dashed" id="events-list">
                     <div class="text-muted">{% trans "Yükleniyor..." %}</div>
                 </div>
@@ -432,7 +432,7 @@
             if (!data.events || data.events.length === 0) {
                 list.innerHTML = `<div class="text-muted">{% trans "Henüz olay yok." %}</div>`;
             } else {
-                list.innerHTML = data.events.map(ev => {
+                list.innerHTML = data.events.slice(0, 3).map(ev => {
                     const iconByKind = {
                         system_log: 'ki-information-5 text-info',
                         power_off: 'ki-power text-warning',
