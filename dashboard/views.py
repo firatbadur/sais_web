@@ -735,6 +735,23 @@ class AlarmsView(OperatorRequiredMixin, TemplateView):
         return ctx
 
 
+class RemindersView(RoleRequiredMixin, TemplateView):
+    """Takvim Hatırlatıcı — paylaşımlı (tüm roller görür ve yönetir).
+
+    Aylık takvim ızgarasından gün seçilir, hatırlatıcı kurulur. Vadesi geldiğinde
+    header'daki çan ikonu + anasayfa widget'ı (yalnız dashboard içi) bildirir.
+    CRUD `dashboard/api_views.py` `reminder_*` AJAX endpoint'leriyle yapılır.
+    """
+    template_name = "dashboard/reminders/index.html"
+
+    def get_context_data(self, **kwargs):
+        from api.models import Reminder
+        ctx = super().get_context_data(**kwargs)
+        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        ctx["priority_choices"] = Reminder.PRIORITY_CHOICES
+        return ctx
+
+
 class CalibrationWizardView(OperatorRequiredMixin, TemplateView):
     """Operatör/Yönetici → İnteraktif Kalibrasyon.
 

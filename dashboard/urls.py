@@ -43,6 +43,9 @@ urlpatterns = [
     path("management/connections/", views.ConnectionsOverviewView.as_view(), name="management_connections"),
     path("management/sensors/", views.SensorsOverviewView.as_view(), name="management_sensors"),
 
+    # --- Takvim Hatırlatıcı ---
+    path("reminders/", views.RemindersView.as_view(), name="reminders"),
+
     # --- Documents (doküman yönetimi) ---
     path("documents/", views.DocumentListView.as_view(), name="documents"),
     path("documents/upload/", views.DocumentUploadView.as_view(), name="document_upload"),
@@ -86,6 +89,13 @@ urlpatterns = [
 
     # --- AJAX API (raporlar) ---
     path("api/parameters/", api_views.station_parameters, name="api_station_parameters"),
+
+    # --- AJAX API (Takvim Hatırlatıcı) ---
+    path("api/reminders/list/", api_views.reminders_list, name="api_reminders_list"),
+    path("api/reminders/feed/", api_views.reminders_feed, name="api_reminders_feed"),
+    path("api/reminders/save/", api_views.reminder_save, name="api_reminder_save"),
+    path("api/reminders/done/", api_views.reminder_done, name="api_reminder_done"),
+    path("api/reminders/delete/", api_views.reminder_delete, name="api_reminder_delete"),
 
     # --- AJAX API (yönetici) ---
     path("api/system-control/status/", api_views.system_control_status,

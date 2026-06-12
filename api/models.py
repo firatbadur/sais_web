@@ -1960,3 +1960,64 @@ class AlarmRule(models.Model):
         if self.rule_type == self.RULE_DIGITAL:
             return f"{self.sensor_label}: {self.state_label}"
         return "İstasyon Offline"
+
+
+class Reminder(models.Model):
+    """Takvim hatırlatıcısı — paylaşımlı (tüm dashboard kullanıcıları görür).
+
+    Jenerik bir özellik (SAIS'e özel değil) → `api/`. Operatör takvimden bir
+    gün/saat seçer, başlık + not girer; `remind_at` geldiğinde **yalnızca
+    dashboard içi** bildirim üretilir: header'daki çan ikonunda badge + açılır
+    liste ve anasayfada "Yaklaşan Hatırlatmalar" widget'ı. Harici SMS/e-posta
+    göndermez (bunun için Alarm Tanımı / Bildirim Merkezi kullanılır).
+
+    `remind_at <= now()` ve `is_done=False` → **vadesi gelmiş** (çan badge'inde
+    sayılır). Paylaşımlı olduğu için herhangi bir kullanıcı tamamlandı işaretler
+    veya siler; `created_by` / `done_by` yalnız denetim içindir.
+    """
+
+    PRIORITY_LOW = "low"
+    PRIORITY_NORMAL = "normal"
+    PRIORITY_HIGH = "high"
+    PRIORITY_CHOICES = (
+        (PRIORITY_LOW, "Düşük"),
+        (PRIORITY_NORMAL, "Normal"),
+        (PRIORITY_HIGH, "Yüksek"),
+    )
+
+    title = models.CharField(max_length=160, verbose_name="Başlık")
+    note = models.TextField(blank=True, default="", verbose_name="Not")
+    remind_at = models.DateTimeField(verbose_name="Hatırlatma Zamanı")
+    priority = models.CharField(
+        max_length=10, choices=PRIORITY_CHOICES, default=PRIORITY_NORMAL,
+        verbose_name="Öncelik",
+    )
+    station = models.ForeignKey(
+        Station, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="reminders", verbose_name="İstasyon",
+        help_text="İsteğe bağlı — hatırlatıcıyı bir istasyona bağla.",
+    )
+
+    is_done = models.BooleanField(default=False, verbose_name="Tamamlandı")
+    done_at = models.DateTimeField(blank=True, null=True, verbose_name="Tamamlanma")
+    done_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="+", verbose_name="Tamamlayan",
+    )
+
+    created_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="+", verbose_name="Oluşturan",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Oluşturma")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Güncelleme")
+
+    class Meta:
+        db_table = "reminder"
+        verbose_name = "Hatırlatıcı"
+        verbose_name_plural = "Hatırlatıcılar"
+        ordering = ["remind_at"]
+        indexes = [models.Index(fields=["remind_at", "is_done"])]
+
+    def __str__(self):
+        return f"{self.title} @ {self.remind_at:%d.%m.%Y %H:%M}"

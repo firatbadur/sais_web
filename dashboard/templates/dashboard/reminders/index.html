@@ -1,0 +1,486 @@
+{% extends "dashboard/base.html" %}
+{% load i18n static dashboard_extras %}
+
+{% block title %}{% trans "Takvim Hatırlatıcı" %}{% endblock %}
+{% block page_title %}{% trans "Takvim Hatırlatıcı" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .rmd-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+    .rmd-cal-dow {
+        text-align: center; font-weight: 600; font-size: .8rem;
+        color: var(--bs-gray-500); text-transform: uppercase; padding: 4px 0;
+    }
+    .rmd-cal-cell {
+        min-height: 96px; border: 1px solid var(--bs-gray-200);
+        border-radius: 8px; padding: 6px; cursor: pointer; position: relative;
+        background: var(--bs-body-bg); transition: background .12s, border-color .12s;
+        display: flex; flex-direction: column; overflow: hidden;
+    }
+    .rmd-cal-cell:hover { border-color: var(--bs-primary); background: var(--bs-light-primary); }
+    .rmd-cal-cell.rmd-other { opacity: .45; }
+    .rmd-cal-cell.rmd-today { border-color: var(--bs-primary); box-shadow: 0 0 0 1px var(--bs-primary) inset; }
+    .rmd-cal-daynum { font-size: .85rem; font-weight: 600; color: var(--bs-gray-700); }
+    .rmd-cal-today .rmd-cal-daynum {
+        background: var(--bs-primary); color: #fff; border-radius: 50%;
+        width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .rmd-chip {
+        display: block; font-size: .72rem; line-height: 1.25; margin-top: 3px;
+        padding: 2px 6px; border-radius: 5px; white-space: nowrap; overflow: hidden;
+        text-overflow: ellipsis; border-left: 3px solid transparent;
+    }
+    .rmd-chip:hover { filter: brightness(.96); }
+    .rmd-p-low    { background: var(--bs-light-info);    border-left-color: var(--bs-info); color: var(--bs-info); }
+    .rmd-p-normal { background: var(--bs-light-primary); border-left-color: var(--bs-primary); color: var(--bs-primary); }
+    .rmd-p-high   { background: var(--bs-light-danger);  border-left-color: var(--bs-danger); color: var(--bs-danger); }
+    .rmd-chip.rmd-done { text-decoration: line-through; opacity: .55; }
+    .rmd-more { font-size: .7rem; color: var(--bs-gray-500); margin-top: 2px; }
+    .rmd-list-item { border-left: 3px solid transparent; }
+    .rmd-list-item.rmd-due { background: var(--bs-light-danger); }
+    .rmd-list-item.rmd-p-high   { border-left-color: var(--bs-danger); }
+    .rmd-list-item.rmd-p-normal { border-left-color: var(--bs-primary); }
+    .rmd-list-item.rmd-p-low    { border-left-color: var(--bs-info); }
+    .rmd-list-item.rmd-list-done .rmd-list-title { text-decoration: line-through; opacity: .6; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-5 g-xl-8">
+
+    <!-- ============ TAKVİM ============ -->
+    <div class="col-xl-8">
+        <div class="card card-flush h-100">
+            <div class="card-header pt-6">
+                <div class="card-title">
+                    <h2 class="fw-bold text-gray-800 fs-3 mb-0" id="rmd-month-label">—</h2>
+                </div>
+                <div class="card-toolbar">
+                    <div class="btn-group me-3">
+                        <button type="button" class="btn btn-sm btn-light-primary" id="rmd-prev"
+                                title="{% trans 'Önceki Ay' %}"><i class="ki-outline ki-left fs-4"></i></button>
+                        <button type="button" class="btn btn-sm btn-light-primary" id="rmd-today-btn">{% trans "Bugün" %}</button>
+                        <button type="button" class="btn btn-sm btn-light-primary" id="rmd-next"
+                                title="{% trans 'Sonraki Ay' %}"><i class="ki-outline ki-right fs-4"></i></button>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-primary" id="rmd-add-btn">
+                        <i class="ki-outline ki-plus fs-4"></i>{% trans "Yeni Hatırlatıcı" %}
+                    </button>
+                </div>
+            </div>
+            <div class="card-body pt-2">
+                <div class="rmd-cal-grid mb-2" id="rmd-dow-row"></div>
+                <div class="rmd-cal-grid" id="rmd-cal-body"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ LİSTE ============ -->
+    <div class="col-xl-4">
+        <div class="card card-flush h-100">
+            <div class="card-header pt-6">
+                <h3 class="card-title fw-bold text-gray-800">{% trans "Hatırlatmalar" %}</h3>
+                <div class="card-toolbar">
+                    <ul class="nav nav-pills nav-pills-sm" role="tablist">
+                        <li class="nav-item"><a class="nav-link active fs-8 py-1 px-3" data-rmd-tab="active" href="#">{% trans "Aktif" %}</a></li>
+                        <li class="nav-item"><a class="nav-link fs-8 py-1 px-3" data-rmd-tab="done" href="#">{% trans "Tamamlanan" %}</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="card-body pt-2" style="max-height: 640px; overflow-y: auto;">
+                <div id="rmd-list">
+                    <div class="text-muted text-center py-10">{% trans "Yükleniyor..." %}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ MODAL: EKLE / DÜZENLE ============ -->
+<div class="modal fade" id="rmd-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="rmd-form">
+                <div class="modal-header">
+                    <h2 class="fw-bold fs-4 mb-0" id="rmd-modal-title">{% trans "Yeni Hatırlatıcı" %}</h2>
+                    <button type="button" class="btn btn-icon btn-sm btn-active-light-primary" data-bs-dismiss="modal">
+                        <i class="ki-outline ki-cross fs-1"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="rmd-id">
+                    <div class="mb-4">
+                        <label class="form-label required">{% trans "Başlık" %}</label>
+                        <input type="text" class="form-control form-control-solid" id="rmd-title" maxlength="160"
+                               placeholder="{% trans 'Örn. Numune alımı, bakım, kalibrasyon...' %}">
+                    </div>
+                    <div class="row g-4 mb-4">
+                        <div class="col-7">
+                            <label class="form-label required">{% trans "Tarih" %}</label>
+                            <input type="date" class="form-control form-control-solid" id="rmd-date">
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label required">{% trans "Saat" %}</label>
+                            <input type="time" class="form-control form-control-solid" id="rmd-time" value="09:00">
+                        </div>
+                    </div>
+                    <div class="row g-4 mb-4">
+                        <div class="col-6">
+                            <label class="form-label">{% trans "Öncelik" %}</label>
+                            <select class="form-select form-select-solid" id="rmd-priority">
+                                {% for val, label in priority_choices %}
+                                <option value="{{ val }}" {% if val == 'normal' %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">{% trans "İstasyon" %}</label>
+                            <select class="form-select form-select-solid" id="rmd-station">
+                                <option value="">{% trans "— Yok —" %}</option>
+                                {% for s in stations %}
+                                <option value="{{ s.id }}">{{ s.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">{% trans "Not" %}</label>
+                        <textarea class="form-control form-control-solid" id="rmd-note" rows="3"
+                                  placeholder="{% trans 'İsteğe bağlı açıklama' %}"></textarea>
+                    </div>
+                    <div class="alert alert-danger d-none mt-3" id="rmd-form-error"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light-danger me-auto d-none" id="rmd-delete-btn">
+                        <i class="ki-outline ki-trash fs-5"></i>{% trans "Sil" %}
+                    </button>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">{% trans "Vazgeç" %}</button>
+                    <button type="submit" class="btn btn-primary" id="rmd-save-btn">{% trans "Kaydet" %}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    "use strict";
+
+    const URLS = {
+        list:   "{% url 'dashboard:api_reminders_list' %}",
+        save:   "{% url 'dashboard:api_reminder_save' %}",
+        done:   "{% url 'dashboard:api_reminder_done' %}",
+        delete: "{% url 'dashboard:api_reminder_delete' %}"
+    };
+
+    const I18N = {
+        months: ["{% trans 'Ocak' %}","{% trans 'Şubat' %}","{% trans 'Mart' %}","{% trans 'Nisan' %}",
+                 "{% trans 'Mayıs' %}","{% trans 'Haziran' %}","{% trans 'Temmuz' %}","{% trans 'Ağustos' %}",
+                 "{% trans 'Eylül' %}","{% trans 'Ekim' %}","{% trans 'Kasım' %}","{% trans 'Aralık' %}"],
+        dows:   ["{% trans 'Pzt' %}","{% trans 'Sal' %}","{% trans 'Çar' %}","{% trans 'Per' %}",
+                 "{% trans 'Cum' %}","{% trans 'Cmt' %}","{% trans 'Paz' %}"],
+        newTitle:  "{% trans 'Yeni Hatırlatıcı' %}",
+        editTitle: "{% trans 'Hatırlatıcıyı Düzenle' %}",
+        more:      "{% trans 'daha' %}",
+        empty:     "{% trans 'Hatırlatıcı yok.' %}",
+        emptyDone: "{% trans 'Tamamlanan hatırlatıcı yok.' %}",
+        confirmDel:"{% trans 'Bu hatırlatıcı silinsin mi?' %}",
+        netError:  "{% trans 'Ağ hatası' %}",
+        required:  "{% trans 'Başlık, tarih ve saat zorunludur.' %}",
+        markDone:  "{% trans 'Tamamlandı işaretle' %}",
+        markUndone:"{% trans 'Geri al' %}",
+        today:     "{% trans 'Bugün' %}",
+        due:       "{% trans 'Vadesi geldi' %}"
+    };
+
+    const LOCALE = "{{ LANGUAGE_CODE|default:'tr' }}" === "en" ? "en-US" : "tr-TR";
+
+    function csrf() {
+        const el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
+    }
+    function escapeHtml(s) {
+        if (s == null) return '';
+        return String(s).replace(/[&<>"']/g, c => (
+            {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    async function postJson(url, body) {
+        const r = await fetch(url, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+            body: JSON.stringify(body)
+        });
+        return r.json();
+    }
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function ymd(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+
+    // --- State ---
+    let viewYear, viewMonth;          // gösterilen ay
+    let reminders = [];               // bu ayın kayıtları (takvim)
+    let allReminders = [];            // liste için (geniş aralık)
+    let listTab = 'active';
+    const byDate = {};                // 'YYYY-MM-DD' -> [reminder]
+
+    const modalEl = document.getElementById('rmd-modal');
+    const modal = new bootstrap.Modal(modalEl);
+
+    // --- DOW başlığı ---
+    (function renderDow() {
+        const row = document.getElementById('rmd-dow-row');
+        row.innerHTML = I18N.dows.map(d => `<div class="rmd-cal-dow">${d}</div>`).join('');
+    })();
+
+    function priorityClass(p) {
+        return p === 'high' ? 'rmd-p-high' : (p === 'low' ? 'rmd-p-low' : 'rmd-p-normal');
+    }
+
+    // --- Takvim render ---
+    function renderCalendar() {
+        document.getElementById('rmd-month-label').textContent =
+            `${I18N.months[viewMonth]} ${viewYear}`;
+
+        // Ay ilk günü ve Pazartesi-başlangıçlı offset
+        const first = new Date(viewYear, viewMonth, 1);
+        let startOffset = (first.getDay() + 6) % 7;   // 0=Pzt
+        const gridStart = new Date(viewYear, viewMonth, 1 - startOffset);
+
+        const todayStr = ymd(new Date());
+        const body = document.getElementById('rmd-cal-body');
+        let html = '';
+
+        for (let i = 0; i < 42; i++) {
+            const d = new Date(gridStart);
+            d.setDate(gridStart.getDate() + i);
+            const key = ymd(d);
+            const other = d.getMonth() !== viewMonth;
+            const isToday = key === todayStr;
+
+            const items = byDate[key] || [];
+            let chips = '';
+            items.slice(0, 3).forEach(r => {
+                chips += `<span class="rmd-chip ${priorityClass(r.priority)} ${r.is_done ? 'rmd-done' : ''}" `
+                       + `data-rmd-open="${r.id}" title="${escapeHtml(r.time + ' ' + r.title)}">`
+                       + `${escapeHtml(r.time)} ${escapeHtml(r.title)}</span>`;
+            });
+            if (items.length > 3) {
+                chips += `<span class="rmd-more">+${items.length - 3} ${I18N.more}</span>`;
+            }
+
+            html += `<div class="rmd-cal-cell ${other ? 'rmd-other' : ''} ${isToday ? 'rmd-cal-today rmd-today' : ''}" `
+                  + `data-rmd-day="${key}">`
+                  + `<span class="rmd-cal-daynum">${d.getDate()}</span>`
+                  + chips + `</div>`;
+        }
+        body.innerHTML = html;
+    }
+
+    // --- Liste render ---
+    function renderList() {
+        const wrap = document.getElementById('rmd-list');
+        let items = allReminders.filter(r => listTab === 'done' ? r.is_done : !r.is_done);
+        if (listTab === 'active') {
+            items.sort((a, b) => new Date(a.remind_at) - new Date(b.remind_at));
+        } else {
+            items.sort((a, b) => new Date(b.remind_at) - new Date(a.remind_at));
+        }
+        if (!items.length) {
+            wrap.innerHTML = `<div class="text-muted text-center py-10">`
+                + `${listTab === 'done' ? I18N.emptyDone : I18N.empty}</div>`;
+            return;
+        }
+        wrap.innerHTML = items.map(r => {
+            const dt = new Date(r.remind_at);
+            const when = dt.toLocaleString(LOCALE, { day: '2-digit', month: 'short',
+                hour: '2-digit', minute: '2-digit' });
+            const dueBadge = r.is_due
+                ? `<span class="badge badge-light-danger fs-9 ms-2">${I18N.due}</span>` : '';
+            const station = r.station
+                ? `<span class="badge badge-light-secondary fs-9 ms-1">${escapeHtml(r.station)}</span>` : '';
+            return `<div class="rmd-list-item rmd-list-${listTab === 'done' ? 'done' : ''} ${priorityClass(r.priority)} ${r.is_due ? 'rmd-due' : ''} d-flex align-items-start p-3 mb-2 rounded">
+                <div class="form-check form-check-custom form-check-sm me-3 mt-1">
+                    <input class="form-check-input" type="checkbox" ${r.is_done ? 'checked' : ''}
+                           data-rmd-toggle="${r.id}" title="${r.is_done ? I18N.markUndone : I18N.markDone}">
+                </div>
+                <div class="flex-grow-1 cursor-pointer" data-rmd-open="${r.id}">
+                    <div class="rmd-list-title fw-semibold text-gray-800">${escapeHtml(r.title)}${dueBadge}</div>
+                    <div class="text-muted fs-8 mt-1">
+                        <i class="ki-outline ki-calendar fs-8 me-1"></i>${escapeHtml(when)}${station}
+                    </div>
+                    ${r.note ? `<div class="text-gray-600 fs-8 mt-1">${escapeHtml(r.note)}</div>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // --- Veri çek ---
+    async function loadMonth() {
+        // Görünür ızgara aralığı (önceki/sonraki ayın taşan günleri dahil)
+        const first = new Date(viewYear, viewMonth, 1);
+        const startOffset = (first.getDay() + 6) % 7;
+        const gridStart = new Date(viewYear, viewMonth, 1 - startOffset);
+        const gridEnd = new Date(gridStart);
+        gridEnd.setDate(gridStart.getDate() + 41);
+
+        try {
+            const r = await fetch(`${URLS.list}?start=${ymd(gridStart)}&end=${ymd(gridEnd)}`,
+                { credentials: 'same-origin' });
+            const data = await r.json();
+            reminders = data.results || [];
+        } catch (e) { reminders = []; }
+
+        // byDate index
+        for (const k in byDate) delete byDate[k];
+        reminders.forEach(r => {
+            (byDate[r.date] = byDate[r.date] || []).push(r);
+        });
+        for (const k in byDate) byDate[k].sort((a, b) => a.time.localeCompare(b.time));
+        renderCalendar();
+    }
+
+    async function loadList() {
+        // Liste: geniş aralık (geçen 90 gün + gelecek 365 gün)
+        const s = new Date(); s.setDate(s.getDate() - 90);
+        const e = new Date(); e.setDate(e.getDate() + 365);
+        try {
+            const r = await fetch(`${URLS.list}?start=${ymd(s)}&end=${ymd(e)}`,
+                { credentials: 'same-origin' });
+            const data = await r.json();
+            allReminders = data.results || [];
+        } catch (err) { allReminders = []; }
+        renderList();
+    }
+
+    function refreshAll() { loadMonth(); loadList(); }
+
+    // --- Modal aç (yeni / düzenle) ---
+    function openModal(reminder, presetDate) {
+        document.getElementById('rmd-form-error').classList.add('d-none');
+        const delBtn = document.getElementById('rmd-delete-btn');
+        if (reminder) {
+            document.getElementById('rmd-modal-title').textContent = I18N.editTitle;
+            document.getElementById('rmd-id').value = reminder.id;
+            document.getElementById('rmd-title').value = reminder.title;
+            document.getElementById('rmd-date').value = reminder.date;
+            document.getElementById('rmd-time').value = reminder.time;
+            document.getElementById('rmd-priority').value = reminder.priority;
+            document.getElementById('rmd-station').value = reminder.station_id || '';
+            document.getElementById('rmd-note').value = reminder.note || '';
+            delBtn.classList.remove('d-none');
+        } else {
+            document.getElementById('rmd-modal-title').textContent = I18N.newTitle;
+            document.getElementById('rmd-id').value = '';
+            document.getElementById('rmd-title').value = '';
+            document.getElementById('rmd-date').value = presetDate || ymd(new Date());
+            document.getElementById('rmd-time').value = '09:00';
+            document.getElementById('rmd-priority').value = 'normal';
+            document.getElementById('rmd-station').value = '';
+            document.getElementById('rmd-note').value = '';
+            delBtn.classList.add('d-none');
+        }
+        modal.show();
+    }
+
+    function findReminder(id) {
+        return allReminders.find(r => String(r.id) === String(id))
+            || reminders.find(r => String(r.id) === String(id));
+    }
+
+    // --- Kaydet ---
+    document.getElementById('rmd-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const err = document.getElementById('rmd-form-error');
+        const title = document.getElementById('rmd-title').value.trim();
+        const date = document.getElementById('rmd-date').value;
+        const time = document.getElementById('rmd-time').value;
+        if (!title || !date || !time) {
+            err.textContent = I18N.required; err.classList.remove('d-none'); return;
+        }
+        const btn = document.getElementById('rmd-save-btn');
+        btn.setAttribute('disabled', 'disabled');
+        const body = {
+            id: document.getElementById('rmd-id').value || null,
+            title: title,
+            remind_at: `${date}T${time}`,
+            priority: document.getElementById('rmd-priority').value,
+            station_id: document.getElementById('rmd-station').value || null,
+            note: document.getElementById('rmd-note').value
+        };
+        try {
+            const res = await postJson(URLS.save, body);
+            if (!res.ok) { err.textContent = res.error || I18N.netError; err.classList.remove('d-none'); return; }
+            modal.hide();
+            refreshAll();
+            if (window.RMD_refreshBell) window.RMD_refreshBell();
+        } catch (e2) {
+            err.textContent = I18N.netError; err.classList.remove('d-none');
+        } finally {
+            btn.removeAttribute('disabled');
+        }
+    });
+
+    // --- Sil ---
+    document.getElementById('rmd-delete-btn').addEventListener('click', async function () {
+        const id = document.getElementById('rmd-id').value;
+        if (!id || !confirm(I18N.confirmDel)) return;
+        const res = await postJson(URLS.delete, { id: id });
+        if (res.ok) {
+            modal.hide(); refreshAll();
+            if (window.RMD_refreshBell) window.RMD_refreshBell();
+        } else { alert(res.error || I18N.netError); }
+    });
+
+    // --- Toggle done (liste checkbox) ---
+    async function toggleDone(id, done) {
+        const res = await postJson(URLS.done, { id: id, done: done });
+        if (res.ok) { refreshAll(); if (window.RMD_refreshBell) window.RMD_refreshBell(); }
+        else { alert(res.error || I18N.netError); refreshAll(); }
+    }
+
+    // --- Event delegation ---
+    document.getElementById('rmd-cal-body').addEventListener('click', function (e) {
+        const chip = e.target.closest('[data-rmd-open]');
+        if (chip) { e.stopPropagation(); const r = findReminder(chip.dataset.rmdOpen); if (r) openModal(r); return; }
+        const cell = e.target.closest('[data-rmd-day]');
+        if (cell) openModal(null, cell.dataset.rmdDay);
+    });
+    document.getElementById('rmd-list').addEventListener('click', function (e) {
+        const tg = e.target.closest('[data-rmd-toggle]');
+        if (tg) { toggleDone(tg.dataset.rmdToggle, tg.checked); return; }
+        const op = e.target.closest('[data-rmd-open]');
+        if (op) { const r = findReminder(op.dataset.rmdOpen); if (r) openModal(r); }
+    });
+
+    // --- Liste sekmeleri ---
+    document.querySelectorAll('[data-rmd-tab]').forEach(a => {
+        a.addEventListener('click', function (e) {
+            e.preventDefault();
+            document.querySelectorAll('[data-rmd-tab]').forEach(x => x.classList.remove('active'));
+            this.classList.add('active');
+            listTab = this.dataset.rmdTab;
+            renderList();
+        });
+    });
+
+    // --- Nav ---
+    document.getElementById('rmd-prev').addEventListener('click', () => {
+        viewMonth--; if (viewMonth < 0) { viewMonth = 11; viewYear--; } loadMonth();
+    });
+    document.getElementById('rmd-next').addEventListener('click', () => {
+        viewMonth++; if (viewMonth > 11) { viewMonth = 0; viewYear++; } loadMonth();
+    });
+    document.getElementById('rmd-today-btn').addEventListener('click', () => {
+        const n = new Date(); viewYear = n.getFullYear(); viewMonth = n.getMonth(); loadMonth();
+    });
+    document.getElementById('rmd-add-btn').addEventListener('click', () => openModal(null));
+
+    // --- Init ---
+    const now = new Date();
+    viewYear = now.getFullYear();
+    viewMonth = now.getMonth();
+    refreshAll();
+})();
+</script>
+{% endblock %}

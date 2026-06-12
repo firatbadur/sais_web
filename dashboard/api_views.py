@@ -1793,3 +1793,201 @@ def calibration_send_sim(request):
     return JsonResponse({"ok": True, "result": result})
 
 
+# ---------------------------------------------------------------------------
+# Takvim Hatırlatıcı (paylaşımlı; sadece dashboard içi bildirim)
+# ---------------------------------------------------------------------------
+def _serialize_reminder(r):
+    """Reminder → JSON (takvim, çan feed'i ve widget ortak kontratı)."""
+    local = timezone.localtime(r.remind_at)
+    return {
+        "id": r.pk,
+        "title": r.title,
+        "note": r.note or "",
+        "remind_at": local.isoformat(),
+        "date": local.strftime("%Y-%m-%d"),
+        "time": local.strftime("%H:%M"),
+        "priority": r.priority,
+        "priority_label": r.get_priority_display(),
+        "station_id": r.station_id,
+        "station": r.station.name if r.station_id and r.station else "",
+        "is_done": r.is_done,
+        "is_due": (not r.is_done) and r.remind_at <= timezone.now(),
+        "created_by": r.created_by.username if r.created_by_id and r.created_by else "",
+    }
+
+
+def _parse_remind_at(raw):
+    """'YYYY-MM-DDTHH:MM' / ISO / 'DD.MM.YYYY HH:MM' → TZ-aware datetime (veya None)."""
+    from datetime import datetime as _dt
+
+    from django.utils.dateparse import parse_datetime
+
+    if not raw:
+        return None
+    raw = str(raw).strip()
+    dt = parse_datetime(raw)
+    if dt is None:
+        for fmt in ("%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M", "%Y-%m-%d %H:%M"):
+            try:
+                dt = _dt.strptime(raw, fmt)
+                break
+            except ValueError:
+                continue
+    if dt is None:
+        return None
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return dt
+
+
+@login_required
+def reminders_list(request):
+    """Takvim için hatırlatıcı listesi.
+
+    GET ?start=YYYY-MM-DD&end=YYYY-MM-DD (opsiyonel aralık) &include_done=1.
+    Paylaşımlı → kullanıcı filtresi yok. En çok 2000 kayıt döner.
+    """
+    from api.models import Reminder
+
+    qs = Reminder.objects.select_related("station").all()
+    start = request.GET.get("start")
+    end = request.GET.get("end")
+    if start:
+        sdt = _parse_remind_at(f"{start} 00:00")
+        if sdt:
+            qs = qs.filter(remind_at__gte=sdt)
+    if end:
+        edt = _parse_remind_at(f"{end} 23:59:59")
+        if edt:
+            qs = qs.filter(remind_at__lte=edt)
+    if request.GET.get("include_done") not in ("1", "true", "yes"):
+        # Takvimde geçmiş tamamlananları da göstermek isteyebiliriz; default hepsi.
+        pass
+    items = [_serialize_reminder(r) for r in qs.order_by("remind_at")[:2000]]
+    return JsonResponse({"results": items})
+
+
+@login_required
+def reminders_feed(request):
+    """Çan ikonu + anasayfa widget'ı için: vadesi gelmiş + yaklaşan hatırlatmalar.
+
+    `count` = vadesi gelmiş (remind_at<=now & tamamlanmamış) sayısı → badge.
+    """
+    from api.models import Reminder
+
+    now = timezone.now()
+    base = Reminder.objects.select_related("station").filter(is_done=False)
+
+    due_qs = base.filter(remind_at__lte=now).order_by("-remind_at")
+    upcoming_qs = base.filter(
+        remind_at__gt=now, remind_at__lte=now + timedelta(days=14),
+    ).order_by("remind_at")
+
+    due = [_serialize_reminder(r) for r in due_qs[:30]]
+    upcoming = [_serialize_reminder(r) for r in upcoming_qs[:30]]
+    return JsonResponse({
+        "count": due_qs.count(),
+        "upcoming_count": upcoming_qs.count(),
+        "due": due,
+        "upcoming": upcoming,
+        "server_now": timezone.localtime(now).isoformat(),
+    })
+
+
+@login_required
+def reminder_save(request):
+    """Hatırlatıcı oluştur / güncelle. POST JSON {id?, title, remind_at, note, priority, station_id}."""
+    import json
+
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    from api.models import Reminder, Station
+
+    title = (data.get("title") or "").strip()
+    if not title:
+        return JsonResponse({"ok": False, "error": "Başlık zorunlu."}, status=400)
+
+    remind_at = _parse_remind_at(data.get("remind_at"))
+    if remind_at is None:
+        return JsonResponse({"ok": False, "error": "Geçerli bir hatırlatma zamanı girin."}, status=400)
+
+    priority = data.get("priority") or Reminder.PRIORITY_NORMAL
+    if priority not in dict(Reminder.PRIORITY_CHOICES):
+        priority = Reminder.PRIORITY_NORMAL
+
+    station = None
+    if data.get("station_id"):
+        station = Station.objects.filter(pk=data["station_id"]).first()
+
+    rid = data.get("id")
+    if rid:
+        r = Reminder.objects.filter(pk=rid).first()
+        if not r:
+            return JsonResponse({"ok": False, "error": "Hatırlatıcı bulunamadı."}, status=404)
+    else:
+        r = Reminder(created_by=request.user)
+
+    r.title = title[:160]
+    r.note = (data.get("note") or "")
+    r.remind_at = remind_at
+    r.priority = priority
+    r.station = station
+    r.save()
+    return JsonResponse({"ok": True, "reminder": _serialize_reminder(r)})
+
+
+@login_required
+def reminder_done(request):
+    """Tamamlandı işaretle / geri al. POST JSON {id, done}."""
+    import json
+
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    from api.models import Reminder
+
+    r = Reminder.objects.filter(pk=data.get("id")).first()
+    if not r:
+        return JsonResponse({"ok": False, "error": "Hatırlatıcı bulunamadı."}, status=404)
+
+    done = bool(data.get("done", True))
+    r.is_done = done
+    if done:
+        r.done_at = timezone.now()
+        r.done_by = request.user
+    else:
+        r.done_at = None
+        r.done_by = None
+    r.save(update_fields=["is_done", "done_at", "done_by", "updated_at"])
+    return JsonResponse({"ok": True, "reminder": _serialize_reminder(r)})
+
+
+@login_required
+def reminder_delete(request):
+    """Hatırlatıcı sil. POST JSON {id}."""
+    import json
+
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+    try:
+        rid = json.loads(request.body or "{}").get("id")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    from api.models import Reminder
+
+    deleted, _ = Reminder.objects.filter(pk=rid).delete()
+    if not deleted:
+        return JsonResponse({"ok": False, "error": "Hatırlatıcı bulunamadı."}, status=404)
+    return JsonResponse({"ok": True})
+
+

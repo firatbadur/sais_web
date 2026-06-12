@@ -74,6 +74,12 @@ MENU = [
         ],
     },
     {
+        "label": _("Takvim Hatırlatıcı"),
+        "url_name": "dashboard:reminders",
+        "icon": "ki-calendar-tick",
+        "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
+    },
+    {
         "label": _("Dokümanlar"),
         "url_name": "dashboard:documents",
         "icon": "ki-folder",

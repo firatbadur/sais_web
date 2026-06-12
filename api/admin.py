@@ -17,6 +17,7 @@ from .models import (
     ReadingDaily,
     ReadingFifteenMin,
     ReadingHourly,
+    Reminder,
     RequestType,
     ScanGroup,
     Sensor,
@@ -527,3 +528,14 @@ class CommandAdmin(admin.ModelAdmin):
             "fields": ("error_message", "response_data"),
         }),
     )
+
+
+@admin.register(Reminder)
+class ReminderAdmin(admin.ModelAdmin):
+    list_display = ("id", "title", "remind_at", "priority", "station", "is_done", "created_by")
+    list_filter = ("is_done", "priority", "station")
+    search_fields = ("title", "note")
+    ordering = ("-remind_at",)
+    date_hierarchy = "remind_at"
+    autocomplete_fields = ("station",)
+    readonly_fields = ("created_at", "updated_at", "done_at")

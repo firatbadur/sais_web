@@ -2136,3 +2136,146 @@ msgstr "All Types"
 
 msgid "Kapandı"
 msgstr "Closed"
+
+# ---- Takvim Hatirlatici ----
+
+msgid "Takvim Hatırlatıcı"
+msgstr "Calendar Reminder"
+
+msgid "Önceki Ay"
+msgstr "Previous Month"
+
+msgid "Sonraki Ay"
+msgstr "Next Month"
+
+msgid "Bugün"
+msgstr "Today"
+
+msgid "Yeni Hatırlatıcı"
+msgstr "New Reminder"
+
+msgid "Hatırlatmalar"
+msgstr "Reminders"
+
+msgid "Tamamlanan"
+msgstr "Completed"
+
+msgid "Hatırlatıcıyı Düzenle"
+msgstr "Edit Reminder"
+
+msgid "Örn. Numune alımı, bakım, kalibrasyon..."
+msgstr "E.g. Sampling, maintenance, calibration..."
+
+msgid "— Yok —"
+msgstr "— None —"
+
+msgid "Not"
+msgstr "Note"
+
+msgid "İsteğe bağlı açıklama"
+msgstr "Optional description"
+
+msgid "daha"
+msgstr "more"
+
+msgid "Hatırlatıcı yok."
+msgstr "No reminders."
+
+msgid "Tamamlanan hatırlatıcı yok."
+msgstr "No completed reminders."
+
+msgid "Bu hatırlatıcı silinsin mi?"
+msgstr "Delete this reminder?"
+
+msgid "Başlık, tarih ve saat zorunludur."
+msgstr "Title, date and time are required."
+
+msgid "Tamamlandı işaretle"
+msgstr "Mark as done"
+
+msgid "Geri al"
+msgstr "Undo"
+
+msgid "Vadesi geldi"
+msgstr "Due"
+
+msgid "Takvimi Aç"
+msgstr "Open Calendar"
+
+msgid "Zamanı gelenler"
+msgstr "Due now"
+
+msgid "Yaklaşan"
+msgstr "Upcoming"
+
+msgid "Hatırlatma yok."
+msgstr "No reminders."
+
+msgid "Hatırlatma"
+msgstr "Reminder"
+
+msgid "Yaklaşan Hatırlatmalar"
+msgstr "Upcoming Reminders"
+
+msgid "Takvim"
+msgstr "Calendar"
+
+msgid "Yaklaşan hatırlatma yok."
+msgstr "No upcoming reminders."
+
+msgid "Ocak"
+msgstr "January"
+
+msgid "Şubat"
+msgstr "February"
+
+msgid "Mart"
+msgstr "March"
+
+msgid "Nisan"
+msgstr "April"
+
+msgid "Mayıs"
+msgstr "May"
+
+msgid "Haziran"
+msgstr "June"
+
+msgid "Temmuz"
+msgstr "July"
+
+msgid "Ağustos"
+msgstr "August"
+
+msgid "Eylül"
+msgstr "September"
+
+msgid "Ekim"
+msgstr "October"
+
+msgid "Kasım"
+msgstr "November"
+
+msgid "Aralık"
+msgstr "December"
+
+msgid "Pzt"
+msgstr "Mon"
+
+msgid "Sal"
+msgstr "Tue"
+
+msgid "Çar"
+msgstr "Wed"
+
+msgid "Per"
+msgstr "Thu"
+
+msgid "Cum"
+msgstr "Fri"
+
+msgid "Cmt"
+msgstr "Sat"
+
+msgid "Paz"
+msgstr "Sun"
