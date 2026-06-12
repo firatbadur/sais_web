@@ -30,7 +30,10 @@
     /* Metronic kart görünümlü node'lar */
     .drawflow .drawflow-node { background: var(--bs-body-bg); border: 1px solid var(--bs-gray-300);
         border-radius: .6rem; box-shadow: 0 2px 8px rgba(0,0,0,.08); padding: 0; min-width: 190px; color: var(--bs-body-color); }
-    .drawflow .drawflow-node.selected { border-color: var(--bs-primary); box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb),.25); }
+    /* Drawflow varsayılanı .selected{background:red} — node içeriğini ezmesin diye geçersiz kıl */
+    .drawflow .drawflow-node.selected { background: var(--bs-body-bg);
+        border-color: var(--bs-primary); box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), .35); }
+    .drawflow .drawflow-node.selected .node-title { filter: brightness(.98); }
     .drawflow .drawflow-node .node-title { font-weight: 700; font-size: .82rem; padding: .5rem .7rem;
         border-bottom: 1px solid var(--bs-gray-200); border-radius: .6rem .6rem 0 0; }
     .drawflow .drawflow-node .node-body { padding: .55rem .7rem; display: flex; flex-direction: column; gap: .4rem; }
