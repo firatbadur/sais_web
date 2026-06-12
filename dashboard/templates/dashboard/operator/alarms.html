@@ -142,9 +142,12 @@
                                 <td class="text-end">{{ r.max_value|default_if_none:"—" }}</td>
                                 <td class="text-muted fs-8">{% if r.send_sms %}SMS {% endif %}{% if r.send_email %}E-posta{% endif %}</td>
                                 <td>{{ r.message }}</td>
-                                <td>{% if r.enabled %}<span class="badge badge-light-success">{% trans "Aktif" %}</span>{% else %}<span class="badge badge-light-secondary">{% trans "Pasif" %}</span>{% endif %}</td>
+                                <td data-order="{{ r.enabled|yesno:'1,0' }}">
+                                    <label class="form-check form-switch form-check-custom form-check-solid">
+                                        <input class="form-check-input rule-toggle" type="checkbox" data-id="{{ r.id }}" {% if r.enabled %}checked{% endif %}>
+                                    </label>
+                                </td>
                                 <td class="text-end text-nowrap">
-                                    <button class="btn btn-icon btn-sm btn-light-warning me-1 rule-toggle" data-id="{{ r.id }}" title="{% trans 'Aktif/Pasif' %}"><i class="ki-outline ki-switch fs-5"></i></button>
                                     <button class="btn btn-icon btn-sm btn-light-danger rule-del" data-id="{{ r.id }}" title="{% trans 'Sil' %}"><i class="ki-outline ki-trash fs-5"></i></button>
                                 </td>
                             </tr>
@@ -251,9 +254,12 @@
                                 <td>{{ r.get_period_minutes_display }}</td>
                                 <td class="text-muted fs-8">{% if r.send_sms %}SMS {% endif %}{% if r.send_email %}E-posta{% endif %}</td>
                                 <td>{{ r.message }}</td>
-                                <td>{% if r.enabled %}<span class="badge badge-light-success">{% trans "Aktif" %}</span>{% else %}<span class="badge badge-light-secondary">{% trans "Pasif" %}</span>{% endif %}</td>
+                                <td data-order="{{ r.enabled|yesno:'1,0' }}">
+                                    <label class="form-check form-switch form-check-custom form-check-solid">
+                                        <input class="form-check-input rule-toggle" type="checkbox" data-id="{{ r.id }}" {% if r.enabled %}checked{% endif %}>
+                                    </label>
+                                </td>
                                 <td class="text-end text-nowrap">
-                                    <button class="btn btn-icon btn-sm btn-light-warning me-1 rule-toggle" data-id="{{ r.id }}" title="{% trans 'Aktif/Pasif' %}"><i class="ki-outline ki-switch fs-5"></i></button>
                                     <button class="btn btn-icon btn-sm btn-light-danger rule-del" data-id="{{ r.id }}" title="{% trans 'Sil' %}"><i class="ki-outline ki-trash fs-5"></i></button>
                                 </td>
                             </tr>
@@ -420,11 +426,19 @@
           .catch(() => alert(I18N.netErr));
     });
 
-    // ---- Tablo işlemleri (toggle / sil) ----
-    document.querySelector('.tab-content').addEventListener('click', function (e) {
-        const del = e.target.closest('.rule-del'), tog = e.target.closest('.rule-toggle');
+    // ---- Tablo işlemleri ----
+    const tc = document.querySelector('.tab-content');
+    tc.addEventListener('click', function (e) {
+        const del = e.target.closest('.rule-del');
         if (del) { if (!confirm(I18N.confirmDel)) return; j(URL_RULES + '?id=' + del.dataset.id, null, 'DELETE').then(() => location.reload()); }
-        else if (tog) { j(URL_RULES, { toggle_id: Number(tog.dataset.id) }).then(() => location.reload()); }
+    });
+    tc.addEventListener('change', function (e) {
+        const tog = e.target.closest('.rule-toggle');
+        if (!tog) return;
+        tog.disabled = true;
+        j(URL_RULES, { toggle_id: Number(tog.dataset.id) })
+            .then(d => { tog.disabled = false; if (!d.ok) tog.checked = !tog.checked; })
+            .catch(() => { tog.disabled = false; tog.checked = !tog.checked; });
     });
 
     // ---- FOUC reveal ----

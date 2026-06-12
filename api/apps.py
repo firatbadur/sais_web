@@ -7,6 +7,11 @@ class ApiConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'api'
 
+    def ready(self):
+        # Sensör eklenince otomatik alarm tanımı oluştur (post_save signal).
+        from . import alarm_autocreate
+        alarm_autocreate.connect()
+
     # def ready(self):
     #     # runserver autoreload sebebiyle iki kez çalışır,
     #     # sadece ana process'te çalışsın

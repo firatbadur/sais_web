@@ -124,6 +124,8 @@ DEFAULT_MESSAGE_TEMPLATES = [
     ("Kapı Açık", "İstasyon kapısı açık konuma geçmiştir. Lütfen kontrol ediniz."),
     ("İstasyon Offline", "İstasyon ile iletişim kesilmiştir (offline). Lütfen kontrol ediniz."),
     ("Cihaz İletişim Hatası", "Cihaz iletişim hatası tespit edilmiştir. Lütfen kontrol ediniz."),
+    ("Numune Alma", "Numune alma işlemi algılanmıştır. Lütfen kontrol ediniz."),
+    ("Bakım Modu Aktif", "İstasyon bakım moduna alınmıştır. Lütfen kontrol ediniz."),
 ]
 
 
