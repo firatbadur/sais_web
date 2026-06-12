@@ -428,14 +428,56 @@ class CalibrationsReportView(RoleRequiredMixin, ListView):
 
 
 class PowerOffsReportView(RoleRequiredMixin, ListView):
-    model = PowerOff
+    """Kapanma Geçmişi — istasyon/durum/tarih filtreli, DataTables rapor."""
     template_name = "dashboard/reports/power_offs.html"
-    context_object_name = "power_offs"
-    paginate_by = 50
-    ordering = ["-time_iso"]
+    context_object_name = "rows"
+    paginate_by = None
+    MAX_ROWS = 5000
+    DEFAULT_LIMIT = 1000
+
+    def _filters(self):
+        gp = self.request.GET
+        try:
+            station_id = int(gp.get("station") or 0) or None
+        except (TypeError, ValueError):
+            station_id = None
+        status = gp.get("status") or ""
+        if status not in ("ongoing", "closed"):
+            status = ""
+        return {
+            "submitted": bool(gp), "station_id": station_id, "status": status,
+            "start": parse_report_dt(gp.get("start")), "end": parse_report_dt(gp.get("end")),
+        }
 
     def get_queryset(self):
-        return super().get_queryset().select_related("station")
+        f = self._filters()
+        qs = (PowerOff.objects
+              .select_related("station")
+              .order_by("-start_date", "-time_iso"))
+        if f["station_id"]:
+            qs = qs.filter(station_id=f["station_id"])
+        if f["status"] == "ongoing":
+            qs = qs.filter(end_date__isnull=True)
+        elif f["status"] == "closed":
+            qs = qs.filter(end_date__isnull=False)
+        if f["start"]:
+            qs = qs.filter(start_date__gte=f["start"])
+        if f["end"]:
+            qs = qs.filter(start_date__lte=f["end"])
+        rows = list(qs[: (self.MAX_ROWS if f["submitted"] else self.DEFAULT_LIMIT)])
+        for r in rows:
+            if r.start_date and r.end_date:
+                r.duration_seconds = int((r.end_date - r.start_date).total_seconds())
+            else:
+                r.duration_seconds = None
+        return rows
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["filters"] = self._filters()
+        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        ctx["default_limit"] = self.DEFAULT_LIMIT
+        return ctx
 
 
 class CommandsReportView(OperatorRequiredMixin, ListView):

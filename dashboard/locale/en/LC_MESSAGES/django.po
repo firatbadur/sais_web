@@ -2133,3 +2133,6 @@ msgstr "Document not found."
 
 msgid "Tüm Türler"
 msgstr "All Types"
+
+msgid "Kapandı"
+msgstr "Closed"

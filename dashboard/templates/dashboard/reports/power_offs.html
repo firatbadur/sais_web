@@ -1,40 +1,92 @@
 {% extends "dashboard/base.html" %}
-{% load i18n %}
+{% load i18n dashboard_extras %}
 
 {% block title %}{% trans "Kapanma Geçmişi" %}{% endblock %}
 {% block page_title %}{% trans "Kapanma Geçmişi" %}{% endblock %}
 
+{% block extra_head %}
+<style>
+    #kt_app_content_container { opacity: 0; }
+    body.page-ready #kt_app_content_container { opacity: 1; transition: opacity 0.18s ease-in-out; }
+    #report-results-card .dt-buttons .btn { margin-right: 0.35rem; padding: 0.45rem 0.85rem; }
+    .flatpickr-calendar { z-index: 10000; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="card">
-    <div class="card-header"><h3 class="card-title">{% trans "İstasyon Kapanma Kayıtları" %}</h3></div>
-    <div class="card-body">
+<div class="card mb-5 mb-xl-8">
+    <div class="card-header border-0 pt-6">
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Kapanma Geçmişi" %}</h3>
+    </div>
+    <div class="card-body pt-2">
+        <form method="get" id="report-filter-form" class="row g-5">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "İstasyon" %}</label>
+                <select name="station" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
+                    <option value="">{% trans "Hepsi" %}</option>
+                    {% for s in stations %}<option value="{{ s.id }}" {% if filters.station_id == s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Durum" %}</label>
+                <select name="status" class="form-select" data-control="select2" data-hide-search="true">
+                    <option value="" {% if filters.status == '' %}selected{% endif %}>{% trans "Hepsi" %}</option>
+                    <option value="closed" {% if filters.status == 'closed' %}selected{% endif %}>{% trans "Kapandı" %}</option>
+                    <option value="ongoing" {% if filters.status == 'ongoing' %}selected{% endif %}>{% trans "Devam ediyor" %}</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Başlangıç Tarihi" %}</label>
+                <input type="text" name="start" id="filter-start" class="form-control" value="{{ filters.start|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Bitiş Tarihi" %}</label>
+                <input type="text" name="end" id="filter-end" class="form-control" value="{{ filters.end|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary"><i class="ki-outline ki-magnifier fs-3"></i>{% trans "Filtrele" %}</button>
+                {% if filters.submitted %}<a href="{% url 'dashboard:reports_power_offs' %}" class="btn btn-light-warning ms-2"><i class="ki-outline ki-arrows-circle fs-3"></i>{% trans "Sıfırla" %}</a>{% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card" id="report-results-card">
+    <div class="card-header border-0 pt-6">
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "İstasyon Kapanma Kayıtları" %}</h3>
+        {% if not filters.submitted %}<div class="card-toolbar"><span class="badge badge-light-primary">{% blocktrans %}Son {{ default_limit }} kayıt{% endblocktrans %}</span></div>{% endif %}
+    </div>
+    <div class="card-body pt-2">
         <div class="table-responsive">
-            <table class="table table-row-dashed align-middle gs-0 gy-3">
-                <thead class="fs-7 fw-bold text-uppercase text-gray-500">
-                    <tr>
-                        <th>{% trans "Kayıt Tarihi" %}</th>
-                        <th>{% trans "İstasyon" %}</th>
-                        <th>{% trans "Başlangıç" %}</th>
-                        <th>{% trans "Bitiş" %}</th>
-                        <th>{% trans "Süre" %}</th>
-                    </tr>
-                </thead>
+            <table id="report-table" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
+                <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
+                    <th>{% trans "İstasyon" %}</th>
+                    <th>{% trans "Başlangıç" %}</th>
+                    <th>{% trans "Bitiş" %}</th>
+                    <th class="text-end">{% trans "Süre" %}</th>
+                    <th>{% trans "Kayıt Tarihi" %}</th>
+                </tr></thead>
                 <tbody>
-                    {% for p in power_offs %}
-                        <tr>
-                            <td class="text-muted">{{ p.time_iso|date:"Y-m-d H:i" }}</td>
-                            <td>{{ p.station.name|default:"—" }}</td>
-                            <td>{{ p.start_date|date:"Y-m-d H:i"|default:"—" }}</td>
-                            <td>{% if p.end_date %}{{ p.end_date|date:"Y-m-d H:i" }}{% else %}<span class="badge badge-light-warning">{% trans "Devam ediyor" %}</span>{% endif %}</td>
-                            <td>{% if p.start_date and p.end_date %}{{ p.end_date|timeuntil:p.start_date }}{% else %}—{% endif %}</td>
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="5" class="text-center text-muted py-5">{% trans "Kapanma kaydı yok." %}</td></tr>
+                    {% for p in rows %}
+                    <tr>
+                        <td>{{ p.station.name|default:"—" }}</td>
+                        <td data-order="{{ p.start_date|date:'U'|default:'0' }}">{{ p.start_date|date:"d.m.Y H:i:s"|default:"—" }}</td>
+                        <td data-order="{{ p.end_date|date:'U'|default:'0' }}">
+                            {% if p.end_date %}{{ p.end_date|date:"d.m.Y H:i:s" }}{% else %}<span class="badge badge-light-warning">{% trans "Devam ediyor" %}</span>{% endif %}
+                        </td>
+                        <td class="text-end" data-order="{{ p.duration_seconds|default:'0' }}">
+                            {% if p.duration_seconds is not None %}{{ p.end_date|timeuntil:p.start_date }}{% else %}—{% endif %}
+                        </td>
+                        <td class="text-muted" data-order="{{ p.time_iso|date:'U' }}">{{ p.time_iso|date:"d.m.Y H:i:s" }}</td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        {% include "dashboard/partials/pagination.html" %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% include "dashboard/partials/report_table_js.html" with order_col=1 %}
 {% endblock %}
