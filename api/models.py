@@ -561,6 +561,10 @@ class Sensor(models.Model):
 
     digital_inverse = models.BooleanField(default=False, verbose_name="Dijital Ters mi ?")
     is_active = models.BooleanField(default=True, verbose_name="Aktif")
+    display_order = models.IntegerField(
+        default=0, db_index=True, verbose_name="Görüntüleme Sırası",
+        help_text="Anasayfa canlı tablolarında artan sıra; eşitse alt kıstaslar uygulanır.",
+    )
     is_simulated = models.BooleanField(
         default=False, verbose_name="Simülasyon Modu",
         help_text="True ise reader cihazdan değer okumak yerine rastgele üretir (test/demo için)",

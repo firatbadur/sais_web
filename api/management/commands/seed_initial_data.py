@@ -98,6 +98,7 @@ DEFAULT_STATUS_CODES = [
 DEFAULT_REQUEST_TYPES = [
     ("operator", "Operatör Talebi"),
     ("auto_scenario", "Otomatik Numune Senaryosu"),
+    ("manual_output", "Manuel Çıkış Kontrolü"),
 ]
 
 

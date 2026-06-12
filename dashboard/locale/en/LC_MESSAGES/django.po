@@ -1341,3 +1341,25 @@ msgstr "Role-based authorization and audit logging"
 
 msgid "Sürekli Atıksu İzleme Sistemi"
 msgstr "Continuous Wastewater Monitoring System"
+
+# ---- Anasayfa: dijital output kontrol + sıralama ----
+msgid "Kontrol"
+msgstr "Control"
+
+msgid "Başlat"
+msgstr "Start"
+
+msgid "Bu çıkış BAŞLATILSIN mı?"
+msgstr "Start this output?"
+
+msgid "Bu çıkış DURDURULSUN mı?"
+msgstr "Stop this output?"
+
+msgid "Komut gönderilemedi"
+msgstr "Command could not be sent"
+
+msgid "Ağ hatası"
+msgstr "Network error"
+
+msgid "Sıralama kaydedilemedi"
+msgstr "Order could not be saved"

@@ -5,6 +5,7 @@
 {% block page_title %}{% trans "Anasayfa" %}{% endblock %}
 
 {% block content %}
+{% csrf_token %}
 
 <!-- ============ KPI CARDS ============ -->
 <div class="row g-5 g-xl-10 mb-5 mb-xl-10">
@@ -64,6 +65,12 @@
                     <span id="analog-wash-badge" class="badge badge-primary me-3 d-none">
                         <i class="ki-outline ki-drop fs-7 me-1"></i><span id="analog-wash-badge-label"></span>
                     </span>
+                    {% if can_control %}
+                    <button type="button" class="btn btn-sm btn-light-primary py-1 px-3 me-3 edit-order-btn"
+                            data-target="snapshot-body" data-type="analog">
+                        <i class="ki-outline ki-pencil fs-7"></i><span class="edit-order-label">{% trans "Düzenle" %}</span>
+                    </button>
+                    {% endif %}
                     <span class="text-muted fs-7">
                         <i class="ki-outline ki-time fs-6 me-1"></i>
                         <span id="snapshot-updated">-</span>
@@ -99,6 +106,12 @@
             <div class="card-header pt-5">
                 <h3 class="card-title fw-bold text-gray-800">{% trans "Dijital Kanallar" %}</h3>
                 <div class="card-toolbar">
+                    {% if can_control %}
+                    <button type="button" class="btn btn-sm btn-light-primary py-1 px-3 me-3 edit-order-btn"
+                            data-target="digital-body" data-type="digital">
+                        <i class="ki-outline ki-pencil fs-7"></i><span class="edit-order-label">{% trans "Düzenle" %}</span>
+                    </button>
+                    {% endif %}
                     <span class="text-muted fs-7">
                         <i class="ki-outline ki-time fs-6 me-1"></i>
                         <span id="digital-updated">-</span>
@@ -113,10 +126,11 @@
                                 <th>{% trans "Sensör" %}</th>
                                 <th>{% trans "Durum" %}</th>
                                 <th class="text-end">{% trans "Son Okuma" %}</th>
+                                {% if can_control %}<th class="text-end">{% trans "Kontrol" %}</th>{% endif %}
                             </tr>
                         </thead>
                         <tbody id="digital-body">
-                            <tr><td colspan="3" class="text-center text-muted">{% trans "Yükleniyor..." %}</td></tr>
+                            <tr><td colspan="{% if can_control %}4{% else %}3{% endif %}" class="text-center text-muted">{% trans "Yükleniyor..." %}</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -144,12 +158,39 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="{% static 'dashboard/plugins/custom/sortablejs/sortable.min.js' %}"></script>
 <script>
 (function() {
     const URLS = {
         kpis:     "{% url 'dashboard:api_home_kpis' %}",
         snapshot: "{% url 'dashboard:api_home_snapshot' %}",
         events:   "{% url 'dashboard:api_home_events' %}"
+    };
+
+    // Dijital output kontrol + sıralama düzenleme (rol 1/2). Sunucu ayrıca doğrular.
+    const CAN_CONTROL = {{ can_control|yesno:"true,false" }};
+    const URL_DIGITAL_CMD = "{% url 'dashboard:api_digital_command' %}";
+    const URL_SENSORS_REORDER = "{% url 'dashboard:api_sensors_reorder' %}";
+
+    function csrf() {
+        const el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
+    }
+
+    // Düzenle modunda polling re-render durmalı (sürükleme sırasında DOM bozulmasın).
+    let editAnalog = false, editDigital = false;
+    let sortAnalog = null, sortDigital = null;
+
+    const I18N = {
+        startConfirm: "{% trans 'Bu çıkış BAŞLATILSIN mı?' %}",
+        stopConfirm:  "{% trans 'Bu çıkış DURDURULSUN mı?' %}",
+        cmdFail:      "{% trans 'Komut gönderilemedi' %}",
+        netError:     "{% trans 'Ağ hatası' %}",
+        orderFail:    "{% trans 'Sıralama kaydedilemedi' %}",
+        start:        "{% trans 'Başlat' %}",
+        stop:         "{% trans 'Durdur' %}",
+        edit:         "{% trans 'Düzenle' %}",
+        save:         "{% trans 'Kaydet' %}"
     };
 
     const QUALITY_BADGE = {
@@ -274,6 +315,7 @@
 
     // --- Analog kanallar (Anlık Sensör Değerleri) (every 5s) ---
     async function refreshSnapshot() {
+        if (editAnalog) return;  // Düzenle modunda DOM'a dokunma
         try {
             const data = await fetchJson(URLS.snapshot + '?type=analog');
             const tbody = document.getElementById('snapshot-body');
@@ -294,7 +336,7 @@
                     const staleBadge = stale
                         ? ` <i class="ki-outline ki-time fs-7 text-warning ms-1" title="{% trans 'Okuma 5 dakikadan eski' %}"></i>`
                         : '';
-                    return `<tr${stale ? ' class="opacity-75"' : ''}>
+                    return `<tr data-sid="${r.sensor_id}"${stale ? ' class="opacity-75"' : ''}>
                         <td class="text-gray-700">${stationTxt}</td>
                         <td class="fw-semibold text-gray-800">${escapeHtml(r.parameter_name || '-')}</td>
                         <td class="text-end fw-bolder fs-5 text-gray-900">${valueTxt}</td>
@@ -311,11 +353,13 @@
 
     // --- Dijital Kanallar (every 5s) ---
     async function refreshDigital() {
+        if (editDigital) return;  // Düzenle modunda DOM'a dokunma
+        const emptyCols = CAN_CONTROL ? 4 : 3;
         try {
             const data = await fetchJson(URLS.snapshot + '?type=digital');
             const tbody = document.getElementById('digital-body');
             if (!data.rows || data.rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">{% trans "Dijital sensör yok." %}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="${emptyCols}" class="text-center text-muted">{% trans "Dijital sensör yok." %}</td></tr>`;
             } else {
                 tbody.innerHTML = data.rows.map(r => {
                     const stale = isStale(r.readtime);
@@ -329,10 +373,25 @@
                         : '';
                     const nameTxt = escapeHtml(r.parameter_name || '-');
                     const stationTxt = r.station_name ? `<div class="text-muted fs-8">${escapeHtml(r.station_name)}</div>` : '';
-                    return `<tr${stale ? ' class="opacity-75"' : ''}>
+                    // Kontrol hücresi: yalnız yetkili + dijital output (sensor_type=3).
+                    // DI (2) için kolon hizası korunsun diye boş hücre.
+                    let actionCell = '';
+                    if (CAN_CONTROL) {
+                        if (r.sensor_type === 3) {
+                            actionCell = `<td class="text-end text-nowrap">
+                                <button class="btn btn-sm btn-light-success py-1 px-2 me-1 do-cmd" data-sid="${r.sensor_id}" data-action="start" ${isActive ? 'disabled' : ''}>
+                                    <i class="ki-outline ki-play fs-7"></i>${I18N.start}</button>
+                                <button class="btn btn-sm btn-light-danger py-1 px-2 do-cmd" data-sid="${r.sensor_id}" data-action="stop" ${!isActive ? 'disabled' : ''}>
+                                    <i class="ki-outline ki-cross-circle fs-7"></i>${I18N.stop}</button></td>`;
+                        } else {
+                            actionCell = '<td></td>';
+                        }
+                    }
+                    return `<tr data-sid="${r.sensor_id}" data-stype="${r.sensor_type}"${stale ? ' class="opacity-75"' : ''}>
                         <td><div class="fw-semibold text-gray-800">${nameTxt}</div>${stationTxt}</td>
                         <td>${statusBadge}</td>
                         <td class="text-end text-muted fs-7">${timeTxt}${staleBadge}</td>
+                        ${actionCell}
                     </tr>`;
                 }).join('');
             }
@@ -379,7 +438,96 @@
         } catch(e) { console.warn('Events fail:', e); }
     }
 
+    // --- Dijital output Start/Stop (event delegation; tbody 5sn'de yenilenir) ---
+    function setupDigitalControl() {
+        if (!CAN_CONTROL) return;
+        const tbody = document.getElementById('digital-body');
+        if (!tbody) return;
+        tbody.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.do-cmd');
+            if (!btn || btn.disabled) return;
+            const action = btn.dataset.action;
+            const sid = Number(btn.dataset.sid);
+            const msg = action === 'start' ? I18N.startConfirm : I18N.stopConfirm;
+            if (!window.confirm(msg)) return;   // Endüstriyel güvenlik onayı
+            btn.disabled = true;
+            try {
+                const r = await fetch(URL_DIGITAL_CMD, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+                    body: JSON.stringify({ sensor_id: sid, action })
+                });
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok || !d.ok) {
+                    alert(d.error || d.message || I18N.cmdFail);
+                    btn.disabled = false;
+                }
+                // Başarılı: disabled bırak; sonraki poll buton durumunu uzlaştırır.
+            } catch (err) {
+                alert(I18N.netError);
+                btn.disabled = false;
+            }
+        });
+    }
+
+    // --- Sıralama düzenleme (Düzenle toggle + SortableJS) ---
+    function setupReorder() {
+        if (!CAN_CONTROL || typeof Sortable === 'undefined') return;
+        document.querySelectorAll('.edit-order-btn').forEach(btn => {
+            const type = btn.dataset.type;
+            const tbody = document.getElementById(btn.dataset.target);
+            if (!tbody) return;
+            const label = btn.querySelector('.edit-order-label');
+            btn.addEventListener('click', () => {
+                const editing = type === 'analog' ? editAnalog : editDigital;
+                if (!editing) {
+                    // Düzenle moduna gir → satırları sürüklenebilir yap.
+                    const inst = Sortable.create(tbody, {
+                        animation: 150,
+                        draggable: 'tr',
+                        // Dijitalde DO(3) ile DI(2) gruplarını karıştırma (sunucu
+                        // -sensor_type ile zaten DO'yu üste alır; karışım snap-back olur).
+                        onMove: (evt) => {
+                            const a = evt.dragged.dataset.stype;
+                            const b = evt.related.dataset.stype;
+                            if (a != null && b != null && a !== b) return false;
+                            return true;
+                        }
+                    });
+                    if (type === 'analog') { editAnalog = true; sortAnalog = inst; }
+                    else { editDigital = true; sortDigital = inst; }
+                    btn.classList.remove('btn-light-primary');
+                    btn.classList.add('btn-primary', 'active');
+                    if (label) label.textContent = I18N.save;
+                } else {
+                    // Çık → sırayı topla, POST et, Sortable'ı kapat, polling devam.
+                    const ids = [...tbody.querySelectorAll('tr[data-sid]')]
+                        .map(tr => Number(tr.dataset.sid))
+                        .filter(n => !isNaN(n));
+                    fetch(URL_SENSORS_REORDER, {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+                        body: JSON.stringify({ order: ids })
+                    }).then(r => r.json()).then(d => {
+                        if (!d.ok) alert(d.error || I18N.orderFail);
+                    }).catch(() => alert(I18N.netError)).finally(() => {
+                        (type === 'analog' ? refreshSnapshot : refreshDigital)();
+                    });
+                    const inst = type === 'analog' ? sortAnalog : sortDigital;
+                    if (inst) inst.destroy();
+                    if (type === 'analog') { editAnalog = false; sortAnalog = null; }
+                    else { editDigital = false; sortDigital = null; }
+                    btn.classList.remove('btn-primary', 'active');
+                    btn.classList.add('btn-light-primary');
+                    if (label) label.textContent = I18N.edit;
+                }
+            });
+        });
+    }
+
     // Initial load + intervals
+    setupDigitalControl();
+    setupReorder();
     refreshKpis();     setInterval(refreshKpis, 30000);
     refreshSnapshot(); setInterval(refreshSnapshot, 5000);
     refreshDigital();  setInterval(refreshDigital, 5000);

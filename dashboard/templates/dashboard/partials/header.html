@@ -1,4 +1,4 @@
-{% load static i18n %}
+{% load static i18n dashboard_extras %}
 <div id="kt_app_header" class="app-header" data-kt-sticky="true" data-kt-sticky-name="app-header-minimize" data-kt-sticky-offset="{default: '200px', lg: '0'}" data-kt-sticky-animation="false">
     <div class="app-container container-fluid d-flex align-items-stretch justify-content-between" id="kt_app_header_container">
 
@@ -42,6 +42,17 @@
                         {% endfor %}
                     </div>
                 </div>
+
+                <!-- Sistem Kontrol kısayolu (yalnız rol=1) -->
+                {% if user|has_role:"1" %}
+                <div class="app-navbar-item ms-1 ms-md-3">
+                    <a href="{% url 'dashboard:admin_system_control' %}"
+                       class="btn btn-icon btn-custom btn-color-gray-500 btn-active-color-primary w-35px h-35px w-md-40px h-md-40px"
+                       title="{% trans 'Sistem Kontrol' %}">
+                        <i class="ki-outline ki-setting-2 fs-1"></i>
+                    </a>
+                </div>
+                {% endif %}
 
                 <!-- User dropdown -->
                 <div class="app-navbar-item ms-1 ms-md-3">

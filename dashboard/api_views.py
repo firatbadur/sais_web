@@ -57,6 +57,18 @@ def home_snapshot(request):
     elif type_filter == "digital":
         sensor_types = (2, 3)
 
+    # Sıralama: operatörün düzenlediği display_order birincil; eşitse istasyon /
+    # bağlantı / parametre adı. Dijital tabloda DO (sensor_type=3) daima DI (2)
+    # üstünde olsun diye -sensor_type en başa eklenir.
+    order_fields = [
+        "sensor__display_order",
+        "sensor__connection__station__name",
+        "sensor__connection_id",
+        "sensor__parameter__parameter_name",
+    ]
+    if type_filter == "digital":
+        order_fields = ["-sensor__sensor_type"] + order_fields
+
     qs = (
         SensorLatest.objects
         .select_related(
@@ -66,11 +78,7 @@ def home_snapshot(request):
             "sensor__connection__station",
             "status",
         )
-        .order_by(
-            "sensor__connection__station__name",
-            "sensor__connection_id",
-            "sensor__parameter__parameter_name",
-        )
+        .order_by(*order_fields)
     )
     if sensor_types is not None:
         qs = qs.filter(sensor__sensor_type__in=sensor_types)
@@ -118,6 +126,134 @@ def home_snapshot(request):
             "readtime": latest.readtime.isoformat() if latest.readtime else None,
         })
     return JsonResponse({"count": len(rows), "rows": rows, "wash": wash_info})
+
+
+@login_required
+def digital_output_command(request):
+    """Operatör/admin → dijital output (sensor_type=3) sensörüne Start(1)/Stop(0).
+
+    POST JSON: ``{"sensor_id": int, "action": "start"|"stop"}``
+    Yanıt: ``{"ok": bool, "message": str|None, "command_id": int|None,
+             "duplicate": bool}``
+
+    Komut `Command` tablosuna yazılır (`source="operator"`, `requested_by`,
+    `request_type=manual_output`) → Celery dispatch_commands/execute_command
+    asenkron yürütür. UI hataya düşmez; idempotency_key 3 sn'lik pencereyle
+    çift-tıklamayı emer, meşru tekrar toggle'a izin verir.
+    """
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    action = data.get("action")
+    try:
+        sensor_id = int(data.get("sensor_id"))
+    except (TypeError, ValueError):
+        return JsonResponse({"ok": False, "error": "Geçersiz sensor_id."}, status=400)
+    if action not in ("start", "stop"):
+        return JsonResponse({"ok": False, "error": "Geçersiz action."}, status=400)
+
+    # Güvenlik sınırı: yalnız dijital output (sensor_type=3) yazılabilir.
+    sensor = (
+        Sensor.objects.select_related("connection")
+        .filter(pk=sensor_id, sensor_type=3)
+        .first()
+    )
+    if sensor is None:
+        return JsonResponse({"ok": False, "error": "Geçersiz çıkış sensörü."}, status=404)
+    if not sensor.is_active:
+        return JsonResponse({"ok": False, "error": "Sensör pasif."}, status=409)
+
+    # Operatör mantıksal Start/Stop ister; digital_inverse ise fiziksel coil
+    # tersine yazılır ki sonraki okuma istenen durumu göstersin (snapshot da
+    # okumayı aynı şekilde tersliyor).
+    value = 1 if action == "start" else 0
+    coil_value = (0 if value else 1) if sensor.digital_inverse else value
+
+    try:
+        from datetime import timedelta as _timedelta
+
+        from api.models import Command, RequestType
+
+        bucket = int(timezone.now().timestamp() // 3)
+        idem = f"manual_output:{sensor_id}:{action}:{bucket}"
+        request_type = RequestType.objects.filter(code="manual_output").first()
+        cmd, created = Command.objects.get_or_create(
+            idempotency_key=idem,
+            defaults=dict(
+                sensor=sensor,
+                value_type="bool",
+                value=coil_value,
+                status="pending",
+                priority=10,
+                source="operator",
+                request_type=request_type,
+                requested_by=request.user,
+                expires_at=timezone.now() + _timedelta(minutes=5),
+                max_attempts=3,
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001 — UI hataya düşmesin
+        return JsonResponse({"ok": False, "error": str(exc)}, status=500)
+
+    return JsonResponse({
+        "ok": True,
+        "message": None if created else "Aynı komut zaten kuyrukta.",
+        "command_id": cmd.pk,
+        "duplicate": not created,
+    })
+
+
+@login_required
+def sensors_reorder(request):
+    """Operatör/admin → canlı tablo sensör sırasını kaydeder.
+
+    POST JSON: ``{"order": [sensor_id, ...]}`` → her sensörün display_order'ı
+    listedeki index'ine eşitlenir.
+    """
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    try:
+        data = json.loads(request.body or "{}")
+        order = data.get("order")
+        order = [int(x) for x in order][:1000]
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz sıra listesi."}, status=400)
+
+    from django.db import transaction
+
+    try:
+        with transaction.atomic():
+            sensors = {s.pk: s for s in Sensor.objects.filter(pk__in=order)}
+            to_update = []
+            for idx, sid in enumerate(order):
+                s = sensors.get(sid)
+                if s and s.display_order != idx:
+                    s.display_order = idx
+                    to_update.append(s)
+            if to_update:
+                Sensor.objects.bulk_update(to_update, ["display_order"])
+    except Exception as exc:  # noqa: BLE001
+        return JsonResponse({"ok": False, "error": str(exc)}, status=500)
+
+    return JsonResponse({"ok": True, "updated": len(to_update)})
 
 
 @login_required
@@ -332,6 +468,16 @@ def _require_admin(request):
 
     user = request.user
     if user.is_superuser or getattr(user, "rol", None) == 1:
+        return None
+    return HttpResponseForbidden("forbidden")
+
+
+def _require_operator(request):
+    """rol ∈ (1,2) (veya superuser) değilse 403 döndürür; değilse None."""
+    from django.http import HttpResponseForbidden
+
+    user = request.user
+    if user.is_superuser or getattr(user, "rol", None) in (1, 2):
         return None
     return HttpResponseForbidden("forbidden")
 

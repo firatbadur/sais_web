@@ -53,6 +53,7 @@ from .permissions import (
     AdminRequiredMixin,
     OperatorRequiredMixin,
     RoleRequiredMixin,
+    user_has_role,
 )
 
 
@@ -95,6 +96,14 @@ class ForgotPasswordView(TemplateView):
 
 class HomeView(RoleRequiredMixin, TemplateView):
     template_name = "dashboard/home.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # Dijital output Start/Stop + sıralama düzenleme yetkisi: rol 1 (admin)
+        # + rol 2 (operatör). Client-side bayrak; sunucu endpoint'lerde
+        # _require_operator ile ayrıca doğruluyor.
+        ctx["can_control"] = user_has_role(self.request.user, 1, 2)
+        return ctx
 
 
 # --------------------------------------------------------------------------- #
