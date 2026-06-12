@@ -1,80 +1,91 @@
 {% extends "dashboard/base.html" %}
-{% load i18n static %}
+{% load i18n dashboard_extras %}
 
 {% block title %}{% trans "Alarm Yönetimi" %}{% endblock %}
 {% block page_title %}{% trans "Alarm Yönetimi" %}{% endblock %}
 
+{% block extra_head %}
+<style>
+    /* FOUC önleme — select2/DataTables init bitene dek içerik gizli. */
+    #kt_app_content_container { opacity: 0; }
+    body.page-ready #kt_app_content_container {
+        opacity: 1; transition: opacity 0.18s ease-in-out;
+    }
+    .alarm-card .form-label { color: var(--bs-text-muted); font-weight: 600; }
+    .alarm-results .dt-buttons .btn { margin-right: 0.35rem; padding: 0.45rem 0.85rem; }
+    .alarm-results .dataTables_filter, .alarm-results .dataTables_length { margin-bottom: 0.5rem; }
+    .alarm-results .dataTables_filter input, .alarm-results .dataTables_length select { margin-left: 0.5rem; }
+</style>
+{% endblock %}
+
 {% block content %}
 {% csrf_token %}
 
-<ul class="nav nav-tabs nav-line-tabs nav-line-tabs-2x fs-5 fw-semibold mb-5">
+<ul class="nav nav-tabs nav-line-tabs nav-line-tabs-2x fs-5 fw-semibold mb-6">
     <li class="nav-item">
         <a class="nav-link active" data-bs-toggle="tab" href="#tab-olcum">
-            <i class="ki-outline ki-chart-line-star fs-4 me-1"></i>{% trans "Ölçüm Alarmları" %}
+            <i class="ki-outline ki-chart-line-star fs-3 me-2"></i>{% trans "Ölçüm Alarmları" %}
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link" data-bs-toggle="tab" href="#tab-diag">
-            <i class="ki-outline ki-shield-cross fs-4 me-1"></i>{% trans "Diagnostik Alarm" %}
+            <i class="ki-outline ki-shield-cross fs-3 me-2"></i>{% trans "Diagnostik Alarm" %}
         </a>
     </li>
 </ul>
 
 <div class="tab-content">
 
-    <!-- ============ ÖLÇÜM ALARMLARI ============ -->
+    <!-- ===================== ÖLÇÜM ALARMLARI ===================== -->
     <div class="tab-pane fade show active" id="tab-olcum" role="tabpanel">
-        <div class="card card-flush mb-5">
-            <div class="card-body pt-5">
+        <div class="card mb-5 mb-xl-8 alarm-card">
+            <div class="card-header border-0 pt-6">
+                <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Yeni Ölçüm Alarmı" %}</h3>
+            </div>
+            <div class="card-body pt-2">
                 <div class="row g-5" id="form-olcum">
-                    <div class="col-lg-6">
-                        <div class="row g-4">
-                            <div class="col-md-12">
-                                <label class="form-label">{% trans "İstasyon Seçimi" %}</label>
-                                <select class="form-select form-select-solid st-sel">
-                                    <option value="">—</option>
-                                    {% for s in stations %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-12">
-                                <label class="form-label">{% trans "Kanal Seçimi" %}</label>
-                                <select class="form-select form-select-solid o-param" disabled></select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">{% trans "Alarm Periyodu" %}</label>
-                                <select class="form-select form-select-solid o-period">
-                                    {% for v, lbl in period_choices %}<option value="{{ v }}" {% if v == 60 %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">{% trans "Alarm Tipi" %}</label>
-                                <select class="form-select form-select-solid o-cond">
-                                    {% for v, lbl in cond_choices %}<option value="{{ v }}" {% if v == 'minmax' %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6 o-min-wrap">
-                                <label class="form-label">{% trans "Min Değer" %}</label>
-                                <input type="number" step="any" class="form-control form-control-solid o-min" placeholder="{% trans 'Min. Değer' %}">
-                            </div>
-                            <div class="col-md-6 o-max-wrap">
-                                <label class="form-label">{% trans "Max Değer" %}</label>
-                                <input type="number" step="any" class="form-control form-control-solid o-max" placeholder="{% trans 'Max. Değer' %}">
-                            </div>
-                            <div class="col-md-12">
-                                <label class="form-label">{% trans "Tetiklenecek Output" %}</label>
-                                <select class="form-select form-select-solid o-output" disabled>
-                                    <option value="">{% trans "Yok" %}</option>
-                                </select>
-                            </div>
-                        </div>
+                    <div class="col-md-4">
+                        <label class="form-label">{% trans "İstasyon Seçimi" %}</label>
+                        <select class="form-select st-sel o-field" data-control="select2"
+                                data-placeholder='{% trans "İstasyon seçiniz" %}' data-allow-clear="true">
+                            <option></option>
+                            {% for s in stations %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+                        </select>
                     </div>
-                    <div class="col-lg-6">
+                    <div class="col-md-4">
+                        <label class="form-label">{% trans "Kanal Seçimi" %}</label>
+                        <select class="form-select o-param" data-control="select2"
+                                data-placeholder='{% trans "Önce istasyon seçin" %}' disabled></select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">{% trans "Alarm Periyodu" %}</label>
+                        <select class="form-select o-period" data-control="select2" data-hide-search="true">
+                            {% for v, lbl in period_choices %}<option value="{{ v }}" {% if v == 60 %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">{% trans "Alarm Tipi" %}</label>
+                        <select class="form-select o-cond" data-control="select2" data-hide-search="true">
+                            {% for v, lbl in cond_choices %}<option value="{{ v }}" {% if v == 'minmax' %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4 o-min-wrap">
+                        <label class="form-label">{% trans "Min Değer" %}</label>
+                        <input type="number" step="any" class="form-control o-min" placeholder="{% trans 'Min. Değer' %}">
+                    </div>
+                    <div class="col-md-4 o-max-wrap">
+                        <label class="form-label">{% trans "Max Değer" %}</label>
+                        <input type="number" step="any" class="form-control o-max" placeholder="{% trans 'Max. Değer' %}">
+                    </div>
+                    <div class="col-md-4">
                         <label class="form-label">{% trans "Alarm Kullanıcıları" %}</label>
-                        <select class="form-select form-select-solid o-notify mb-2">
+                        <select class="form-select o-notify" data-control="select2" data-hide-search="true">
                             <option value="1">{% trans "Tüm Yetkililer" %}</option>
                             <option value="0">{% trans "Sadece Ben" %}</option>
                         </select>
-                        <div class="d-flex gap-4 mb-2">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="d-flex gap-5 pb-2">
                             <label class="form-check form-check-custom form-check-solid">
                                 <input class="form-check-input o-sms" type="checkbox" checked><span class="form-check-label ms-2">{% trans "SMS" %}</span>
                             </label>
@@ -82,68 +93,106 @@
                                 <input class="form-check-input o-mail" type="checkbox" checked><span class="form-check-label ms-2">{% trans "E-posta" %}</span>
                             </label>
                         </div>
-                        <label class="form-label">{% trans "Mesaj" %}</label>
-                        <textarea class="form-control form-control-solid o-msg" rows="4" placeholder="{% trans 'Alarm için iletilecek mesajı ekleyiniz...' %}"></textarea>
                     </div>
-                    <div class="col-12 d-flex justify-content-end">
-                        <button type="button" class="btn btn-success o-save">
+                    <div class="col-md-4">
+                        <label class="form-label">{% trans "Hazır Mesaj" %}</label>
+                        <select class="form-select tpl-sel o-tpl" data-control="select2"
+                                data-placeholder='{% trans "Hazır mesaj seç" %}' data-allow-clear="true">
+                            <option></option>
+                            {% for t in message_templates %}<option value="{{ t.id }}" data-body="{{ t.body }}">{{ t.title }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">{% trans "Mesaj" %}</label>
+                        <textarea class="form-control o-msg" rows="3" placeholder="{% trans 'Alarm için iletilecek mesajı ekleyiniz...' %}"></textarea>
+                        <div class="form-text">{% trans "Hazır mesaj seçebilir veya kendi mesajınızı yazıp kaydedebilirsiniz." %}</div>
+                    </div>
+                    <div class="col-12 d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-light-primary tpl-save" data-msg=".o-msg">
+                            <i class="ki-outline ki-save-2 fs-4"></i>{% trans "Hazır Mesaj Kaydet" %}
+                        </button>
+                        <button type="button" class="btn btn-primary o-save">
                             <i class="ki-outline ki-notification-bing fs-4"></i>{% trans "Alarm Kaydet" %}
                         </button>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="card card-flush">
-            <div class="card-body pt-5">
+
+        <div class="card alarm-results">
+            <div class="card-header border-0 pt-6">
+                <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Tanımlı Ölçüm Alarmları" %}</h3>
+            </div>
+            <div class="card-body pt-2">
                 <div class="table-responsive">
-                    <table class="table table-row-bordered align-middle fs-7">
-                        <thead><tr class="fw-bold text-gray-600">
+                    <table id="tbl-olcum" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
+                        <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
                             <th>{% trans "İstasyon" %}</th><th>{% trans "Kanal" %}</th><th>{% trans "Periyod" %}</th>
-                            <th>{% trans "Alarm Tipi" %}</th><th>Min</th><th>Max</th><th>Output</th>
-                            <th>{% trans "Mesaj" %}</th><th>{% trans "Aktif" %}</th><th></th>
+                            <th>{% trans "Alarm Tipi" %}</th><th class="text-end">Min</th><th class="text-end">Max</th>
+                            <th>{% trans "Bildirim" %}</th><th>{% trans "Mesaj" %}</th><th>{% trans "Aktif" %}</th><th class="text-end">{% trans "İşlem" %}</th>
                         </tr></thead>
-                        <tbody id="tbl-olcum"></tbody>
+                        <tbody>
+                            {% for r in analog_rules %}
+                            <tr>
+                                <td>{{ r.station.name }}</td>
+                                <td>{{ r.parameter.parameter_name|default:"—" }}</td>
+                                <td>{{ r.get_period_minutes_display }}</td>
+                                <td>{{ r.type_label }}</td>
+                                <td class="text-end">{{ r.min_value|default_if_none:"—" }}</td>
+                                <td class="text-end">{{ r.max_value|default_if_none:"—" }}</td>
+                                <td class="text-muted fs-8">{% if r.send_sms %}SMS {% endif %}{% if r.send_email %}E-posta{% endif %}</td>
+                                <td>{{ r.message }}</td>
+                                <td>{% if r.enabled %}<span class="badge badge-light-success">{% trans "Aktif" %}</span>{% else %}<span class="badge badge-light-secondary">{% trans "Pasif" %}</span>{% endif %}</td>
+                                <td class="text-end text-nowrap">
+                                    <button class="btn btn-icon btn-sm btn-light-warning me-1 rule-toggle" data-id="{{ r.id }}" title="{% trans 'Aktif/Pasif' %}"><i class="ki-outline ki-switch fs-5"></i></button>
+                                    <button class="btn btn-icon btn-sm btn-light-danger rule-del" data-id="{{ r.id }}" title="{% trans 'Sil' %}"><i class="ki-outline ki-trash fs-5"></i></button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
                     </table>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ============ DIAGNOSTIK ALARM ============ -->
+    <!-- ===================== DIAGNOSTIK ALARM ===================== -->
     <div class="tab-pane fade" id="tab-diag" role="tabpanel">
-        <div class="card card-flush mb-5">
-            <div class="card-body pt-5">
+        <div class="card mb-5 mb-xl-8 alarm-card">
+            <div class="card-header border-0 pt-6">
+                <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Yeni Diagnostik Alarm" %}</h3>
+            </div>
+            <div class="card-body pt-2">
                 <div class="row g-5" id="form-diag">
-                    <div class="col-lg-6">
-                        <div class="row g-4">
-                            <div class="col-md-12">
-                                <label class="form-label">{% trans "İstasyon Seçimi" %}</label>
-                                <select class="form-select form-select-solid st-sel">
-                                    <option value="">—</option>
-                                    {% for s in stations %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">{% trans "Alarm Periyodu" %}</label>
-                                <select class="form-select form-select-solid d-period">
-                                    {% for v, lbl in period_choices %}<option value="{{ v }}" {% if v == 60 %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">{% trans "Alarm Tipi" %}</label>
-                                <select class="form-select form-select-solid d-type">
-                                    <option value="offline">{% trans "İstasyon Offline" %}</option>
-                                </select>
-                            </div>
-                        </div>
+                    <div class="col-md-4">
+                        <label class="form-label">{% trans "İstasyon Seçimi" %}</label>
+                        <select class="form-select st-sel d-field" data-control="select2"
+                                data-placeholder='{% trans "İstasyon seçiniz" %}' data-allow-clear="true">
+                            <option></option>
+                            {% for s in stations %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+                        </select>
                     </div>
-                    <div class="col-lg-6">
+                    <div class="col-md-4">
+                        <label class="form-label">{% trans "Alarm Tipi" %}</label>
+                        <select class="form-select d-type" data-control="select2" data-hide-search="true">
+                            <option value="offline">{% trans "İstasyon Offline" %}</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">{% trans "Alarm Periyodu" %}</label>
+                        <select class="form-select d-period" data-control="select2" data-hide-search="true">
+                            {% for v, lbl in period_choices %}<option value="{{ v }}" {% if v == 60 %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
                         <label class="form-label">{% trans "Alarm Kullanıcıları" %}</label>
-                        <select class="form-select form-select-solid d-notify mb-2">
+                        <select class="form-select d-notify" data-control="select2" data-hide-search="true">
                             <option value="1">{% trans "Tüm Yetkililer" %}</option>
                             <option value="0">{% trans "Sadece Ben" %}</option>
                         </select>
-                        <div class="d-flex gap-4 mb-2">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="d-flex gap-5 pb-2">
                             <label class="form-check form-check-custom form-check-solid">
                                 <input class="form-check-input d-sms" type="checkbox" checked><span class="form-check-label ms-2">{% trans "SMS" %}</span>
                             </label>
@@ -151,26 +200,58 @@
                                 <input class="form-check-input d-mail" type="checkbox" checked><span class="form-check-label ms-2">{% trans "E-posta" %}</span>
                             </label>
                         </div>
-                        <label class="form-label">{% trans "Mesaj" %}</label>
-                        <textarea class="form-control form-control-solid d-msg" rows="4" placeholder="{% trans 'Alarm için iletilecek mesajı ekleyiniz...' %}"></textarea>
                     </div>
-                    <div class="col-12 d-flex justify-content-end">
-                        <button type="button" class="btn btn-success d-save">
+                    <div class="col-md-4">
+                        <label class="form-label">{% trans "Hazır Mesaj" %}</label>
+                        <select class="form-select tpl-sel d-tpl" data-control="select2"
+                                data-placeholder='{% trans "Hazır mesaj seç" %}' data-allow-clear="true">
+                            <option></option>
+                            {% for t in message_templates %}<option value="{{ t.id }}" data-body="{{ t.body }}">{{ t.title }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">{% trans "Mesaj" %}</label>
+                        <textarea class="form-control d-msg" rows="3" placeholder="{% trans 'Alarm için iletilecek mesajı ekleyiniz...' %}"></textarea>
+                    </div>
+                    <div class="col-12 d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-light-primary tpl-save" data-msg=".d-msg">
+                            <i class="ki-outline ki-save-2 fs-4"></i>{% trans "Hazır Mesaj Kaydet" %}
+                        </button>
+                        <button type="button" class="btn btn-primary d-save">
                             <i class="ki-outline ki-notification-bing fs-4"></i>{% trans "Alarm Kaydet" %}
                         </button>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="card card-flush">
-            <div class="card-body pt-5">
+
+        <div class="card alarm-results">
+            <div class="card-header border-0 pt-6">
+                <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Tanımlı Diagnostik Alarmlar" %}</h3>
+            </div>
+            <div class="card-body pt-2">
                 <div class="table-responsive">
-                    <table class="table table-row-bordered align-middle fs-7">
-                        <thead><tr class="fw-bold text-gray-600">
+                    <table id="tbl-diag" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
+                        <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
                             <th>{% trans "İstasyon" %}</th><th>{% trans "Periyod" %}</th><th>{% trans "Alarm Tipi" %}</th>
-                            <th>{% trans "Mesaj" %}</th><th>{% trans "Aktif" %}</th><th></th>
+                            <th>{% trans "Bildirim" %}</th><th>{% trans "Mesaj" %}</th><th>{% trans "Aktif" %}</th><th class="text-end">{% trans "İşlem" %}</th>
                         </tr></thead>
-                        <tbody id="tbl-diag"></tbody>
+                        <tbody>
+                            {% for r in diag_rules %}
+                            <tr>
+                                <td>{{ r.station.name }}</td>
+                                <td>{{ r.get_period_minutes_display }}</td>
+                                <td>{{ r.type_label }}</td>
+                                <td class="text-muted fs-8">{% if r.send_sms %}SMS {% endif %}{% if r.send_email %}E-posta{% endif %}</td>
+                                <td>{{ r.message }}</td>
+                                <td>{% if r.enabled %}<span class="badge badge-light-success">{% trans "Aktif" %}</span>{% else %}<span class="badge badge-light-secondary">{% trans "Pasif" %}</span>{% endif %}</td>
+                                <td class="text-end text-nowrap">
+                                    <button class="btn btn-icon btn-sm btn-light-warning me-1 rule-toggle" data-id="{{ r.id }}" title="{% trans 'Aktif/Pasif' %}"><i class="ki-outline ki-switch fs-5"></i></button>
+                                    <button class="btn btn-icon btn-sm btn-light-danger rule-del" data-id="{{ r.id }}" title="{% trans 'Sil' %}"><i class="ki-outline ki-trash fs-5"></i></button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
                     </table>
                 </div>
             </div>
@@ -184,10 +265,12 @@
 (function () {
     const URL_IO = "{% url 'dashboard:api_alarm_io' %}";
     const URL_RULES = "{% url 'dashboard:api_alarm_rules' %}";
+    const URL_TPL = "{% url 'dashboard:api_notification_templates' %}";
     const I18N = {
         needStation: "{% trans 'İstasyon seçin.' %}", needMsg: "{% trans 'Mesaj zorunlu.' %}",
-        confirmDel: "{% trans 'Bu alarm silinsin mi?' %}", netErr: "{% trans 'Ağ hatası' %}",
-        none: "{% trans 'Yok' %}", offline: "{% trans 'İstasyon Offline' %}",
+        needChannel: "{% trans 'Kanal seçin.' %}", confirmDel: "{% trans 'Bu alarm silinsin mi?' %}",
+        netErr: "{% trans 'Ağ hatası' %}", offline: "{% trans 'İstasyon Offline' %}",
+        titlePrompt: "{% trans 'Hazır mesaj başlığı:' %}",
     };
     function csrf() { const el = document.querySelector('[name=csrfmiddlewaretoken]'); return el ? el.value : ''; }
     function j(url, body, method) {
@@ -195,64 +278,123 @@
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
             body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
     }
-    function esc(s) { return s == null ? '' : String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
-    function fill(sel, items, placeholder) {
-        sel.innerHTML = (placeholder ? '<option value="">' + placeholder + '</option>' : '') +
-            items.map(i => '<option value="' + i.id + '">' + esc(i.text) + '</option>').join('');
-        sel.disabled = items.length === 0 && !placeholder;
+
+    // ---- DataTables (raporlardaki desen) ----
+    function initDT(id) {
+        if (typeof $.fn.dataTable === 'undefined') return;
+        $('#' + id).DataTable({
+            dom: "<'row mb-3'<'col-sm-12 col-md-6 d-flex align-items-center'B><'col-sm-12 col-md-6 d-flex justify-content-md-end align-items-center'f>>" +
+                 "<'row'<'col-sm-12'tr>>" +
+                 "<'row mt-3'<'col-sm-12 col-md-5 d-flex align-items-center'<'me-3'l>i><'col-sm-12 col-md-7 d-flex justify-content-md-end'p>>",
+            buttons: [
+                { extend: 'copyHtml5',  text: '<i class="ki-outline ki-copy fs-3"></i> {% trans "Kopyala" %}',  className: 'btn btn-sm btn-light-primary' },
+                { extend: 'csvHtml5',   text: '<i class="ki-outline ki-document fs-3"></i> CSV',                 className: 'btn btn-sm btn-light-primary' },
+                { extend: 'excelHtml5', text: '<i class="ki-outline ki-file-down fs-3"></i> Excel',              className: 'btn btn-sm btn-light-success' },
+                { extend: 'pdfHtml5',   text: '<i class="ki-outline ki-file-down fs-3"></i> PDF',                className: 'btn btn-sm btn-light-danger' },
+                { extend: 'print',      text: '<i class="ki-outline ki-printer fs-3"></i> {% trans "Yazdır" %}', className: 'btn btn-sm btn-light-info' },
+                { extend: 'colvis',     text: '<i class="ki-outline ki-eye fs-3"></i> {% trans "Kolonlar" %}',    className: 'btn btn-sm btn-light' },
+            ],
+            order: [], pageLength: 10,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, '{% trans "Hepsi" %}']],
+            language: {
+                "lengthMenu": '{% trans "Sayfada _MENU_ kayıt göster" %}', "zeroRecords": '{% trans "Kayıt bulunamadı." %}',
+                "info": '{% trans "_TOTAL_ kayıttan _START_ - _END_ arası" %}', "infoEmpty": '{% trans "Kayıt yok" %}',
+                "infoFiltered": '{% trans "(_MAX_ kayıt arasından filtrelendi)" %}', "search": '{% trans "Ara:" %}',
+                "emptyTable": '{% trans "Henüz alarm tanımlanmadı." %}',
+                "paginate": { "first": '{% trans "İlk" %}', "last": '{% trans "Son" %}', "next": '{% trans "Sonraki" %}', "previous": '{% trans "Önceki" %}' }
+            }
+        });
     }
+    initDT('tbl-olcum'); initDT('tbl-diag');
 
     // ---- IO yükle (istasyon seçilince) ----
+    function reinit($el, ph) {
+        if ($el.hasClass('select2-hidden-accessible')) $el.select2('destroy');
+        $el.select2({ placeholder: ph, width: '100%', allowClear: true });
+    }
     function loadIO(scope, stationId) {
-        const param = scope.querySelector('.o-param'), out = scope.querySelector('.o-output'), dtype = scope.querySelector('.d-type');
+        const $param = $(scope.querySelector('.o-param') || []);
+        const dtype = scope.querySelector('.d-type');
         if (!stationId) {
-            if (param) { param.innerHTML = ''; param.disabled = true; }
-            if (out) { out.innerHTML = '<option value="">' + I18N.none + '</option>'; out.disabled = true; }
+            if ($param.length) { $param.empty().prop('disabled', true); reinit($param, '{% trans "Önce istasyon seçin" %}'); }
             if (dtype) dtype.innerHTML = '<option value="offline">' + I18N.offline + '</option>';
             return;
         }
         fetch(URL_IO + '?station=' + stationId, { credentials: 'same-origin' }).then(r => r.json()).then(d => {
-            if (param) fill(param, d.analog, '—');
-            if (out) { fill(out, d.outputs, I18N.none); out.disabled = false; }
+            if ($param.length) {
+                $param.empty().append('<option></option>');
+                (d.analog || []).forEach(i => $param.append(new Option(i.text, i.id)));
+                $param.prop('disabled', false);
+                reinit($param, '{% trans "Kanal seçiniz" %}');
+            }
             if (dtype) {
                 dtype.innerHTML = '<option value="offline">' + I18N.offline + '</option>' +
-                    d.digital.map(i => '<option value="' + i.id + '">' + esc(i.text) + '</option>').join('');
+                    (d.digital || []).map(i => '<option value="' + i.id + '">' + i.text + '</option>').join('');
+                if ($(dtype).hasClass('select2-hidden-accessible')) $(dtype).select2('destroy');
+                $(dtype).select2({ width: '100%', minimumResultsForSearch: Infinity });
             }
         }).catch(() => {});
     }
 
+    // ---- Hazır mesaj seçici → textarea doldur ----
+    document.querySelectorAll('.tpl-sel').forEach(sel => {
+        $(sel).on('change', function () {
+            const opt = this.options[this.selectedIndex];
+            if (!opt || !opt.value) return;
+            const body = opt.getAttribute('data-body') || '';
+            const ta = this.closest('.row').querySelector(this.classList.contains('o-tpl') ? '.o-msg' : '.d-msg');
+            if (ta) ta.value = body;
+        });
+    });
+
+    // ---- Hazır mesaj kaydet ----
+    document.querySelectorAll('.tpl-save').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const ta = this.closest('.row').querySelector(this.dataset.msg);
+            const body = (ta.value || '').trim();
+            if (!body) { alert(I18N.needMsg); return; }
+            const title = prompt(I18N.titlePrompt, body.slice(0, 40));
+            if (!title) return;
+            j(URL_TPL, { title: title, body: body, channel: 'both' }).then(d => {
+                if (!d.ok) { alert(d.error || I18N.netErr); return; }
+                document.querySelectorAll('.tpl-sel').forEach(sel => {
+                    const o = new Option(d.title, d.id); o.setAttribute('data-body', d.body); sel.add(o);
+                });
+            }).catch(() => alert(I18N.netErr));
+        });
+    });
+
     // ---- Ölçüm tab ----
     const fo = document.getElementById('form-olcum');
-    fo.querySelector('.st-sel').addEventListener('change', e => loadIO(fo, e.target.value));
+    $(fo.querySelector('.st-sel')).on('change', function () { loadIO(fo, this.value); });
     function toggleMinMax() {
         const c = fo.querySelector('.o-cond').value;
         fo.querySelector('.o-min-wrap').style.display = (c === 'max') ? 'none' : '';
         fo.querySelector('.o-max-wrap').style.display = (c === 'min') ? 'none' : '';
     }
-    fo.querySelector('.o-cond').addEventListener('change', toggleMinMax); toggleMinMax();
+    $(fo.querySelector('.o-cond')).on('change', toggleMinMax); toggleMinMax();
     fo.querySelector('.o-save').addEventListener('click', function () {
         const station = fo.querySelector('.st-sel').value;
         if (!station) { alert(I18N.needStation); return; }
+        const param = fo.querySelector('.o-param').value;
+        if (!param) { alert(I18N.needChannel); return; }
         const msg = fo.querySelector('.o-msg').value.trim();
         if (!msg) { alert(I18N.needMsg); return; }
-        const param = fo.querySelector('.o-param').value;
-        if (!param) { alert("{% trans 'Kanal seçin.' %}"); return; }
         j(URL_RULES, {
             rule_type: 'analog', station_id: Number(station), parameter_id: Number(param),
             condition: fo.querySelector('.o-cond').value,
             min_value: fo.querySelector('.o-min').value, max_value: fo.querySelector('.o-max').value,
-            trigger_output_id: fo.querySelector('.o-output').value || null,
             period_minutes: Number(fo.querySelector('.o-period').value),
             notify_all: fo.querySelector('.o-notify').value === '1',
             send_sms: fo.querySelector('.o-sms').checked, send_email: fo.querySelector('.o-mail').checked,
             message: msg,
-        }).then(d => { if (!d.ok) { alert(d.error || I18N.netErr); return; } fo.querySelector('.o-msg').value = ''; loadTable('analog'); })
+        }).then(d => { if (!d.ok) { alert(d.error || I18N.netErr); return; } location.reload(); })
           .catch(() => alert(I18N.netErr));
     });
 
     // ---- Diagnostik tab ----
     const fd = document.getElementById('form-diag');
-    fd.querySelector('.st-sel').addEventListener('change', e => loadIO(fd, e.target.value));
+    $(fd.querySelector('.st-sel')).on('change', function () { loadIO(fd, this.value); });
     fd.querySelector('.d-save').addEventListener('click', function () {
         const station = fd.querySelector('.st-sel').value;
         if (!station) { alert(I18N.needStation); return; }
@@ -267,39 +409,21 @@
         };
         if (tval === 'offline') { body.rule_type = 'offline'; }
         else { body.rule_type = 'digital'; body.sensor_id = Number(tval); }
-        j(URL_RULES, body).then(d => { if (!d.ok) { alert(d.error || I18N.netErr); return; } fd.querySelector('.d-msg').value = ''; loadTable('diag'); })
+        j(URL_RULES, body).then(d => { if (!d.ok) { alert(d.error || I18N.netErr); return; } location.reload(); })
           .catch(() => alert(I18N.netErr));
     });
 
-    // ---- Tablolar ----
-    function rowActions(id) {
-        return '<button class="btn btn-icon btn-sm btn-light-warning me-1 rule-toggle" data-id="' + id + '" title="Aktif/Pasif"><i class="ki-outline ki-switch fs-5"></i></button>' +
-               '<button class="btn btn-icon btn-sm btn-light-danger rule-del" data-id="' + id + '"><i class="ki-outline ki-trash fs-5"></i></button>';
-    }
-    function badge(on) { return on ? '<span class="badge badge-light-success">{% trans "Aktif" %}</span>' : '<span class="badge badge-light-secondary">{% trans "Pasif" %}</span>'; }
-    function loadTable(type) {
-        const rt = type === 'analog' ? 'analog' : 'diag';
-        fetch(URL_RULES + '?rule_type=' + rt, { credentials: 'same-origin' }).then(r => r.json()).then(d => {
-            const tb = document.getElementById(type === 'analog' ? 'tbl-olcum' : 'tbl-diag');
-            const rows = (d.results || []).map(r => {
-                if (type === 'analog') {
-                    return '<tr><td>' + esc(r.station) + '</td><td>' + esc(r.channel) + '</td><td>' + esc(r.period) + '</td><td>' + esc(r.type_label) +
-                        '</td><td>' + (r.min == null ? '-' : r.min) + '</td><td>' + (r.max == null ? '-' : r.max) + '</td><td>' + esc(r.output || '-') +
-                        '</td><td>' + esc(r.message) + '</td><td>' + badge(r.enabled) + '</td><td class="text-nowrap">' + rowActions(r.id) + '</td></tr>';
-                }
-                return '<tr><td>' + esc(r.station) + '</td><td>' + esc(r.period) + '</td><td>' + esc(r.type_label) +
-                    '</td><td>' + esc(r.message) + '</td><td>' + badge(r.enabled) + '</td><td class="text-nowrap">' + rowActions(r.id) + '</td></tr>';
-            }).join('');
-            tb.innerHTML = rows || '<tr><td colspan="' + (type === 'analog' ? 10 : 6) + '" class="text-center text-muted">{% trans "Kayıt yok." %}</td></tr>';
-        }).catch(() => {});
-    }
+    // ---- Tablo işlemleri (toggle / sil) ----
     document.querySelector('.tab-content').addEventListener('click', function (e) {
         const del = e.target.closest('.rule-del'), tog = e.target.closest('.rule-toggle');
-        if (del) { if (!confirm(I18N.confirmDel)) return; j(URL_RULES + '?id=' + del.dataset.id, null, 'DELETE').then(() => { loadTable('analog'); loadTable('diag'); }); }
-        else if (tog) { j(URL_RULES, { toggle_id: Number(tog.dataset.id) }).then(() => { loadTable('analog'); loadTable('diag'); }); }
+        if (del) { if (!confirm(I18N.confirmDel)) return; j(URL_RULES + '?id=' + del.dataset.id, null, 'DELETE').then(() => location.reload()); }
+        else if (tog) { j(URL_RULES, { toggle_id: Number(tog.dataset.id) }).then(() => location.reload()); }
     });
 
-    loadTable('analog'); loadTable('diag');
+    // ---- FOUC reveal ----
+    function reveal() { if (!document.body.classList.contains('page-ready')) requestAnimationFrame(() => document.body.classList.add('page-ready')); }
+    if (document.readyState === 'complete') reveal(); else window.addEventListener('load', reveal);
+    setTimeout(reveal, 1200);
 })();
 </script>
 {% endblock %}

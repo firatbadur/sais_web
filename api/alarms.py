@@ -124,46 +124,20 @@ def _offline_triggered(rule, now) -> bool:
     return (now - last).total_seconds() > rule.offline_seconds
 
 
-def _trigger_output(rule, now) -> None:
-    """Ölçüm alarmında tanımlıysa dijital output'a 1 yazacak Command üretir."""
-    from api.models import Command
-
-    sensor = rule.trigger_output
-    if sensor is None:
-        return
-    coil_value = 0 if sensor.digital_inverse else 1  # mantıksal "aktif"
-    bucket = int(now.timestamp() // (rule.period_minutes * 60 or 60))
-    idem = f"alarm_output:{rule.pk}:{bucket}"
-    try:
-        Command.objects.get_or_create(
-            idempotency_key=idem,
-            defaults=dict(
-                sensor=sensor, value_type="bool", value=coil_value,
-                status="pending", priority=10, source="rule",
-                expires_at=now + timezone.timedelta(minutes=5), max_attempts=3,
-            ),
-        )
-    except Exception:  # noqa: BLE001
-        logger.exception("Alarm output Command üretilemedi (rule=%s)", rule.pk)
-
-
 def _fire(rule, now) -> int:
-    """Alarmı tetikler: bildirim gönder + output + damga. Gönderilen sayısı döner."""
+    """Alarmı tetikler: bildirim gönder + damga. Gönderilen sayısı döner."""
     from api.notifications import send_bulk
     from .models import AlarmRule
 
     recipients = _recipients(rule)
     channels = _channels(rule)
     station_name = rule.station.name if rule.station else ""
-    full_msg = f"{station_name} SAİS Alarm: {rule.message}".strip()
+    full_msg = f"{station_name} Alarm: {rule.message}".strip()
 
     sent = 0
     if recipients and channels:
         results = send_bulk(recipients, channels, full_msg, kind="alarm")
         sent = sum(1 for r in results if r["ok"])
-
-    if rule.rule_type == AlarmRule.RULE_ANALOG:
-        _trigger_output(rule, now)
 
     AlarmRule.objects.filter(pk=rule.pk).update(last_triggered_at=now)
     logger.info("Alarm tetiklendi rule=%s sent=%s/%s", rule.pk, sent, len(recipients) * len(channels))

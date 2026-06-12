@@ -1533,3 +1533,49 @@ msgstr "Message is required."
 
 msgid "İstasyon seçin."
 msgstr "Select a station."
+
+# ---- Alarm Yonetimi v2 (raporlar stili) ----
+msgid "Yeni Ölçüm Alarmı"
+msgstr "New Measurement Alarm"
+
+msgid "Yeni Diagnostik Alarm"
+msgstr "New Diagnostic Alarm"
+
+msgid "Tanımlı Ölçüm Alarmları"
+msgstr "Defined Measurement Alarms"
+
+msgid "Tanımlı Diagnostik Alarmlar"
+msgstr "Defined Diagnostic Alarms"
+
+msgid "Hazır Mesaj"
+msgstr "Ready Message"
+
+msgid "Hazır mesaj seç"
+msgstr "Select ready message"
+
+msgid "Hazır Mesaj Kaydet"
+msgstr "Save Ready Message"
+
+msgid "Bildirim"
+msgstr "Notification"
+
+msgid "İşlem"
+msgstr "Action"
+
+msgid "Kanal seçiniz"
+msgstr "Select channel"
+
+msgid "Önce istasyon seçin"
+msgstr "Select a station first"
+
+msgid "Hazır mesaj seçebilir veya kendi mesajınızı yazıp kaydedebilirsiniz."
+msgstr "You can select a ready message or write and save your own."
+
+msgid "İstasyon seçiniz"
+msgstr "Select station"
+
+msgid "Aktif/Pasif"
+msgstr "Active/Inactive"
+
+msgid "Henüz alarm tanımlanmadı."
+msgstr "No alarms defined yet."

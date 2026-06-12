@@ -421,11 +421,11 @@ class AlarmRuleAdmin(admin.ModelAdmin):
     list_filter = ("rule_type", "enabled", "station", "send_sms", "send_email")
     search_fields = ("message", "station__name")
     list_editable = ("enabled",)
-    autocomplete_fields = ("station", "parameter", "sensor", "trigger_output", "created_by")
+    autocomplete_fields = ("station", "parameter", "sensor", "created_by")
     readonly_fields = ("created_at", "last_triggered_at")
     fieldsets = (
         ("Genel", {"fields": ("station", "rule_type", "period_minutes", "message", "enabled")}),
-        ("Ölçüm (Analog)", {"fields": ("parameter", "condition", "min_value", "max_value", "trigger_output")}),
+        ("Ölçüm (Analog)", {"fields": ("parameter", "condition", "min_value", "max_value")}),
         ("Diagnostik / Offline", {"fields": ("sensor", "offline_seconds")}),
         ("Bildirim", {"fields": ("notify_all", "send_sms", "send_email")}),
         ("Audit", {"fields": ("created_by", "created_at", "last_triggered_at")}),

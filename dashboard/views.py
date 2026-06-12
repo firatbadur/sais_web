@@ -329,14 +329,15 @@ class AlarmsView(OperatorRequiredMixin, TemplateView):
     template_name = "dashboard/operator/alarms.html"
 
     def get_context_data(self, **kwargs):
-        from api.models import AlarmRule
+        from api.models import AlarmRule, MessageTemplate
         ctx = super().get_context_data(**kwargs)
         ctx["stations"] = Station.objects.filter(active=True).order_by("name")
         ctx["period_choices"] = AlarmRule.PERIOD_CHOICES
         ctx["cond_choices"] = AlarmRule.COND_CHOICES
+        ctx["message_templates"] = MessageTemplate.objects.all()[:200]
         rules = (
             AlarmRule.objects
-            .select_related("station", "parameter", "sensor", "trigger_output")
+            .select_related("station", "parameter", "sensor")
             .order_by("-created_at")
         )
         ctx["analog_rules"] = [r for r in rules if r.rule_type == AlarmRule.RULE_ANALOG]

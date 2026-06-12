@@ -1834,11 +1834,6 @@ class AlarmRule(models.Model):
     )
     min_value = models.FloatField(null=True, blank=True, verbose_name="Min Değer")
     max_value = models.FloatField(null=True, blank=True, verbose_name="Max Değer")
-    trigger_output = models.ForeignKey(
-        Sensor, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="+", verbose_name="Tetiklenecek Output",
-        help_text="Alarm tetiklendiğinde 1 yazılacak dijital output sensörü (opsiyonel).",
-    )
 
     # --- Diagnostik (dijital kanal) ---
     sensor = models.ForeignKey(

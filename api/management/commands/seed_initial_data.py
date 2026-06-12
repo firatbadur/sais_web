@@ -10,7 +10,7 @@ Alan-özel (SAIS / Envisoft / Bakanlık) veriler için ayrı komut:
 """
 from django.core.management.base import BaseCommand
 
-from api.models import Parameter, RequestType, Station, StatusCode
+from api.models import MessageTemplate, Parameter, RequestType, Station, StatusCode
 
 
 # (parameter_name, parameter_txt, unit, unit_txt, device_channel_id,
@@ -102,6 +102,20 @@ DEFAULT_REQUEST_TYPES = [
 ]
 
 
+# Hazır bildirim mesajları (alarm + SMS/mail test panelinde kullanılır).
+DEFAULT_MESSAGE_TEMPLATES = [
+    ("Ölçüm Limit Dışı", "Ölçüm değeri belirlenen limit dışında. Lütfen kontrol ediniz."),
+    ("İstasyon Offline", "İstasyon ile iletişim kesildi (offline). Lütfen kontrol ediniz."),
+    ("Cihaz İletişim Hatası", "Cihaz iletişim hatası tespit edildi. Lütfen kontrol ediniz."),
+    ("Sıcaklık Alarmı", "Sıcaklık alarmı devrede. Lütfen kontrol ediniz."),
+    ("Enerji Kesintisi", "Enerji kesintisi tespit edildi. UPS devrede; lütfen kontrol ediniz."),
+    ("Su Baskını", "Su baskını sensörü aktif. Lütfen acil kontrol ediniz."),
+    ("Acil Stop", "Acil stop aktif edildi. Lütfen kontrol ediniz."),
+    ("Sürücü Hatası", "Sürücü hatası tespit edildi. Lütfen kontrol ediniz."),
+    ("Genel Alarm", "İstasyonda alarm durumu oluştu. Lütfen kontrol ediniz."),
+]
+
+
 class Command(BaseCommand):
     help = "Çekirdek SCADA seed kayıtlarını oluşturur (idempotent)."
 
@@ -167,10 +181,19 @@ class Command(BaseCommand):
             )
             created_request += int(created)
 
+        created_msg = 0
+        for title, body in DEFAULT_MESSAGE_TEMPLATES:
+            _, created = MessageTemplate.objects.get_or_create(
+                title=title,
+                defaults={"body": body, "channel": "both"},
+            )
+            created_msg += int(created)
+
         self.stdout.write(
             self.style.SUCCESS(
                 f"Parametreler: {created_params} yeni, "
                 f"Status kodları: {created_status} yeni, "
-                f"Talep tipleri: {created_request} yeni."
+                f"Talep tipleri: {created_request} yeni, "
+                f"Hazır mesajlar: {created_msg} yeni."
             )
         )

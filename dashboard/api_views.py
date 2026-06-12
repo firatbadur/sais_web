@@ -914,7 +914,7 @@ def alarm_io(request):
     except (TypeError, ValueError):
         station_id = None
     if not station_id:
-        return JsonResponse({"analog": [], "digital": [], "outputs": []})
+        return JsonResponse({"analog": [], "digital": []})
 
     analog = [
         {"id": p.id, "text": p.parameter_name or f"Parametre {p.id}"}
@@ -923,12 +923,12 @@ def alarm_io(request):
             sensors__sensor_type__in=(0, 1),
         ).distinct().order_by("parameter_name")
     ]
-    digital, outputs = [], []
-    for s in (Sensor.objects.filter(connection__station_id=station_id, sensor_type__in=(2, 3))
-              .select_related("parameter").order_by("address")):
-        item = {"id": s.id, "text": _sensor_label(s)}
-        (digital if s.sensor_type == 2 else outputs).append(item)
-    return JsonResponse({"analog": analog, "digital": digital, "outputs": outputs})
+    digital = [
+        {"id": s.id, "text": _sensor_label(s)}
+        for s in Sensor.objects.filter(connection__station_id=station_id, sensor_type=2)
+        .select_related("parameter").order_by("address")
+    ]
+    return JsonResponse({"analog": analog, "digital": digital})
 
 
 @login_required
@@ -959,7 +959,6 @@ def alarm_rules(request):
             "channel": (r.parameter.parameter_name if r.parameter else "") if r.rule_type == AlarmRule.RULE_ANALOG else "",
             "type_label": r.type_label, "period": r.get_period_minutes_display(),
             "min": r.min_value, "max": r.max_value,
-            "output": _sensor_label(r.trigger_output) if r.trigger_output else "",
             "channels": (("SMS " if r.send_sms else "") + ("E-posta" if r.send_email else "")).strip() or "-",
             "message": r.message, "enabled": r.enabled,
         } for r in qs]
@@ -1018,9 +1017,6 @@ def alarm_rules(request):
         rule.condition = data.get("condition") or AlarmRule.COND_MINMAX
         rule.min_value = data.get("min_value") if data.get("min_value") not in ("", None) else None
         rule.max_value = data.get("max_value") if data.get("max_value") not in ("", None) else None
-        out_id = data.get("trigger_output_id")
-        if out_id:
-            rule.trigger_output = S.objects.filter(pk=out_id, sensor_type=3).first()
     elif rule_type == AlarmRule.RULE_DIGITAL:
         sid = data.get("sensor_id")
         rule.sensor = S.objects.filter(pk=sid, sensor_type=2).first()
