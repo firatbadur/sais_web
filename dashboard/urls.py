@@ -41,6 +41,14 @@ urlpatterns = [
     path("management/connections/", views.ConnectionsOverviewView.as_view(), name="management_connections"),
     path("management/sensors/", views.SensorsOverviewView.as_view(), name="management_sensors"),
 
+    # --- Documents (doküman yönetimi) ---
+    path("documents/", views.DocumentListView.as_view(), name="documents"),
+    path("documents/upload/", views.DocumentUploadView.as_view(), name="document_upload"),
+    path("documents/<int:pk>/download/", views.DocumentDownloadView.as_view(),
+         name="document_download"),
+    path("documents/<int:pk>/delete/", views.DocumentDeleteView.as_view(),
+         name="document_delete"),
+
     # --- Admin pages (rol=1) ---
     path("admin-pages/users/", views.UserListView.as_view(), name="admin_users"),
     path("admin-pages/users/create/", views.UserCreateView.as_view(), name="admin_user_create"),

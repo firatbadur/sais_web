@@ -2057,3 +2057,76 @@ msgstr "Lower Bound"
 
 msgid "Üst Sınır"
 msgstr "Upper Bound"
+
+#: dashboard documents
+msgid "Doküman Yönetimi"
+msgstr "Document Management"
+
+msgid "Dokümanlar"
+msgstr "Documents"
+
+msgid "Doküman Yükle"
+msgstr "Upload Document"
+
+msgid "Belge Türü"
+msgstr "Document Type"
+
+msgid "Filtre"
+msgstr "Filter"
+
+msgid "Başlık"
+msgstr "Title"
+
+msgid "Yükleyen"
+msgstr "Uploaded By"
+
+msgid "Sil"
+msgstr "Delete"
+
+msgid "Yükle"
+msgstr "Upload"
+
+msgid "Teknik Dokümantasyon"
+msgstr "Technical Documentation"
+
+msgid "Bütünleşik Karşılaştırma Testleri"
+msgstr "Integrated Comparison Tests"
+
+msgid "Periyodik Bakım Formu"
+msgstr "Periodic Maintenance Form"
+
+msgid "Tutanaklar"
+msgstr "Minutes / Records"
+
+msgid "Sensör Katalogları"
+msgstr "Sensor Catalogs"
+
+msgid "Sensör Broşürleri"
+msgstr "Sensor Brochures"
+
+msgid "Henüz doküman yüklenmemiş."
+msgstr "No documents uploaded yet."
+
+msgid "Bu dokümanı silmek istediğinize emin misiniz?"
+msgstr "Are you sure you want to delete this document?"
+
+msgid "İzin verilen: PDF, Word, Excel, PowerPoint, metin/CSV. Resim ve video yüklenemez. En fazla 50 MB."
+msgstr "Allowed: PDF, Word, Excel, PowerPoint, text/CSV. Images and videos are not allowed. Max 50 MB."
+
+msgid "Dosya çok büyük (en fazla 50 MB)."
+msgstr "File is too large (max 50 MB)."
+
+msgid "Resim, video ve ses dosyaları yüklenemez. Yalnızca belge dosyalarına izin verilir."
+msgstr "Image, video and audio files cannot be uploaded. Only document files are allowed."
+
+msgid "İzin verilmeyen dosya türü (.%(ext)s). İzin verilenler: PDF, Word, Excel, PowerPoint, metin/CSV."
+msgstr "File type not allowed (.%(ext)s). Allowed: PDF, Word, Excel, PowerPoint, text/CSV."
+
+msgid "Doküman yüklendi: %(t)s"
+msgstr "Document uploaded: %(t)s"
+
+msgid "Doküman silindi: %(t)s"
+msgstr "Document deleted: %(t)s"
+
+msgid "Doküman bulunamadı."
+msgstr "Document not found."

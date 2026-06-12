@@ -72,6 +72,12 @@ MENU = [
         ],
     },
     {
+        "label": _("Dokümanlar"),
+        "url_name": "dashboard:documents",
+        "icon": "ki-folder",
+        "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
+    },
+    {
         "label": _("Yönetici"),
         "menu_key": "admin",
         "icon": "ki-shield-tick",

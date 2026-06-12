@@ -1,0 +1,245 @@
+{% extends "dashboard/base.html" %}
+{% load i18n static dashboard_extras %}
+
+{% block title %}{% trans "Doküman Yönetimi" %}{% endblock %}
+{% block page_title %}{% trans "Doküman Yönetimi" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* FOUC önleme: DataTables init bitmeden ham tablo görünmesin. */
+    #kt_app_content_container { opacity: 0; }
+    body.page-ready #kt_app_content_container {
+        opacity: 1;
+        transition: opacity 0.18s ease-in-out;
+    }
+    #documents-card .dt-buttons .btn { margin-right: .35rem; }
+    #documents-card div.dataTables_filter input { margin-left: .5rem; }
+    .doc-ext-badge { text-transform: uppercase; font-weight: 600; letter-spacing: .03em; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Filtre kartı -->
+<div class="card mb-5 mb-xl-8">
+    <div class="card-header border-0 pt-6">
+        <div class="card-title">
+            <h3 class="fw-bold m-0">{% trans "Filtre" %}</h3>
+        </div>
+        {% if can_manage %}
+        <div class="card-toolbar">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal"
+                    data-bs-target="#upload-modal">
+                <i class="ki-outline ki-plus fs-2"></i>{% trans "Doküman Yükle" %}
+            </button>
+        </div>
+        {% endif %}
+    </div>
+    <div class="card-body pt-3 pb-6">
+        <form method="get" id="filter-form" class="row g-5 align-items-end">
+            <div class="col-md-6 col-lg-5">
+                <label class="form-label fw-semibold">{% trans "Belge Türü" %}</label>
+                <select name="doc_type" class="form-select form-select-solid"
+                        data-control="select2" data-allow-clear="true"
+                        data-placeholder="{% trans 'Tümü' %}">
+                    <option value=""></option>
+                    {% for value, label in doc_types %}
+                        <option value="{{ value }}" {% if value == selected_type %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 col-lg-7">
+                <button type="submit" class="btn btn-primary">
+                    <i class="ki-outline ki-filter fs-3"></i>{% trans "Filtrele" %}
+                </button>
+                {% if selected_type %}
+                <a href="{% url 'dashboard:documents' %}" class="btn btn-light-warning">
+                    <i class="ki-outline ki-arrows-circle fs-3"></i>{% trans "Sıfırla" %}
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Doküman listesi -->
+<div class="card" id="documents-card">
+    <div class="card-header border-0 pt-6">
+        <div class="card-title">
+            <h3 class="fw-bold m-0">{% trans "Dokümanlar" %}</h3>
+        </div>
+    </div>
+    <div class="card-body pt-3">
+        <table id="documents-table"
+               class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
+            <thead>
+                <tr class="fw-bold fs-7 text-uppercase text-gray-500">
+                    <th>{% trans "Başlık" %}</th>
+                    <th>{% trans "Tür" %}</th>
+                    <th>{% trans "Dosya" %}</th>
+                    <th class="text-end">{% trans "Boyut" %}</th>
+                    <th>{% trans "Yükleyen" %}</th>
+                    <th data-order="">{% trans "Tarih" %}</th>
+                    <th class="text-end">{% trans "İşlemler" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for doc in documents %}
+                <tr>
+                    <td class="fw-bold text-gray-800">
+                        {{ doc.title }}
+                        {% if doc.description %}
+                        <div class="text-muted fs-8 fw-normal text-truncate" style="max-width:320px;"
+                             title="{{ doc.description }}">{{ doc.description }}</div>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge badge-light-primary">{{ doc.get_doc_type_display }}</span></td>
+                    <td>
+                        <span class="badge badge-light-info doc-ext-badge">{{ doc.extension|default:"?" }}</span>
+                    </td>
+                    <td class="text-end text-muted" data-order="{{ doc.file_size }}">
+                        {{ doc.file_size|filesizeformat }}
+                    </td>
+                    <td class="text-muted">{{ doc.uploaded_by.get_full_name|default:doc.uploaded_by.username|default:"—" }}</td>
+                    <td data-order="{{ doc.created_at|date:'U' }}">{{ doc.created_at|date:"d.m.Y H:i" }}</td>
+                    <td class="text-end">
+                        <a href="{% url 'dashboard:document_download' doc.pk %}"
+                           class="btn btn-sm btn-light-success btn-icon"
+                           title="{% trans 'İndir' %}">
+                            <i class="ki-outline ki-file-down fs-3"></i>
+                        </a>
+                        {% if can_manage %}
+                        <button type="button" class="btn btn-sm btn-light-danger btn-icon ms-1 btn-delete-doc"
+                                data-doc-id="{{ doc.pk }}" data-doc-title="{{ doc.title }}"
+                                title="{% trans 'Sil' %}">
+                            <i class="ki-outline ki-trash fs-3"></i>
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if can_manage %}
+<!-- Yükleme modalı -->
+<div class="modal fade" id="upload-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="{% url 'dashboard:document_upload' %}"
+                  enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h2 class="fw-bold">{% trans "Doküman Yükle" %}</h2>
+                    <button type="button" class="btn btn-icon btn-sm btn-active-light-primary"
+                            data-bs-dismiss="modal"><i class="ki-outline ki-cross fs-1"></i></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-5">
+                        <label class="required form-label">{% trans "Başlık" %}</label>
+                        <input type="text" name="title" class="form-control form-control-solid"
+                               required maxlength="255">
+                    </div>
+                    <div class="mb-5">
+                        <label class="required form-label">{% trans "Belge Türü" %}</label>
+                        <select name="doc_type" class="form-select form-select-solid" required>
+                            {% for value, label in doc_types %}
+                                <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-5">
+                        <label class="form-label">{% trans "Açıklama" %}</label>
+                        <textarea name="description" rows="3"
+                                  class="form-control form-control-solid"></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="required form-label">{% trans "Dosya" %}</label>
+                        <input type="file" name="file" class="form-control form-control-solid" required
+                               accept=".pdf,.doc,.docx,.rtf,.odt,.txt,.xls,.xlsx,.ods,.csv,.ppt,.pptx,.odp">
+                        <div class="form-text">
+                            {% trans "İzin verilen: PDF, Word, Excel, PowerPoint, metin/CSV. Resim ve video yüklenemez. En fazla 50 MB." %}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">{% trans "İptal" %}</button>
+                    <button type="submit" class="btn btn-primary">{% trans "Yükle" %}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Silme onay formu (gizli; JS doldurur) -->
+<form method="post" id="delete-form" class="d-none">{% csrf_token %}</form>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    "use strict";
+
+    // --- DataTables init (client-side) ---
+    const tableEl = document.getElementById('documents-table');
+    if (tableEl && typeof $.fn.dataTable !== 'undefined') {
+        $('#documents-table').DataTable({
+            dom:
+                "<'row mb-3'<'col-sm-12 col-md-6 d-flex align-items-center'B><'col-sm-12 col-md-6 d-flex justify-content-md-end align-items-center'f>>" +
+                "<'row'<'col-sm-12'tr>>" +
+                "<'row mt-3'<'col-sm-12 col-md-5 d-flex align-items-center'<'me-3'l>i><'col-sm-12 col-md-7 d-flex justify-content-md-end'p>>",
+            buttons: [
+                { extend: 'copyHtml5',  text: '<i class="ki-outline ki-copy fs-3"></i> {% trans "Kopyala" %}', className: 'btn btn-sm btn-light-primary', exportOptions: { columns: [0,1,2,3,4,5] } },
+                { extend: 'csvHtml5',   text: '<i class="ki-outline ki-document fs-3"></i> CSV',                className: 'btn btn-sm btn-light-primary', exportOptions: { columns: [0,1,2,3,4,5] } },
+                { extend: 'excelHtml5', text: '<i class="ki-outline ki-file-down fs-3"></i> Excel',             className: 'btn btn-sm btn-light-success', exportOptions: { columns: [0,1,2,3,4,5] } },
+                { extend: 'pdfHtml5',   text: '<i class="ki-outline ki-file-down fs-3"></i> PDF',               className: 'btn btn-sm btn-light-danger',  exportOptions: { columns: [0,1,2,3,4,5] } },
+                { extend: 'print',      text: '<i class="ki-outline ki-printer fs-3"></i> {% trans "Yazdır" %}', className: 'btn btn-sm btn-light-info',    exportOptions: { columns: [0,1,2,3,4,5] } },
+                { extend: 'colvis',     text: '<i class="ki-outline ki-eye fs-3"></i> {% trans "Kolonlar" %}',   className: 'btn btn-sm btn-light' },
+            ],
+            order: [[5, 'desc']],
+            pageLength: 10,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, '{% trans "Hepsi" %}']],
+            columnDefs: [{ orderable: false, targets: 6 }],
+            language: {
+                "lengthMenu":   '{% trans "Sayfada _MENU_ kayıt göster" %}',
+                "zeroRecords":  '{% trans "Kayıt bulunamadı." %}',
+                "info":         '{% trans "_TOTAL_ kayıttan _START_ - _END_ arası" %}',
+                "infoEmpty":    '{% trans "Kayıt yok" %}',
+                "infoFiltered": '{% trans "(_MAX_ kayıt arasından filtrelendi)" %}',
+                "search":       '{% trans "Ara:" %}',
+                "emptyTable":   '{% trans "Henüz doküman yüklenmemiş." %}',
+                "paginate": {
+                    "first": '{% trans "İlk" %}', "last": '{% trans "Son" %}',
+                    "next": '{% trans "Sonraki" %}', "previous": '{% trans "Önceki" %}'
+                }
+            }
+        });
+    }
+
+    // --- Silme onayı ---
+    const deleteForm = document.getElementById('delete-form');
+    document.querySelectorAll('.btn-delete-doc').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const id = this.getAttribute('data-doc-id');
+            const title = this.getAttribute('data-doc-title');
+            const msg = '{% trans "Bu dokümanı silmek istediğinize emin misiniz?" %}';
+            if (window.confirm(msg + '\n\n' + title)) {
+                deleteForm.action = '/dashboard/documents/' + id + '/delete/';
+                deleteForm.submit();
+            }
+        });
+    });
+
+    // --- FOUC reveal ---
+    function revealContent() {
+        if (document.body.classList.contains('page-ready')) return;
+        requestAnimationFrame(function () { document.body.classList.add('page-ready'); });
+    }
+    if (document.readyState === 'complete') revealContent();
+    else window.addEventListener('load', revealContent);
+    setTimeout(revealContent, 1200);
+})();
+</script>
+{% endblock %}

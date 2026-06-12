@@ -18,7 +18,15 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    FormView,
+    ListView,
+    TemplateView,
+    UpdateView,
+    View,
+)
 
 from api.models import (
     ApiLog,
@@ -44,10 +52,12 @@ from .forms import (
     CertUploadForm,
     ChangePasswordForm,
     DashboardLoginForm,
+    DocumentUploadForm,
     NotificationSettingsForm,
     ProfileForm,
     WebSettingsForm,
 )
+from .models import Document
 from .permissions import (
     ROLE_ADMIN,
     ROLE_OPERATOR,
@@ -1341,3 +1351,95 @@ class NotificationCenterView(AdminRequiredMixin, TemplateView):
         ns.save()
         messages.success(request, _("Bildirim ayarları kaydedildi."))
         return redirect("dashboard:admin_notifications")
+
+
+# ---------------------------------------------------------------------------
+# Doküman Yönetimi
+# ---------------------------------------------------------------------------
+class DocumentListView(RoleRequiredMixin, ListView):
+    """Doküman yönetimi — liste + filtre (rapor tarzı).
+
+    Tüm roller listeler ve indirir; yükleme/silme yalnızca operatör (rol=2) ve
+    yönetici (rol=1) için (template + ilgili view'lar `OperatorRequiredMixin`).
+    """
+
+    model = Document
+    template_name = "dashboard/documents/document_list.html"
+    context_object_name = "documents"
+    paginate_by = None
+    MAX_ROWS = 5000
+
+    def get_queryset(self):
+        qs = Document.objects.select_related("uploaded_by").all()
+        doc_type = self.request.GET.get("doc_type")
+        if doc_type:
+            qs = qs.filter(doc_type=doc_type)
+        return qs.order_by("-created_at")[: self.MAX_ROWS]
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["doc_types"] = Document.DocType.choices
+        ctx["selected_type"] = self.request.GET.get("doc_type", "")
+        ctx["can_manage"] = user_has_role(self.request.user, ROLE_ADMIN, ROLE_OPERATOR)
+        ctx["upload_form"] = DocumentUploadForm()
+        return ctx
+
+
+class DocumentUploadView(OperatorRequiredMixin, FormView):
+    """Doküman yükleme (operatör + yönetici). Modal form POST hedefi."""
+
+    form_class = DocumentUploadForm
+    template_name = "dashboard/documents/document_list.html"
+    success_url = reverse_lazy("dashboard:documents")
+
+    def form_valid(self, form):
+        doc = form.save(commit=False)
+        upload = form.cleaned_data["file"]
+        doc.uploaded_by = self.request.user
+        doc.original_name = upload.name
+        doc.file_size = upload.size
+        doc.content_type = getattr(upload, "content_type", "") or ""
+        doc.save()
+        messages.success(self.request, _("Doküman yüklendi: %(t)s") % {"t": doc.title})
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        # Modal validasyonu — hataları mesaj olarak göster, listeye dön.
+        for field, errors in form.errors.items():
+            for err in errors:
+                messages.error(self.request, err)
+        return redirect("dashboard:documents")
+
+
+class DocumentDownloadView(RoleRequiredMixin, View):
+    """Yetki kontrollü dosya indirme (attachment). Tüm roller indirebilir."""
+
+    def get(self, request, pk):
+        from django.http import FileResponse, Http404
+
+        doc = Document.objects.filter(pk=pk).first()
+        if not doc or not doc.file:
+            raise Http404(_("Doküman bulunamadı."))
+        try:
+            handle = doc.file.open("rb")
+        except FileNotFoundError as exc:
+            raise Http404(_("Dosya diskte bulunamadı.")) from exc
+        filename = doc.original_name or doc.file.name.split("/")[-1]
+        response = FileResponse(handle, as_attachment=True, filename=filename)
+        if doc.content_type:
+            response["Content-Type"] = doc.content_type
+        return response
+
+
+class DocumentDeleteView(OperatorRequiredMixin, View):
+    """Doküman silme (operatör + yönetici). POST ile."""
+
+    def post(self, request, pk):
+        doc = Document.objects.filter(pk=pk).first()
+        if doc:
+            title = doc.title
+            doc.delete()  # model.delete() diskteki dosyayı da siler
+            messages.success(request, _("Doküman silindi: %(t)s") % {"t": title})
+        else:
+            messages.error(request, _("Doküman bulunamadı."))
+        return redirect("dashboard:documents")
