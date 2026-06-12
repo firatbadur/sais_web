@@ -379,10 +379,10 @@
                     if (CAN_CONTROL) {
                         if (r.sensor_type === 3) {
                             actionCell = `<td class="text-end text-nowrap">
-                                <button class="btn btn-sm btn-light-success py-1 px-2 me-1 do-cmd" data-sid="${r.sensor_id}" data-action="start" ${isActive ? 'disabled' : ''}>
-                                    <i class="ki-outline ki-play fs-7"></i>${I18N.start}</button>
-                                <button class="btn btn-sm btn-light-danger py-1 px-2 do-cmd" data-sid="${r.sensor_id}" data-action="stop" ${!isActive ? 'disabled' : ''}>
-                                    <i class="ki-outline ki-cross-circle fs-7"></i>${I18N.stop}</button></td>`;
+                                <button class="btn btn-icon btn-sm btn-light-success me-1 do-cmd" data-sid="${r.sensor_id}" data-action="start" title="${I18N.start}" ${isActive ? 'disabled' : ''}>
+                                    <i class="ki-outline ki-play fs-5"></i></button>
+                                <button class="btn btn-icon btn-sm btn-light-danger do-cmd" data-sid="${r.sensor_id}" data-action="stop" title="${I18N.stop}" ${!isActive ? 'disabled' : ''}>
+                                    <i class="ki-outline ki-cross-circle fs-5"></i></button></td>`;
                         } else {
                             actionCell = '<td></td>';
                         }
