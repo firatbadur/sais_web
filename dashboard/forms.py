@@ -36,7 +36,8 @@ class AdminUserCreateForm(UserCreationForm):
 
     class Meta:
         model = User
-        fields = ("username", "email", "first_name", "last_name", "rol", "is_active")
+        fields = ("username", "email", "first_name", "last_name", "rol", "is_active",
+                  "phone_number", "sms_enabled", "email_enabled")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -52,7 +53,8 @@ class AdminUserUpdateForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ("username", "email", "first_name", "last_name", "rol", "is_active")
+        fields = ("username", "email", "first_name", "last_name", "rol", "is_active",
+                  "phone_number", "sms_enabled", "email_enabled")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -149,6 +151,46 @@ class WebSettingsForm(forms.ModelForm):
             if not (self.instance.manual_cert_pem and self.instance.manual_key_pem):
                 self.add_error("tls_mode",
                                _("Manuel mod için önce sertifika + anahtar yükleyin."))
+        return cleaned
+
+
+class NotificationSettingsForm(forms.ModelForm):
+    """Yönetici → Bildirim Merkezi: SMS (NetGSM) + e-posta (SMTP) ayarları."""
+
+    class Meta:
+        from api.models import NotificationSettings  # lazy
+        model = NotificationSettings
+        fields = (
+            "email_enabled", "smtp_host", "smtp_port", "smtp_use_tls",
+            "smtp_user", "smtp_password", "mail_from", "mail_subject",
+            "sms_enabled", "netgsm_usercode", "netgsm_password",
+            "netgsm_header", "netgsm_api_url",
+        )
+        widgets = {
+            "smtp_password": forms.PasswordInput(render_value=True),
+            "netgsm_password": forms.PasswordInput(render_value=True),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            elif isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select form-select-solid")
+            else:
+                field.widget.attrs.setdefault("class", "form-control form-control-solid")
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("email_enabled"):
+            for f in ("smtp_host", "smtp_user", "mail_from"):
+                if not (cleaned.get(f) or "").strip():
+                    self.add_error(f, _("E-posta etkinken bu alan zorunludur."))
+        if cleaned.get("sms_enabled"):
+            for f in ("netgsm_usercode", "netgsm_password", "netgsm_header"):
+                if not (cleaned.get(f) or "").strip():
+                    self.add_error(f, _("SMS etkinken bu alan zorunludur."))
         return cleaned
 
 

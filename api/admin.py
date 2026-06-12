@@ -7,6 +7,9 @@ from .models import (
     Command,
     Connection,
     LogType,
+    MessageTemplate,
+    NotificationLog,
+    NotificationSettings,
     Parameter,
     PowerOff,
     Reading,
@@ -18,6 +21,7 @@ from .models import (
     Sensor,
     SensorLatest,
     Station,
+    StationAuthority,
     StationType,
     StatusCode,
     SystemLog,
@@ -31,6 +35,12 @@ class StationTypeAdmin(admin.ModelAdmin):
     ordering = ("code",)
 
 
+class StationAuthorityInline(admin.TabularInline):
+    model = StationAuthority
+    extra = 0
+    autocomplete_fields = ("user",)
+
+
 @admin.register(Station)
 class StationAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "station_type", "company", "domain", "port", "active", "user", "created_at")
@@ -39,7 +49,17 @@ class StationAdmin(admin.ModelAdmin):
     list_editable = ("active",)
     readonly_fields = ("created_at",)
     autocomplete_fields = ("station_type", "sample_request_sensor", "user")
+    inlines = (StationAuthorityInline,)
     ordering = ("-created_at",)
+
+
+@admin.register(StationAuthority)
+class StationAuthorityAdmin(admin.ModelAdmin):
+    list_display = ("id", "station", "user", "notify", "created_at")
+    list_filter = ("notify", "station")
+    search_fields = ("station__name", "user__username")
+    autocomplete_fields = ("station", "user")
+    readonly_fields = ("created_at",)
 
 
 @admin.register(Connection)
@@ -326,6 +346,71 @@ class SystemLogAdmin(admin.ModelAdmin):
         if not obj.description:
             return "—"
         return obj.description if len(obj.description) <= 80 else obj.description[:77] + "…"
+
+
+class _NotificationSettingsForm(forms.ModelForm):
+    class Meta:
+        model = NotificationSettings
+        fields = "__all__"
+        widgets = {
+            "smtp_password": forms.PasswordInput(render_value=True),
+            "netgsm_password": forms.PasswordInput(render_value=True),
+        }
+
+
+@admin.register(NotificationSettings)
+class NotificationSettingsAdmin(admin.ModelAdmin):
+    form = _NotificationSettingsForm
+    list_display = ("__str__", "email_enabled", "sms_enabled", "updated_at", "updated_by")
+    readonly_fields = ("updated_at", "updated_by")
+    fieldsets = (
+        ("E-posta (SMTP)", {
+            "fields": ("email_enabled", "smtp_host", "smtp_port", "smtp_use_tls",
+                       "smtp_user", "smtp_password", "mail_from", "mail_subject"),
+        }),
+        ("SMS (NetGSM)", {
+            "fields": ("sms_enabled", "netgsm_usercode", "netgsm_password",
+                       "netgsm_header", "netgsm_api_url"),
+        }),
+        ("Audit", {"fields": ("updated_at", "updated_by")}),
+    )
+
+    def has_add_permission(self, request):
+        return not NotificationSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(MessageTemplate)
+class MessageTemplateAdmin(admin.ModelAdmin):
+    list_display = ("id", "title", "channel", "category", "created_by", "created_at")
+    list_filter = ("channel", "category")
+    search_fields = ("title", "body")
+    readonly_fields = ("created_by", "created_at")
+
+    def save_model(self, request, obj, form, change):
+        if not change and obj.created_by_id is None:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(NotificationLog)
+class NotificationLogAdmin(admin.ModelAdmin):
+    list_display = ("id", "channel", "recipient", "status", "kind", "sent_by", "created_at")
+    list_filter = ("channel", "status", "kind")
+    search_fields = ("recipient", "message")
+    date_hierarchy = "created_at"
+    readonly_fields = ("channel", "recipient", "message", "status", "error", "kind",
+                       "created_at", "sent_by")
+    ordering = ("-created_at",)
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(ApiLog)

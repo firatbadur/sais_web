@@ -753,3 +753,142 @@ def port_check(request):
         pass
 
     return JsonResponse(result)
+
+
+# --------------------------------------------------------------------------- #
+# Bildirim Merkezi: alıcı listesi + toplu test gönderimi + hazır mesajlar (rol=1)
+# --------------------------------------------------------------------------- #
+
+@login_required
+def notification_recipients(request):
+    """Test paneli için aktif kullanıcı listesi (select2)."""
+    denied = _require_admin(request)
+    if denied:
+        return denied
+
+    from users.models import CustomUser
+
+    results = []
+    for u in CustomUser.objects.filter(is_active=True).order_by("first_name", "username"):
+        name = (u.get_full_name() or u.username).strip()
+        phone = (u.phone_number or "").strip()
+        email = (u.email or "").strip()
+        chans = []
+        if u.sms_enabled and phone:
+            chans.append("SMS")
+        if u.email_enabled and email:
+            chans.append("E-posta")
+        suffix = f" ({', '.join(chans)})" if chans else ""
+        results.append({
+            "id": u.pk,
+            "text": f"{name} — {phone or '—'} / {email or '—'}{suffix}",
+            "phone": phone,
+            "email": email,
+        })
+    return JsonResponse({"results": results})
+
+
+@login_required
+def notification_send_test(request):
+    """Seçili kullanıcılara + serbest telefon/e-postalara toplu test gönderir.
+
+    POST JSON: {user_ids:[], extra_phones:[], extra_emails:[], channels:["sms","email"],
+                message:str, subject?:str}
+    """
+    import json
+
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    message = (data.get("message") or "").strip()
+    channels = [c for c in (data.get("channels") or []) if c in ("sms", "email")]
+    if not message:
+        return JsonResponse({"ok": False, "error": "Mesaj boş olamaz."}, status=400)
+    if not channels:
+        return JsonResponse({"ok": False, "error": "En az bir kanal seçin."}, status=400)
+
+    from users.models import CustomUser
+    from api.notifications import send_bulk
+
+    recipients = []
+    user_ids = data.get("user_ids") or []
+    if user_ids:
+        for u in CustomUser.objects.filter(pk__in=user_ids):
+            recipients.append({
+                "name": (u.get_full_name() or u.username).strip(),
+                "phone": (u.phone_number or "").strip(),
+                "email": (u.email or "").strip(),
+            })
+    for ph in (data.get("extra_phones") or []):
+        ph = (ph or "").strip()
+        if ph:
+            recipients.append({"name": ph, "phone": ph, "email": ""})
+    for em in (data.get("extra_emails") or []):
+        em = (em or "").strip()
+        if em:
+            recipients.append({"name": em, "phone": "", "email": em})
+
+    if not recipients:
+        return JsonResponse({"ok": False, "error": "Alıcı seçilmedi."}, status=400)
+
+    results = send_bulk(
+        recipients, channels, message,
+        subject=(data.get("subject") or "").strip() or None,
+        triggered_by=request.user, kind="test",
+    )
+    sent = sum(1 for r in results if r["ok"])
+    return JsonResponse({"ok": True, "sent": sent, "total": len(results), "results": results})
+
+
+@login_required
+def notification_templates(request):
+    """Hazır mesaj CRUD. GET liste / POST {title,body,channel?} / DELETE ?id=."""
+    import json
+
+    denied = _require_admin(request)
+    if denied:
+        return denied
+
+    from api.models import MessageTemplate
+
+    if request.method == "GET":
+        items = [
+            {"id": t.pk, "title": t.title, "body": t.body, "channel": t.channel}
+            for t in MessageTemplate.objects.all()[:100]
+        ]
+        return JsonResponse({"results": items})
+
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body or "{}")
+        except (ValueError, TypeError):
+            return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+        title = (data.get("title") or "").strip()
+        body = (data.get("body") or "").strip()
+        channel = data.get("channel") or "both"
+        if not title or not body:
+            return JsonResponse({"ok": False, "error": "Başlık ve mesaj zorunlu."}, status=400)
+        if channel not in ("sms", "email", "both"):
+            channel = "both"
+        t = MessageTemplate.objects.create(
+            title=title[:120], body=body, channel=channel, created_by=request.user,
+        )
+        return JsonResponse({"ok": True, "id": t.pk, "title": t.title, "body": t.body,
+                             "channel": t.channel})
+
+    if request.method == "DELETE":
+        tid = request.GET.get("id")
+        MessageTemplate.objects.filter(pk=tid).delete()
+        return JsonResponse({"ok": True})
+
+    return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+

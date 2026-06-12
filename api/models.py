@@ -99,6 +99,36 @@ class Station(models.Model):
         return self.name
 
 
+class StationAuthority(models.Model):
+    """İstasyon ↔ kullanıcı yetki eşlemesi.
+
+    Bir istasyonun alarm/bildirimlerinden sorumlu kullanıcıları tanımlar.
+    Alarm motoru (Faz 2) alıcıları buradan (`notify=True`) + kullanıcının
+    `sms_enabled`/`email_enabled` tercihlerinden çözer.
+    """
+
+    station = models.ForeignKey(
+        Station, on_delete=models.CASCADE, related_name="authorities",
+        verbose_name="İstasyon",
+    )
+    user = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE, related_name="station_authorities",
+        verbose_name="Kullanıcı",
+    )
+    notify = models.BooleanField(default=True, verbose_name="Bildirim Gönder")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "station_authority"
+        unique_together = (("station", "user"),)
+        ordering = ["station_id", "user_id"]
+        verbose_name = "İstasyon Yetkilisi"
+        verbose_name_plural = "İstasyon Yetkilileri"
+
+    def __str__(self):
+        return f"{self.station} ← {self.user}"
+
+
 class Connection(models.Model):
     """SCADA haberleşme bağlantısı (Modbus + ASCII).
 
@@ -1639,3 +1669,110 @@ class PublicIpRecord(models.Model):
             return current
         cls.objects.filter(is_current=True).update(is_current=False)
         return cls.objects.create(ip_address=ip, is_current=True)
+
+
+class NotificationSettings(models.Model):
+    """SMS (NetGSM) + e-posta (SMTP) gönderim ayarları — singleton (pk=1).
+
+    Admin panelden / dashboard'dan yönetilir. Default'lar eski yazılımın
+    değerleridir; ilk `load()`'da bu değerlerle oluşturulur.
+    """
+
+    # ---- E-posta (dinamik SMTP) ----
+    email_enabled = models.BooleanField(default=False, verbose_name="E-posta Etkin")
+    smtp_host = models.CharField(max_length=255, default="smtp.gmail.com", verbose_name="SMTP Sunucu")
+    smtp_port = models.IntegerField(default=587, verbose_name="SMTP Port")
+    smtp_use_tls = models.BooleanField(default=True, verbose_name="STARTTLS")
+    smtp_user = models.CharField(max_length=255, default="saisalarm57@gmail.com", verbose_name="SMTP Kullanıcı")
+    smtp_password = models.CharField(max_length=255, default="kyaqokitoascdyhq", verbose_name="SMTP Şifre")
+    mail_from = models.CharField(max_length=255, default="saisalarm57@gmail.com", verbose_name="Gönderen")
+    mail_subject = models.CharField(max_length=255, default="SAİS Mail Bildirim Servisi", verbose_name="Konu")
+
+    # ---- SMS (NetGSM GET/POST API) ----
+    sms_enabled = models.BooleanField(default=False, verbose_name="SMS Etkin")
+    netgsm_usercode = models.CharField(max_length=64, default="3129119605", verbose_name="NetGSM Kullanıcı Kodu")
+    netgsm_password = models.CharField(max_length=64, default="k1-c33mX", verbose_name="NetGSM Şifre")
+    netgsm_header = models.CharField(max_length=32, default="ONLNE CEVRE", verbose_name="NetGSM Başlık")
+    netgsm_api_url = models.CharField(
+        max_length=255, default="https://api.netgsm.com.tr/sms/send/get/", verbose_name="NetGSM API URL",
+    )
+
+    # ---- Audit ----
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Son Güncelleme")
+    updated_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="+", verbose_name="Güncelleyen",
+    )
+
+    class Meta:
+        db_table = "notification_settings"
+        verbose_name = "Bildirim Ayarı"
+        verbose_name_plural = "Bildirim Ayarları"
+
+    def __str__(self):
+        return "Bildirim Ayarları"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # singleton
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass  # singleton — silinmez
+
+    @classmethod
+    def load(cls):
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj
+
+
+class MessageTemplate(models.Model):
+    """Hazır (kayıtlı) bildirim mesajı — test panelinde kart olarak gösterilir."""
+
+    CHANNEL_CHOICES = (("sms", "SMS"), ("email", "E-posta"), ("both", "Her ikisi"))
+
+    title = models.CharField(max_length=120, verbose_name="Başlık")
+    body = models.TextField(verbose_name="Mesaj")
+    channel = models.CharField(max_length=10, choices=CHANNEL_CHOICES, default="both", verbose_name="Kanal")
+    category = models.CharField(max_length=60, blank=True, default="", verbose_name="Kategori")
+    created_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="+", verbose_name="Oluşturan",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Oluşturma")
+
+    class Meta:
+        db_table = "message_template"
+        verbose_name = "Hazır Mesaj"
+        verbose_name_plural = "Hazır Mesajlar"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.title
+
+
+class NotificationLog(models.Model):
+    """Gönderilen her SMS/e-posta kaydı (test şimdi; alarm Faz 2'de)."""
+
+    CHANNEL_CHOICES = (("sms", "SMS"), ("email", "E-posta"))
+    STATUS_CHOICES = (("ok", "Başarılı"), ("fail", "Hatalı"))
+
+    channel = models.CharField(max_length=10, choices=CHANNEL_CHOICES, verbose_name="Kanal")
+    recipient = models.CharField(max_length=255, verbose_name="Alıcı")
+    message = models.CharField(max_length=500, blank=True, default="", verbose_name="Mesaj")
+    status = models.CharField(max_length=8, choices=STATUS_CHOICES, verbose_name="Durum")
+    error = models.CharField(max_length=500, blank=True, default="", verbose_name="Hata")
+    kind = models.CharField(max_length=20, default="test", verbose_name="Tür")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Tarih")
+    sent_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="+", verbose_name="Gönderen",
+    )
+
+    class Meta:
+        db_table = "notification_log"
+        verbose_name = "Bildirim Kaydı"
+        verbose_name_plural = "Bildirim Kayıtları"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.channel} → {self.recipient} ({self.status})"

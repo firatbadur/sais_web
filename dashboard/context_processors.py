@@ -77,6 +77,8 @@ MENU = [
              "roles": (ROLE_ADMIN,)},
             {"label": _("Web Erişim Ayarları"), "url_name": "dashboard:admin_web_settings",
              "roles": (ROLE_ADMIN,)},
+            {"label": _("Bildirim Merkezi"), "url_name": "dashboard:admin_notifications",
+             "roles": (ROLE_ADMIN,)},
             {"label": _("Kullanıcılar"), "url_name": "dashboard:admin_users",
              "roles": (ROLE_ADMIN,)},
             {"label": _("API Logları"), "url_name": "dashboard:admin_api_logs",

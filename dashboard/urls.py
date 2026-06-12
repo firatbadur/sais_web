@@ -51,6 +51,8 @@ urlpatterns = [
     path("admin-pages/license/", views.LicenseStatusView.as_view(), name="admin_license"),
     path("admin-pages/web-settings/", views.WebSettingsView.as_view(),
          name="admin_web_settings"),
+    path("admin-pages/notifications/", views.NotificationCenterView.as_view(),
+         name="admin_notifications"),
 
     # --- License lock screen (menüsüz; middleware buraya yönlendirir) ---
     path("license-expired/", views.LicenseExpiredView.as_view(), name="license_expired"),
@@ -81,4 +83,12 @@ urlpatterns = [
     path("api/version/update/", api_views.trigger_update, name="api_trigger_update"),
     path("api/port-check/", api_views.port_check, name="api_port_check"),
     path("api/server-info/", api_views.server_info, name="api_server_info"),
+
+    # --- AJAX API (Bildirim Merkezi) ---
+    path("api/notifications/recipients/", api_views.notification_recipients,
+         name="api_notification_recipients"),
+    path("api/notifications/send-test/", api_views.notification_send_test,
+         name="api_notification_send_test"),
+    path("api/notifications/templates/", api_views.notification_templates,
+         name="api_notification_templates"),
 ]

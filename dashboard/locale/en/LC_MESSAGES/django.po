@@ -1369,3 +1369,91 @@ msgstr "Edit Order"
 
 msgid "Sırayı Kaydet"
 msgstr "Save Order"
+
+# ---- Bildirim Merkezi (Faz 1) ----
+msgid "Bildirim Merkezi"
+msgstr "Notification Center"
+
+msgid "SMS / E-posta Ayarları"
+msgstr "SMS / Email Settings"
+
+msgid "E-posta (SMTP)"
+msgstr "Email (SMTP)"
+
+msgid "Etkin"
+msgstr "Enabled"
+
+msgid "Sunucu"
+msgstr "Server"
+
+msgid "Gönderen"
+msgstr "Sender"
+
+msgid "Konu"
+msgstr "Subject"
+
+msgid "NetGSM Kullanıcı Kodu"
+msgstr "NetGSM User Code"
+
+msgid "Başlık (Gönderici)"
+msgstr "Header (Sender)"
+
+msgid "Toplu Test Gönderimi"
+msgstr "Bulk Test Send"
+
+msgid "Alıcılar"
+msgstr "Recipients"
+
+msgid "Kullanıcı seçin"
+msgstr "Select users"
+
+msgid "Ek Telefonlar (virgülle)"
+msgstr "Extra Phones (comma)"
+
+msgid "Ek E-postalar (virgülle)"
+msgstr "Extra Emails (comma)"
+
+msgid "Kanal"
+msgstr "Channel"
+
+msgid "Gönderilecek mesaj..."
+msgstr "Message to send..."
+
+msgid "Hazır mesaj olarak kaydet"
+msgstr "Save as ready message"
+
+msgid "Hazır Mesajlar"
+msgstr "Ready Messages"
+
+msgid "Henüz hazır mesaj yok."
+msgstr "No ready messages yet."
+
+msgid "Alıcı"
+msgstr "Recipient"
+
+msgid "Hedef"
+msgstr "Target"
+
+msgid "Bilgi"
+msgstr "Info"
+
+msgid "Seçili alıcılara test gönderilsin mi?"
+msgstr "Send test to selected recipients?"
+
+msgid "Mesaj boş olamaz."
+msgstr "Message cannot be empty."
+
+msgid "Hazır mesaj başlığı:"
+msgstr "Ready message title:"
+
+msgid "gönderildi"
+msgstr "sent"
+
+msgid "Telefon"
+msgstr "Phone"
+
+msgid "SMS Bildirimi"
+msgstr "SMS Notification"
+
+msgid "E-posta Bildirimi"
+msgstr "Email Notification"

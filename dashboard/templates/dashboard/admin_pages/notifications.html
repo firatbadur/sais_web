@@ -1,0 +1,303 @@
+{% extends "dashboard/base.html" %}
+{% load i18n static %}
+
+{% block title %}{% trans "Bildirim Merkezi" %}{% endblock %}
+{% block page_title %}{% trans "Bildirim Merkezi" %}{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+
+<ul class="nav nav-tabs nav-line-tabs nav-line-tabs-2x fs-5 fw-semibold mb-5">
+    <li class="nav-item">
+        <a class="nav-link active" data-bs-toggle="tab" href="#tab-ayarlar">
+            <i class="ki-outline ki-setting-3 fs-4 me-1"></i>{% trans "SMS / E-posta Ayarları" %}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#tab-test">
+            <i class="ki-outline ki-send fs-4 me-1"></i>{% trans "Test" %}
+        </a>
+    </li>
+</ul>
+
+<div class="tab-content">
+
+    <!-- ============ SEKME: AYARLAR ============ -->
+    <div class="tab-pane fade show active" id="tab-ayarlar" role="tabpanel">
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_settings">
+            <div class="row g-5">
+                <!-- E-posta -->
+                <div class="col-lg-6">
+                    <div class="card card-flush h-100">
+                        <div class="card-header pt-5">
+                            <h3 class="card-title fw-bold">
+                                <i class="ki-outline ki-sms fs-2 me-2 text-primary"></i>{% trans "E-posta (SMTP)" %}
+                            </h3>
+                            <div class="card-toolbar">
+                                <div class="form-check form-switch form-check-custom form-check-solid">
+                                    {{ settings_form.email_enabled }}
+                                    <label class="form-check-label fw-semibold ms-2">{% trans "Etkin" %}</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body pt-3">
+                            <div class="row g-4">
+                                <div class="col-8"><label class="form-label">{% trans "Sunucu" %}</label>{{ settings_form.smtp_host }}</div>
+                                <div class="col-4"><label class="form-label">{% trans "Port" %}</label>{{ settings_form.smtp_port }}</div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch form-check-custom form-check-solid">
+                                        {{ settings_form.smtp_use_tls }}
+                                        <label class="form-check-label ms-2">STARTTLS</label>
+                                    </div>
+                                </div>
+                                <div class="col-12"><label class="form-label">{% trans "Kullanıcı" %}</label>{{ settings_form.smtp_user }}</div>
+                                <div class="col-12"><label class="form-label">{% trans "Şifre" %}</label>{{ settings_form.smtp_password }}</div>
+                                <div class="col-12"><label class="form-label">{% trans "Gönderen" %}</label>{{ settings_form.mail_from }}</div>
+                                <div class="col-12"><label class="form-label">{% trans "Konu" %}</label>{{ settings_form.mail_subject }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- SMS -->
+                <div class="col-lg-6">
+                    <div class="card card-flush h-100">
+                        <div class="card-header pt-5">
+                            <h3 class="card-title fw-bold">
+                                <i class="ki-outline ki-phone fs-2 me-2 text-success"></i>{% trans "SMS (NetGSM)" %}
+                            </h3>
+                            <div class="card-toolbar">
+                                <div class="form-check form-switch form-check-custom form-check-solid">
+                                    {{ settings_form.sms_enabled }}
+                                    <label class="form-check-label fw-semibold ms-2">{% trans "Etkin" %}</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body pt-3">
+                            <div class="row g-4">
+                                <div class="col-12"><label class="form-label">{% trans "NetGSM Kullanıcı Kodu" %}</label>{{ settings_form.netgsm_usercode }}</div>
+                                <div class="col-12"><label class="form-label">{% trans "Şifre" %}</label>{{ settings_form.netgsm_password }}</div>
+                                <div class="col-12"><label class="form-label">{% trans "Başlık (Gönderici)" %}</label>{{ settings_form.netgsm_header }}</div>
+                                <div class="col-12"><label class="form-label">{% trans "API URL" %}</label>{{ settings_form.netgsm_api_url }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% if settings_form.errors %}
+            <div class="alert alert-danger mt-5">
+                {% for field in settings_form %}{% for e in field.errors %}<div>{{ field.label }}: {{ e }}</div>{% endfor %}{% endfor %}
+            </div>
+            {% endif %}
+            <div class="d-flex justify-content-end mt-5">
+                <button type="submit" class="btn btn-primary">
+                    <i class="ki-outline ki-check fs-4"></i>{% trans "Kaydet" %}
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- ============ SEKME: TEST ============ -->
+    <div class="tab-pane fade" id="tab-test" role="tabpanel">
+        <div class="row g-5">
+            <div class="col-lg-7">
+                <div class="card card-flush">
+                    <div class="card-header pt-5">
+                        <h3 class="card-title fw-bold">{% trans "Toplu Test Gönderimi" %}</h3>
+                    </div>
+                    <div class="card-body pt-3">
+                        <div class="mb-4">
+                            <label class="form-label">{% trans "Alıcılar" %}</label>
+                            <select id="recipients" class="form-select" multiple data-placeholder="{% trans 'Kullanıcı seçin' %}"></select>
+                        </div>
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">{% trans "Ek Telefonlar (virgülle)" %}</label>
+                                <input id="extra-phones" type="text" class="form-control form-control-solid" placeholder="5XXXXXXXXX, 5XXXXXXXXX">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">{% trans "Ek E-postalar (virgülle)" %}</label>
+                                <input id="extra-emails" type="text" class="form-control form-control-solid" placeholder="a@x.com, b@y.com">
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label">{% trans "Kanal" %}</label>
+                            <div class="d-flex gap-5">
+                                <label class="form-check form-check-custom form-check-solid">
+                                    <input class="form-check-input chan" type="checkbox" value="sms" checked>
+                                    <span class="form-check-label ms-2">{% trans "SMS" %}</span>
+                                </label>
+                                <label class="form-check form-check-custom form-check-solid">
+                                    <input class="form-check-input chan" type="checkbox" value="email" checked>
+                                    <span class="form-check-label ms-2">{% trans "E-posta" %}</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label">{% trans "Mesaj" %}</label>
+                            <textarea id="message" rows="4" class="form-control form-control-solid" placeholder="{% trans 'Gönderilecek mesaj...' %}"></textarea>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <button id="btn-save-tpl" type="button" class="btn btn-light-primary">
+                                <i class="ki-outline ki-save-2 fs-4"></i>{% trans "Hazır mesaj olarak kaydet" %}
+                            </button>
+                            <button id="btn-send" type="button" class="btn btn-primary">
+                                <i class="ki-outline ki-send fs-4"></i>{% trans "Gönder" %}
+                            </button>
+                        </div>
+                        <div id="send-result" class="mt-5"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card card-flush">
+                    <div class="card-header pt-5">
+                        <h3 class="card-title fw-bold">{% trans "Hazır Mesajlar" %}</h3>
+                    </div>
+                    <div class="card-body pt-3">
+                        <div id="tpl-cards" class="d-flex flex-column gap-3">
+                            {% for t in templates %}
+                            <div class="border border-dashed border-gray-300 rounded p-3 tpl-card" data-id="{{ t.id }}" data-body="{{ t.body }}">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="fw-bold text-gray-800">{{ t.title }}</div>
+                                    <button type="button" class="btn btn-icon btn-sm btn-light-danger tpl-del" data-id="{{ t.id }}" title="{% trans 'Sil' %}">
+                                        <i class="ki-outline ki-trash fs-5"></i>
+                                    </button>
+                                </div>
+                                <div class="text-muted fs-7 mt-1">{{ t.body|truncatechars:90 }}</div>
+                            </div>
+                            {% empty %}
+                            <div class="text-muted" id="tpl-empty">{% trans "Henüz hazır mesaj yok." %}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    const $ = window.jQuery;
+    const URL_RECIPIENTS = "{% url 'dashboard:api_notification_recipients' %}";
+    const URL_SEND = "{% url 'dashboard:api_notification_send_test' %}";
+    const URL_TPL = "{% url 'dashboard:api_notification_templates' %}";
+    const I18N = {
+        confirmSend: "{% trans 'Seçili alıcılara test gönderilsin mi?' %}",
+        needMsg: "{% trans 'Mesaj boş olamaz.' %}",
+        titlePrompt: "{% trans 'Hazır mesaj başlığı:' %}",
+        netErr: "{% trans 'Ağ hatası' %}",
+        del: "{% trans 'Sil' %}",
+        sent: "{% trans 'gönderildi' %}",
+    };
+    function csrf() {
+        const el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
+    }
+    function jpost(url, body, method) {
+        return fetch(url, {
+            method: method || 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+            body: body ? JSON.stringify(body) : undefined,
+        }).then(r => r.json());
+    }
+
+    // --- Alıcı select2 ---
+    function initRecipients() {
+        fetch(URL_RECIPIENTS, { credentials: 'same-origin' })
+            .then(r => r.json()).then(d => {
+                const sel = $('#recipients');
+                (d.results || []).forEach(u => {
+                    sel.append(new Option(u.text, u.id, false, false));
+                });
+                sel.select2({ placeholder: sel.data('placeholder'), width: '100%' });
+            }).catch(() => {});
+    }
+    if ($) initRecipients();
+
+    // --- Hazır mesaj: kart tıkla → mesaja doldur ---
+    document.getElementById('tpl-cards').addEventListener('click', function (e) {
+        const del = e.target.closest('.tpl-del');
+        if (del) {
+            e.stopPropagation();
+            const id = del.dataset.id;
+            jpost(URL_TPL + '?id=' + id, null, 'DELETE').then(() => {
+                const card = del.closest('.tpl-card');
+                if (card) card.remove();
+            });
+            return;
+        }
+        const card = e.target.closest('.tpl-card');
+        if (card) document.getElementById('message').value = card.dataset.body || '';
+    });
+
+    // --- Hazır mesaj kaydet ---
+    document.getElementById('btn-save-tpl').addEventListener('click', function () {
+        const body = document.getElementById('message').value.trim();
+        if (!body) { alert(I18N.needMsg); return; }
+        const title = prompt(I18N.titlePrompt, body.slice(0, 40));
+        if (!title) return;
+        jpost(URL_TPL, { title: title, body: body, channel: 'both' }).then(d => {
+            if (!d.ok) { alert(d.error || I18N.netErr); return; }
+            const empty = document.getElementById('tpl-empty');
+            if (empty) empty.remove();
+            const div = document.createElement('div');
+            div.className = 'border border-dashed border-gray-300 rounded p-3 tpl-card';
+            div.dataset.id = d.id; div.dataset.body = d.body;
+            div.innerHTML = '<div class="d-flex justify-content-between align-items-start">' +
+                '<div class="fw-bold text-gray-800"></div>' +
+                '<button type="button" class="btn btn-icon btn-sm btn-light-danger tpl-del" data-id="' + d.id + '" title="' + I18N.del + '"><i class="ki-outline ki-trash fs-5"></i></button></div>' +
+                '<div class="text-muted fs-7 mt-1"></div>';
+            div.querySelector('.fw-bold').textContent = d.title;
+            div.querySelector('.text-muted').textContent = d.body.slice(0, 90);
+            document.getElementById('tpl-cards').prepend(div);
+        }).catch(() => alert(I18N.netErr));
+    });
+
+    // --- Gönder ---
+    document.getElementById('btn-send').addEventListener('click', function () {
+        const btn = this;
+        const message = document.getElementById('message').value.trim();
+        if (!message) { alert(I18N.needMsg); return; }
+        const channels = Array.from(document.querySelectorAll('.chan:checked')).map(c => c.value);
+        const userIds = $ ? ($('#recipients').val() || []).map(Number) : [];
+        const splitList = s => s.split(',').map(x => x.trim()).filter(Boolean);
+        const extraPhones = splitList(document.getElementById('extra-phones').value);
+        const extraEmails = splitList(document.getElementById('extra-emails').value);
+        if (!confirm(I18N.confirmSend)) return;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm align-middle me-2"></span>';
+        jpost(URL_SEND, {
+            user_ids: userIds, extra_phones: extraPhones, extra_emails: extraEmails,
+            channels: channels, message: message,
+        }).then(d => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="ki-outline ki-send fs-4"></i>{% trans "Gönder" %}';
+            const box = document.getElementById('send-result');
+            if (!d.ok) { box.innerHTML = '<div class="alert alert-danger">' + (d.error || I18N.netErr) + '</div>'; return; }
+            let rows = (d.results || []).map(r =>
+                '<tr><td>' + escapeHtml(r.name) + '</td><td>' + r.channel.toUpperCase() + '</td><td>' + escapeHtml(r.target) +
+                '</td><td>' + (r.ok ? '<span class="badge badge-light-success">OK</span>' : '<span class="badge badge-light-danger">HATA</span>') +
+                '</td><td class="text-muted fs-8">' + escapeHtml(r.info || '') + '</td></tr>').join('');
+            box.innerHTML = '<div class="alert alert-light-primary">' + d.sent + '/' + d.total + ' ' + I18N.sent +
+                '</div><div class="table-responsive"><table class="table table-row-bordered align-middle fs-7">' +
+                '<thead><tr class="fw-bold text-gray-600"><th>{% trans "Alıcı" %}</th><th>{% trans "Kanal" %}</th><th>{% trans "Hedef" %}</th><th>{% trans "Durum" %}</th><th>{% trans "Bilgi" %}</th></tr></thead><tbody>' +
+                rows + '</tbody></table></div>';
+        }).catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="ki-outline ki-send fs-4"></i>{% trans "Gönder" %}';
+            alert(I18N.netErr);
+        });
+    });
+
+    function escapeHtml(s) {
+        if (s == null) return '';
+        return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+})();
+</script>
+{% endblock %}

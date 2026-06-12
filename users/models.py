@@ -18,6 +18,15 @@ class CustomUser(AbstractUser):
     device_id = models.CharField(max_length=250, blank=True, null=True)
     added_by = models.IntegerField(verbose_name="Ekleyen Kullanıcı", help_text="Ekleyen Kullanıcı", blank=False,
                                      null=True,default=1)
+
+    # Bildirim (alarm) tercih alanları — SMS/e-posta alıcı çözümü bunları kullanır.
+    phone_number = models.CharField(
+        max_length=20, blank=True, default="", verbose_name="Telefon",
+        help_text="NetGSM formatı: 5XXXXXXXXX",
+    )
+    sms_enabled = models.BooleanField(default=False, verbose_name="SMS Bildirimi")
+    email_enabled = models.BooleanField(default=False, verbose_name="E-posta Bildirimi")
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):

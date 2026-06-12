@@ -43,6 +43,7 @@ from .forms import (
     CertUploadForm,
     ChangePasswordForm,
     DashboardLoginForm,
+    NotificationSettingsForm,
     ProfileForm,
     WebSettingsForm,
 )
@@ -949,3 +950,35 @@ class WebSettingsView(AdminRequiredMixin, TemplateView):
         else:
             messages.error(request, _("Yüklendi ama üretim hatası: %(e)s") % {"e": error})
         return redirect("dashboard:admin_web_settings")
+
+
+class NotificationCenterView(AdminRequiredMixin, TemplateView):
+    """Yönetici → Bildirim Merkezi (SMS/E-posta).
+
+    Sekme 1: SMS (NetGSM) + e-posta (SMTP) ayarları.
+    Sekme 2: seçili kullanıcılara toplu SMS/mail test + hazır mesaj kartları.
+    Test + hazır mesaj işlemleri AJAX (api_views); ayar kaydı form POST.
+    """
+    template_name = "dashboard/admin_pages/notifications.html"
+
+    def get_context_data(self, **kwargs):
+        from api.models import MessageTemplate, NotificationSettings
+        ns = NotificationSettings.load()
+        ctx = super().get_context_data(**kwargs)
+        ctx.setdefault("settings_form", NotificationSettingsForm(instance=ns))
+        ctx["ns"] = ns
+        ctx["templates"] = MessageTemplate.objects.all()[:100]
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        from api.models import NotificationSettings
+        ns = NotificationSettings.load()
+        form = NotificationSettingsForm(request.POST, instance=ns)
+        if not form.is_valid():
+            ctx = self.get_context_data(settings_form=form)
+            return self.render_to_response(ctx)
+        ns = form.save(commit=False)
+        ns.updated_by = request.user
+        ns.save()
+        messages.success(request, _("Bildirim ayarları kaydedildi."))
+        return redirect("dashboard:admin_notifications")
