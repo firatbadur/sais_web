@@ -1531,6 +1531,44 @@ class License(models.Model):
         return (self.valid_until - timezone.now()).days
 
 
+class SystemHeartbeat(models.Model):
+    """Sistem canlılık damgası — singleton (pk=1), SystemSwitch deseni.
+
+    Çalışan stack `api.tasks.heartbeat_task` ile her dakika `last_seen`'i tazeler.
+    PC kapanınca (elektrik kesintisi/sert kapanma dahil) damga durur. Açılışta
+    `detect_power_off` komutu son damga ile şimdiki zaman arasındaki boşluğu ölçer;
+    `settings.POWEROFF_DETECT_THRESHOLD_MIN` eşiğini aşarsa o aralığı her istasyon
+    için bir `PowerOff` kaydına yazar (start_date=son damga, end_date=açılış).
+    Graceful sinyale (SIGTERM) bağlı olmadığı için elektrik kesintisini de yakalar.
+    """
+
+    last_seen = models.DateTimeField(verbose_name="Son Canlılık")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Güncelleme")
+
+    class Meta:
+        db_table = "system_heartbeat"
+        verbose_name = "Sistem Canlılık"
+        verbose_name_plural = "Sistem Canlılık"
+
+    def __str__(self):
+        return str(self.last_seen)
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # singleton
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass  # singleton — silinmez
+
+    @classmethod
+    def load(cls):
+        from django.utils import timezone
+        obj, _created = cls.objects.get_or_create(
+            pk=1, defaults={"last_seen": timezone.now()},
+        )
+        return obj
+
+
 # ---------------------------------------------------------------------------
 # Web erişim ayarları (domain + SSL) — Caddy reverse proxy ile yönetilir
 # ---------------------------------------------------------------------------

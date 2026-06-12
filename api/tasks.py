@@ -28,6 +28,26 @@ def run_alarms():
     return alarms.run()
 
 
+@shared_task(name="api.tasks.heartbeat_task")
+def heartbeat_task():
+    """Sistem canlılık damgasını tazeler (her dakika).
+
+    PC kapanma tespiti buna dayanır: açılışta `detect_power_off` son damga ile
+    şimdiki zaman arasındaki boşluğu ölçer; eşiği aşarsa o aralık PC kapalı kalma
+    süresi olarak `PowerOff` kayıtlarına yazılır.
+
+    Lisans bitse de çalışır (gate'lenmez) — PC ayakta olduğu sürece damga
+    tazelenmeli, aksi halde lisans/polling kesintisi yanlışlıkla 'kapanma' gibi
+    görünür.
+    """
+    from django.utils import timezone
+    from api.models import SystemHeartbeat
+    hb = SystemHeartbeat.load()
+    hb.last_seen = timezone.now()
+    hb.save(update_fields=["last_seen", "updated_at"])
+    return {"last_seen": hb.last_seen.isoformat()}
+
+
 @shared_task(name="api.tasks.aggregate_readings_5m")
 def aggregate_readings_5m():
     """5 dakikalık aggregate — son 2 saatlik aralığı yeniden hesaplar.

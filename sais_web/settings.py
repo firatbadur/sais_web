@@ -297,6 +297,11 @@ READING_RETENTION_15M_DAYS = int(os.getenv("READING_RETENTION_15M_DAYS", "365"))
 READING_RETENTION_HOURLY_DAYS = int(os.getenv("READING_RETENTION_HOURLY_DAYS", "1825"))   # 5 yıl
 READING_RETENTION_DAILY_DAYS = int(os.getenv("READING_RETENTION_DAILY_DAYS", "99999"))    # pratikte sonsuz
 
+# PC kapanma tespiti (heartbeat) — açılışta son canlılık damgası ile şimdiki zaman
+# arasındaki boşluk bu dakikayı aşarsa PowerOff kaydı düşülür. Kısa container
+# restart'larını (Watchtower güncellemesi vb.) kayıt dışı bırakacak kadar büyük tut.
+POWEROFF_DETECT_THRESHOLD_MIN = int(os.getenv("POWEROFF_DETECT_THRESHOLD_MIN", "5"))
+
 
 # Celery — periyodik polling ve Command executor
 # Broker (Redis DB 2) ve result backend (django-db) cache'den ayrı tutuluyor.

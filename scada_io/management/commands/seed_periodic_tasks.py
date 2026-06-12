@@ -8,6 +8,7 @@ Bu komut beat scheduler'ın okuyacağı periyodik task'ları DB'ye yazar:
   - scada_io.tasks.dispatch_polls            (her 5 sn)
   - scada_io.tasks.dispatch_commands         (her 3 sn)
   - scada_io.tasks.expire_commands           (her 60 sn)
+  - api.tasks.heartbeat_task                  (her 60 sn)  — PC kapanma tespiti damgası
   - api.tasks.aggregate_readings_5m          (cron: * * * * *)
   - api.tasks.aggregate_readings_15m         (cron: */5 * * * *)
   - api.tasks.aggregate_readings_hourly      (cron: 5 * * * *)
@@ -32,6 +33,8 @@ INTERVAL_TASKS = [
     ("scada_io.tasks.expire_commands", 60),
     # Alarm kurallarını her 60 sn'de değerlendir (SMS/e-posta gönderimi).
     ("api.tasks.run_alarms", 60),
+    # Sistem canlılık damgası — PC kapanma tespiti (detect_power_off) buna dayanır.
+    ("api.tasks.heartbeat_task", 60),
 ]
 
 CRONTAB_TASKS = [

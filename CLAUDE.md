@@ -66,7 +66,6 @@ sais_web/
 │   ├── middleware.py      # ApiLoggingMiddleware — gelen istek auto-log
 │   ├── api_logging.py     # Outbound helper (log_outbound_call decorator + record_outbound_call)
 │   ├── web_proxy.py       # WebSettings → Caddyfile render + PFX→PEM + atomik yazım
-│   ├── signals.py         # SIGTERM/SIGINT yakalar, PowerOff kaydı kapatır
 │   ├── helpers.py         # DataFrame → JSON safe dönüşüm
 │   ├── permissions.py
 │   ├── management/commands/
@@ -74,6 +73,7 @@ sais_web/
 │   │   ├── aggregate_readings.py   # 15m / hour / day bucket hesaplama
 │   │   ├── prune_readings.py       # Reading + aggregate retention (raw/15m/hour/day level'lar)
 │   │   ├── prune_api_logs.py       # 90 günlük ApiLog retention
+│   │   ├── detect_power_off.py     # Açılışta heartbeat boşluğundan PowerOff kaydı düşer
 │   │   └── render_caddyfile.py     # WebSettings → Caddyfile üret (startup + panel save)
 │   └── migrations/
 ├── sais_domain/           # SAIS-özel uzantılar (Bakanlık + Envisoft entegrasyonu)
@@ -368,6 +368,7 @@ başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows ser
 - **Retention:**
   - `prune_api_logs` (`API_LOG_RETENTION_DAYS`, default 90gün) — günlük cron.
   - `prune_readings` 4 seviye (`READING_RETENTION_RAW_DAYS=90`, `..._15M_DAYS=365`, `..._HOURLY_DAYS=1825`, `..._DAILY_DAYS=99999`) — günlük cron. Batch delete (10K/transaction) ile MSSQL tek büyük transaction'dan kaçınır.
+- **PC kapanma kaydı (PowerOff, heartbeat bazlı):** Çalışan stack `api.tasks.heartbeat_task` ile her dakika `SystemHeartbeat` (singleton pk=1) `last_seen` damgasını tazeler. Container açılış zincirinde `detect_power_off` (migrate sonrası) son damga ile şimdiki zaman arasındaki boşluğu ölçer; `POWEROFF_DETECT_THRESHOLD_MIN` (default 5dk) aşılırsa o aralığı **her istasyon için** bir `PowerOff` kaydına yazar (`start_date`=son damga ≈ kapanma anı, `end_date`=açılış). Elektrik kesintisi/sert kapanmayı da yakalar (graceful sinyale bağlı değil); kısa container restart'ları (Watchtower) eşik altında kalıp kayıt üretmez. Heartbeat task lisans-gate'siz (PC ayaktayken damga durmamalı). Eski SIGTERM bazlı `api/signals.py` kaldırıldı.
 - **Dashboard arayüz** (`/dashboard/`): Metronic 8.2 tabanlı light-sidebar layout. Giriş `/dashboard/login/` (Metronic corporate template, sosyal login/signup yok); "şifremi unuttum" admin'e yönlendiren info sayfası. Ana sayfa 4 widget'lı (KPI/grid/trend/events) AJAX polling ile canlı. Role mapping: rol=1 (admin) her menüyü görür, rol=2 (operatör) admin dışı, rol=3 (user) salt-izleme (komut/sistem log yok). Session cookie 24h (`SESSION_COOKIE_AGE=86400`); "Beni hatırla" işaretlenirse 30 gün.
 - **Dil desteği (i18n):** `USE_I18N=True`, `LANGUAGES=[("tr","Türkçe"),("en","English")]`, `LOCALE_PATHS=[dashboard/locale]`. TR default, EN çevirisi `dashboard/locale/en/LC_MESSAGES/django.po` (178 entry). `django.mo` dosyası commit'te; gettext binary olmadan Python script ile compile edildi. Yeni string eklendiğinde ya Linux/Docker'da `python manage.py compilemessages` ya da `_compile_po.py` benzeri bir script kullanılmalı (Windows gettext eksik).
 
