@@ -1921,3 +1921,104 @@ msgstr "Cancel"
 
 msgid "Bu çalışma iptal edilsin mi? (Numune alıcı kapatılır)"
 msgstr "Cancel this run? (Sampler will be turned off)"
+
+# --- Senaryo Tasarimci (demo) ---
+
+msgid "Senaryo Tasarımcı"
+msgstr "Scenario Designer"
+
+msgid "Senaryo Tasarımcı (Demo)"
+msgstr "Scenario Designer (Demo)"
+
+msgid "Tasarım Adı"
+msgstr "Design Name"
+
+msgid "Örn. Atıksu Otomasyon Senaryosu"
+msgstr "e.g. Wastewater Automation Scenario"
+
+msgid "İstasyon (bağlam)"
+msgstr "Station (context)"
+
+msgid "Yeni"
+msgstr "New"
+
+msgid "Aç"
+msgstr "Open"
+
+msgid "Şablonlar"
+msgstr "Templates"
+
+msgid "Şablon yok"
+msgstr "No templates"
+
+msgid "Temizle"
+msgstr "Clear"
+
+msgid "Girişler"
+msgstr "Inputs"
+
+msgid "Mantık"
+msgstr "Logic"
+
+msgid "Çıkışlar"
+msgstr "Outputs"
+
+msgid "Sensör (Analog)"
+msgstr "Sensor (Analog)"
+
+msgid "Sensör (Dijital)"
+msgstr "Sensor (Digital)"
+
+msgid "Bakanlık Talebi"
+msgstr "Ministry Request"
+
+msgid "Zaman Penceresi"
+msgstr "Time Window"
+
+msgid "Gecikme"
+msgstr "Delay"
+
+msgid "Numune Alıcı Aç"
+msgstr "Sampler On"
+
+msgid "Numune Alıcı Kapat"
+msgstr "Sampler Off"
+
+msgid "Bakanlık Kod Al"
+msgstr "Get Ministry Code"
+
+msgid "SIM Başlat"
+msgstr "SIM Start"
+
+msgid "SIM Tamamla"
+msgstr "SIM Complete"
+
+msgid "SIM Hata"
+msgstr "SIM Error"
+
+msgid "Diagnostik"
+msgstr "Diagnostic"
+
+msgid "Komut"
+msgstr "Command"
+
+msgid "Tasarım adı zorunlu."
+msgstr "Design name is required."
+
+msgid "Tasarım kaydedildi."
+msgstr "Design saved."
+
+msgid "Bu tasarım silinsin mi?"
+msgstr "Delete this design?"
+
+msgid "Bütün düğümler silinsin mi?"
+msgstr "Delete all nodes?"
+
+msgid "Kayıtlı tasarım yok"
+msgstr "No saved designs"
+
+msgid "Numune Alma (Yerleşik)"
+msgstr "Sampling (Built-in)"
+
+msgid "Demo: node'ları sürükleyip bırakın, çıkış→giriş portlarını tel ile bağlayın. Bu fazda tasarım yalnız kaydedilir; yürütme bir sonraki aşamada."
+msgstr "Demo: drag and drop nodes, wire output->input ports. In this phase the design is only saved; execution comes next."

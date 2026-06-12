@@ -640,6 +640,23 @@ class ScenarioBuilderView(OperatorRequiredMixin, TemplateView):
         return ctx
 
 
+class ScenarioDesignerView(OperatorRequiredMixin, TemplateView):
+    """Operatör/Yönetici → Senaryo Tasarımcı (Demo).
+
+    Node-graph (PLC-benzeri) görsel senaryo tasarımcısı: sürükle-bırak sensör
+    giriş / AND-OR-NOT mantık / gecikme / çıkış-aksiyon node'ları, aralarında
+    tel bağlantıları. Bu fazda yalnız tasarlanıp graph JSON olarak saklanır
+    (yürütme motoru + per-senaryo beat sonraki faz).
+    """
+    template_name = "dashboard/operator/scenario_designer.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        ctx["default_station_id"] = default_station_id()
+        return ctx
+
+
 class AlarmsView(OperatorRequiredMixin, TemplateView):
     """Operatör/Yönetici → Alarm Yönetimi (2 sekme: Ölçüm + Diagnostik).
 

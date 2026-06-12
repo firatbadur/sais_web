@@ -32,6 +32,8 @@ urlpatterns = [
 
     # --- Operator ---
     path("operator/sample-trigger/", views.ScenarioBuilderView.as_view(), name="operator_sample"),
+    path("operator/scenario-designer/", views.ScenarioDesignerView.as_view(),
+         name="operator_scenario_designer"),
     path("operator/alarms/", views.AlarmsView.as_view(), name="operator_alarms"),
 
     # --- Management (readonly) ---
@@ -107,6 +109,12 @@ urlpatterns = [
     path("api/scenario/history/", api_views.scenario_history, name="api_scenario_history"),
     path("api/scenario/ministry/", api_views.scenario_request_ministry, name="api_scenario_ministry"),
     path("api/scenario/cancel-run/", api_views.scenario_cancel_run, name="api_scenario_cancel_run"),
+
+    # --- AJAX API (Senaryo Tasarımcı / node-graph) ---
+    path("api/scenario-graph/list/", api_views.graph_list, name="api_graph_list"),
+    path("api/scenario-graph/get/", api_views.graph_get, name="api_graph_get"),
+    path("api/scenario-graph/save/", api_views.graph_save, name="api_graph_save"),
+    path("api/scenario-graph/delete/", api_views.graph_delete, name="api_graph_delete"),
     path("api/scenario/digital-sensors/", api_views.scenario_digital_sensors,
          name="api_scenario_digital_sensors"),
 ]

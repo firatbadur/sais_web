@@ -1448,6 +1448,119 @@ def scenario_cancel_run(request):
     return JsonResponse({"ok": True})
 
 
+# --------------------------------------------------------------------------- #
+# Senaryo Tasarımcı (node-graph) AJAX endpoint'leri — demo
+# --------------------------------------------------------------------------- #
+
+@login_required
+def graph_list(request):
+    """Kayıtlı senaryo tasarımları (şablonlar dahil)."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    from sais_domain.models import ScenarioGraph
+
+    items = [{
+        "id": g.id,
+        "name": g.name,
+        "is_template": g.is_template,
+        "station_id": g.station_id,
+        "updated_at": timezone.localtime(g.updated_at).strftime("%d.%m.%Y %H:%M"),
+    } for g in ScenarioGraph.objects.all()]
+    return JsonResponse({"results": items})
+
+
+@login_required
+def graph_get(request):
+    """Tek tasarımın tam tanımı (graph JSON dahil)."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    from sais_domain.models import ScenarioGraph
+
+    g = ScenarioGraph.objects.filter(pk=request.GET.get("id")).first()
+    if g is None:
+        return JsonResponse({"ok": False, "error": "Tasarım bulunamadı."}, status=404)
+    return JsonResponse({"ok": True, "graph": {
+        "id": g.id, "name": g.name, "description": g.description,
+        "station_id": g.station_id, "is_template": g.is_template, "graph": g.graph,
+    }})
+
+
+@login_required
+def graph_save(request):
+    """Senaryo tasarımı oluştur/güncelle (Drawflow export JSON)."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from api.models import Station as St
+    from sais_domain.models import ScenarioGraph
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    name = (data.get("name") or "").strip()
+    if not name:
+        return JsonResponse({"ok": False, "error": "Tasarım adı zorunlu."}, status=400)
+
+    graph = data.get("graph")
+    if not isinstance(graph, dict):
+        return JsonResponse({"ok": False, "error": "Geçersiz graph verisi."}, status=400)
+
+    station = None
+    if data.get("station_id"):
+        station = St.objects.filter(pk=data.get("station_id")).first()
+
+    g_id = data.get("id")
+    if g_id:
+        g = ScenarioGraph.objects.filter(pk=g_id).first()
+        if g is None:
+            return JsonResponse({"ok": False, "error": "Tasarım bulunamadı."}, status=404)
+    else:
+        g = ScenarioGraph(created_by=request.user)
+
+    g.name = name
+    g.description = (data.get("description") or "").strip()
+    g.station = station
+    g.graph = graph
+    g.save()
+    return JsonResponse({"ok": True, "id": g.pk})
+
+
+@login_required
+def graph_delete(request):
+    """Senaryo tasarımı sil — yerleşik şablonlar silinemez."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from sais_domain.models import ScenarioGraph
+
+    try:
+        g_id = json.loads(request.body or "{}").get("id")
+    except (ValueError, TypeError):
+        g_id = None
+
+    g = ScenarioGraph.objects.filter(pk=g_id).first()
+    if g is None:
+        return JsonResponse({"ok": False, "error": "Tasarım bulunamadı."}, status=404)
+    if g.is_template:
+        return JsonResponse({"ok": False, "error": "Yerleşik şablon silinemez."}, status=400)
+    g.delete()
+    return JsonResponse({"ok": True})
+
+
 @login_required
 def scenario_digital_sensors(request):
     """İstasyonun dijital çıkış sensörleri — numune alıcı override dropdown'u."""

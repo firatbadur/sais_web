@@ -1,0 +1,369 @@
+{% extends "dashboard/base.html" %}
+{% load i18n static dashboard_extras %}
+
+{% block title %}{% trans "Senaryo Tasarımcı" %}{% endblock %}
+{% block page_title %}{% trans "Senaryo Tasarımcı (Demo)" %}{% endblock %}
+
+{% block extra_head %}
+<link href="{% static 'dashboard/plugins/custom/drawflow/drawflow.min.css' %}" rel="stylesheet">
+<style>
+    #kt_app_content_container { opacity: 0; }
+    body.page-ready #kt_app_content_container { opacity: 1; transition: opacity 0.18s ease-in-out; }
+
+    .designer-wrap { display: flex; gap: 0; height: calc(100vh - 230px); min-height: 520px; }
+    .palette { width: 230px; flex: 0 0 230px; overflow-y: auto; padding-right: 0.75rem; }
+    .palette h4 { font-size: 0.72rem; text-transform: uppercase; color: var(--bs-text-muted);
+        font-weight: 700; letter-spacing: .04em; margin: 0.9rem 0 0.4rem; }
+    .palette-node { display: flex; align-items: center; gap: .5rem; cursor: grab; user-select: none;
+        border: 1px solid var(--bs-gray-300); border-radius: .5rem; padding: .5rem .65rem;
+        margin-bottom: .4rem; background: var(--bs-body-bg); font-size: .85rem; font-weight: 600; }
+    .palette-node:hover { border-color: var(--bs-primary); background: var(--bs-gray-100); }
+    .palette-node .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 10px; }
+    .dot-input { background: #50cd89; } .dot-logic { background: #7239ea; }
+    .dot-timer { background: #f1bc00; } .dot-output { background: #f1416c; }
+
+    #drawflow { flex: 1 1 auto; position: relative; border: 1px solid var(--bs-gray-300);
+        border-radius: .65rem; background: var(--bs-gray-100);
+        background-image: radial-gradient(var(--bs-gray-300) 1px, transparent 1px);
+        background-size: 22px 22px; }
+
+    /* Metronic kart görünümlü node'lar */
+    .drawflow .drawflow-node { background: var(--bs-body-bg); border: 1px solid var(--bs-gray-300);
+        border-radius: .6rem; box-shadow: 0 2px 8px rgba(0,0,0,.08); padding: 0; min-width: 190px; color: var(--bs-body-color); }
+    .drawflow .drawflow-node.selected { border-color: var(--bs-primary); box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb),.25); }
+    .drawflow .drawflow-node .node-title { font-weight: 700; font-size: .82rem; padding: .5rem .7rem;
+        border-bottom: 1px solid var(--bs-gray-200); border-radius: .6rem .6rem 0 0; }
+    .drawflow .drawflow-node .node-body { padding: .55rem .7rem; display: flex; flex-direction: column; gap: .4rem; }
+    .drawflow .drawflow-node .node-body .form-control, .drawflow .drawflow-node .node-body .form-select {
+        font-size: .8rem; padding: .25rem .5rem; height: auto; }
+    .drawflow .drawflow-node .node-body label { font-size: .72rem; color: var(--bs-text-muted); margin-bottom: -.2rem; }
+    .node-input  .node-title { background: rgba(80,205,137,.12); color: #1b7a4b; }
+    .node-logic  .node-title { background: rgba(114,57,234,.12); color: #5a2bc0; }
+    .node-timer  .node-title { background: rgba(241,188,0,.15); color: #a07c00; }
+    .node-output .node-title { background: rgba(241,65,108,.12); color: #c01244; }
+    .drawflow .connection .main-path { stroke: var(--bs-primary); stroke-width: 2.5px; }
+    .drawflow-node .input, .drawflow-node .output { background: var(--bs-gray-500); border: 2px solid var(--bs-body-bg); }
+    .designer-toolbar .btn { margin-right: .35rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+
+<div class="card mb-4">
+    <div class="card-body py-4">
+        <div class="row g-3 align-items-end designer-toolbar">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold text-muted">{% trans "Tasarım Adı" %}</label>
+                <input type="text" class="form-control" id="dz-name" placeholder="{% trans 'Örn. Atıksu Otomasyon Senaryosu' %}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold text-muted">{% trans "İstasyon (bağlam)" %}</label>
+                <select class="form-select" id="dz-station" data-control="select2" data-allow-clear="true"
+                        data-placeholder='{% trans "İstasyon seçiniz" %}'>
+                    <option></option>
+                    {% for s in stations %}<option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 text-md-end">
+                <button class="btn btn-sm btn-light-primary" id="dz-new"><i class="ki-outline ki-plus fs-5"></i>{% trans "Yeni" %}</button>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-light" data-bs-toggle="dropdown"><i class="ki-outline ki-folder-up fs-5"></i>{% trans "Aç" %}</button>
+                    <div class="dropdown-menu p-2" id="dz-open-menu" style="max-height:320px;overflow:auto;min-width:260px"></div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-light-info" data-bs-toggle="dropdown"><i class="ki-outline ki-data fs-5"></i>{% trans "Şablonlar" %}</button>
+                    <div class="dropdown-menu p-2" id="dz-tpl-menu" style="max-height:320px;overflow:auto;min-width:260px"></div>
+                </div>
+                <button class="btn btn-sm btn-light-warning" id="dz-clear"><i class="ki-outline ki-eraser fs-5"></i>{% trans "Temizle" %}</button>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-light" id="dz-zoom-out"><i class="ki-outline ki-minus fs-5"></i></button>
+                    <button class="btn btn-sm btn-light" id="dz-zoom-reset">100%</button>
+                    <button class="btn btn-sm btn-light" id="dz-zoom-in"><i class="ki-outline ki-plus fs-5"></i></button>
+                </div>
+                <button class="btn btn-sm btn-primary" id="dz-save"><i class="ki-outline ki-save-2 fs-5"></i>{% trans "Kaydet" %}</button>
+            </div>
+            <div class="col-12">
+                <div class="alert alert-warning d-none mb-0 py-2" id="dz-alert"><span></span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-3">
+        <div class="designer-wrap">
+            <div class="palette">
+                <h4>{% trans "Girişler" %}</h4>
+                <div class="palette-node" draggable="true" data-node="sensor_analog"><span class="dot dot-input"></span>{% trans "Sensör (Analog)" %}</div>
+                <div class="palette-node" draggable="true" data-node="sensor_digital"><span class="dot dot-input"></span>{% trans "Sensör (Dijital)" %}</div>
+                <div class="palette-node" draggable="true" data-node="ministry_request"><span class="dot dot-input"></span>{% trans "Bakanlık Talebi" %}</div>
+                <div class="palette-node" draggable="true" data-node="time_window"><span class="dot dot-input"></span>{% trans "Zaman Penceresi" %}</div>
+                <h4>{% trans "Mantık" %}</h4>
+                <div class="palette-node" draggable="true" data-node="logic_and"><span class="dot dot-logic"></span>AND</div>
+                <div class="palette-node" draggable="true" data-node="logic_or"><span class="dot dot-logic"></span>OR</div>
+                <div class="palette-node" draggable="true" data-node="logic_not"><span class="dot dot-logic"></span>NOT</div>
+                <h4>{% trans "Zaman" %}</h4>
+                <div class="palette-node" draggable="true" data-node="delay"><span class="dot dot-timer"></span>{% trans "Gecikme" %}</div>
+                <h4>{% trans "Çıkışlar" %}</h4>
+                <div class="palette-node" draggable="true" data-node="notify"><span class="dot dot-output"></span>{% trans "Bildirim" %}</div>
+                <div class="palette-node" draggable="true" data-node="sampler_on"><span class="dot dot-output"></span>{% trans "Numune Alıcı Aç" %}</div>
+                <div class="palette-node" draggable="true" data-node="sampler_off"><span class="dot dot-output"></span>{% trans "Numune Alıcı Kapat" %}</div>
+                <div class="palette-node" draggable="true" data-node="ministry_get_code"><span class="dot dot-output"></span>{% trans "Bakanlık Kod Al" %}</div>
+                <div class="palette-node" draggable="true" data-node="sim_start"><span class="dot dot-output"></span>{% trans "SIM Başlat" %}</div>
+                <div class="palette-node" draggable="true" data-node="sim_complete"><span class="dot dot-output"></span>{% trans "SIM Tamamla" %}</div>
+                <div class="palette-node" draggable="true" data-node="sim_error"><span class="dot dot-output"></span>{% trans "SIM Hata" %}</div>
+                <div class="palette-node" draggable="true" data-node="diagnostic"><span class="dot dot-output"></span>{% trans "Diagnostik" %}</div>
+                <div class="palette-node" draggable="true" data-node="command"><span class="dot dot-output"></span>{% trans "Komut" %}</div>
+            </div>
+            <div id="drawflow"></div>
+        </div>
+        <div class="text-muted fs-8 mt-2">
+            <i class="ki-outline ki-information-5 fs-6 me-1"></i>{% trans "Demo: node'ları sürükleyip bırakın, çıkış→giriş portlarını tel ile bağlayın. Bu fazda tasarım yalnız kaydedilir; yürütme bir sonraki aşamada." %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'dashboard/plugins/custom/drawflow/drawflow.min.js' %}"></script>
+<script>
+(function () {
+    const URLS = {
+        list: "{% url 'dashboard:api_graph_list' %}",
+        get: "{% url 'dashboard:api_graph_get' %}",
+        save: "{% url 'dashboard:api_graph_save' %}",
+        del: "{% url 'dashboard:api_graph_delete' %}",
+    };
+    const STATIONS = [{% for s in stations %}{ id: {{ s.id }}, name: "{{ s.name|escapejs }}" },{% endfor %}];
+    const I18N = {
+        needName: "{% trans 'Tasarım adı zorunlu.' %}", netErr: "{% trans 'Ağ hatası' %}",
+        saved: "{% trans 'Tasarım kaydedildi.' %}", confirmDel: "{% trans 'Bu tasarım silinsin mi?' %}",
+        confirmClear: "{% trans 'Bütün düğümler silinsin mi?' %}", builtin: "{% trans 'Yerleşik' %}",
+        empty: "{% trans 'Kayıtlı tasarım yok' %}", noTpl: "{% trans 'Şablon yok' %}",
+        del: "{% trans 'Sil' %}",
+    };
+    function csrf() { const el = document.querySelector('[name=csrfmiddlewaretoken]'); return el ? el.value : ''; }
+    function j(url, body, method) {
+        return fetch(url, { method: method || 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+            body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+    }
+    function gj(url) { return fetch(url, { credentials: 'same-origin' }).then(r => r.json()); }
+    function alertBox(msg, cls) {
+        const b = document.getElementById('dz-alert');
+        if (!msg) { b.classList.add('d-none'); return; }
+        b.querySelector('span').textContent = msg; b.className = 'alert mb-0 py-2 ' + (cls || 'alert-warning');
+    }
+    function stationOpts(sel) {
+        let h = '<option value="">—</option>';
+        STATIONS.forEach(s => h += `<option value="${s.id}" ${String(s.id) === String(sel) ? 'selected' : ''}>${s.name}</option>`);
+        return h;
+    }
+
+    // ---- Node tanımları (title, ports, data, html) ----
+    const NODES = {
+        sensor_analog: { cls: 'node-input', in: 0, out: 1, data: { station: '', parameter: '', cmp: 'gt', threshold: 0, window: '15m' },
+            html: () => `<div class="node-title">${t('Sensör (Analog)')}</div><div class="node-body">
+                <label>${t('İstasyon')}</label><select df-station class="form-select">${stationOpts('')}</select>
+                <label>${t('Parametre')}</label><input df-parameter class="form-control" placeholder="pH">
+                <label>${t('Karşılaştırma')}</label><select df-cmp class="form-select">
+                    <option value="gt">${t('Üstünde (>)')}</option><option value="lt">${t('Altında (<)')}</option><option value="out">${t('Sınır dışında')}</option></select>
+                <label>${t('Eşik')}</label><input df-threshold type="number" step="any" class="form-control" value="0">
+                <label>${t('Pencere')}</label><select df-window class="form-select"><option value="5m">5 dk</option><option value="15m" selected>15 dk</option></select>
+            </div>` },
+        sensor_digital: { cls: 'node-input', in: 0, out: 1, data: { station: '', sensor: '', state: '1' },
+            html: () => `<div class="node-title">${t('Sensör (Dijital)')}</div><div class="node-body">
+                <label>${t('İstasyon')}</label><select df-station class="form-select">${stationOpts('')}</select>
+                <label>${t('Sensör')}</label><input df-sensor class="form-control" placeholder="Pompa1">
+                <label>${t('Durum')}</label><select df-state class="form-select"><option value="1">ON</option><option value="0">OFF</option></select>
+            </div>` },
+        ministry_request: { cls: 'node-input', in: 0, out: 1, data: {},
+            html: () => `<div class="node-title">${t('Bakanlık Talebi')}</div><div class="node-body"><span class="text-muted fs-8">${t('Dış olay tetikleyici')}</span></div>` },
+        time_window: { cls: 'node-input', in: 0, out: 1, data: { start: '08:00', end: '18:00' },
+            html: () => `<div class="node-title">${t('Zaman Penceresi')}</div><div class="node-body">
+                <label>${t('Başlangıç')}</label><input df-start type="time" class="form-control" value="08:00">
+                <label>${t('Bitiş')}</label><input df-end type="time" class="form-control" value="18:00"></div>` },
+        logic_and: { cls: 'node-logic', in: 1, out: 1, data: {}, html: () => `<div class="node-title">AND</div><div class="node-body"><span class="text-muted fs-8">${t('Tüm girişler doğru')}</span></div>` },
+        logic_or:  { cls: 'node-logic', in: 1, out: 1, data: {}, html: () => `<div class="node-title">OR</div><div class="node-body"><span class="text-muted fs-8">${t('Herhangi biri doğru')}</span></div>` },
+        logic_not: { cls: 'node-logic', in: 1, out: 1, data: {}, html: () => `<div class="node-title">NOT</div><div class="node-body"><span class="text-muted fs-8">${t('Tersle')}</span></div>` },
+        delay: { cls: 'node-timer', in: 1, out: 1, data: { seconds: 300, unit: '60' },
+            html: () => `<div class="node-title">${t('Gecikme')}</div><div class="node-body">
+                <label>${t('Süre')}</label><input df-seconds type="number" min="0" class="form-control" value="5">
+                <label>${t('Birim')}</label><select df-unit class="form-select"><option value="1">${t('Saniye')}</option><option value="60" selected>${t('Dakika')}</option><option value="3600">${t('Saat')}</option><option value="86400">${t('Gün')}</option></select></div>` },
+        notify: { cls: 'node-output', in: 1, out: 0, data: { message: '', sms: '1', email: '1' },
+            html: () => `<div class="node-title">${t('Bildirim')}</div><div class="node-body">
+                <label>${t('Mesaj')}</label><input df-message class="form-control" placeholder="${t('Mesaj')}">
+                <label>SMS</label><select df-sms class="form-select"><option value="1">${t('Evet')}</option><option value="0">${t('Hayır')}</option></select>
+                <label>${t('E-posta')}</label><select df-email class="form-select"><option value="1">${t('Evet')}</option><option value="0">${t('Hayır')}</option></select></div>` },
+        sampler_on:  { cls: 'node-output', in: 1, out: 0, data: {}, html: () => `<div class="node-title">${t('Numune Alıcı Aç')}</div><div class="node-body"><span class="text-muted fs-8">${t('Çıkış ON')}</span></div>` },
+        sampler_off: { cls: 'node-output', in: 1, out: 0, data: {}, html: () => `<div class="node-title">${t('Numune Alıcı Kapat')}</div><div class="node-body"><span class="text-muted fs-8">${t('Çıkış OFF')}</span></div>` },
+        ministry_get_code: { cls: 'node-output', in: 1, out: 0, data: {}, html: () => `<div class="node-title">${t('Bakanlık Kod Al')}</div><div class="node-body"><span class="text-muted fs-8">GetSampleCode</span></div>` },
+        sim_start:    { cls: 'node-output', in: 1, out: 0, data: {}, html: () => `<div class="node-title">${t('SIM Başlat')}</div><div class="node-body"><span class="text-muted fs-8">SampleRequestStart</span></div>` },
+        sim_complete: { cls: 'node-output', in: 1, out: 0, data: {}, html: () => `<div class="node-title">${t('SIM Tamamla')}</div><div class="node-body"><span class="text-muted fs-8">SampleRequestComplete</span></div>` },
+        sim_error:    { cls: 'node-output', in: 1, out: 0, data: {}, html: () => `<div class="node-title">${t('SIM Hata')}</div><div class="node-body"><span class="text-muted fs-8">SampleRequestError</span></div>` },
+        diagnostic: { cls: 'node-output', in: 1, out: 0, data: { type_no: 701, details: '' },
+            html: () => `<div class="node-title">${t('Diagnostik')}</div><div class="node-body">
+                <label>${t('Tip No')}</label><select df-type_no class="form-select"><option value="701">701</option><option value="702">702</option></select>
+                <label>${t('Detay')}</label><input df-details class="form-control"></div>` },
+        command: { cls: 'node-output', in: 1, out: 0, data: { station: '', sensor: '', value: '1' },
+            html: () => `<div class="node-title">${t('Komut')}</div><div class="node-body">
+                <label>${t('İstasyon')}</label><select df-station class="form-select">${stationOpts('')}</select>
+                <label>${t('Sensör')}</label><input df-sensor class="form-control" placeholder="NumuneAlma">
+                <label>${t('Değer')}</label><input df-value class="form-control" value="1"></div>` },
+    };
+    function t(s) { return s; }  // canvas node metinleri TR literal (demo); kimlik fonksiyon
+
+    // ---- Drawflow init ----
+    const el = document.getElementById('drawflow');
+    const editor = new Drawflow(el);
+    editor.reroute = true;
+    editor.start();
+
+    let currentId = null;
+    let currentIsTemplate = false;
+
+    function addNode(type, x, y, overrides) {
+        const def = NODES[type];
+        if (!def) return null;
+        const data = Object.assign(JSON.parse(JSON.stringify(def.data)), overrides || {});
+        const id = editor.addNode(type, def.in, def.out, x, y, def.cls, data, def.html());
+        // node.data zaten doğru; DOM alanlarını da override değerleriyle senkronla
+        const nodeEl = document.getElementById('node-' + id);
+        if (nodeEl) Object.keys(data).forEach(k => {
+            const f = nodeEl.querySelector('[df-' + k + ']'); if (f) f.value = data[k];
+        });
+        return id;
+    }
+
+    // ---- Yerleşik "Numune Alma" şablonu (client-side) ----
+    function loadSampleTemplate() {
+        editor.clearModuleSelected();
+        const ph  = addNode('sensor_analog', 40, 40,  { parameter: 'pH',  cmp: 'out', threshold: 0,    window: '15m' });
+        const akm = addNode('sensor_analog', 40, 250, { parameter: 'AKM', cmp: 'gt',  threshold: 1000, window: '15m' });
+        const koi = addNode('sensor_analog', 40, 460, { parameter: 'KOi', cmp: 'gt',  threshold: 1000, window: '15m' });
+        const orn = addNode('logic_or', 340, 250);
+        [ph, akm, koi].forEach(s => editor.addConnection(s, orn, 'output_1', 'input_1'));
+        const d1 = addNode('delay', 580, 60, { seconds: 10, unit: '60' });       // 10 dk
+        editor.addConnection(orn, d1, 'output_1', 'input_1');
+        const getcode = addNode('ministry_get_code', 840, 20);
+        const son = addNode('sampler_on', 840, 120);
+        const diag = addNode('diagnostic', 840, 220, { type_no: 701, details: 'Numune alınıyor' });
+        const notif = addNode('notify', 840, 360, { message: 'Numune alınıyor' });
+        [getcode, son, diag, notif].forEach(o => editor.addConnection(d1, o, 'output_1', 'input_1'));
+        const d2 = addNode('delay', 580, 480, { seconds: 24, unit: '3600' });    // 24 saat
+        editor.addConnection(orn, d2, 'output_1', 'input_1');
+        const cmpl = addNode('sim_complete', 840, 480);
+        const diag2 = addNode('diagnostic', 840, 580, { type_no: 702, details: 'Numune alındı' });
+        const soff = addNode('sampler_off', 840, 700);
+        [cmpl, diag2, soff].forEach(o => editor.addConnection(d2, o, 'output_1', 'input_1'));
+        document.getElementById('dz-name').value = 'Numune Alma (Şablon)';
+        currentId = null; currentIsTemplate = false; alertBox('');
+    }
+
+    // ---- Sürükle-bırak ----
+    let dragType = null;
+    document.querySelectorAll('.palette-node').forEach(p => {
+        p.addEventListener('dragstart', e => { dragType = p.dataset.node; e.dataTransfer.setData('node', p.dataset.node); });
+    });
+    el.addEventListener('dragover', e => e.preventDefault());
+    el.addEventListener('drop', e => {
+        e.preventDefault();
+        const type = e.dataTransfer.getData('node') || dragType;
+        if (!type) return;
+        const z = editor.zoom;
+        const rect = editor.precanvas.getBoundingClientRect();
+        const x = (e.clientX - rect.x) / z;
+        const y = (e.clientY - rect.y) / z;
+        addNode(type, x, y);
+    });
+    // Tıkla-ekle (fallback) — palet node'una çift tık merkeze ekler
+    document.querySelectorAll('.palette-node').forEach(p => {
+        p.addEventListener('dblclick', () => addNode(p.dataset.node, 120, 80));
+    });
+
+    // ---- Toolbar ----
+    document.getElementById('dz-zoom-in').addEventListener('click', () => editor.zoom_in());
+    document.getElementById('dz-zoom-out').addEventListener('click', () => editor.zoom_out());
+    document.getElementById('dz-zoom-reset').addEventListener('click', () => { editor.zoom = 1; editor.zoom_refresh(); });
+    document.getElementById('dz-clear').addEventListener('click', () => {
+        if (!confirm(I18N.confirmClear)) return;
+        editor.clearModuleSelected();
+    });
+    document.getElementById('dz-new').addEventListener('click', () => {
+        editor.clearModuleSelected(); currentId = null; currentIsTemplate = false;
+        document.getElementById('dz-name').value = ''; alertBox('');
+    });
+
+    document.getElementById('dz-save').addEventListener('click', () => {
+        const name = document.getElementById('dz-name').value.trim();
+        if (!name) { alertBox(I18N.needName); return; }
+        const payload = {
+            id: currentIsTemplate ? null : currentId,  // şablon kaydederken kopya oluştur
+            name: name,
+            station_id: document.getElementById('dz-station').value || null,
+            graph: editor.export(),
+        };
+        j(URLS.save, payload).then(d => {
+            if (!d.ok) { alertBox(d.error || I18N.netErr, 'alert-danger'); return; }
+            currentId = d.id; currentIsTemplate = false;
+            alertBox(I18N.saved, 'alert-success');
+            loadLists();
+        }).catch(() => alertBox(I18N.netErr, 'alert-danger'));
+    });
+
+    function openGraph(id, asCopy) {
+        gj(URLS.get + '?id=' + id).then(d => {
+            if (!d.ok) { alertBox(d.error || I18N.netErr, 'alert-danger'); return; }
+            const g = d.graph;
+            editor.clearModuleSelected();
+            try { editor.import(g.graph); } catch (e) { editor.import({ drawflow: { Home: { data: {} } } }); }
+            document.getElementById('dz-name').value = asCopy ? (g.name + ' (kopya)') : g.name;
+            $('#dz-station').val(g.station_id ? String(g.station_id) : '').trigger('change');
+            currentId = asCopy ? null : g.id;
+            currentIsTemplate = asCopy ? false : g.is_template;
+            alertBox('');
+        }).catch(() => alertBox(I18N.netErr, 'alert-danger'));
+    }
+
+    function loadLists() {
+        gj(URLS.list).then(d => {
+            const all = d.results || [];
+            const openMenu = document.getElementById('dz-open-menu');
+            const tplMenu = document.getElementById('dz-tpl-menu');
+            const saved = all.filter(g => !g.is_template);
+            const tpls = all.filter(g => g.is_template);
+            openMenu.innerHTML = saved.length ? saved.map(g =>
+                `<div class="d-flex align-items-center justify-content-between gap-2 px-2 py-1">
+                    <a href="#" class="text-gray-800 flex-grow-1 dz-open" data-id="${g.id}">${esc(g.name)}<span class="text-muted fs-8 ms-2">${g.updated_at}</span></a>
+                    <button class="btn btn-icon btn-sm btn-light-danger dz-del" data-id="${g.id}" title="${I18N.del}"><i class="ki-outline ki-trash fs-6"></i></button>
+                 </div>`).join('') : `<div class="text-muted px-2 py-1">${I18N.empty}</div>`;
+            tplMenu.innerHTML =
+                `<a href="#" class="dropdown-item dz-builtin"><i class="ki-outline ki-flask fs-6 me-2"></i>${t('Numune Alma (Yerleşik)')}</a>` +
+                (tpls.length ? `<div class="separator my-2"></div>` + tpls.map(g =>
+                    `<a href="#" class="dropdown-item dz-tpl" data-id="${g.id}"><i class="ki-outline ki-data fs-6 me-2"></i>${esc(g.name)}</a>`).join('') : '');
+        }).catch(() => {});
+    }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+    document.getElementById('dz-open-menu').addEventListener('click', e => {
+        const open = e.target.closest('.dz-open'); const del = e.target.closest('.dz-del');
+        if (open) { e.preventDefault(); openGraph(open.dataset.id, false); }
+        else if (del) { e.preventDefault(); if (!confirm(I18N.confirmDel)) return;
+            j(URLS.del, { id: Number(del.dataset.id) }).then(d => { if (!d.ok) alertBox(d.error || I18N.netErr, 'alert-danger'); loadLists(); }); }
+    });
+    document.getElementById('dz-tpl-menu').addEventListener('click', e => {
+        const tpl = e.target.closest('.dz-tpl');
+        const builtin = e.target.closest('.dz-builtin');
+        if (builtin) { e.preventDefault(); loadSampleTemplate(); }
+        else if (tpl) { e.preventDefault(); openGraph(tpl.dataset.id, true); }
+    });
+
+    loadLists();
+
+    function reveal() { if (!document.body.classList.contains('page-ready')) requestAnimationFrame(() => document.body.classList.add('page-ready')); }
+    if (document.readyState === 'complete') reveal(); else window.addEventListener('load', reveal);
+    setTimeout(reveal, 1200);
+})();
+</script>
+{% endblock %}

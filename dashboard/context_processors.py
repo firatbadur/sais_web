@@ -51,6 +51,8 @@ MENU = [
         "children": [
             {"label": _("Numune Senaryosu"), "url_name": "dashboard:operator_sample",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
+            {"label": _("Senaryo Tasarımcı (Demo)"), "url_name": "dashboard:operator_scenario_designer",
+             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Alarmlar"), "url_name": "dashboard:operator_alarms",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
         ],

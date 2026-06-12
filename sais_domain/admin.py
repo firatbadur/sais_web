@@ -4,6 +4,7 @@ from .models import (
     EnvisoftChannel,
     SaisCabinet,
     Scenario,
+    ScenarioGraph,
     ScenarioParameter,
     ScenarioRun,
     ScenarioRunLog,
@@ -136,3 +137,17 @@ class ScenarioRunLogAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(ScenarioGraph)
+class ScenarioGraphAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "is_template", "station", "created_by", "updated_at")
+    list_filter = ("is_template", "station")
+    search_fields = ("name", "description")
+    autocomplete_fields = ("station", "created_by")
+    readonly_fields = ("created_at", "updated_at")
+
+    def has_delete_permission(self, request, obj=None):
+        if obj is not None and obj.is_template:
+            return False
+        return super().has_delete_permission(request, obj)

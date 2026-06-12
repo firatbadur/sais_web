@@ -610,3 +610,46 @@ class ScenarioRunLog(models.Model):
 
     def __str__(self):
         return f"{self.get_kind_display()} @ {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class ScenarioGraph(models.Model):
+    """Görsel node-graph senaryo tasarımı (Drawflow export JSON).
+
+    Genel otomasyon senaryosu tasarımcısının (PLC-benzeri node-graph) sakladığı
+    ham graph tanımı. Demo aşamasında yalnız tasarlanıp saklanır — yürütülmez;
+    motor + per-senaryo beat sonraki fazda gelir. `is_template` yerleşik
+    "Numune Alma" başlangıç tasarımıdır (silinemez).
+
+    Not: graph jenerik bir kavram; ileride `api/`'a taşınabilir. Demo'da mevcut
+    senaryo koduna yakın olsun diye `sais_domain`'de tutuluyor.
+    """
+
+    name = models.CharField(max_length=150, verbose_name="Tasarım Adı")
+    description = models.TextField(blank=True, default="", verbose_name="Açıklama")
+    graph = models.JSONField(
+        default=dict, blank=True, verbose_name="Graph (Drawflow)",
+        help_text="Drawflow editor.export() çıktısı (node + bağlantı tanımı).",
+    )
+    is_template = models.BooleanField(
+        default=False, verbose_name="Yerleşik Şablon",
+        help_text="Yerleşik şablonlar silinemez (kopyalanıp düzenlenebilir).",
+    )
+    station = models.ForeignKey(
+        "api.Station", on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="+", verbose_name="İstasyon (bağlam)",
+    )
+    created_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True, related_name="+",
+        verbose_name="Oluşturan",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Oluşturma")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Son Güncelleme")
+
+    class Meta:
+        db_table = "sais_scenario_graph"
+        verbose_name = "Senaryo Tasarımı"
+        verbose_name_plural = "Senaryo Tasarımları"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return self.name
