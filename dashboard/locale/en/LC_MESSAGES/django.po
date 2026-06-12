@@ -1634,3 +1634,19 @@ msgstr "Notifications are sent based on each user's SMS/email preference."
 # ---- Alarm v6 (placeholder duzeltme) ----
 msgid "Kanal seçiniz"
 msgstr "Select a channel"
+
+# ---- Sensör Seçimi ibareleri ----
+msgid "Sensör Seçimi"
+msgstr "Sensor Selection"
+
+msgid "Sensör seçiniz (aranabilir)"
+msgstr "Select sensor (searchable)"
+
+msgid "Sensör seçilmezse o istasyonun tüm sensörleri gösterilir."
+msgstr "If no sensor is selected, all sensors of that station are shown."
+
+msgid "Sensör seçiniz"
+msgstr "Select sensor"
+
+msgid "Sensör seçin."
+msgstr "Select a sensor."

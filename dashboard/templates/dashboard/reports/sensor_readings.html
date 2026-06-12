@@ -90,9 +90,9 @@
 
             <!-- Parametre Listesi (search'lü, optgroup'lu, multi) — istasyon seçilene dek disabled -->
             <div class="col-md-6">
-                <label class="form-label fw-semibold">{% trans "Parametre Listesi" %}</label>
+                <label class="form-label fw-semibold">{% trans "Sensör Seçimi" %}</label>
                 <select name="parameter" id="filter-parameters" class="form-select" data-control="select2"
-                        data-placeholder='{% trans "Parametre seçiniz (aranabilir)" %}' multiple
+                        data-placeholder='{% trans "Sensör seçiniz (aranabilir)" %}' multiple
                         {% if not filters.station_id %}disabled{% endif %}>
                     {% if parameters_analog %}
                     <optgroup label="{% trans 'Analog' %}">
@@ -123,7 +123,7 @@
                     {% endif %}
                 </select>
                 <div class="form-text" id="parameter-hint">
-                    {% if filters.station_id %}{% trans "Parametre seçilmezse o istasyonun tüm parametreleri gösterilir." %}{% else %}{% trans "Önce bir istasyon seçin." %}{% endif %}
+                    {% if filters.station_id %}{% trans "Sensör seçilmezse o istasyonun tüm sensörleri gösterilir." %}{% else %}{% trans "Önce bir istasyon seçin." %}{% endif %}
                 </div>
             </div>
 
@@ -300,7 +300,7 @@
         endLtStart:    "{% trans 'Bitiş tarihi başlangıç tarihinden küçük olamaz.' %}",
         invalidDate:   "{% trans 'Geçerli bir tarih giriniz (gg.aa.yyyy SS:DD:SS).' %}",
         emptyDate:     "{% trans 'Tarih boş olamaz.' %}",
-        paramHintIdle: "{% trans 'Parametre seçilmezse o istasyonun tüm parametreleri gösterilir.' %}",
+        paramHintIdle: "{% trans 'Sensör seçilmezse o istasyonun tüm sensörleri gösterilir.' %}",
         paramHintNone: "{% trans 'Önce bir istasyon seçin.' %}",
     };
 
@@ -428,7 +428,7 @@
     const paramUrl   = "{% url 'dashboard:api_station_parameters' %}";
 
     const PARAM_S2_OPTS = {
-        placeholder: "{% trans 'Parametre seçiniz (aranabilir)' %}",
+        placeholder: "{% trans 'Sensör seçiniz (aranabilir)' %}",
         allowClear: false,
         width: '100%',
         closeOnSelect: false,

@@ -53,9 +53,9 @@
                         </select>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">{% trans "Kanal Seçimi" %}</label>
+                        <label class="form-label">{% trans "Sensör Seçimi" %}</label>
                         <select class="form-select o-param" data-control="select2"
-                                data-placeholder='{% trans "Kanal seçiniz" %}'></select>
+                                data-placeholder='{% trans "Sensör seçiniz" %}'></select>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">{% trans "Alarm Periyodu" %}</label>
@@ -111,7 +111,7 @@
                 <div class="table-responsive">
                     <table id="tbl-olcum" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
                         <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
-                            <th>{% trans "İstasyon" %}</th><th>{% trans "Kanal" %}</th><th>{% trans "Periyod" %}</th>
+                            <th>{% trans "İstasyon" %}</th><th>{% trans "Sensör" %}</th><th>{% trans "Periyod" %}</th>
                             <th>{% trans "Alarm Tipi" %}</th><th class="text-end">Min</th><th class="text-end">Max</th>
                             <th>{% trans "Mesaj" %}</th><th>{% trans "Aktif" %}</th><th class="text-end">{% trans "İşlem" %}</th>
                         </tr></thead>
@@ -251,7 +251,7 @@
     const URL_TPL = "{% url 'dashboard:api_notification_templates' %}";
     const I18N = {
         needStation: "{% trans 'İstasyon seçin.' %}", needMsg: "{% trans 'Mesaj zorunlu.' %}",
-        needChannel: "{% trans 'Kanal seçin.' %}", confirmDel: "{% trans 'Bu alarm silinsin mi?' %}",
+        needChannel: "{% trans 'Sensör seçin.' %}", confirmDel: "{% trans 'Bu alarm silinsin mi?' %}",
         netErr: "{% trans 'Ağ hatası' %}", offline: "{% trans 'İstasyon Offline' %}",
         titlePrompt: "{% trans 'Hazır mesaj başlığı:' %}",
         needMinMax: "{% trans 'Min veya Max değerinden en az birini girin.' %}",
@@ -310,7 +310,7 @@
                 $param.empty().append('<option></option>');
                 (d.analog || []).forEach(i => $param.append(new Option(i.text, i.id)));
                 $param.prop('disabled', false);
-                reinit($param, '{% trans "Kanal seçiniz" %}');
+                reinit($param, '{% trans "Sensör seçiniz" %}');
             }
             if ($sensor.length) {
                 $sensor.empty().append('<option></option>');
