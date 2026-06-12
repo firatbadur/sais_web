@@ -81,15 +81,20 @@ def _modbus_write(client, sensor, value: Any, value_type: str) -> WriteResult:
     byte_order = sensor.byte_order or "big"
     word_order = sensor.word_order or "big"
 
-    # Boolean (dijital output Start/Stop) yazımı — sensörün data_type'ı ne
-    # olursa olsun sağlam çalışsın; yapılandırma hatası exception'a dönmesin
-    # ("hataya düşmeyecek" gereksinimi). Hangi Modbus fonksiyonunun kullanılacağı
-    # data_type'tan türetilir (sensor.function bir okuma kodu olsa bile önemsiz):
-    #   - bool        → write_coil (fn5)
-    #   - bit         → read_holding + bit değiştir + write_register
-    #   - sayısal reg → write_register ile 0/1
+    # Boolean (dijital output Start/Stop) yazımı. Hangi Modbus objesine
+    # yazılacağı sensörün OKUMA fonksiyonundan türetilir — çünkü Modbus'ta
+    # obje türünü (coil mi, holding register mı) function belirler, data_type
+    # yalnız çözümleme biçimidir. Aksi halde int16 yapılandırılmış bir coil'e
+    # write_register gider; cihaz ACK'lar ama fiziksel çıkış değişmez
+    # (Holding 4xxxx ≠ Coil 0xxxx farklı adres uzayı).
+    #   - data_type=bit               → read_holding + bit değiştir + write_register
+    #   - okuma fn 3/4 + sayısal dtype → write_register ile 0/1 (register çıkış)
+    #   - aksi (coil; fn 1/2 ya da dtype=bool) → write_coil (fn5)  ← çoğu DO
     if value_type == "bool":
         bval = 1 if bool(value) else 0
+        read_fn = sensor.function or 0
+        register_dtypes = ("int16", "uint16", "int32", "uint32", "int64", "uint64",
+                           "float32", "float64", "raw")
         if data_type == "bit":
             rr = client.read_holding_registers(address=addr, count=1, device_id=slave)
             if rr is None or (hasattr(rr, "isError") and rr.isError()):
@@ -101,14 +106,14 @@ def _modbus_write(client, sensor, value: Any, value_type: str) -> WriteResult:
             if wr is None or (hasattr(wr, "isError") and wr.isError()):
                 return WriteResult(success=False, error=f"write_register hata: {wr}")
             return WriteResult(success=True, response=str(wr))
-        if data_type in ("int16", "uint16", "int32", "uint32", "int64", "uint64",
-                         "float32", "float64", "raw"):
-            # Register tabanlı dijital output → 0/1 değerini register'a yaz.
+        if read_fn in (3, 4) and data_type in register_dtypes:
+            # Register tabanlı dijital output → 0/1 değerini holding register'a yaz.
             wr = client.write_register(address=addr, value=bval, device_id=slave)
             if wr is None or (hasattr(wr, "isError") and wr.isError()):
                 return WriteResult(success=False, error=f"write_register hata: {wr}")
             return WriteResult(success=True, response=str(wr))
-        # Varsayılan: coil (data_type="bool" veya bilinmeyen)
+        # Varsayılan: coil (write_coil / fn5). data_type=bool ya da bit-tabanlı
+        # okuma (fn 1=coils, 2=discrete) — dijital çıkışların çoğu coil'dir.
         rr = client.write_coil(address=addr, value=bool(bval), device_id=slave)
         if rr is None or (hasattr(rr, "isError") and rr.isError()):
             return WriteResult(success=False, error=f"write_coil hata: {rr}")
