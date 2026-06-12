@@ -21,6 +21,7 @@
     .palette-node .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 10px; }
     .dot-input { background: #50cd89; } .dot-logic { background: #7239ea; }
     .dot-timer { background: #f1bc00; } .dot-output { background: #f1416c; }
+    .dot-avg { background: #00a3ff; } .dot-cmp { background: #ff8a00; }
 
     #drawflow { flex: 1 1 auto; position: relative; border: 1px solid var(--bs-gray-300);
         border-radius: .65rem; background: var(--bs-gray-100);
@@ -44,6 +45,8 @@
     .node-logic  .node-title { background: rgba(114,57,234,.12); color: #5a2bc0; }
     .node-timer  .node-title { background: rgba(241,188,0,.15); color: #a07c00; }
     .node-output .node-title { background: rgba(241,65,108,.12); color: #c01244; }
+    .node-avg    .node-title { background: rgba(0,163,255,.12); color: #0079bf; }
+    .node-cmp    .node-title { background: rgba(255,138,0,.14); color: #b35f00; }
     .drawflow .connection .main-path { stroke: var(--bs-primary); stroke-width: 2.5px; }
     .drawflow-node .input, .drawflow-node .output { background: var(--bs-gray-500); border: 2px solid var(--bs-body-bg); }
     .designer-toolbar .btn { margin-right: .35rem; }
@@ -102,6 +105,13 @@
                 <div class="palette-node" draggable="true" data-node="sensor_digital"><span class="dot dot-input"></span>{% trans "Sensör (Dijital)" %}</div>
                 <div class="palette-node" draggable="true" data-node="ministry_request"><span class="dot dot-input"></span>{% trans "Bakanlık Talebi" %}</div>
                 <div class="palette-node" draggable="true" data-node="time_window"><span class="dot dot-input"></span>{% trans "Zaman Penceresi" %}</div>
+                <h4>{% trans "Ortalama" %}</h4>
+                <div class="palette-node" draggable="true" data-node="avg_5m"><span class="dot dot-avg"></span>{% trans "5 dk Ortalama" %}</div>
+                <div class="palette-node" draggable="true" data-node="avg_15m"><span class="dot dot-avg"></span>{% trans "15 dk Ortalama" %}</div>
+                <h4>{% trans "Karşılaştırma" %}</h4>
+                <div class="palette-node" draggable="true" data-node="cmp_gt"><span class="dot dot-cmp"></span>{% trans "Üstünde (>)" %}</div>
+                <div class="palette-node" draggable="true" data-node="cmp_lt"><span class="dot dot-cmp"></span>{% trans "Altında (<)" %}</div>
+                <div class="palette-node" draggable="true" data-node="cmp_out"><span class="dot dot-cmp"></span>{% trans "Sınır Dışında" %}</div>
                 <h4>{% trans "Mantık" %}</h4>
                 <div class="palette-node" draggable="true" data-node="logic_and"><span class="dot dot-logic"></span>AND</div>
                 <div class="palette-node" draggable="true" data-node="logic_or"><span class="dot dot-logic"></span>OR</div>
@@ -166,15 +176,23 @@
 
     // ---- Node tanımları (title, ports, data, html) ----
     const NODES = {
-        sensor_analog: { cls: 'node-input', in: 0, out: 1, data: { station: '', parameter: '', cmp: 'gt', threshold: 0, window: '15m' },
+        sensor_analog: { cls: 'node-input', in: 0, out: 1, data: { station: '', parameter: '' },
             html: () => `<div class="node-title">${t('Sensör (Analog)')}</div><div class="node-body">
                 <label>${t('İstasyon')}</label><select df-station class="form-select">${stationOpts('')}</select>
                 <label>${t('Parametre')}</label><input df-parameter class="form-control" placeholder="pH">
-                <label>${t('Karşılaştırma')}</label><select df-cmp class="form-select">
-                    <option value="gt">${t('Üstünde (>)')}</option><option value="lt">${t('Altında (<)')}</option><option value="out">${t('Sınır dışında')}</option></select>
-                <label>${t('Eşik')}</label><input df-threshold type="number" step="any" class="form-control" value="0">
-                <label>${t('Pencere')}</label><select df-window class="form-select"><option value="5m">5 dk</option><option value="15m" selected>15 dk</option></select>
             </div>` },
+        avg_5m:  { cls: 'node-avg', in: 1, out: 1, data: {}, html: () => `<div class="node-title">${t('5 dk Ortalama')}</div><div class="node-body"><span class="text-muted fs-8">${t('Son 5 dk ortalaması')}</span></div>` },
+        avg_15m: { cls: 'node-avg', in: 1, out: 1, data: {}, html: () => `<div class="node-title">${t('15 dk Ortalama')}</div><div class="node-body"><span class="text-muted fs-8">${t('Son 15 dk ortalaması')}</span></div>` },
+        cmp_gt: { cls: 'node-cmp', in: 1, out: 1, data: { threshold: 0 },
+            html: () => `<div class="node-title">${t('Üstünde (>)')}</div><div class="node-body">
+                <label>${t('Eşik')}</label><input df-threshold type="number" step="any" class="form-control" value="0"></div>` },
+        cmp_lt: { cls: 'node-cmp', in: 1, out: 1, data: { threshold: 0 },
+            html: () => `<div class="node-title">${t('Altında (<)')}</div><div class="node-body">
+                <label>${t('Eşik')}</label><input df-threshold type="number" step="any" class="form-control" value="0"></div>` },
+        cmp_out: { cls: 'node-cmp', in: 1, out: 1, data: { min: '', max: '' },
+            html: () => `<div class="node-title">${t('Sınır Dışında')}</div><div class="node-body">
+                <label>${t('Alt Sınır')}</label><input df-min type="number" step="any" class="form-control">
+                <label>${t('Üst Sınır')}</label><input df-max type="number" step="any" class="form-control"></div>` },
         sensor_digital: { cls: 'node-input', in: 0, out: 1, data: { station: '', sensor: '', state: '1' },
             html: () => `<div class="node-title">${t('Sensör (Dijital)')}</div><div class="node-body">
                 <label>${t('İstasyon')}</label><select df-station class="form-select">${stationOpts('')}</select>
@@ -242,23 +260,32 @@
     // ---- Yerleşik "Numune Alma" şablonu (client-side) ----
     function loadSampleTemplate() {
         editor.clearModuleSelected();
-        const ph  = addNode('sensor_analog', 40, 40,  { parameter: 'pH',  cmp: 'out', threshold: 0,    window: '15m' });
-        const akm = addNode('sensor_analog', 40, 250, { parameter: 'AKM', cmp: 'gt',  threshold: 1000, window: '15m' });
-        const koi = addNode('sensor_analog', 40, 460, { parameter: 'KOi', cmp: 'gt',  threshold: 1000, window: '15m' });
-        const orn = addNode('logic_or', 340, 250);
-        [ph, akm, koi].forEach(s => editor.addConnection(s, orn, 'output_1', 'input_1'));
-        const d1 = addNode('delay', 580, 60, { seconds: 10, unit: '60' });       // 10 dk
+        // Sensör → 15 dk Ortalama → Karşılaştırma(eşik) → OR
+        const chain = (param, y, cmpType, ov) => {
+            const s = addNode('sensor_analog', 20, y, { parameter: param });
+            const a = addNode('avg_15m', 250, y);
+            const c = addNode(cmpType, 470, y, ov);
+            editor.addConnection(s, a, 'output_1', 'input_1');
+            editor.addConnection(a, c, 'output_1', 'input_1');
+            return c;
+        };
+        const cPh  = chain('pH',  20,  'cmp_out', { min: 6, max: 9 });
+        const cAkm = chain('AKM', 240, 'cmp_gt',  { threshold: 1000 });
+        const cKoi = chain('KOi', 460, 'cmp_gt',  { threshold: 1000 });
+        const orn = addNode('logic_or', 700, 240);
+        [cPh, cAkm, cKoi].forEach(c => editor.addConnection(c, orn, 'output_1', 'input_1'));
+        const d1 = addNode('delay', 920, 60, { seconds: 10, unit: '60' });       // 10 dk
         editor.addConnection(orn, d1, 'output_1', 'input_1');
-        const getcode = addNode('ministry_get_code', 840, 20);
-        const son = addNode('sampler_on', 840, 120);
-        const diag = addNode('diagnostic', 840, 220, { type_no: 701, details: 'Numune alınıyor' });
-        const notif = addNode('notify', 840, 360, { message: 'Numune alınıyor' });
+        const getcode = addNode('ministry_get_code', 1160, 20);
+        const son = addNode('sampler_on', 1160, 120);
+        const diag = addNode('diagnostic', 1160, 220, { type_no: 701, details: 'Numune alınıyor' });
+        const notif = addNode('notify', 1160, 360, { message: 'Numune alınıyor' });
         [getcode, son, diag, notif].forEach(o => editor.addConnection(d1, o, 'output_1', 'input_1'));
-        const d2 = addNode('delay', 580, 480, { seconds: 24, unit: '3600' });    // 24 saat
+        const d2 = addNode('delay', 920, 480, { seconds: 24, unit: '3600' });    // 24 saat
         editor.addConnection(orn, d2, 'output_1', 'input_1');
-        const cmpl = addNode('sim_complete', 840, 480);
-        const diag2 = addNode('diagnostic', 840, 580, { type_no: 702, details: 'Numune alındı' });
-        const soff = addNode('sampler_off', 840, 700);
+        const cmpl = addNode('sim_complete', 1160, 480);
+        const diag2 = addNode('diagnostic', 1160, 580, { type_no: 702, details: 'Numune alındı' });
+        const soff = addNode('sampler_off', 1160, 700);
         [cmpl, diag2, soff].forEach(o => editor.addConnection(d2, o, 'output_1', 'input_1'));
         document.getElementById('dz-name').value = 'Numune Alma (Şablon)';
         currentId = null; currentIsTemplate = false; alertBox('');

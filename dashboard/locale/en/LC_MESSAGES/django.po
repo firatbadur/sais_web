@@ -2022,3 +2022,38 @@ msgstr "Sampling (Built-in)"
 
 msgid "Demo: node'ları sürükleyip bırakın, çıkış→giriş portlarını tel ile bağlayın. Bu fazda tasarım yalnız kaydedilir; yürütme bir sonraki aşamada."
 msgstr "Demo: drag and drop nodes, wire output->input ports. In this phase the design is only saved; execution comes next."
+
+# --- Senaryo Tasarimci: ortalama + karsilastirma ---
+
+msgid "5 dk Ortalama"
+msgstr "5 min Average"
+
+msgid "15 dk Ortalama"
+msgstr "15 min Average"
+
+msgid "Son 5 dk ortalaması"
+msgstr "Last 5 min average"
+
+msgid "Son 15 dk ortalaması"
+msgstr "Last 15 min average"
+
+msgid "Karşılaştırma"
+msgstr "Comparison"
+
+msgid "Üstünde (>)"
+msgstr "Above (>)"
+
+msgid "Altında (<)"
+msgstr "Below (<)"
+
+msgid "Sınır Dışında"
+msgstr "Out of Bounds"
+
+msgid "Eşik"
+msgstr "Threshold"
+
+msgid "Alt Sınır"
+msgstr "Lower Bound"
+
+msgid "Üst Sınır"
+msgstr "Upper Bound"
