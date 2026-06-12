@@ -36,6 +36,8 @@ AppPublisher=Envisoft
 DefaultDirName=C:\EnvisoftWebX
 DefaultGroupName=Envisoft WebX
 DisableProgramGroupPage=yes
+; Show the welcome page first (Inno 6 hides it by default in modern style).
+DisableWelcomePage=no
 OutputDir=dist
 OutputBaseFilename=EnvisoftWebX-Setup-{#APP_VERSION}
 Compression=lzma2
@@ -47,7 +49,9 @@ WizardStyle=modern
 ; Corporate branding (Envisoft WebX)
 SetupIconFile=assets\EnvisoftWebX.ico
 WizardImageFile=assets\WizardImage.bmp
-WizardSmallImageFile=assets\WizardSmallImage.bmp
+; Multiple resolutions so the top-right logo stays sharp on high-DPI displays
+; (Inno picks the closest size: 100% / 125% / 150% / 200%).
+WizardSmallImageFile=assets\WizardSmallImage.bmp,assets\WizardSmallImage_69x73.bmp,assets\WizardSmallImage_83x87.bmp,assets\WizardSmallImage_110x116.bmp
 UninstallDisplayIcon={app}\EnvisoftWebX.ico
 
 [Languages]
@@ -91,6 +95,34 @@ var
   AdminPage: TInputQueryWizardPage;
   WinPage: TInputQueryWizardPage;
   TlsCombo: TNewComboBox;
+
+{ Enable the Next button only when the current page's REQUIRED fields are filled.
+  Required: Site page -> domain (with a dot) + Let's Encrypt email (when TLS is
+  letsencrypt); Admin page -> username + password. Other pages stay unrestricted. }
+procedure UpdateNextButton;
+var
+  ok: Boolean;
+begin
+  ok := True;
+  if WizardForm.CurPageID = SitePage.ID then begin
+    ok := (Trim(SitePage.Values[0]) <> '') and (Pos('.', SitePage.Values[0]) > 0);
+    if ok and (TlsCombo.Text = 'letsencrypt') then
+      ok := Trim(SitePage.Values[1]) <> '';
+  end else if WizardForm.CurPageID = AdminPage.ID then begin
+    ok := (Trim(AdminPage.Values[0]) <> '') and (Trim(AdminPage.Values[2]) <> '');
+  end;
+  WizardForm.NextButton.Enabled := ok;
+end;
+
+procedure FieldChanged(Sender: TObject);
+begin
+  UpdateNextButton;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  UpdateNextButton;
+end;
 
 procedure InitializeWizard;
 begin
@@ -151,6 +183,13 @@ begin
     registered), so it cannot be changed. }
   WinPage.Values[0] := GetEnv('USERNAME');
   WinPage.Edits[0].Enabled := False;
+
+  { Live-validate required fields so Next is disabled until they are filled. }
+  SitePage.Edits[0].OnChange := @FieldChanged;
+  SitePage.Edits[1].OnChange := @FieldChanged;
+  TlsCombo.OnChange := @FieldChanged;
+  AdminPage.Edits[0].OnChange := @FieldChanged;
+  AdminPage.Edits[2].OnChange := @FieldChanged;
 end;
 
 function GetDomain(Param: String): String;
