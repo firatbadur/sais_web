@@ -79,6 +79,9 @@ def home_snapshot(request):
             "status",
         )
         .order_by(*order_fields)
+        # Admin'den "Dashboard'da Gizle" işaretli sensörler tablolarda görünmez
+        # (polling/kayıt etkilenmez; yalnız görünürlük filtresi).
+        .filter(sensor__dashboard_hidden=False)
     )
     if sensor_types is not None:
         qs = qs.filter(sensor__sensor_type__in=sensor_types)
@@ -267,9 +270,10 @@ def home_trend(request):
     now = timezone.now()
     since = now - timedelta(hours=24)
 
-    # Öne çıkan aktif sensörlerden ilk 5 tanesini al (MVP — ileride filtre)
+    # Öne çıkan aktif sensörlerden ilk 5 tanesini al (MVP — ileride filtre).
+    # Dashboard'da gizlenenler trend grafiğinde de gösterilmez.
     top_sensors = list(
-        Sensor.objects.filter(is_active=True)
+        Sensor.objects.filter(is_active=True, dashboard_hidden=False)
         .select_related("parameter")
         .order_by("id")[:5]
     )

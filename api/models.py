@@ -565,6 +565,11 @@ class Sensor(models.Model):
         default=0, db_index=True, verbose_name="Görüntüleme Sırası",
         help_text="Anasayfa canlı tablolarında artan sıra; eşitse alt kıstaslar uygulanır.",
     )
+    dashboard_hidden = models.BooleanField(
+        default=False, verbose_name="Dashboard'da Gizle",
+        help_text="True ise bu sensör dashboard anlık tablolarında (analog/dijital) "
+                  "gösterilmez. Polling, kayıt ve raporlar etkilenmez — yalnız görünürlük.",
+    )
     is_simulated = models.BooleanField(
         default=False, verbose_name="Simülasyon Modu",
         help_text="True ise reader cihazdan değer okumak yerine rastgele üretir (test/demo için)",
