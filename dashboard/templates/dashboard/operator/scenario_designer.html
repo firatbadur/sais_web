@@ -47,6 +47,17 @@
     .node-output .node-title { background: rgba(241,65,108,.12); color: #c01244; }
     .node-avg    .node-title { background: rgba(0,163,255,.12); color: #0079bf; }
     .node-cmp    .node-title { background: rgba(255,138,0,.14); color: #b35f00; }
+    /* Kompakt (ikon tarzı) node'lar — ortalama / karşılaştırma / mantık / zaman */
+    .drawflow .drawflow-node.compact { min-width: auto; }
+    .drawflow .drawflow-node.compact .node-compact { display: flex; align-items: center; gap: .4rem;
+        padding: .5rem .7rem; border-radius: .6rem; font-weight: 700; font-size: .85rem; white-space: nowrap; }
+    .drawflow .drawflow-node.compact .node-compact .sym { font-size: 1.15rem; font-weight: 800; line-height: 1; }
+    .drawflow .drawflow-node.compact .node-compact .form-control { width: 60px; font-size: .78rem; padding: .12rem .4rem; height: auto; }
+    .drawflow .drawflow-node.compact .node-compact select.form-select { width: auto; font-size: .75rem; padding: .12rem 1.2rem .12rem .4rem; height: auto; }
+    .drawflow-node.node-logic.compact .node-compact { background: rgba(114,57,234,.12); color: #5a2bc0; }
+    .drawflow-node.node-avg.compact   .node-compact { background: rgba(0,163,255,.12); color: #0079bf; }
+    .drawflow-node.node-cmp.compact   .node-compact { background: rgba(255,138,0,.14); color: #b35f00; }
+    .drawflow-node.node-timer.compact .node-compact { background: rgba(241,188,0,.18); color: #a07c00; }
     .drawflow .connection .main-path { stroke: var(--bs-primary); stroke-width: 2.5px; }
     .drawflow-node .input, .drawflow-node .output { background: var(--bs-gray-500); border: 2px solid var(--bs-body-bg); }
     .designer-toolbar .btn { margin-right: .35rem; }
@@ -173,18 +184,14 @@
             html: () => `<div class="node-title">${t('Sensör (Analog)')}</div><div class="node-body">
                 <label>${t('Parametre')}</label><input df-parameter class="form-control" placeholder="pH">
             </div>` },
-        avg_5m:  { cls: 'node-avg', in: 1, out: 1, data: {}, html: () => `<div class="node-title">${t('5 dk Ortalama')}</div><div class="node-body"><span class="text-muted fs-8">${t('Son 5 dk ortalaması')}</span></div>` },
-        avg_15m: { cls: 'node-avg', in: 1, out: 1, data: {}, html: () => `<div class="node-title">${t('15 dk Ortalama')}</div><div class="node-body"><span class="text-muted fs-8">${t('Son 15 dk ortalaması')}</span></div>` },
-        cmp_gt: { cls: 'node-cmp', in: 1, out: 1, data: { threshold: 0 },
-            html: () => `<div class="node-title">${t('Üstünde (>)')}</div><div class="node-body">
-                <label>${t('Eşik')}</label><input df-threshold type="number" step="any" class="form-control" value="0"></div>` },
-        cmp_lt: { cls: 'node-cmp', in: 1, out: 1, data: { threshold: 0 },
-            html: () => `<div class="node-title">${t('Altında (<)')}</div><div class="node-body">
-                <label>${t('Eşik')}</label><input df-threshold type="number" step="any" class="form-control" value="0"></div>` },
-        cmp_out: { cls: 'node-cmp', in: 1, out: 1, data: { min: '', max: '' },
-            html: () => `<div class="node-title">${t('Sınır Dışında')}</div><div class="node-body">
-                <label>${t('Alt Sınır')}</label><input df-min type="number" step="any" class="form-control">
-                <label>${t('Üst Sınır')}</label><input df-max type="number" step="any" class="form-control"></div>` },
+        avg_5m:  { cls: 'node-avg compact', in: 1, out: 1, data: {}, html: () => `<div class="node-compact"><span class="sym">µ</span>${t('5 dk')}</div>` },
+        avg_15m: { cls: 'node-avg compact', in: 1, out: 1, data: {}, html: () => `<div class="node-compact"><span class="sym">µ</span>${t('15 dk')}</div>` },
+        cmp_gt: { cls: 'node-cmp compact', in: 1, out: 1, data: { threshold: 0 },
+            html: () => `<div class="node-compact"><span class="sym">&gt;</span><input df-threshold type="number" step="any" class="form-control" value="0"></div>` },
+        cmp_lt: { cls: 'node-cmp compact', in: 1, out: 1, data: { threshold: 0 },
+            html: () => `<div class="node-compact"><span class="sym">&lt;</span><input df-threshold type="number" step="any" class="form-control" value="0"></div>` },
+        cmp_out: { cls: 'node-cmp compact', in: 1, out: 1, data: { min: '', max: '' },
+            html: () => `<div class="node-compact"><span class="sym">↔</span><input df-min type="number" step="any" class="form-control" placeholder="${t('alt')}"><input df-max type="number" step="any" class="form-control" placeholder="${t('üst')}"></div>` },
         sensor_digital: { cls: 'node-input', in: 0, out: 1, data: { sensor: '', state: '1' },
             html: () => `<div class="node-title">${t('Sensör (Dijital)')}</div><div class="node-body">
                 <label>${t('Sensör')}</label><input df-sensor class="form-control" placeholder="Pompa1">
@@ -196,13 +203,11 @@
             html: () => `<div class="node-title">${t('Zaman Penceresi')}</div><div class="node-body">
                 <label>${t('Başlangıç')}</label><input df-start type="time" class="form-control" value="08:00">
                 <label>${t('Bitiş')}</label><input df-end type="time" class="form-control" value="18:00"></div>` },
-        logic_and: { cls: 'node-logic', in: 1, out: 1, data: {}, html: () => `<div class="node-title">AND</div><div class="node-body"><span class="text-muted fs-8">${t('Tüm girişler doğru')}</span></div>` },
-        logic_or:  { cls: 'node-logic', in: 1, out: 1, data: {}, html: () => `<div class="node-title">OR</div><div class="node-body"><span class="text-muted fs-8">${t('Herhangi biri doğru')}</span></div>` },
-        logic_not: { cls: 'node-logic', in: 1, out: 1, data: {}, html: () => `<div class="node-title">NOT</div><div class="node-body"><span class="text-muted fs-8">${t('Tersle')}</span></div>` },
-        delay: { cls: 'node-timer', in: 1, out: 1, data: { seconds: 300, unit: '60' },
-            html: () => `<div class="node-title">${t('Gecikme')}</div><div class="node-body">
-                <label>${t('Süre')}</label><input df-seconds type="number" min="0" class="form-control" value="5">
-                <label>${t('Birim')}</label><select df-unit class="form-select"><option value="1">${t('Saniye')}</option><option value="60" selected>${t('Dakika')}</option><option value="3600">${t('Saat')}</option><option value="86400">${t('Gün')}</option></select></div>` },
+        logic_and: { cls: 'node-logic compact', in: 1, out: 1, data: {}, html: () => `<div class="node-compact"><span class="sym">∧</span>AND</div>` },
+        logic_or:  { cls: 'node-logic compact', in: 1, out: 1, data: {}, html: () => `<div class="node-compact"><span class="sym">∨</span>OR</div>` },
+        logic_not: { cls: 'node-logic compact', in: 1, out: 1, data: {}, html: () => `<div class="node-compact"><span class="sym">¬</span>NOT</div>` },
+        delay: { cls: 'node-timer compact', in: 1, out: 1, data: { seconds: 300, unit: '60' },
+            html: () => `<div class="node-compact"><i class="ki-outline ki-time fs-4"></i><input df-seconds type="number" min="0" class="form-control" value="5"><select df-unit class="form-select"><option value="1">${t('sn')}</option><option value="60" selected>${t('dk')}</option><option value="3600">${t('saat')}</option><option value="86400">${t('gün')}</option></select></div>` },
         notify: { cls: 'node-output', in: 1, out: 0, data: { message: '', sms: '1', email: '1' },
             html: () => `<div class="node-title">${t('Bildirim')}</div><div class="node-body">
                 <label>${t('Mesaj')}</label><input df-message class="form-control" placeholder="${t('Mesaj')}">
