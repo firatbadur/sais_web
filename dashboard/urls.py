@@ -28,6 +28,7 @@ urlpatterns = [
     path("reports/power-offs/", views.PowerOffsReportView.as_view(), name="reports_power_offs"),
     path("reports/commands/", views.CommandsReportView.as_view(), name="reports_commands"),
     path("reports/system-logs/", views.SystemLogsReportView.as_view(), name="reports_system_logs"),
+    path("reports/alarms/", views.AlarmReportsView.as_view(), name="reports_alarms"),
 
     # --- Operator ---
     path("operator/sample-trigger/", views.SampleTriggerView.as_view(), name="operator_sample"),

@@ -38,6 +38,8 @@ MENU = [
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Sistem Logları"), "url_name": "dashboard:reports_system_logs",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
+            {"label": _("Alarm Raporları"), "url_name": "dashboard:reports_alarms",
+             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
         ],
     },
     {

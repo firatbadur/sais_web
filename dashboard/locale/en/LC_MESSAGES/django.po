@@ -1650,3 +1650,37 @@ msgstr "Select sensor"
 
 msgid "Sensör seçin."
 msgstr "Select a sensor."
+
+# ---- Alarm Raporlari ----
+msgid "Alarm Raporları"
+msgstr "Alarm Reports"
+
+msgid "Kullanıcı (Alıcı)"
+msgstr "User (Recipient)"
+
+msgid "Tüm kullanıcılar"
+msgstr "All users"
+
+msgid "Tür"
+msgstr "Type"
+
+msgid "Filtrele"
+msgstr "Filter"
+
+msgid "Gönderilen Bildirimler"
+msgstr "Sent Notifications"
+
+msgid "Alıcı"
+msgstr "Recipient"
+
+msgid "Hata"
+msgstr "Error"
+
+msgid "Başlangıç Tarihi"
+msgstr "Start Date"
+
+msgid "Bitiş Tarihi"
+msgstr "End Date"
+
+msgid "Gönderilmiş bildirim kaydı yok."
+msgstr "No sent notification records."

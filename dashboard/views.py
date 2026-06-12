@@ -25,6 +25,7 @@ from api.models import (
     Calibration,
     Command,
     Connection,
+    NotificationLog,
     Parameter,
     PowerOff,
     Reading,
@@ -325,6 +326,92 @@ class SystemLogsReportView(OperatorRequiredMixin, ListView):
 
     def get_queryset(self):
         return super().get_queryset().select_related("type", "station")
+
+
+class AlarmReportsView(OperatorRequiredMixin, ListView):
+    """Alarm Raporları — gönderilen SMS/e-posta bildirimleri (NotificationLog).
+
+    Kullanıcı (alıcı), kanal, durum, tür ve tarih filtreli. Filtre uygulanmadan
+    son `DEFAULT_LIMIT` (100) kayıt gösterilir; filtreyle `MAX_ROWS`'a kadar.
+    DataTables client-side; grafik yok.
+    """
+    template_name = "dashboard/reports/alarm_reports.html"
+    context_object_name = "rows"
+    paginate_by = None
+    MAX_ROWS = 5000
+    DEFAULT_LIMIT = 100
+    DATE_FORMAT = "%d.%m.%Y %H:%M:%S"
+
+    CHANNEL_CHOICES = (("", _("Hepsi")), ("sms", "SMS"), ("email", _("E-posta")))
+    STATUS_CHOICES = (("", _("Hepsi")), ("ok", _("Başarılı")), ("fail", _("Hatalı")))
+    KIND_CHOICES = (("", _("Hepsi")), ("alarm", _("Alarm")), ("test", _("Test")))
+
+    def _parse_dt(self, raw: str):
+        if not raw:
+            return None
+        try:
+            return timezone.make_aware(datetime.strptime(raw.strip(), self.DATE_FORMAT))
+        except (ValueError, TypeError):
+            return None
+
+    def _filters(self):
+        gp = self.request.GET
+        try:
+            user_id = int(gp.get("user") or 0) or None
+        except (TypeError, ValueError):
+            user_id = None
+        channel = gp.get("channel") or ""
+        status = gp.get("status") or ""
+        kind = gp.get("kind") or ""
+        if channel not in dict(self.CHANNEL_CHOICES):
+            channel = ""
+        if status not in dict(self.STATUS_CHOICES):
+            status = ""
+        if kind not in dict(self.KIND_CHOICES):
+            kind = ""
+        return {
+            "submitted": bool(gp),
+            "user_id": user_id,
+            "channel": channel,
+            "status": status,
+            "kind": kind,
+            "start": self._parse_dt(gp.get("start")),
+            "end": self._parse_dt(gp.get("end")),
+        }
+
+    def get_queryset(self):
+        f = self._filters()
+        qs = NotificationLog.objects.select_related("sent_by").order_by("-created_at")
+
+        if f["user_id"]:
+            user = User.objects.filter(pk=f["user_id"]).first()
+            targets = [t for t in ((user.phone_number or "").strip(),
+                                   (user.email or "").strip()) if t] if user else []
+            qs = qs.filter(recipient__in=targets) if targets else qs.none()
+        if f["channel"]:
+            qs = qs.filter(channel=f["channel"])
+        if f["status"]:
+            qs = qs.filter(status=f["status"])
+        if f["kind"]:
+            qs = qs.filter(kind=f["kind"])
+        if f["start"]:
+            qs = qs.filter(created_at__gte=f["start"])
+        if f["end"]:
+            qs = qs.filter(created_at__lte=f["end"])
+
+        limit = self.MAX_ROWS if f["submitted"] else self.DEFAULT_LIMIT
+        return qs[:limit]
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        f = self._filters()
+        ctx["filters"] = f
+        ctx["users"] = User.objects.filter(is_active=True).order_by("first_name", "username")
+        ctx["channel_choices"] = self.CHANNEL_CHOICES
+        ctx["status_choices"] = self.STATUS_CHOICES
+        ctx["kind_choices"] = self.KIND_CHOICES
+        ctx["default_limit"] = self.DEFAULT_LIMIT
+        return ctx
 
 
 # --------------------------------------------------------------------------- #
