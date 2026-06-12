@@ -18,12 +18,12 @@ MENU = [
     {
         "label": _("Anasayfa"),
         "url_name": "dashboard:home",
-        "icon": "duotune/general/gen001.svg",
+        "icon": "ki-home-2",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
     },
     {
         "label": _("Raporlama"),
-        "icon": "duotune/general/gen005.svg",
+        "icon": "ki-chart-line-star",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
         "children": [
             {"label": _("Sensör Okumaları"), "url_name": "dashboard:reports_readings",
@@ -44,7 +44,7 @@ MENU = [
     },
     {
         "label": _("Operatör"),
-        "icon": "duotune/general/gen019.svg",
+        "icon": "ki-notification-bing",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR),
         "children": [
             {"label": _("Numune Başlat"), "url_name": "dashboard:operator_sample",
@@ -55,7 +55,7 @@ MENU = [
     },
     {
         "label": _("Yönetim"),
-        "icon": "duotune/general/gen017.svg",
+        "icon": "ki-wifi",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
         "children": [
             {"label": _("İstasyonlar"), "url_name": "dashboard:management_stations",
@@ -68,7 +68,7 @@ MENU = [
     },
     {
         "label": _("Yönetici"),
-        "icon": "duotune/coding/cod001.svg",
+        "icon": "ki-shield-tick",
         "roles": (ROLE_ADMIN,),
         "children": [
             {"label": _("Sistem Kontrol"), "url_name": "dashboard:admin_system_control",
@@ -89,7 +89,7 @@ MENU = [
     },
     {
         "label": _("Ayarlar"),
-        "icon": "duotune/coding/cod009.svg",
+        "icon": "ki-setting-2",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
         "children": [
             {"label": _("Profilim"), "url_name": "dashboard:profile",

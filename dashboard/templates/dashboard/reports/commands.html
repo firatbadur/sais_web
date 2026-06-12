@@ -1,52 +1,94 @@
 {% extends "dashboard/base.html" %}
-{% load i18n %}
+{% load i18n dashboard_extras %}
 
 {% block title %}{% trans "Komut Geçmişi" %}{% endblock %}
 {% block page_title %}{% trans "Komut Geçmişi" %}{% endblock %}
 
+{% block extra_head %}
+<style>
+    #kt_app_content_container { opacity: 0; }
+    body.page-ready #kt_app_content_container { opacity: 1; transition: opacity 0.18s ease-in-out; }
+    #report-results-card .dt-buttons .btn { margin-right: 0.35rem; padding: 0.45rem 0.85rem; }
+    .flatpickr-calendar { z-index: 10000; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="card">
-    <div class="card-header"><h3 class="card-title">{% trans "Command History" %}</h3></div>
-    <div class="card-body">
+<div class="card mb-5 mb-xl-8">
+    <div class="card-header border-0 pt-6">
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Komut Geçmişi" %}</h3>
+    </div>
+    <div class="card-body pt-2">
+        <form method="get" id="report-filter-form" class="row g-5">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Durum" %}</label>
+                <select name="status" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
+                    <option value="">{% trans "Hepsi" %}</option>
+                    {% for v, lbl in status_choices %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Kaynak" %}</label>
+                <select name="source" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
+                    <option value="">{% trans "Hepsi" %}</option>
+                    {% for v, lbl in source_choices %}<option value="{{ v }}" {% if filters.source == v %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Başlangıç Tarihi" %}</label>
+                <input type="text" name="start" id="filter-start" class="form-control" value="{{ filters.start|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Bitiş Tarihi" %}</label>
+                <input type="text" name="end" id="filter-end" class="form-control" value="{{ filters.end|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary"><i class="ki-outline ki-magnifier fs-3"></i>{% trans "Filtrele" %}</button>
+                {% if filters.submitted %}<a href="{% url 'dashboard:reports_commands' %}" class="btn btn-light-warning ms-2"><i class="ki-outline ki-arrows-circle fs-3"></i>{% trans "Sıfırla" %}</a>{% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card" id="report-results-card">
+    <div class="card-header border-0 pt-6">
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Komutlar" %}</h3>
+        {% if not filters.submitted %}<div class="card-toolbar"><span class="badge badge-light-primary">{% blocktrans %}Son {{ default_limit }} kayıt{% endblocktrans %}</span></div>{% endif %}
+    </div>
+    <div class="card-body pt-2">
         <div class="table-responsive">
-            <table class="table table-row-dashed align-middle gs-0 gy-3">
-                <thead class="fs-7 fw-bold text-uppercase text-gray-500">
-                    <tr>
-                        <th>{% trans "Oluşturulma" %}</th>
-                        <th>{% trans "Sensör" %}</th>
-                        <th>{% trans "Değer" %}</th>
-                        <th>{% trans "Durum" %}</th>
-                        <th>{% trans "Öncelik" %}</th>
-                        <th>{% trans "Deneme" %}</th>
-                        <th>{% trans "Kaynak" %}</th>
-                        <th>{% trans "Talep Eden" %}</th>
-                    </tr>
-                </thead>
+            <table id="report-table" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
+                <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
+                    <th>{% trans "Oluşturulma" %}</th><th>{% trans "Sensör" %}</th><th>{% trans "Değer" %}</th>
+                    <th>{% trans "Durum" %}</th><th class="text-end">{% trans "Öncelik" %}</th><th class="text-end">{% trans "Deneme" %}</th>
+                    <th>{% trans "Kaynak" %}</th><th>{% trans "Talep Eden" %}</th>
+                </tr></thead>
                 <tbody>
-                    {% for c in commands %}
-                        <tr>
-                            <td class="text-muted">{{ c.created_at|date:"Y-m-d H:i:s" }}</td>
-                            <td>{{ c.sensor.parameter.parameter_name|default:c.sensor_id }}</td>
-                            <td class="fw-semibold">{{ c.value|default:c.value_text|default:"—" }} <small class="text-muted">({{ c.value_type }})</small></td>
-                            <td>
-                                {% if c.status == 'completed' %}<span class="badge badge-light-success">{{ c.get_status_display }}</span>
-                                {% elif c.status == 'failed' %}<span class="badge badge-light-danger">{{ c.get_status_display }}</span>
-                                {% elif c.status == 'expired' %}<span class="badge badge-light-secondary">{{ c.get_status_display }}</span>
-                                {% elif c.status == 'executing' %}<span class="badge badge-light-info">{{ c.get_status_display }}</span>
-                                {% else %}<span class="badge badge-light-warning">{{ c.get_status_display }}</span>{% endif %}
-                            </td>
-                            <td class="text-end">{{ c.priority }}</td>
-                            <td class="text-end">{{ c.attempt_count }}/{{ c.max_attempts }}</td>
-                            <td>{{ c.get_source_display }}</td>
-                            <td class="text-muted">{{ c.requested_by.username|default:"—" }}</td>
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="8" class="text-center text-muted py-5">{% trans "Komut geçmişi yok." %}</td></tr>
+                    {% for c in rows %}
+                    <tr>
+                        <td data-order="{{ c.created_at|date:'U' }}">{{ c.created_at|date:"d.m.Y H:i:s" }}</td>
+                        <td>{{ c.sensor.parameter.parameter_name|default:c.sensor_id }}</td>
+                        <td class="fw-semibold">{{ c.value|default:c.value_text|default:"—" }} <small class="text-muted">({{ c.value_type }})</small></td>
+                        <td>
+                            {% if c.status == 'completed' %}<span class="badge badge-light-success">{{ c.get_status_display }}</span>
+                            {% elif c.status == 'failed' %}<span class="badge badge-light-danger">{{ c.get_status_display }}</span>
+                            {% elif c.status == 'expired' %}<span class="badge badge-light-secondary">{{ c.get_status_display }}</span>
+                            {% elif c.status == 'executing' %}<span class="badge badge-light-info">{{ c.get_status_display }}</span>
+                            {% else %}<span class="badge badge-light-warning">{{ c.get_status_display }}</span>{% endif %}
+                        </td>
+                        <td class="text-end">{{ c.priority }}</td>
+                        <td class="text-end">{{ c.attempt_count }}/{{ c.max_attempts }}</td>
+                        <td>{{ c.get_source_display }}</td>
+                        <td class="text-muted">{{ c.requested_by.username|default:"—" }}</td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        {% include "dashboard/partials/pagination.html" %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% include "dashboard/partials/report_table_js.html" with order_col=0 %}
 {% endblock %}

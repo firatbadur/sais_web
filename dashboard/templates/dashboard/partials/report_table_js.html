@@ -1,0 +1,45 @@
+{% load i18n %}
+{# Ortak rapor JS: flatpickr (TR) + DataTables (export) + FOUC reveal.
+   Parametre: order_col (varsayılan 0) — başlangıç sıralama kolonu. #}
+<script>
+(function () {
+    const flatpickrTR = {
+        weekdays: { shorthand: ['Paz','Pzt','Sal','Çar','Per','Cum','Cmt'], longhand: ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'] },
+        months: { shorthand: ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'], longhand: ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'] },
+        firstDayOfWeek: 1, time_24hr: true,
+    };
+    if (typeof flatpickr !== 'undefined') {
+        const opts = { enableTime: true, enableSeconds: true, dateFormat: "d.m.Y H:i:S", time_24hr: true, allowInput: true, locale: flatpickrTR };
+        if (document.getElementById('filter-start')) flatpickr("#filter-start", opts);
+        if (document.getElementById('filter-end')) flatpickr("#filter-end", opts);
+    }
+    const tbl = document.getElementById('report-table');
+    if (tbl && typeof $.fn.dataTable !== 'undefined') {
+        $('#report-table').DataTable({
+            dom: "<'row mb-3'<'col-sm-12 col-md-6 d-flex align-items-center'B><'col-sm-12 col-md-6 d-flex justify-content-md-end align-items-center'f>>" +
+                 "<'row'<'col-sm-12'tr>>" +
+                 "<'row mt-3'<'col-sm-12 col-md-5 d-flex align-items-center'<'me-3'l>i><'col-sm-12 col-md-7 d-flex justify-content-md-end'p>>",
+            buttons: [
+                { extend: 'copyHtml5',  text: '<i class="ki-outline ki-copy fs-3"></i> {% trans "Kopyala" %}',  className: 'btn btn-sm btn-light-primary' },
+                { extend: 'csvHtml5',   text: '<i class="ki-outline ki-document fs-3"></i> CSV',                 className: 'btn btn-sm btn-light-primary' },
+                { extend: 'excelHtml5', text: '<i class="ki-outline ki-file-down fs-3"></i> Excel',              className: 'btn btn-sm btn-light-success' },
+                { extend: 'pdfHtml5',   text: '<i class="ki-outline ki-file-down fs-3"></i> PDF',                className: 'btn btn-sm btn-light-danger' },
+                { extend: 'print',      text: '<i class="ki-outline ki-printer fs-3"></i> {% trans "Yazdır" %}', className: 'btn btn-sm btn-light-info' },
+                { extend: 'colvis',     text: '<i class="ki-outline ki-eye fs-3"></i> {% trans "Kolonlar" %}',    className: 'btn btn-sm btn-light' },
+            ],
+            order: [[{{ order_col|default:0 }}, 'desc']], pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, '{% trans "Hepsi" %}']],
+            language: {
+                "lengthMenu": '{% trans "Sayfada _MENU_ kayıt göster" %}', "zeroRecords": '{% trans "Kayıt bulunamadı." %}',
+                "info": '{% trans "_TOTAL_ kayıttan _START_ - _END_ arası" %}', "infoEmpty": '{% trans "Kayıt yok" %}',
+                "infoFiltered": '{% trans "(_MAX_ kayıt arasından filtrelendi)" %}', "search": '{% trans "Ara:" %}',
+                "emptyTable": '{% trans "Kayıt bulunamadı." %}',
+                "paginate": { "first": '{% trans "İlk" %}', "last": '{% trans "Son" %}', "next": '{% trans "Sonraki" %}', "previous": '{% trans "Önceki" %}' }
+            }
+        });
+    }
+    function reveal() { if (!document.body.classList.contains('page-ready')) requestAnimationFrame(() => document.body.classList.add('page-ready')); }
+    if (document.readyState === 'complete') reveal(); else window.addEventListener('load', reveal);
+    setTimeout(reveal, 1200);
+})();
+</script>

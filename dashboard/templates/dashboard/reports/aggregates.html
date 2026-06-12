@@ -1,22 +1,123 @@
 {% extends "dashboard/base.html" %}
-{% load i18n %}
+{% load i18n dashboard_extras %}
 
 {% block title %}{% trans "Aggregate Raporu" %}{% endblock %}
 {% block page_title %}{% trans "Aggregate Raporu" %}{% endblock %}
 
+{% block extra_head %}
+<style>
+    #kt_app_content_container { opacity: 0; }
+    body.page-ready #kt_app_content_container { opacity: 1; transition: opacity 0.18s ease-in-out; }
+    #report-results-card .dt-buttons .btn { margin-right: 0.35rem; padding: 0.45rem 0.85rem; }
+    .flatpickr-calendar { z-index: 10000; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="card">
-    <div class="card-header">
-        <h3 class="card-title">{% trans "15 Dakika / Saatlik / Günlük Bucket" %}</h3>
+<div class="card mb-5 mb-xl-8">
+    <div class="card-header border-0 pt-6">
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Aggregate Raporu" %}</h3>
     </div>
-    <div class="card-body">
-        <p class="text-muted">{% trans "Bu sayfa yapım aşamasında. Sensör ve bucket periyodu seçerek karşılaştırmalı grafik + tablo görünümü buraya gelecek." %}</p>
-        <div class="row g-4 mt-2">
-            <div class="col-md-4"><label class="form-label">{% trans "Sensör" %}</label><select class="form-select form-select-solid" disabled><option>—</option></select></div>
-            <div class="col-md-4"><label class="form-label">{% trans "Bucket" %}</label><select class="form-select form-select-solid"><option>15m</option><option>hour</option><option>day</option></select></div>
-            <div class="col-md-4"><label class="form-label">{% trans "Tarih Aralığı" %}</label><input type="text" class="form-control form-control-solid" placeholder="YYYY-MM-DD — YYYY-MM-DD" disabled></div>
-        </div>
-        <div class="mt-5"><button class="btn btn-primary" disabled>{% trans "Göster" %}</button></div>
+    <div class="card-body pt-2">
+        <form method="get" id="report-filter-form" class="row g-5">
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">{% trans "İstasyon Seçimi" %}</label>
+                <select name="station" id="filter-station" class="form-select" data-control="select2" data-placeholder='{% trans "İstasyon seçiniz" %}' data-allow-clear="true">
+                    <option></option>
+                    {% for s in stations %}<option value="{{ s.id }}" {% if filters.station_id == s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">{% trans "Sensör Seçimi" %}</label>
+                <select name="parameter" id="filter-parameters" class="form-select" data-control="select2" data-placeholder='{% trans "Sensör seçiniz (aranabilir)" %}' multiple>
+                    {% if parameters_analog %}<optgroup label="{% trans 'Analog' %}">{% for p in parameters_analog %}<option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>{{ p.parameter_name }}</option>{% endfor %}</optgroup>{% endif %}
+                    {% if parameters_digital %}<optgroup label="{% trans 'Dijital' %}">{% for p in parameters_digital %}<option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>{{ p.parameter_name }}</option>{% endfor %}</optgroup>{% endif %}
+                    {% if parameters_other %}<optgroup label="{% trans 'Diğer' %}">{% for p in parameters_other %}<option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>{{ p.parameter_name }}</option>{% endfor %}</optgroup>{% endif %}
+                </select>
+                <div class="form-text">{% trans "Sensör seçilmezse o istasyonun tüm sensörleri gösterilir." %}</div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">{% trans "Seviye" %}</label>
+                <select name="level" class="form-select" data-control="select2" data-hide-search="true">
+                    {% for v, lbl in level_choices %}<option value="{{ v }}" {% if filters.level == v %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Başlangıç Tarihi" %}</label>
+                <input type="text" name="start" id="filter-start" class="form-control" value="{{ filters.start|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Bitiş Tarihi" %}</label>
+                <input type="text" name="end" id="filter-end" class="form-control" value="{{ filters.end|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary"><i class="ki-outline ki-flash fs-3"></i>{% trans "Rapor Getir" %}</button>
+                {% if filters.submitted %}<a href="{% url 'dashboard:reports_aggregates' %}" class="btn btn-light-warning ms-2"><i class="ki-outline ki-arrows-circle fs-3"></i>{% trans "Sıfırla" %}</a>{% endif %}
+            </div>
+        </form>
     </div>
 </div>
+
+<div class="card" id="report-results-card">
+    <div class="card-header border-0 pt-6">
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Rapor Çıktısı" %}</h3>
+    </div>
+    <div class="card-body pt-2">
+        {% if not filters.submitted %}
+        <div class="text-center text-muted py-10">
+            <i class="ki-outline ki-information-5 fs-2hx text-muted mb-3 d-block"></i>
+            {% trans "Rapor oluşturmak için filtreleri seçip 'Rapor Getir' butonuna basın." %}
+        </div>
+        {% else %}
+        <div class="table-responsive">
+            <table id="report-table" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
+                <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
+                    <th>{% trans "Bucket" %}</th><th>{% trans "Sensör" %}</th><th class="text-end">{% trans "Ortalama" %}</th>
+                    <th class="text-end">{% trans "Min" %}</th><th class="text-end">{% trans "Max" %}</th><th class="text-end">{% trans "Adet" %}</th><th class="text-end">{% trans "Bad" %}</th>
+                </tr></thead>
+                <tbody>
+                    {% for r in rows %}
+                    <tr>
+                        <td data-order="{{ r.bucket_start|date:'U' }}">{{ r.bucket_start|date:"d.m.Y H:i" }}</td>
+                        <td>{{ r.sensor.parameter.parameter_name|default:r.sensor_id }}</td>
+                        <td class="text-end fw-semibold" data-order="{{ r.avg_value|default_if_none:'' }}">{{ r.avg_value|default_if_none:"—" }}</td>
+                        <td class="text-end text-muted" data-order="{{ r.min_value|default_if_none:'' }}">{{ r.min_value|default_if_none:"—" }}</td>
+                        <td class="text-end text-muted" data-order="{{ r.max_value|default_if_none:'' }}">{{ r.max_value|default_if_none:"—" }}</td>
+                        <td class="text-end">{{ r.count }}</td>
+                        <td class="text-end">{% if r.bad_count %}<span class="text-danger">{{ r.bad_count }}</span>{% else %}0{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    // İstasyon değişince sensör (parametre) listesini AJAX ile yenile.
+    const paramUrl = "{% url 'dashboard:api_station_parameters' %}";
+    const $param = $('#filter-parameters');
+    const S2 = { placeholder: "{% trans 'Sensör seçiniz (aranabilir)' %}", width: '100%', closeOnSelect: false };
+    function reinit() { if ($param.hasClass('select2-hidden-accessible')) $param.select2('destroy'); $param.select2(S2); }
+    $('#filter-station').on('change', function () {
+        const sid = this.value;
+        $param.val(null).empty();
+        if (!sid) { reinit(); return; }
+        fetch(paramUrl + '?station=' + encodeURIComponent(sid), { credentials: 'same-origin' })
+            .then(r => r.json()).then(d => {
+                (d.results || []).forEach(g => {
+                    const $og = $('<optgroup>').attr('label', g.text);
+                    (g.children || []).forEach(p => $('<option>').val(p.id).text(p.text).appendTo($og));
+                    $param.append($og);
+                });
+                reinit();
+            }).catch(() => reinit());
+    });
+})();
+</script>
+{% include "dashboard/partials/report_table_js.html" with order_col=0 %}
 {% endblock %}

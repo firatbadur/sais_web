@@ -74,6 +74,19 @@ def default_station_id():
     return s.id if s else None
 
 
+REPORT_DATE_FORMAT = "%d.%m.%Y %H:%M:%S"
+
+
+def parse_report_dt(raw):
+    """Rapor filtre formundaki 'gg.aa.yyyy SS:DD:SS' metnini TZ-aware datetime'a çevirir."""
+    if not raw:
+        return None
+    try:
+        return timezone.make_aware(datetime.strptime(raw.strip(), REPORT_DATE_FORMAT))
+    except (ValueError, TypeError):
+        return None
+
+
 # --------------------------------------------------------------------------- #
 # Authentication
 # --------------------------------------------------------------------------- #
@@ -279,20 +292,129 @@ class ReadingsReportView(RoleRequiredMixin, ListView):
         return ctx
 
 
-class AggregatesReportView(RoleRequiredMixin, TemplateView):
-    """15dk/saatlik/günlük bucket kıyaslama — chart + tablo (taslak)."""
+class AggregatesReportView(RoleRequiredMixin, ListView):
+    """Aggregate Raporu — istasyon/sensör/seviye/tarih filtreli bucket tablosu."""
     template_name = "dashboard/reports/aggregates.html"
+    context_object_name = "rows"
+    paginate_by = None
+    MAX_ROWS = 50000
+    LEVEL_CHOICES = (("15min", _("15 Dakika")), ("hourly", _("Saatlik")), ("daily", _("Günlük")))
+
+    def _filters(self):
+        gp = self.request.GET
+        now = timezone.now()
+        start = parse_report_dt(gp.get("start")) or (now - timedelta(days=7))
+        end = parse_report_dt(gp.get("end")) or now
+        if end < start:
+            start, end = end, start
+        try:
+            station_id = int(gp.get("station") or 0) or None
+        except (TypeError, ValueError):
+            station_id = None
+        if station_id is None:
+            station_id = default_station_id()
+        param_ids = []
+        for raw in gp.getlist("parameter"):
+            try:
+                param_ids.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+        level = gp.get("level") or "hourly"
+        if level not in dict(self.LEVEL_CHOICES):
+            level = "hourly"
+        return {
+            "submitted": bool(gp), "station_id": station_id, "parameter_ids": param_ids,
+            "level": level, "start": start, "end": end,
+        }
+
+    def get_queryset(self):
+        f = self._filters()
+        if not f["submitted"] or not f["station_id"]:
+            return ReadingHourly.objects.none()
+        model = {"15min": ReadingFifteenMin, "hourly": ReadingHourly, "daily": ReadingDaily}[f["level"]]
+        qs = (model.objects
+              .select_related("sensor__parameter")
+              .filter(bucket_start__gte=f["start"], bucket_start__lte=f["end"],
+                      sensor__connection__station_id=f["station_id"]))
+        if f["parameter_ids"]:
+            qs = qs.filter(sensor__parameter_id__in=f["parameter_ids"])
+        return qs.order_by("-bucket_start", "sensor_id")[: self.MAX_ROWS]
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        f = self._filters()
+        ctx["filters"] = f
+        ctx["level_choices"] = self.LEVEL_CHOICES
+        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        if f["station_id"]:
+            param_qs = (Parameter.objects
+                        .filter(sensors__connection__station_id=f["station_id"])
+                        .distinct().order_by("parameter_name").prefetch_related("sensors"))
+        else:
+            param_qs = Parameter.objects.none()
+        analog, digital, other = [], [], []
+        for p in param_qs:
+            sensors = list(p.sensors.all())
+            stype = sensors[0].sensor_type if sensors else None
+            if stype in (0, 1):
+                analog.append(p)
+            elif stype in (2, 3):
+                digital.append(p)
+            else:
+                other.append(p)
+        ctx["parameters_analog"] = analog
+        ctx["parameters_digital"] = digital
+        ctx["parameters_other"] = other
+        return ctx
 
 
 class CalibrationsReportView(RoleRequiredMixin, ListView):
-    model = Calibration
+    """Kalibrasyon Geçmişi — istasyon/tip/geçerlilik/tarih filtreli, DataTables rapor."""
     template_name = "dashboard/reports/calibrations.html"
-    context_object_name = "calibrations"
-    paginate_by = 50
-    ordering = ["-time_iso"]
+    context_object_name = "rows"
+    paginate_by = None
+    MAX_ROWS = 5000
+    DEFAULT_LIMIT = 1000
+
+    def _filters(self):
+        gp = self.request.GET
+        try:
+            station_id = int(gp.get("station") or 0) or None
+        except (TypeError, ValueError):
+            station_id = None
+        cal_type = gp.get("type") or ""
+        if cal_type not in dict(Calibration._meta.get_field("type").choices):
+            cal_type = ""
+        valid = gp.get("valid") or ""
+        return {
+            "submitted": bool(gp), "station_id": station_id, "type": cal_type, "valid": valid,
+            "start": parse_report_dt(gp.get("start")), "end": parse_report_dt(gp.get("end")),
+        }
 
     def get_queryset(self):
-        return super().get_queryset().select_related("sensor", "sensor__parameter", "user")
+        f = self._filters()
+        qs = (Calibration.objects
+              .select_related("sensor__parameter", "user")
+              .order_by("-time_iso"))
+        if f["station_id"]:
+            qs = qs.filter(sensor__connection__station_id=f["station_id"])
+        if f["type"]:
+            qs = qs.filter(type=f["type"])
+        if f["valid"] in ("0", "1"):
+            qs = qs.filter(is_valid=(f["valid"] == "1"))
+        if f["start"]:
+            qs = qs.filter(time_iso__gte=f["start"])
+        if f["end"]:
+            qs = qs.filter(time_iso__lte=f["end"])
+        return qs[: (self.MAX_ROWS if f["submitted"] else self.DEFAULT_LIMIT)]
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["filters"] = self._filters()
+        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        ctx["type_choices"] = Calibration._meta.get_field("type").choices
+        ctx["default_limit"] = self.DEFAULT_LIMIT
+        return ctx
 
 
 class PowerOffsReportView(RoleRequiredMixin, ListView):
@@ -307,25 +429,94 @@ class PowerOffsReportView(RoleRequiredMixin, ListView):
 
 
 class CommandsReportView(OperatorRequiredMixin, ListView):
-    model = Command
+    """Komut Geçmişi — durum/kaynak/tarih filtreli, DataTables rapor."""
     template_name = "dashboard/reports/commands.html"
-    context_object_name = "commands"
-    paginate_by = 50
-    ordering = ["-created_at"]
+    context_object_name = "rows"
+    paginate_by = None
+    MAX_ROWS = 5000
+    DEFAULT_LIMIT = 1000
+
+    def _filters(self):
+        gp = self.request.GET
+        status = gp.get("status") or ""
+        source = gp.get("source") or ""
+        if status not in dict(Command._meta.get_field("status").choices):
+            status = ""
+        if source not in dict(Command._meta.get_field("source").choices):
+            source = ""
+        return {
+            "submitted": bool(gp), "status": status, "source": source,
+            "start": parse_report_dt(gp.get("start")), "end": parse_report_dt(gp.get("end")),
+        }
 
     def get_queryset(self):
-        return super().get_queryset().select_related("sensor", "sensor__parameter", "request_type", "requested_by")
+        f = self._filters()
+        qs = (Command.objects
+              .select_related("sensor__parameter", "requested_by")
+              .order_by("-created_at"))
+        if f["status"]:
+            qs = qs.filter(status=f["status"])
+        if f["source"]:
+            qs = qs.filter(source=f["source"])
+        if f["start"]:
+            qs = qs.filter(created_at__gte=f["start"])
+        if f["end"]:
+            qs = qs.filter(created_at__lte=f["end"])
+        return qs[: (self.MAX_ROWS if f["submitted"] else self.DEFAULT_LIMIT)]
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["filters"] = self._filters()
+        ctx["status_choices"] = Command._meta.get_field("status").choices
+        ctx["source_choices"] = Command._meta.get_field("source").choices
+        ctx["default_limit"] = self.DEFAULT_LIMIT
+        return ctx
 
 
 class SystemLogsReportView(OperatorRequiredMixin, ListView):
-    model = SystemLog
+    """Sistem Logları — tip/istasyon/tarih filtreli, DataTables rapor."""
     template_name = "dashboard/reports/system_logs.html"
-    context_object_name = "logs"
-    paginate_by = 50
-    ordering = ["-time_iso"]
+    context_object_name = "rows"
+    paginate_by = None
+    MAX_ROWS = 5000
+    DEFAULT_LIMIT = 1000
+
+    def _filters(self):
+        gp = self.request.GET
+        try:
+            type_id = int(gp.get("type") or 0) or None
+        except (TypeError, ValueError):
+            type_id = None
+        try:
+            station_id = int(gp.get("station") or 0) or None
+        except (TypeError, ValueError):
+            station_id = None
+        return {
+            "submitted": bool(gp), "type_id": type_id, "station_id": station_id,
+            "start": parse_report_dt(gp.get("start")), "end": parse_report_dt(gp.get("end")),
+        }
 
     def get_queryset(self):
-        return super().get_queryset().select_related("type", "station")
+        f = self._filters()
+        qs = SystemLog.objects.select_related("type", "station").order_by("-time_iso")
+        if f["type_id"]:
+            qs = qs.filter(type_id=f["type_id"])
+        if f["station_id"]:
+            qs = qs.filter(station_id=f["station_id"])
+        if f["start"]:
+            qs = qs.filter(time_iso__gte=f["start"])
+        if f["end"]:
+            qs = qs.filter(time_iso__lte=f["end"])
+        return qs[: (self.MAX_ROWS if f["submitted"] else self.DEFAULT_LIMIT)]
+
+    def get_context_data(self, **kwargs):
+        from api.models import LogType
+        ctx = super().get_context_data(**kwargs)
+        ctx["filters"] = self._filters()
+        ctx["log_types"] = LogType.objects.order_by("name")
+        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        ctx["default_limit"] = self.DEFAULT_LIMIT
+        return ctx
 
 
 class AlarmReportsView(OperatorRequiredMixin, ListView):

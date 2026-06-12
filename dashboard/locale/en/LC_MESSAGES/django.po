@@ -1684,3 +1684,28 @@ msgstr "End Date"
 
 msgid "Gönderilmiş bildirim kaydı yok."
 msgstr "No sent notification records."
+
+# ---- Rapor sayfalari (yeniden yazim) ----
+msgid "Komutlar"
+msgstr "Commands"
+
+msgid "Log Tipi"
+msgstr "Log Type"
+
+msgid "Geçerlilik"
+msgstr "Validity"
+
+msgid "Seviye"
+msgstr "Level"
+
+msgid "15 Dakika"
+msgstr "15 Minutes"
+
+msgid "Saatlik"
+msgstr "Hourly"
+
+msgid "Günlük"
+msgstr "Daily"
+
+msgid "Rapor oluşturmak için filtreleri seçip 'Rapor Getir' butonuna basın."
+msgstr "Select filters and press 'Generate Report' to create a report."
