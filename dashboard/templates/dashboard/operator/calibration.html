@@ -1,0 +1,912 @@
+{% extends "dashboard/base.html" %}
+{% load i18n static dashboard_extras %}
+
+{% block title %}{% trans "İnteraktif Kalibrasyon" %}{% endblock %}
+{% block page_title %}{% trans "İnteraktif Kalibrasyon" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    #kt_app_content_container { opacity: 0; }
+    body.page-ready #kt_app_content_container { opacity: 1; transition: opacity 0.18s ease-in-out; }
+
+    /* ============================== Stepper ============================== */
+    .cal-stepper {
+        display: flex; align-items: flex-start; gap: 0; position: relative;
+        padding: 1.25rem 1rem 0.5rem; margin-bottom: 1.5rem;
+    }
+    .cal-step { flex: 1; display: flex; flex-direction: column; align-items: center;
+        position: relative; z-index: 2; }
+    .cal-step .cal-node {
+        width: 48px; height: 48px; border-radius: 50%; display: flex;
+        align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem;
+        background: var(--bs-gray-200); color: var(--bs-gray-600);
+        border: 3px solid var(--bs-body-bg);
+        box-shadow: 0 0 0 1px var(--bs-gray-300);
+        transition: all 0.35s cubic-bezier(.4,0,.2,1);
+    }
+    .cal-step .cal-node i { font-size: 1.3rem; }
+    .cal-step .cal-label { margin-top: 0.6rem; font-weight: 600; font-size: 0.92rem;
+        color: var(--bs-gray-500); text-align: center; transition: color 0.3s; }
+    .cal-step .cal-sub { font-size: 0.74rem; color: var(--bs-gray-400); margin-top: 0.1rem; }
+    /* connector line */
+    .cal-step:not(:last-child)::after {
+        content: ""; position: absolute; top: 24px; left: 50%; width: 100%; height: 4px;
+        background: var(--bs-gray-200); z-index: -1; border-radius: 4px;
+    }
+    .cal-step.is-done:not(:last-child)::after {
+        background: linear-gradient(90deg, #00c9a7, #00b8d9);
+    }
+    .cal-step.is-active .cal-node {
+        background: linear-gradient(135deg, #7239ea, #5014d0); color: #fff;
+        box-shadow: 0 8px 22px rgba(114,57,234,.45), 0 0 0 1px #7239ea;
+        transform: scale(1.08);
+    }
+    .cal-step.is-active .cal-label { color: var(--bs-gray-900); }
+    .cal-step.is-done .cal-node {
+        background: linear-gradient(135deg, #00c9a7, #00a88f); color: #fff;
+        box-shadow: 0 6px 18px rgba(0,201,167,.4);
+    }
+    .cal-step.is-done .cal-label { color: var(--bs-gray-800); }
+
+    .cal-pane { display: none; animation: calFade .35s ease; }
+    .cal-pane.active { display: block; }
+    @keyframes calFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    .cal-card .form-label { color: var(--bs-text-muted); font-weight: 600; }
+
+    /* ============================== Beaker ============================== */
+    .beaker-stage {
+        position: relative; height: 380px; border-radius: 1rem;
+        background:
+            radial-gradient(120% 80% at 50% -10%, rgba(114,57,234,.10), transparent 60%),
+            var(--bs-gray-100);
+        display: flex; align-items: flex-end; justify-content: center; overflow: hidden;
+    }
+    .beaker-stage .stage-floor {
+        position: absolute; bottom: 0; left: 0; right: 0; height: 26px;
+        background: linear-gradient(180deg, transparent, rgba(0,0,0,.06));
+    }
+    /* probe (sensör) */
+    .probe {
+        position: absolute; top: -4px; left: 50%; transform: translateX(-50%) translateY(0);
+        width: 34px; z-index: 4; transition: transform 1.4s cubic-bezier(.45,.05,.3,1);
+        display: flex; flex-direction: column; align-items: center;
+    }
+    .probe .cable { width: 6px; height: 150px; border-radius: 3px;
+        background: linear-gradient(180deg, #475569, #1e293b); }
+    .probe .body { width: 26px; height: 92px; border-radius: 8px 8px 6px 6px;
+        background: linear-gradient(180deg, #e2e8f0, #94a3b8);
+        box-shadow: inset -3px 0 4px rgba(0,0,0,.18), inset 3px 0 4px rgba(255,255,255,.5);
+        border: 1px solid #64748b; }
+    .probe .tip { width: 12px; height: 30px; border-radius: 0 0 6px 6px;
+        background: linear-gradient(180deg, #cbd5e1, #64748b);
+        position: relative; }
+    .probe .tip::after { content:""; position:absolute; bottom:-6px; left:50%; transform:translateX(-50%);
+        width: 8px; height: 8px; border-radius: 50%; background:#475569; }
+    .probe.dipped { transform: translateX(-50%) translateY(118px); }
+    .probe.detecting .body { animation: probePulse 1s ease-in-out infinite; }
+    @keyframes probePulse { 0%,100% { box-shadow: inset -3px 0 4px rgba(0,0,0,.18), 0 0 0 0 rgba(114,57,234,.5);} 50% { box-shadow: inset -3px 0 4px rgba(0,0,0,.18), 0 0 0 12px rgba(114,57,234,0);} }
+
+    /* beaker glass */
+    .beaker {
+        position: relative; width: 190px; height: 300px; z-index: 3;
+        border: 4px solid rgba(148,163,184,.55); border-top: none;
+        border-radius: 6px 6px 26px 26px;
+        background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.02));
+        box-shadow: inset 0 0 30px rgba(255,255,255,.25), 0 10px 30px rgba(0,0,0,.10);
+        overflow: hidden; backdrop-filter: blur(1px);
+    }
+    .beaker .rim { position: absolute; top: -4px; left: -10px; right: -10px; height: 8px;
+        border-radius: 6px; background: rgba(148,163,184,.6); }
+    .liquid {
+        position: absolute; left: 0; right: 0; bottom: 0; height: 58%;
+        background: linear-gradient(180deg, var(--liq-top, #38bdf8), var(--liq-bot, #0284c7));
+        transition: background .6s ease, height .6s ease;
+        box-shadow: inset 0 8px 18px rgba(255,255,255,.25);
+    }
+    .liquid::before, .liquid::after {
+        content: ""; position: absolute; top: -18px; left: 50%; width: 240px; height: 240px;
+        border-radius: 43%; background: var(--liq-top, #38bdf8); opacity: .55;
+        transform: translateX(-50%); animation: wave 6s linear infinite;
+    }
+    .liquid::after { opacity: .35; animation: wave 9s linear infinite reverse; top: -14px; }
+    @keyframes wave { from { transform: translateX(-50%) rotate(0); } to { transform: translateX(-50%) rotate(360deg); } }
+    .bubble { position: absolute; bottom: 6px; width: 8px; height: 8px; border-radius: 50%;
+        background: rgba(255,255,255,.55); opacity: 0; }
+    .beaker.boiling .bubble { animation: rise 2.6s ease-in infinite; }
+    .bubble:nth-child(1){ left: 22%; animation-delay: .2s; }
+    .bubble:nth-child(2){ left: 40%; width: 6px; height: 6px; animation-delay: .9s; }
+    .bubble:nth-child(3){ left: 58%; width: 10px; height: 10px; animation-delay: 1.4s; }
+    .bubble:nth-child(4){ left: 72%; width: 5px; height: 5px; animation-delay: .6s; }
+    .bubble:nth-child(5){ left: 50%; width: 7px; height: 7px; animation-delay: 1.9s; }
+    @keyframes rise { 0% { transform: translateY(0) scale(.6); opacity: 0; }
+        20% { opacity: .8; } 100% { transform: translateY(-150px) scale(1.1); opacity: 0; } }
+
+    .stage-hint {
+        position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+        background: var(--bs-body-bg); border: 1px solid var(--bs-gray-300);
+        border-radius: 2rem; padding: .45rem 1.1rem; font-weight: 600; font-size: .9rem;
+        box-shadow: 0 6px 18px rgba(0,0,0,.08); z-index: 6; white-space: nowrap;
+        display: flex; align-items: center; gap: .5rem;
+    }
+    .stage-hint .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bs-warning);
+        animation: blink 1s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.25;} }
+
+    /* ============================ Live panel ============================ */
+    .live-value { font-size: 3.4rem; font-weight: 800; line-height: 1; letter-spacing: -1px; }
+    .live-unit { font-size: 1.2rem; font-weight: 600; color: var(--bs-gray-500); }
+    .metric-box { background: var(--bs-gray-100); border-radius: .75rem; padding: .9rem 1rem; }
+    .metric-box .lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .5px;
+        font-weight: 700; color: var(--bs-gray-500); }
+    .metric-box .val { font-size: 1.35rem; font-weight: 700; }
+
+    /* tolerance band bar */
+    .band { position: relative; height: 18px; border-radius: 10px; margin: 1.6rem 0 .4rem;
+        background: linear-gradient(90deg, #f1416c 0%, #f1416c 18%, #ffc700 18%, #50cd89 38%,
+            #50cd89 62%, #ffc700 82%, #f1416c 82%, #f1416c 100%); }
+    .band .marker { position: absolute; top: -7px; width: 4px; height: 32px; border-radius: 3px;
+        background: var(--bs-gray-900); box-shadow: 0 0 0 3px var(--bs-body-bg);
+        left: 50%; transform: translateX(-50%); transition: left .5s cubic-bezier(.4,0,.2,1); }
+    .band .marker::after { content:""; position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+        border-left: 6px solid transparent; border-right: 6px solid transparent;
+        border-top: 8px solid var(--bs-gray-900); }
+    .band-scale { display:flex; justify-content:space-between; font-size:.72rem; color:var(--bs-gray-500);
+        font-weight:600; }
+
+    /* countdown ring */
+    .ring-wrap { position: relative; width: 132px; height: 132px; }
+    .ring-wrap svg { transform: rotate(-90deg); }
+    .ring-bg { stroke: var(--bs-gray-200); }
+    .ring-fg { stroke: url(#calGrad); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+    .ring-text { position: absolute; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; }
+    .ring-text .t-big { font-size: 1.7rem; font-weight: 800; line-height: 1; }
+    .ring-text .t-sub { font-size: .72rem; color: var(--bs-gray-500); font-weight: 600; text-transform: uppercase; }
+
+    .status-pill { display:inline-flex; align-items:center; gap:.4rem; padding:.4rem .9rem;
+        border-radius: 2rem; font-weight: 700; font-size: .85rem; }
+
+    /* report success banner */
+    .report-hero { border-radius: 1rem; padding: 1.5rem; color: #fff;
+        background: linear-gradient(135deg, #00c9a7, #00b8d9); }
+    .report-hero.fail { background: linear-gradient(135deg, #f1416c, #cf1d4f); }
+    .report-hero .icn { width: 64px; height: 64px; border-radius: 50%;
+        background: rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; }
+    .report-hero .icn i { font-size: 2.2rem; color: #fff; }
+    .sum-cell { padding: .9rem 1rem; border-radius: .65rem; background: var(--bs-gray-100); height:100%; }
+    .sum-cell .lbl { font-size:.72rem; text-transform:uppercase; letter-spacing:.5px; font-weight:700; color:var(--bs-gray-500); }
+    .sum-cell .val { font-size:1.15rem; font-weight:700; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+
+<!-- ============================== STEPPER ============================== -->
+<div class="card mb-2">
+    <div class="card-body py-2">
+        <div class="cal-stepper" id="cal-stepper">
+            <div class="cal-step is-active" data-step="1">
+                <div class="cal-node"><i class="ki-outline ki-element-11"></i></div>
+                <div class="cal-label">{% trans "Kal. Adımları" %}</div>
+                <div class="cal-sub">{% trans "Parametre & referans" %}</div>
+            </div>
+            <div class="cal-step" data-step="2">
+                <div class="cal-node"><i class="ki-outline ki-drop"></i></div>
+                <div class="cal-label">{% trans "Ölçüm" %}</div>
+                <div class="cal-sub">{% trans "Daldır & oku" %}</div>
+            </div>
+            <div class="cal-step" data-step="3">
+                <div class="cal-node"><i class="ki-outline ki-document"></i></div>
+                <div class="cal-label">{% trans "Rapor" %}</div>
+                <div class="cal-sub">{% trans "Kaydet & gönder" %}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- =============================== STEP 1 =============================== -->
+<div class="cal-pane active" id="pane-1">
+    <div class="card cal-card">
+        <div class="card-header border-0 pt-6">
+            <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Kalibrasyon Adımları" %}</h3>
+        </div>
+        <div class="card-body pt-2">
+            <div class="row g-6">
+                <div class="col-md-6">
+                    <label class="form-label required">{% trans "İstasyon Seçimi" %}</label>
+                    <select class="form-select" id="c-station" data-control="select2"
+                            data-placeholder='{% trans "İstasyon seçiniz" %}' data-allow-clear="true">
+                        <option></option>
+                        {% for s in stations %}<option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label required">{% trans "Parametre Seçimi" %}</label>
+                    <select class="form-select" id="c-param" data-control="select2"
+                            data-placeholder='{% trans "Önce istasyon seçin" %}' data-allow-clear="true" disabled>
+                        <option></option>
+                    </select>
+                    <div class="form-text" id="c-param-hint">{% trans "Önce bir istasyon seçin." %}</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label required">{% trans "Kalibrasyon Tipi" %}</label>
+                    <select class="form-select" id="c-type" data-control="select2" data-hide-search="true"
+                            data-placeholder="...">
+                        <option></option>
+                        {% for v, lbl in type_choices %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label required">{% trans "Referans Çözelti Değeri" %}</label>
+                    <div class="input-group">
+                        <input type="number" step="any" class="form-control" id="c-ref"
+                               placeholder="{% trans 'Referans Değer' %}">
+                        <span class="input-group-text" id="c-ref-unit">—</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label required">{% trans "Kalibrasyon Süresi" %}</label>
+                    <select class="form-select" id="c-duration" data-control="select2" data-hide-search="true">
+                        {% for d in duration_choices %}<option value="{{ d }}" {% if d == 60 %}selected{% endif %}>{{ d }} {% trans "sn." %}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">{% trans "Kabul Toleransı (± %)" %}</label>
+                    <div class="input-group">
+                        <input type="number" step="any" min="1" class="form-control" id="c-tol" value="{{ tolerance_pct }}">
+                        <span class="input-group-text">%</span>
+                    </div>
+                    <div class="form-text">{% trans "Daldırma algılama ve geçerlilik bandı." %}</div>
+                </div>
+            </div>
+
+            <div class="alert alert-warning d-none mt-6" id="step1-alert"></div>
+
+            <div class="d-flex justify-content-end mt-8">
+                <button type="button" class="btn btn-primary" id="btn-to-2" disabled>
+                    {% trans "Ölçüme Geç" %} <i class="ki-outline ki-arrow-right fs-3 ms-1"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- =============================== STEP 2 =============================== -->
+<div class="cal-pane" id="pane-2">
+    <div class="row g-5">
+        <!-- Beaker -->
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="beaker-stage">
+                        <div class="stage-hint" id="stage-hint">
+                            <span class="dot"></span><span id="hint-text">{% trans "Sensörü solüsyona daldırın" %}</span>
+                        </div>
+                        <div class="probe" id="probe">
+                            <div class="cable"></div>
+                            <div class="body"></div>
+                            <div class="tip"></div>
+                        </div>
+                        <div class="beaker" id="beaker">
+                            <span class="rim"></span>
+                            <div class="liquid" id="liquid">
+                                <span class="bubble"></span><span class="bubble"></span>
+                                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+                            </div>
+                        </div>
+                        <div class="stage-floor"></div>
+                    </div>
+                    <div class="text-center mt-4">
+                        <button type="button" class="btn btn-light-primary btn-sm" id="btn-manual-dip">
+                            <i class="ki-outline ki-down fs-5"></i>{% trans "Daldırmayı Elle Onayla" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live panel -->
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start mb-2">
+                        <div>
+                            <div class="text-muted fw-semibold fs-7 text-uppercase" id="live-param">—</div>
+                            <div class="d-flex align-items-end gap-2">
+                                <span class="live-value" id="live-value">--</span>
+                                <span class="live-unit" id="live-unit"></span>
+                            </div>
+                            <div class="text-muted fs-8 mt-1" id="live-time">{% trans "Veri bekleniyor…" %}</div>
+                        </div>
+                        <div class="ring-wrap">
+                            <svg width="132" height="132" viewBox="0 0 132 132">
+                                <defs>
+                                    <linearGradient id="calGrad" x1="0" y1="0" x2="1" y2="1">
+                                        <stop offset="0%" stop-color="#7239ea"/>
+                                        <stop offset="100%" stop-color="#00b8d9"/>
+                                    </linearGradient>
+                                </defs>
+                                <circle class="ring-bg" cx="66" cy="66" r="58" fill="none" stroke-width="12"/>
+                                <circle class="ring-fg" id="ring-fg" cx="66" cy="66" r="58" fill="none" stroke-width="12"
+                                        stroke-dasharray="364.4" stroke-dashoffset="364.4"/>
+                            </svg>
+                            <div class="ring-text">
+                                <span class="t-big" id="ring-big">—</span>
+                                <span class="t-sub" id="ring-sub">{% trans "hazır" %}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- tolerance band -->
+                    <div class="band"><div class="marker" id="band-marker"></div></div>
+                    <div class="band-scale">
+                        <span id="band-min">—</span>
+                        <span class="text-success">{% trans "Referans" %} <b id="band-ref">—</b></span>
+                        <span id="band-max">—</span>
+                    </div>
+
+                    <!-- metrics -->
+                    <div class="row g-3 mt-3">
+                        <div class="col-4"><div class="metric-box">
+                            <div class="lbl">{% trans "Ortalama" %}</div>
+                            <div class="val" id="m-avg">—</div></div></div>
+                        <div class="col-4"><div class="metric-box">
+                            <div class="lbl">{% trans "% Sapma" %}</div>
+                            <div class="val" id="m-dev">—</div></div></div>
+                        <div class="col-4"><div class="metric-box">
+                            <div class="lbl">{% trans "Örnek" %}</div>
+                            <div class="val" id="m-samples">0</div></div></div>
+                    </div>
+
+                    <div id="spark" class="mt-4" style="min-height:90px;"></div>
+
+                    <div class="d-flex align-items-center justify-content-between mt-3">
+                        <span class="status-pill badge-light-secondary" id="step2-status">
+                            <i class="ki-outline ki-information-5 fs-5"></i>{% trans "Bekleniyor" %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between mt-5">
+        <button type="button" class="btn btn-light" id="btn-back-1">
+            <i class="ki-outline ki-arrow-left fs-3 me-1"></i>{% trans "Geri" %}
+        </button>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-light-warning d-none" id="btn-retry">
+                <i class="ki-outline ki-arrows-circle fs-4"></i>{% trans "Yeniden Dene" %}
+            </button>
+            <button type="button" class="btn btn-primary" id="btn-to-3" disabled>
+                {% trans "Raporu Oluştur" %} <i class="ki-outline ki-arrow-right fs-3 ms-1"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- =============================== STEP 3 =============================== -->
+<div class="cal-pane" id="pane-3">
+    <div class="card mb-5">
+        <div class="card-body">
+            <div class="report-hero d-flex align-items-center gap-4" id="report-hero">
+                <div class="icn"><i class="ki-outline ki-check-circle" id="hero-icon"></i></div>
+                <div>
+                    <div class="fs-2 fw-bold" id="hero-title">{% trans "Kalibrasyon Tamamlandı" %}</div>
+                    <div class="fs-6 opacity-75" id="hero-sub"></div>
+                </div>
+            </div>
+
+            <div class="row g-3 mt-2">
+                <div class="col-6 col-md-3"><div class="sum-cell">
+                    <div class="lbl">{% trans "Ortalama Değer" %}</div><div class="val" id="r-avg">—</div></div></div>
+                <div class="col-6 col-md-3"><div class="sum-cell">
+                    <div class="lbl">{% trans "Referans Değer" %}</div><div class="val" id="r-ref">—</div></div></div>
+                <div class="col-6 col-md-3"><div class="sum-cell">
+                    <div class="lbl">{% trans "% Sapma" %}</div><div class="val" id="r-dev">—</div></div></div>
+                <div class="col-6 col-md-3"><div class="sum-cell">
+                    <div class="lbl">{% trans "Std. Sapma" %}</div><div class="val" id="r-std">—</div></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header border-0 pt-6">
+            <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Kalibrasyon Raporu" %}</h3>
+        </div>
+        <div class="card-body pt-2">
+            <div class="table-responsive">
+                <table class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
+                    <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
+                        <th>{% trans "Parametre" %}</th><th>{% trans "Kal. Tipi" %}</th><th>{% trans "Süre" %}</th>
+                        <th>{% trans "Ref. Değer" %}</th><th>{% trans "Okunan Değer" %}</th>
+                        <th>{% trans "Ortalama Değer" %}</th><th>{% trans "% Sapma" %}</th>
+                        <th>{% trans "Durum" %}</th><th>{% trans "Kullanıcı" %}</th><th>{% trans "Tarih" %}</th>
+                    </tr></thead>
+                    <tbody><tr id="report-row">
+                        <td id="t-param">—</td><td id="t-type">—</td><td id="t-period">—</td>
+                        <td id="t-ref">—</td><td id="t-read">—</td><td id="t-avg">—</td>
+                        <td id="t-dev">—</td>
+                        <td id="t-status">—</td><td id="t-user">{{ request.user.get_full_name|default:request.user.username }}</td>
+                        <td id="t-date">—</td>
+                    </tr></tbody>
+                </table>
+            </div>
+
+            <div class="alert alert-light-primary d-none mt-4" id="step3-msg"></div>
+
+            <div class="d-flex flex-wrap justify-content-between gap-2 mt-6">
+                <button type="button" class="btn btn-light" id="btn-restart">
+                    <i class="ki-outline ki-arrows-circle fs-4"></i>{% trans "Yeni Kalibrasyon" %}
+                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-success" id="btn-save">
+                        <i class="ki-outline ki-save-2 fs-4"></i>{% trans "Kaydet" %}
+                    </button>
+                    <button type="button" class="btn btn-primary" id="btn-send-sim" disabled>
+                        <i class="ki-outline ki-send fs-4"></i>{% trans "Bakanlık SIM'e Gönder" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    "use strict";
+
+    const I18N = {
+        dipPrompt: "{% trans 'Sensörü solüsyona daldırın' %}",
+        detecting: "{% trans 'Daldırma algılanıyor…' %}",
+        detected: "{% trans 'Daldırma algılandı' %}",
+        measuring: "{% trans 'Kalibrasyon işlemi başlatıldı' %}",
+        done: "{% trans 'Ölçüm tamamlandı' %}",
+        waiting: "{% trans 'Bekleniyor' %}",
+        noData: "{% trans 'Veri bekleniyor…' %}",
+        inBand: "{% trans 'Bant içinde' %}",
+        outBand: "{% trans 'Bant dışında' %}",
+        valid: "{% trans 'Geçerli' %}",
+        invalid: "{% trans 'Geçersiz' %}",
+        saved: "{% trans 'Kalibrasyon kaydedildi.' %}",
+        sent: "{% trans 'Bakanlık SIM gönderimi başarılı.' %}",
+        sec: "{% trans 'sn' %}",
+    };
+    const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const RING_LEN = 364.4;
+
+    // ---- state ----
+    const S = {
+        stationId: null, sensorId: null, paramName: "", unit: "",
+        minRange: null, maxRange: null,
+        calType: null, calTypeLabel: "", ref: null, duration: 60, tol: {{ tolerance_pct }},
+        // measurement
+        phase: "idle",            // idle | waiting | detecting | measuring | done
+        inBandCount: 0,
+        samples: [], lastValue: null,
+        measureStart: 0,
+        avg: null, std: null, dev: null, valid: false,
+        savedId: null,
+    };
+    let pollTimer = null, spark = null;
+
+    const $ = (id) => document.getElementById(id);
+    const fmt = (v, d=2) => (v === null || v === undefined || isNaN(v)) ? "—" : Number(v).toFixed(d);
+
+    // ============================ STEP NAV ============================
+    function gotoStep(n) {
+        document.querySelectorAll('.cal-pane').forEach(p => p.classList.remove('active'));
+        $('pane-' + n).classList.add('active');
+        document.querySelectorAll('.cal-step').forEach(st => {
+            const s = +st.dataset.step;
+            st.classList.toggle('is-active', s === n);
+            st.classList.toggle('is-done', s < n);
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ============================ STEP 1 ============================
+    const $station = $('c-station'), $param = $('c-param'), $type = $('c-type'),
+          $ref = $('c-ref'), $dur = $('c-duration'), $tol = $('c-tol');
+
+    function reinitParam() {
+        const $p = window.jQuery($param);
+        if ($p.hasClass('select2-hidden-accessible')) $p.select2('destroy');
+        $p.select2({ placeholder: "{% trans 'Parametre seçiniz' %}", allowClear: true,
+            templateResult: fmtParamOpt, templateSelection: fmtParamOpt });
+    }
+    function fmtParamOpt(o) { return o.text; }
+
+    function loadParams(stationId) {
+        const $p = window.jQuery($param);
+        $param.innerHTML = '<option></option>';
+        if (!stationId) {
+            $param.disabled = true;
+            $('c-param-hint').textContent = "{% trans 'Önce bir istasyon seçin.' %}";
+            reinitParam(); validate1(); return;
+        }
+        fetch(`{% url 'dashboard:api_calibration_params' %}?station=${stationId}`)
+            .then(r => r.json()).then(d => {
+                (d.results || []).forEach(it => {
+                    const o = document.createElement('option');
+                    o.value = it.sensor_id;
+                    o.textContent = it.text + (it.unit ? ` (${it.unit})` : '');
+                    o.dataset.unit = it.unit || '';
+                    o.dataset.name = it.text;
+                    o.dataset.min = it.min_range === null ? '' : it.min_range;
+                    o.dataset.max = it.max_range === null ? '' : it.max_range;
+                    $param.appendChild(o);
+                });
+                $param.disabled = (d.results || []).length === 0;
+                $('c-param-hint').textContent = (d.results || []).length
+                    ? "{% trans 'Kalibre edilecek parametreyi seçin.' %}"
+                    : "{% trans 'Bu istasyonda kalibre edilebilir analog parametre yok.' %}";
+                reinitParam(); validate1();
+            });
+    }
+
+    function selectedParamOpt() { return $param.options[$param.selectedIndex]; }
+
+    function validate1() {
+        const errs = [];
+        S.stationId = $station.value || null;
+        S.sensorId = $param.value || null;
+        S.calType = $type.value === "" ? null : parseInt($type.value, 10);
+        S.calTypeLabel = $type.options[$type.selectedIndex] ? $type.options[$type.selectedIndex].text : "";
+        S.ref = $ref.value === "" ? null : parseFloat($ref.value);
+        S.duration = parseInt($dur.value, 10) || 60;
+        S.tol = parseFloat($tol.value) || 25;
+
+        const op = selectedParamOpt();
+        if (op && op.dataset) {
+            S.unit = op.dataset.unit || "";
+            S.paramName = op.dataset.name || "";
+            S.minRange = op.dataset.min === '' ? null : parseFloat(op.dataset.min);
+            S.maxRange = op.dataset.max === '' ? null : parseFloat(op.dataset.max);
+        }
+        $('c-ref-unit').textContent = S.unit || "—";
+
+        if (!S.stationId) errs.push("{% trans 'İstasyon seçin.' %}");
+        if (!S.sensorId) errs.push("{% trans 'Parametre seçin.' %}");
+        if (S.calType === null) errs.push("{% trans 'Kalibrasyon tipi seçin.' %}");
+        if (S.ref === null || isNaN(S.ref)) errs.push("{% trans 'Referans değeri girin.' %}");
+        if (S.tol <= 0) errs.push("{% trans 'Tolerans pozitif olmalı.' %}");
+
+        const alert = $('step1-alert');
+        if (errs.length) { alert.classList.remove('d-none'); alert.innerHTML = errs.join('<br>'); }
+        else alert.classList.add('d-none');
+        $('btn-to-2').disabled = errs.length > 0;
+        return errs.length === 0;
+    }
+
+    window.jQuery($station).on('change', function () { loadParams(this.value); });
+    window.jQuery($param).on('change', validate1);
+    window.jQuery($type).on('change', validate1);
+    window.jQuery($dur).on('change', validate1);
+    $ref.addEventListener('input', validate1);
+    $tol.addEventListener('input', validate1);
+
+    $('btn-to-2').addEventListener('click', function () {
+        if (!validate1()) return;
+        gotoStep(2); enterMeasure();
+    });
+    $('btn-back-1').addEventListener('click', function () { stopPoll(); gotoStep(1); });
+
+    // ============================ STEP 2 ============================
+    // tolerance band geometry (band fill: red|yellow|green|yellow|red at 18/38/62/82)
+    function band() {
+        // green zone = ref ± tol%. Use symmetric absolute half-width.
+        let half;
+        if (S.ref !== 0 && S.ref !== null) half = Math.abs(S.ref) * (S.tol / 100);
+        else {
+            const span = (S.maxRange !== null && S.minRange !== null) ? (S.maxRange - S.minRange) : null;
+            half = span ? Math.abs(span) * (S.tol / 100) : (S.tol / 100) || 1;
+        }
+        // full bar spans ref ± 2.78*half so that green (ref±half) lands on 38%..62%
+        const fullHalf = half / 0.12;   // 0.12 = (0.5-0.38)
+        return { half, low: S.ref - fullHalf, high: S.ref + fullHalf };
+    }
+
+    function inBand(v) {
+        const b = band();
+        return v >= (S.ref - b.half) && v <= (S.ref + b.half);
+    }
+
+    function deviation(avg) {
+        if (S.ref === 0 || S.ref === null) return avg - S.ref;     // mutlak fark
+        return ((avg - S.ref) / S.ref) * 100;
+    }
+    function devLabel(avg) {
+        if (S.ref === 0 || S.ref === null) return fmt(avg - S.ref) + " " + S.unit;
+        return fmt(deviation(avg)) + " %";
+    }
+
+    function liquidColor() {
+        const liq = $('liquid');
+        // parametreye göre hafif renk: pH→mor, debi→mavi, default→teal
+        const n = (S.paramName || "").toLowerCase();
+        if (n.includes('ph')) { liq.style.setProperty('--liq-top', '#a855f7'); liq.style.setProperty('--liq-bot', '#7e22ce'); }
+        else if (n.includes('çöz') || n.includes('oksijen') || n.includes('do')) { liq.style.setProperty('--liq-top', '#22d3ee'); liq.style.setProperty('--liq-bot', '#0891b2'); }
+        else { liq.style.setProperty('--liq-top', '#38bdf8'); liq.style.setProperty('--liq-bot', '#0284c7'); }
+    }
+
+    function setHint(text, color) {
+        $('hint-text').textContent = text;
+        const dot = document.querySelector('.stage-hint .dot');
+        if (dot) dot.style.background = color || 'var(--bs-warning)';
+    }
+    function setStatus(text, cls, icon) {
+        const el = $('step2-status');
+        el.className = 'status-pill ' + cls;
+        el.innerHTML = `<i class="ki-outline ${icon} fs-5"></i>${text}`;
+    }
+
+    function enterMeasure() {
+        resetMeasure();
+        $('live-param').textContent = S.paramName + (S.calTypeLabel ? ` · ${S.calTypeLabel}` : '');
+        $('live-unit').textContent = S.unit;
+        $('band-ref').textContent = fmt(S.ref);
+        const b = band();
+        $('band-min').textContent = fmt(b.low);
+        $('band-max').textContent = fmt(b.high);
+        liquidColor();
+        initSpark();
+        S.phase = "waiting";
+        setHint(I18N.dipPrompt, 'var(--bs-warning)');
+        setStatus(I18N.waiting, 'badge-light-secondary', 'ki-information-5');
+        startPoll();
+    }
+
+    function resetMeasure() {
+        S.phase = "idle"; S.inBandCount = 0; S.samples = []; S.lastValue = null;
+        S.avg = S.std = S.dev = null; S.valid = false;
+        $('probe').classList.remove('dipped', 'detecting');
+        $('beaker').classList.remove('boiling');
+        $('btn-to-3').disabled = true;
+        $('btn-retry').classList.add('d-none');
+        $('m-avg').textContent = '—'; $('m-dev').textContent = '—'; $('m-samples').textContent = '0';
+        setRing(0, '—', I18N.waiting);
+        $('live-value').textContent = '--';
+    }
+
+    function setRing(pct, big, sub) {
+        $('ring-fg').style.strokeDashoffset = RING_LEN * (1 - Math.max(0, Math.min(1, pct)));
+        $('ring-big').textContent = big;
+        $('ring-sub').textContent = sub;
+    }
+
+    function moveMarker(v) {
+        const b = band();
+        let pct = (v - b.low) / (b.high - b.low);
+        pct = Math.max(0, Math.min(1, pct));
+        $('band-marker').style.left = (pct * 100) + '%';
+    }
+
+    // ---- spark (ApexCharts) ----
+    function initSpark() {
+        if (spark) { spark.destroy(); spark = null; }
+        const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+        spark = new ApexCharts($('spark'), {
+            chart: { type: 'area', height: 90, sparkline: { enabled: true }, animations: { easing: 'linear', dynamicAnimation: { speed: 400 } } },
+            series: [{ name: S.paramName || 'Değer', data: [] }],
+            stroke: { curve: 'smooth', width: 2.5 },
+            fill: { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0.05 } },
+            colors: ['#7239ea'],
+            tooltip: { theme: dark ? 'dark' : 'light', y: { formatter: v => fmt(v) + ' ' + S.unit } },
+            annotations: { yaxis: [{ y: S.ref, borderColor: '#50cd89', strokeDashArray: 4,
+                label: { text: '{% trans "Ref" %} ' + fmt(S.ref), style: { color: '#fff', background: '#50cd89' } } }] },
+        });
+        spark.render();
+    }
+    function pushSpark(v) {
+        if (!spark) return;
+        const data = spark.w.config.series[0].data.concat([v]);
+        if (data.length > 40) data.shift();
+        spark.updateSeries([{ data }]);
+    }
+
+    // ---- polling ----
+    function startPoll() {
+        stopPoll();
+        tick();
+        pollTimer = setInterval(tick, 1500);
+    }
+    function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+    function tick() {
+        fetch(`{% url 'dashboard:api_calibration_live' %}?sensor=${S.sensorId}`)
+            .then(r => r.json()).then(onReading).catch(() => {});
+    }
+
+    function onReading(d) {
+        if (!d || !d.ok || d.value === null || d.value === undefined) {
+            $('live-time').textContent = I18N.noData; return;
+        }
+        const v = Number(d.value);
+        S.lastValue = v;
+        $('live-value').textContent = fmt(v);
+        $('live-time').textContent = d.readtime || '';
+        moveMarker(v);
+        pushSpark(v);
+
+        const ok = inBand(v);
+        if (S.phase === "waiting") {
+            setStatus(ok ? I18N.inBand : I18N.outBand,
+                ok ? 'badge-light-success' : 'badge-light-danger',
+                ok ? 'ki-check-circle' : 'ki-cross-circle');
+            S.inBandCount = ok ? S.inBandCount + 1 : 0;
+            setRing(Math.min(1, S.inBandCount / 2), String(S.inBandCount), I18N.detecting);
+            if (ok) { setHint(I18N.detecting, 'var(--bs-success)'); $('probe').classList.add('detecting'); }
+            else { $('probe').classList.remove('detecting'); }
+            if (S.inBandCount >= 2) onDetected();
+        } else if (S.phase === "measuring") {
+            S.samples.push(v);
+            updateMeasuring();
+        }
+    }
+
+    function onDetected() {
+        S.phase = "detecting";
+        $('probe').classList.remove('detecting');
+        $('probe').classList.add('dipped');
+        $('beaker').classList.add('boiling');
+        setHint(I18N.detected + ' ✓', 'var(--bs-success)');
+        setStatus(I18N.detected, 'badge-light-success', 'ki-check-circle');
+        setTimeout(startMeasuring, 1600);
+    }
+
+    function startMeasuring() {
+        S.phase = "measuring"; S.samples = []; S.measureStart = performance.now();
+        setHint(I18N.measuring, 'var(--bs-primary)');
+        setStatus(I18N.measuring, 'badge-light-primary', 'ki-pulse');
+    }
+
+    function updateMeasuring() {
+        const elapsed = (performance.now() - S.measureStart) / 1000;
+        const remain = Math.max(0, S.duration - elapsed);
+        const pct = Math.min(1, elapsed / S.duration);
+        setRing(pct, Math.ceil(remain) + '', I18N.sec);
+        const avg = mean(S.samples);
+        $('m-avg').textContent = fmt(avg);
+        $('m-dev').textContent = devLabel(avg);
+        $('m-samples').textContent = S.samples.length;
+        if (elapsed >= S.duration) finishMeasuring();
+    }
+
+    function finishMeasuring() {
+        S.phase = "done";
+        stopPoll();
+        $('beaker').classList.remove('boiling');
+        const avg = mean(S.samples);
+        S.avg = avg; S.std = stddev(S.samples, avg); S.dev = deviation(avg);
+        S.valid = Math.abs((S.ref === 0 || S.ref === null) ? (avg - S.ref) / (band().half || 1) * (S.tol)
+                                                            : S.dev) <= S.tol;
+        setRing(1, S.valid ? '✓' : '✕', S.valid ? I18N.valid : I18N.invalid);
+        $('ring-fg').style.stroke = S.valid ? '#50cd89' : '#f1416c';
+        setHint(I18N.done, S.valid ? 'var(--bs-success)' : 'var(--bs-danger)');
+        setStatus(S.valid ? I18N.valid : I18N.invalid,
+            S.valid ? 'badge-light-success' : 'badge-light-danger',
+            S.valid ? 'ki-check-circle' : 'ki-cross-circle');
+        $('btn-to-3').disabled = false;
+        $('btn-retry').classList.remove('d-none');
+    }
+
+    function mean(a) { return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null; }
+    function stddev(a, m) {
+        if (a.length < 2) return 0;
+        const mu = m === undefined ? mean(a) : m;
+        return Math.sqrt(a.reduce((s, x) => s + (x - mu) ** 2, 0) / (a.length - 1));
+    }
+
+    $('btn-manual-dip').addEventListener('click', function () {
+        if (S.phase === "waiting") {
+            S.inBandCount = 2;
+            if (S.lastValue === null) { S.lastValue = S.ref; $('live-value').textContent = fmt(S.ref); }
+            onDetected();
+        }
+    });
+    $('btn-retry').addEventListener('click', function () { enterMeasure(); });
+    $('btn-to-3').addEventListener('click', function () { stopPoll(); buildReport(); gotoStep(3); });
+
+    // ============================ STEP 3 ============================
+    function buildReport() {
+        const finalRead = S.samples.length ? S.samples[S.samples.length - 1] : S.lastValue;
+        $('t-param').textContent = S.paramName;
+        $('t-type').textContent = S.calTypeLabel;
+        $('t-period').textContent = S.duration + ' ' + I18N.sec + '.';
+        $('t-ref').textContent = fmt(S.ref) + ' ' + S.unit;
+        $('t-read').textContent = fmt(finalRead) + ' ' + S.unit;
+        $('t-avg').textContent = fmt(S.avg) + ' ' + S.unit;
+        $('t-dev').textContent = devLabel(S.avg);
+        const stBadge = S.valid ? `<span class="badge badge-light-success">${I18N.valid}</span>`
+                                : `<span class="badge badge-light-danger">${I18N.invalid}</span>`;
+        $('t-status').innerHTML = stBadge;
+        $('t-date').textContent = new Date().toLocaleString('tr-TR');
+
+        // hero + summary
+        $('r-avg').textContent = fmt(S.avg) + ' ' + S.unit;
+        $('r-ref').textContent = fmt(S.ref) + ' ' + S.unit;
+        $('r-dev').textContent = devLabel(S.avg);
+        $('r-std').textContent = fmt(S.std);
+        const hero = $('report-hero');
+        hero.classList.toggle('fail', !S.valid);
+        $('hero-icon').className = 'ki-outline ' + (S.valid ? 'ki-check-circle' : 'ki-cross-circle');
+        $('hero-title').textContent = S.valid ? "{% trans 'Kalibrasyon Başarılı' %}" : "{% trans 'Kalibrasyon Başarısız' %}";
+        $('hero-sub').textContent = `${S.paramName} · ${S.calTypeLabel} · ${devLabel(S.avg)} ${S.valid ? '' : '(tolerans aşıldı)'}`;
+
+        // reset step3 buttons
+        S.savedId = null;
+        $('btn-save').disabled = false;
+        $('btn-send-sim').disabled = true;
+        $('step3-msg').classList.add('d-none');
+    }
+
+    function postJSON(url, body) {
+        return fetch(url, { method: 'POST', headers: {
+            'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify(body) }).then(async r => ({ ok: r.ok, data: await r.json() }));
+    }
+    function showMsg(text, cls) {
+        const el = $('step3-msg');
+        el.className = 'alert mt-4 alert-' + cls;
+        el.textContent = text; el.classList.remove('d-none');
+    }
+
+    $('btn-save').addEventListener('click', function () {
+        const btn = this; btn.disabled = true;
+        btn.setAttribute('data-kt-indicator', 'on');
+        postJSON("{% url 'dashboard:api_calibration_save' %}", {
+            sensor_id: S.sensorId, type: S.calType, period: S.duration,
+            cal_ref: S.ref, cal_average: S.avg, cal_std: S.std, is_valid: S.valid,
+        }).then(({ ok, data }) => {
+            btn.removeAttribute('data-kt-indicator');
+            if (ok && data.ok) {
+                S.savedId = data.id;
+                $('t-date').textContent = data.time_iso || $('t-date').textContent;
+                $('btn-send-sim').disabled = false;
+                showMsg(I18N.saved + ' (#' + data.id + ')', 'success');
+            } else {
+                btn.disabled = false;
+                showMsg(data.error || 'Hata', 'danger');
+            }
+        }).catch(() => { btn.removeAttribute('data-kt-indicator'); btn.disabled = false;
+            showMsg('Ağ hatası', 'danger'); });
+    });
+
+    $('btn-send-sim').addEventListener('click', function () {
+        if (!S.savedId) return;
+        const btn = this; btn.disabled = true;
+        btn.setAttribute('data-kt-indicator', 'on');
+        postJSON("{% url 'dashboard:api_calibration_send_sim' %}", { id: S.savedId })
+            .then(({ ok, data }) => {
+                btn.removeAttribute('data-kt-indicator');
+                if (ok && data.ok) { showMsg(I18N.sent, 'success');
+                    btn.innerHTML = '<i class="ki-outline ki-check fs-4"></i>{% trans "Gönderildi" %}'; }
+                else { btn.disabled = false; showMsg(data.error || 'Hata', 'danger'); }
+            }).catch(() => { btn.removeAttribute('data-kt-indicator'); btn.disabled = false;
+                showMsg('Ağ hatası', 'danger'); });
+    });
+
+    $('btn-restart').addEventListener('click', function () {
+        stopPoll(); resetMeasure(); gotoStep(1);
+    });
+
+    // ---- init ----
+    function revealContent() {
+        if (document.body.classList.contains('page-ready')) return;
+        requestAnimationFrame(() => document.body.classList.add('page-ready'));
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+        if ($station.value) loadParams($station.value);
+        validate1();
+        if (document.readyState === 'complete') revealContent();
+        else window.addEventListener('load', revealContent);
+        setTimeout(revealContent, 1200);
+    });
+})();
+</script>
+{% endblock %}

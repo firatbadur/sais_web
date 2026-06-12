@@ -34,6 +34,8 @@ urlpatterns = [
     path("operator/sample-trigger/", views.ScenarioBuilderView.as_view(), name="operator_sample"),
     path("operator/scenario-designer/", views.ScenarioDesignerView.as_view(),
          name="operator_scenario_designer"),
+    path("operator/calibration/", views.CalibrationWizardView.as_view(),
+         name="operator_calibration"),
     path("operator/alarms/", views.AlarmsView.as_view(), name="operator_alarms"),
 
     # --- Management (readonly) ---
@@ -117,6 +119,12 @@ urlpatterns = [
     path("api/scenario/history/", api_views.scenario_history, name="api_scenario_history"),
     path("api/scenario/ministry/", api_views.scenario_request_ministry, name="api_scenario_ministry"),
     path("api/scenario/cancel-run/", api_views.scenario_cancel_run, name="api_scenario_cancel_run"),
+
+    # --- AJAX API (İnteraktif Kalibrasyon) ---
+    path("api/calibration/params/", api_views.calibration_params, name="api_calibration_params"),
+    path("api/calibration/live/", api_views.calibration_live, name="api_calibration_live"),
+    path("api/calibration/save/", api_views.calibration_save, name="api_calibration_save"),
+    path("api/calibration/send-sim/", api_views.calibration_send_sim, name="api_calibration_send_sim"),
 
     # --- AJAX API (Senaryo Tasarımcı / node-graph) ---
     path("api/scenario-graph/list/", api_views.graph_list, name="api_graph_list"),

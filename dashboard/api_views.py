@@ -1588,3 +1588,208 @@ def scenario_digital_sensors(request):
     return JsonResponse({"results": items})
 
 
+# --------------------------------------------------------------------------- #
+# İnteraktif Kalibrasyon AJAX endpoint'leri
+# --------------------------------------------------------------------------- #
+
+@login_required
+def calibration_params(request):
+    """İstasyonun kalibre edilebilir (analog girişli) parametreleri.
+
+    Her parametre için kalibrasyonda kullanılacak birincil analog sensörün
+    id'si, birimi ve aralığı (min/max) döner — sihirbaz adım 1 dropdown'u +
+    canlı tolerans bandı için.
+    """
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    try:
+        station_id = int(request.GET.get("station") or 0) or None
+    except (TypeError, ValueError):
+        station_id = None
+    if not station_id:
+        return JsonResponse({"results": []})
+
+    # Analog giriş sensörü (sensor_type=0) olan parametreler; her parametre için
+    # ilk analog sensörü kalibrasyon hedefi al.
+    sensors = (
+        Sensor.objects
+        .filter(connection__station_id=station_id, sensor_type=0, parameter__isnull=False)
+        .select_related("parameter")
+        .order_by("parameter__parameter_name", "id")
+    )
+    seen = set()
+    items = []
+    for s in sensors:
+        if s.parameter_id in seen:
+            continue
+        seen.add(s.parameter_id)
+        p = s.parameter
+        items.append({
+            "sensor_id": s.id,
+            "parameter_id": p.id,
+            "text": p.parameter_name or f"Parametre {p.id}",
+            "unit": p.unit_txt or p.unit or "",
+            "min_range": p.min_range,
+            "max_range": p.max_range,
+        })
+    return JsonResponse({"results": items})
+
+
+@login_required
+def calibration_live(request):
+    """Bir sensörün anlık değeri — daldırma algılama + örnekleme polling'i.
+
+    `SensorLatest` snapshot'ından değer/status/okuma zamanı döner. Sihirbaz
+    adım 2 her 1-2 sn'de bunu çağırıp daldırmayı algılar ve süre boyunca
+    örnek toplar.
+    """
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    try:
+        sensor_id = int(request.GET.get("sensor") or 0) or None
+    except (TypeError, ValueError):
+        sensor_id = None
+    if not sensor_id:
+        return JsonResponse({"ok": False, "error": "Sensör seçilmedi."}, status=400)
+
+    latest = (
+        SensorLatest.objects
+        .select_related("status", "sensor", "sensor__parameter")
+        .filter(sensor_id=sensor_id)
+        .first()
+    )
+    if latest is None:
+        return JsonResponse({
+            "ok": True, "value": None, "status": None, "status_code": None,
+            "readtime": None, "quality": None,
+        })
+    return JsonResponse({
+        "ok": True,
+        "value": latest.value,
+        "status": latest.status.name if latest.status_id else None,
+        "status_code": latest.status.code if latest.status_id else None,
+        "quality": latest.quality,
+        "readtime": timezone.localtime(latest.readtime).strftime("%d.%m.%Y %H:%M:%S")
+        if latest.readtime else None,
+    })
+
+
+@login_required
+def calibration_save(request):
+    """Kalibrasyon sonucunu `Calibration` tablosuna kaydeder.
+
+    Payload: sensor_id, type (0/1/2), period (sn), cal_ref, cal_average,
+    cal_std, is_valid. Kullanıcı request.user'dan alınır.
+    """
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from api.models import Calibration
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    sensor = Sensor.objects.filter(pk=data.get("sensor_id")).first()
+    if sensor is None:
+        return JsonResponse({"ok": False, "error": "Sensör bulunamadı."}, status=400)
+
+    def _num(key):
+        v = data.get(key)
+        try:
+            return float(v) if v is not None and v != "" else None
+        except (TypeError, ValueError):
+            return None
+
+    try:
+        cal_type = int(data.get("type"))
+    except (TypeError, ValueError):
+        cal_type = None
+    if cal_type not in (0, 1, 2):
+        return JsonResponse({"ok": False, "error": "Geçersiz kalibrasyon tipi."}, status=400)
+
+    try:
+        period = int(data.get("period") or 60)
+    except (TypeError, ValueError):
+        period = 60
+
+    cal = Calibration.objects.create(
+        sensor=sensor,
+        type=cal_type,
+        period=period,
+        cal_ref=_num("cal_ref"),
+        cal_average=_num("cal_average"),
+        cal_std=_num("cal_std"),
+        is_valid=bool(data.get("is_valid")),
+        user=request.user,
+    )
+    return JsonResponse({
+        "ok": True,
+        "id": cal.id,
+        "time_iso": timezone.localtime(cal.time_iso).strftime("%d.%m.%Y %H:%M:%S"),
+    })
+
+
+@login_required
+def calibration_send_sim(request):
+    """Kaydedilmiş bir kalibrasyonu Bakanlık SAIS ``SendCalibration`` ile gönderir."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from api.models import Calibration
+    from api.serializers import CalibrationResultSerializer
+    from sais_domain.clients.sim import SaisSimClient
+    from sais_domain.models import SaisCabinet
+
+    try:
+        cal_id = json.loads(request.body or "{}").get("id")
+    except (ValueError, TypeError):
+        cal_id = None
+
+    cal = (
+        Calibration.objects
+        .select_related("sensor__parameter__station", "user")
+        .filter(pk=cal_id)
+        .first()
+    )
+    if cal is None:
+        return JsonResponse({"ok": False, "error": "Kalibrasyon kaydı bulunamadı."}, status=404)
+
+    station_id = (
+        cal.sensor.parameter.station_id
+        if cal.sensor_id and cal.sensor.parameter_id else None
+    )
+    cabinet = SaisCabinet.objects.filter(station_id=station_id).first() if station_id else None
+    if cabinet is None:
+        return JsonResponse(
+            {"ok": False, "error": "Bu istasyona bağlı Bakanlık kabini (SIM) tanımlı değil."},
+            status=400,
+        )
+
+    payload = CalibrationResultSerializer(cal).data
+    try:
+        client = SaisSimClient(cabinet)
+        result = client.send_calibration(payload, triggered_by=request.user)
+    except Exception as exc:  # noqa: BLE001 — kullanıcıya hata mesajı dön
+        return JsonResponse(
+            {"ok": False, "error": f"Bakanlık gönderimi başarısız: {exc}"},
+            status=502,
+        )
+    return JsonResponse({"ok": True, "result": result})
+
+

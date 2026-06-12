@@ -693,6 +693,33 @@ class AlarmsView(OperatorRequiredMixin, TemplateView):
         return ctx
 
 
+class CalibrationWizardView(OperatorRequiredMixin, TemplateView):
+    """Operatör/Yönetici → İnteraktif Kalibrasyon.
+
+    3 adımlı sihirbaz: (1) Kal. Adımları — istasyon/parametre/tip/referans/süre
+    seçimi, (2) Ölçüm — sensörü solüsyona daldırma animasyonu + canlı değer
+    izleme + ±%25 tolerans bandında otomatik algılama + süre boyunca örnekleme,
+    (3) Rapor — ortalama/sapma/durum tablosu + kaydet + Bakanlık SIM'e gönder.
+
+    Canlı değer `SensorLatest` snapshot'ından `calibration_live` ile çekilir;
+    kayıt `Calibration` tablosuna yazılır; SIM gönderimi `SaisSimClient
+    .send_calibration` ile yapılır.
+    """
+    template_name = "dashboard/operator/calibration.html"
+
+    DURATION_CHOICES = (30, 60, 120, 180, 300)
+    DEFAULT_TOLERANCE = 25  # ± yüzde
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        ctx["default_station_id"] = default_station_id()
+        ctx["type_choices"] = Calibration._meta.get_field("type").choices
+        ctx["duration_choices"] = self.DURATION_CHOICES
+        ctx["tolerance_pct"] = self.DEFAULT_TOLERANCE
+        return ctx
+
+
 # --------------------------------------------------------------------------- #
 # Management overview (readonly)
 # --------------------------------------------------------------------------- #
