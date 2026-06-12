@@ -708,7 +708,7 @@ class CalibrationWizardView(OperatorRequiredMixin, TemplateView):
     template_name = "dashboard/operator/calibration.html"
 
     DURATION_CHOICES = (30, 60, 120, 180, 300)
-    DEFAULT_TOLERANCE = 25  # ± yüzde
+    DEFAULT_TOLERANCE = 5  # ± yüzde
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
