@@ -892,3 +892,153 @@ def notification_templates(request):
     return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
 
 
+# --------------------------------------------------------------------------- #
+# Alarm Yönetimi: istasyon IO listesi + alarm kuralı CRUD (rol 1,2)
+# --------------------------------------------------------------------------- #
+
+def _sensor_label(s):
+    if s.parameter and s.parameter.parameter_name:
+        return s.parameter.parameter_name
+    return s.brand or s.model or f"Sensor {s.pk}"
+
+
+@login_required
+def alarm_io(request):
+    """Bir istasyonun alarm formu IO listeleri: analog parametreler + dijital
+    kanallar (DI) + çıkışlar (DO)."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    try:
+        station_id = int(request.GET.get("station") or 0) or None
+    except (TypeError, ValueError):
+        station_id = None
+    if not station_id:
+        return JsonResponse({"analog": [], "digital": [], "outputs": []})
+
+    analog = [
+        {"id": p.id, "text": p.parameter_name or f"Parametre {p.id}"}
+        for p in Parameter.objects.filter(
+            sensors__connection__station_id=station_id,
+            sensors__sensor_type__in=(0, 1),
+        ).distinct().order_by("parameter_name")
+    ]
+    digital, outputs = [], []
+    for s in (Sensor.objects.filter(connection__station_id=station_id, sensor_type__in=(2, 3))
+              .select_related("parameter").order_by("address")):
+        item = {"id": s.id, "text": _sensor_label(s)}
+        (digital if s.sensor_type == 2 else outputs).append(item)
+    return JsonResponse({"analog": analog, "digital": digital, "outputs": outputs})
+
+
+@login_required
+def alarm_rules(request):
+    """Alarm kuralı CRUD.
+
+    GET ?rule_type=analog|diag → liste.
+    POST JSON {toggle_id} → enable/disable; aksi halde yeni kural oluştur.
+    DELETE ?id= → sil.
+    """
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    from api.models import AlarmRule, Parameter as P, Sensor as S, Station as St
+
+    if request.method == "GET":
+        rt = request.GET.get("rule_type")
+        qs = AlarmRule.objects.select_related("station", "parameter", "sensor").order_by("-created_at")
+        if rt == "analog":
+            qs = qs.filter(rule_type=AlarmRule.RULE_ANALOG)
+        elif rt == "diag":
+            qs = qs.exclude(rule_type=AlarmRule.RULE_ANALOG)
+        items = [{
+            "id": r.pk, "station": r.station.name if r.station else "",
+            "channel": (r.parameter.parameter_name if r.parameter else "") if r.rule_type == AlarmRule.RULE_ANALOG else "",
+            "type_label": r.type_label, "period": r.get_period_minutes_display(),
+            "min": r.min_value, "max": r.max_value,
+            "output": _sensor_label(r.trigger_output) if r.trigger_output else "",
+            "channels": (("SMS " if r.send_sms else "") + ("E-posta" if r.send_email else "")).strip() or "-",
+            "message": r.message, "enabled": r.enabled,
+        } for r in qs]
+        return JsonResponse({"results": items})
+
+    if request.method == "DELETE":
+        AlarmRule.objects.filter(pk=request.GET.get("id")).delete()
+        return JsonResponse({"ok": True})
+
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    # Enable/disable toggle
+    if data.get("toggle_id"):
+        r = AlarmRule.objects.filter(pk=data["toggle_id"]).first()
+        if not r:
+            return JsonResponse({"ok": False, "error": "Kural bulunamadı."}, status=404)
+        r.enabled = not r.enabled
+        r.save(update_fields=["enabled"])
+        return JsonResponse({"ok": True, "enabled": r.enabled})
+
+    # Yeni kural
+    try:
+        station = St.objects.get(pk=data.get("station_id"))
+    except (St.DoesNotExist, ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "İstasyon seçin."}, status=400)
+
+    rule_type = data.get("rule_type")
+    message = (data.get("message") or "").strip()
+    if not message:
+        return JsonResponse({"ok": False, "error": "Mesaj zorunlu."}, status=400)
+
+    try:
+        period = int(data.get("period_minutes") or 60)
+    except (TypeError, ValueError):
+        period = 60
+
+    rule = AlarmRule(
+        station=station, rule_type=rule_type, message=message, period_minutes=period,
+        notify_all=bool(data.get("notify_all", True)),
+        send_sms=bool(data.get("send_sms", True)),
+        send_email=bool(data.get("send_email", True)),
+        created_by=request.user,
+    )
+
+    if rule_type == AlarmRule.RULE_ANALOG:
+        pid = data.get("parameter_id")
+        if not pid:
+            return JsonResponse({"ok": False, "error": "Kanal seçin."}, status=400)
+        rule.parameter = P.objects.filter(pk=pid).first()
+        rule.condition = data.get("condition") or AlarmRule.COND_MINMAX
+        rule.min_value = data.get("min_value") if data.get("min_value") not in ("", None) else None
+        rule.max_value = data.get("max_value") if data.get("max_value") not in ("", None) else None
+        out_id = data.get("trigger_output_id")
+        if out_id:
+            rule.trigger_output = S.objects.filter(pk=out_id, sensor_type=3).first()
+    elif rule_type == AlarmRule.RULE_DIGITAL:
+        sid = data.get("sensor_id")
+        rule.sensor = S.objects.filter(pk=sid, sensor_type=2).first()
+        if rule.sensor is None:
+            return JsonResponse({"ok": False, "error": "Dijital kanal seçin."}, status=400)
+    elif rule_type == AlarmRule.RULE_OFFLINE:
+        try:
+            rule.offline_seconds = int(data.get("offline_seconds") or 900)
+        except (TypeError, ValueError):
+            rule.offline_seconds = 900
+    else:
+        return JsonResponse({"ok": False, "error": "Geçersiz alarm türü."}, status=400)
+
+    rule.save()
+    return JsonResponse({
+        "ok": True, "id": rule.pk, "station": station.name,
+        "type_label": rule.type_label, "period": rule.get_period_minutes_display(),
+        "message": rule.message, "enabled": rule.enabled,
+    })
+
+

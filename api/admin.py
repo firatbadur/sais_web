@@ -2,6 +2,7 @@ from django import forms
 from django.contrib import admin
 
 from .models import (
+    AlarmRule,
     ApiLog,
     Calibration,
     Command,
@@ -411,6 +412,24 @@ class NotificationLogAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(AlarmRule)
+class AlarmRuleAdmin(admin.ModelAdmin):
+    list_display = ("id", "station", "rule_type", "type_label", "period_minutes",
+                    "enabled", "send_sms", "send_email", "last_triggered_at")
+    list_filter = ("rule_type", "enabled", "station", "send_sms", "send_email")
+    search_fields = ("message", "station__name")
+    list_editable = ("enabled",)
+    autocomplete_fields = ("station", "parameter", "sensor", "trigger_output", "created_by")
+    readonly_fields = ("created_at", "last_triggered_at")
+    fieldsets = (
+        ("Genel", {"fields": ("station", "rule_type", "period_minutes", "message", "enabled")}),
+        ("Ölçüm (Analog)", {"fields": ("parameter", "condition", "min_value", "max_value", "trigger_output")}),
+        ("Diagnostik / Offline", {"fields": ("sensor", "offline_seconds")}),
+        ("Bildirim", {"fields": ("notify_all", "send_sms", "send_email")}),
+        ("Audit", {"fields": ("created_by", "created_at", "last_triggered_at")}),
+    )
 
 
 @admin.register(ApiLog)

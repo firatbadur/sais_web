@@ -321,7 +321,27 @@ class SampleTriggerView(OperatorRequiredMixin, TemplateView):
 
 
 class AlarmsView(OperatorRequiredMixin, TemplateView):
+    """Operatör/Yönetici → Alarm Yönetimi (2 sekme: Ölçüm + Diagnostik).
+
+    Alarm tanımları oluşturma/listeleme/silme; tetikleme + bildirim gönderimi
+    periyodik `api.tasks.run_alarms` task'ı tarafından yapılır.
+    """
     template_name = "dashboard/operator/alarms.html"
+
+    def get_context_data(self, **kwargs):
+        from api.models import AlarmRule
+        ctx = super().get_context_data(**kwargs)
+        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        ctx["period_choices"] = AlarmRule.PERIOD_CHOICES
+        ctx["cond_choices"] = AlarmRule.COND_CHOICES
+        rules = (
+            AlarmRule.objects
+            .select_related("station", "parameter", "sensor", "trigger_output")
+            .order_by("-created_at")
+        )
+        ctx["analog_rules"] = [r for r in rules if r.rule_type == AlarmRule.RULE_ANALOG]
+        ctx["diag_rules"] = [r for r in rules if r.rule_type != AlarmRule.RULE_ANALOG]
+        return ctx
 
 
 # --------------------------------------------------------------------------- #

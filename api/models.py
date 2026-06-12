@@ -1776,3 +1776,120 @@ class NotificationLog(models.Model):
 
     def __str__(self):
         return f"{self.channel} → {self.recipient} ({self.status})"
+
+
+class AlarmRule(models.Model):
+    """Bir istasyon için alarm tanımı (ölçüm / diagnostik / offline).
+
+    Jenerik SCADA alarmı — SAIS'e özel değildir. Periyodik task
+    (`api.tasks.run_alarms`) her kuralı `SensorLatest` anlık değerlerine karşı
+    değerlendirir; koşul sağlanır ve `period_minutes` süresi dolmuşsa aktif
+    kullanıcılara SMS/e-posta gönderir (`api.notifications`), opsiyonel olarak
+    bir dijital output'u tetikler (`trigger_output`).
+    """
+
+    RULE_ANALOG = "analog"
+    RULE_DIGITAL = "digital"
+    RULE_OFFLINE = "offline"
+    RULE_CHOICES = (
+        (RULE_ANALOG, "Ölçüm (Analog Limit)"),
+        (RULE_DIGITAL, "Diagnostik (Dijital Kanal)"),
+        (RULE_OFFLINE, "İstasyon Offline"),
+    )
+
+    COND_MIN = "min"
+    COND_MAX = "max"
+    COND_MINMAX = "minmax"
+    COND_CHOICES = (
+        (COND_MIN, "Limit Altı"),
+        (COND_MAX, "Limit Üstü"),
+        (COND_MINMAX, "Limit Altı ve Üstü"),
+    )
+
+    PERIOD_CHOICES = (
+        (15, "15 Dakika"),
+        (30, "30 Dakika"),
+        (60, "Saat Başı"),
+        (180, "3 Saat"),
+        (360, "6 Saat"),
+        (720, "12 Saat"),
+        (1440, "Günlük"),
+    )
+
+    station = models.ForeignKey(
+        Station, on_delete=models.CASCADE, related_name="alarm_rules",
+        verbose_name="İstasyon",
+    )
+    rule_type = models.CharField(
+        max_length=10, choices=RULE_CHOICES, default=RULE_ANALOG, verbose_name="Alarm Türü",
+    )
+
+    # --- Ölçüm (analog) ---
+    parameter = models.ForeignKey(
+        Parameter, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+", verbose_name="Kanal (Parametre)",
+    )
+    condition = models.CharField(
+        max_length=10, choices=COND_CHOICES, blank=True, default="", verbose_name="Limit Tipi",
+    )
+    min_value = models.FloatField(null=True, blank=True, verbose_name="Min Değer")
+    max_value = models.FloatField(null=True, blank=True, verbose_name="Max Değer")
+    trigger_output = models.ForeignKey(
+        Sensor, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+", verbose_name="Tetiklenecek Output",
+        help_text="Alarm tetiklendiğinde 1 yazılacak dijital output sensörü (opsiyonel).",
+    )
+
+    # --- Diagnostik (dijital kanal) ---
+    sensor = models.ForeignKey(
+        Sensor, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+", verbose_name="Dijital Kanal",
+        help_text="Aktif (1) olduğunda alarm üreten dijital input sensörü.",
+    )
+
+    # --- İstasyon offline ---
+    offline_seconds = models.IntegerField(
+        default=900, verbose_name="Offline Eşiği (sn)",
+        help_text="Son veriden bu kadar saniye geçtiyse istasyon offline sayılır.",
+    )
+
+    # --- Ortak ---
+    period_minutes = models.IntegerField(
+        default=60, choices=PERIOD_CHOICES, verbose_name="Alarm Periyodu",
+        help_text="Aynı alarm için iki bildirim arası minimum süre.",
+    )
+    message = models.TextField(verbose_name="Mesaj")
+    notify_all = models.BooleanField(
+        default=True, verbose_name="Tüm Yetkililer",
+        help_text="True ise tüm aktif kullanıcılara; False ise yalnız oluşturana gönderilir.",
+    )
+    send_sms = models.BooleanField(default=True, verbose_name="SMS Gönder")
+    send_email = models.BooleanField(default=True, verbose_name="E-posta Gönder")
+    enabled = models.BooleanField(default=True, verbose_name="Aktif")
+
+    created_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+", verbose_name="Oluşturan",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Oluşturma")
+    last_triggered_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="Son Tetiklenme",
+    )
+
+    class Meta:
+        db_table = "alarm_rule"
+        verbose_name = "Alarm Tanımı"
+        verbose_name_plural = "Alarm Tanımları"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.station} · {self.get_rule_type_display()}"
+
+    @property
+    def type_label(self):
+        """Tabloda gösterilecek okunur alarm tipi."""
+        if self.rule_type == self.RULE_ANALOG:
+            return dict(self.COND_CHOICES).get(self.condition, "Ölçüm")
+        if self.rule_type == self.RULE_DIGITAL:
+            return self.sensor.parameter.parameter_name if (self.sensor and self.sensor.parameter) else "Dijital"
+        return "İstasyon Offline"

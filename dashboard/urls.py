@@ -91,4 +91,8 @@ urlpatterns = [
          name="api_notification_send_test"),
     path("api/notifications/templates/", api_views.notification_templates,
          name="api_notification_templates"),
+
+    # --- AJAX API (Alarm Yönetimi) ---
+    path("api/alarms/io/", api_views.alarm_io, name="api_alarm_io"),
+    path("api/alarms/rules/", api_views.alarm_rules, name="api_alarm_rules"),
 ]

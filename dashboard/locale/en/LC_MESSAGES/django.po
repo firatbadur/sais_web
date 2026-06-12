@@ -1457,3 +1457,79 @@ msgstr "SMS Notification"
 
 msgid "E-posta Bildirimi"
 msgstr "Email Notification"
+
+# ---- Alarm Yonetimi (Faz 2) ----
+msgid "Alarm Yönetimi"
+msgstr "Alarm Management"
+
+msgid "Ölçüm Alarmları"
+msgstr "Measurement Alarms"
+
+msgid "Diagnostik Alarm"
+msgstr "Diagnostic Alarm"
+
+msgid "İstasyon Seçimi"
+msgstr "Station Selection"
+
+msgid "Kanal Seçimi"
+msgstr "Channel Selection"
+
+msgid "Alarm Periyodu"
+msgstr "Alarm Period"
+
+msgid "Alarm Tipi"
+msgstr "Alarm Type"
+
+msgid "Min Değer"
+msgstr "Min Value"
+
+msgid "Max Değer"
+msgstr "Max Value"
+
+msgid "Min. Değer"
+msgstr "Min. Value"
+
+msgid "Max. Değer"
+msgstr "Max. Value"
+
+msgid "Tetiklenecek Output"
+msgstr "Output to Trigger"
+
+msgid "Yok"
+msgstr "None"
+
+msgid "Alarm Kullanıcıları"
+msgstr "Alarm Recipients"
+
+msgid "Tüm Yetkililer"
+msgstr "All Authorities"
+
+msgid "Sadece Ben"
+msgstr "Only Me"
+
+msgid "Alarm için iletilecek mesajı ekleyiniz..."
+msgstr "Enter the message to be sent for the alarm..."
+
+msgid "Alarm Kaydet"
+msgstr "Save Alarm"
+
+msgid "İstasyon Offline"
+msgstr "Station Offline"
+
+msgid "Periyod"
+msgstr "Period"
+
+msgid "Kayıt yok."
+msgstr "No records."
+
+msgid "Bu alarm silinsin mi?"
+msgstr "Delete this alarm?"
+
+msgid "Kanal seçin."
+msgstr "Select a channel."
+
+msgid "Mesaj zorunlu."
+msgstr "Message is required."
+
+msgid "İstasyon seçin."
+msgstr "Select a station."

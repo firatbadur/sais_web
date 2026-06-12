@@ -1,18 +1,305 @@
 {% extends "dashboard/base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
-{% block title %}{% trans "Alarmlar" %}{% endblock %}
-{% block page_title %}{% trans "Alarmlar" %}{% endblock %}
+{% block title %}{% trans "Alarm Yönetimi" %}{% endblock %}
+{% block page_title %}{% trans "Alarm Yönetimi" %}{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header"><h3 class="card-title">{% trans "Aktif Alarmlar" %}</h3></div>
-    <div class="card-body">
-        <div class="d-flex flex-column align-items-center py-10">
-            <i class="ki-outline ki-information-5 fs-4x text-muted mb-5"></i>
-            <h3 class="text-gray-700">{% trans "Yapım aşamasında" %}</h3>
-            <p class="text-muted">{% trans "Alarm motoru ve acknowledge akışı sonraki fazda eklenecek." %}</p>
+{% csrf_token %}
+
+<ul class="nav nav-tabs nav-line-tabs nav-line-tabs-2x fs-5 fw-semibold mb-5">
+    <li class="nav-item">
+        <a class="nav-link active" data-bs-toggle="tab" href="#tab-olcum">
+            <i class="ki-outline ki-chart-line-star fs-4 me-1"></i>{% trans "Ölçüm Alarmları" %}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#tab-diag">
+            <i class="ki-outline ki-shield-cross fs-4 me-1"></i>{% trans "Diagnostik Alarm" %}
+        </a>
+    </li>
+</ul>
+
+<div class="tab-content">
+
+    <!-- ============ ÖLÇÜM ALARMLARI ============ -->
+    <div class="tab-pane fade show active" id="tab-olcum" role="tabpanel">
+        <div class="card card-flush mb-5">
+            <div class="card-body pt-5">
+                <div class="row g-5" id="form-olcum">
+                    <div class="col-lg-6">
+                        <div class="row g-4">
+                            <div class="col-md-12">
+                                <label class="form-label">{% trans "İstasyon Seçimi" %}</label>
+                                <select class="form-select form-select-solid st-sel">
+                                    <option value="">—</option>
+                                    {% for s in stations %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">{% trans "Kanal Seçimi" %}</label>
+                                <select class="form-select form-select-solid o-param" disabled></select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">{% trans "Alarm Periyodu" %}</label>
+                                <select class="form-select form-select-solid o-period">
+                                    {% for v, lbl in period_choices %}<option value="{{ v }}" {% if v == 60 %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">{% trans "Alarm Tipi" %}</label>
+                                <select class="form-select form-select-solid o-cond">
+                                    {% for v, lbl in cond_choices %}<option value="{{ v }}" {% if v == 'minmax' %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6 o-min-wrap">
+                                <label class="form-label">{% trans "Min Değer" %}</label>
+                                <input type="number" step="any" class="form-control form-control-solid o-min" placeholder="{% trans 'Min. Değer' %}">
+                            </div>
+                            <div class="col-md-6 o-max-wrap">
+                                <label class="form-label">{% trans "Max Değer" %}</label>
+                                <input type="number" step="any" class="form-control form-control-solid o-max" placeholder="{% trans 'Max. Değer' %}">
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">{% trans "Tetiklenecek Output" %}</label>
+                                <select class="form-select form-select-solid o-output" disabled>
+                                    <option value="">{% trans "Yok" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <label class="form-label">{% trans "Alarm Kullanıcıları" %}</label>
+                        <select class="form-select form-select-solid o-notify mb-2">
+                            <option value="1">{% trans "Tüm Yetkililer" %}</option>
+                            <option value="0">{% trans "Sadece Ben" %}</option>
+                        </select>
+                        <div class="d-flex gap-4 mb-2">
+                            <label class="form-check form-check-custom form-check-solid">
+                                <input class="form-check-input o-sms" type="checkbox" checked><span class="form-check-label ms-2">{% trans "SMS" %}</span>
+                            </label>
+                            <label class="form-check form-check-custom form-check-solid">
+                                <input class="form-check-input o-mail" type="checkbox" checked><span class="form-check-label ms-2">{% trans "E-posta" %}</span>
+                            </label>
+                        </div>
+                        <label class="form-label">{% trans "Mesaj" %}</label>
+                        <textarea class="form-control form-control-solid o-msg" rows="4" placeholder="{% trans 'Alarm için iletilecek mesajı ekleyiniz...' %}"></textarea>
+                    </div>
+                    <div class="col-12 d-flex justify-content-end">
+                        <button type="button" class="btn btn-success o-save">
+                            <i class="ki-outline ki-notification-bing fs-4"></i>{% trans "Alarm Kaydet" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card card-flush">
+            <div class="card-body pt-5">
+                <div class="table-responsive">
+                    <table class="table table-row-bordered align-middle fs-7">
+                        <thead><tr class="fw-bold text-gray-600">
+                            <th>{% trans "İstasyon" %}</th><th>{% trans "Kanal" %}</th><th>{% trans "Periyod" %}</th>
+                            <th>{% trans "Alarm Tipi" %}</th><th>Min</th><th>Max</th><th>Output</th>
+                            <th>{% trans "Mesaj" %}</th><th>{% trans "Aktif" %}</th><th></th>
+                        </tr></thead>
+                        <tbody id="tbl-olcum"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIAGNOSTIK ALARM ============ -->
+    <div class="tab-pane fade" id="tab-diag" role="tabpanel">
+        <div class="card card-flush mb-5">
+            <div class="card-body pt-5">
+                <div class="row g-5" id="form-diag">
+                    <div class="col-lg-6">
+                        <div class="row g-4">
+                            <div class="col-md-12">
+                                <label class="form-label">{% trans "İstasyon Seçimi" %}</label>
+                                <select class="form-select form-select-solid st-sel">
+                                    <option value="">—</option>
+                                    {% for s in stations %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">{% trans "Alarm Periyodu" %}</label>
+                                <select class="form-select form-select-solid d-period">
+                                    {% for v, lbl in period_choices %}<option value="{{ v }}" {% if v == 60 %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">{% trans "Alarm Tipi" %}</label>
+                                <select class="form-select form-select-solid d-type">
+                                    <option value="offline">{% trans "İstasyon Offline" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <label class="form-label">{% trans "Alarm Kullanıcıları" %}</label>
+                        <select class="form-select form-select-solid d-notify mb-2">
+                            <option value="1">{% trans "Tüm Yetkililer" %}</option>
+                            <option value="0">{% trans "Sadece Ben" %}</option>
+                        </select>
+                        <div class="d-flex gap-4 mb-2">
+                            <label class="form-check form-check-custom form-check-solid">
+                                <input class="form-check-input d-sms" type="checkbox" checked><span class="form-check-label ms-2">{% trans "SMS" %}</span>
+                            </label>
+                            <label class="form-check form-check-custom form-check-solid">
+                                <input class="form-check-input d-mail" type="checkbox" checked><span class="form-check-label ms-2">{% trans "E-posta" %}</span>
+                            </label>
+                        </div>
+                        <label class="form-label">{% trans "Mesaj" %}</label>
+                        <textarea class="form-control form-control-solid d-msg" rows="4" placeholder="{% trans 'Alarm için iletilecek mesajı ekleyiniz...' %}"></textarea>
+                    </div>
+                    <div class="col-12 d-flex justify-content-end">
+                        <button type="button" class="btn btn-success d-save">
+                            <i class="ki-outline ki-notification-bing fs-4"></i>{% trans "Alarm Kaydet" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card card-flush">
+            <div class="card-body pt-5">
+                <div class="table-responsive">
+                    <table class="table table-row-bordered align-middle fs-7">
+                        <thead><tr class="fw-bold text-gray-600">
+                            <th>{% trans "İstasyon" %}</th><th>{% trans "Periyod" %}</th><th>{% trans "Alarm Tipi" %}</th>
+                            <th>{% trans "Mesaj" %}</th><th>{% trans "Aktif" %}</th><th></th>
+                        </tr></thead>
+                        <tbody id="tbl-diag"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    const URL_IO = "{% url 'dashboard:api_alarm_io' %}";
+    const URL_RULES = "{% url 'dashboard:api_alarm_rules' %}";
+    const I18N = {
+        needStation: "{% trans 'İstasyon seçin.' %}", needMsg: "{% trans 'Mesaj zorunlu.' %}",
+        confirmDel: "{% trans 'Bu alarm silinsin mi?' %}", netErr: "{% trans 'Ağ hatası' %}",
+        none: "{% trans 'Yok' %}", offline: "{% trans 'İstasyon Offline' %}",
+    };
+    function csrf() { const el = document.querySelector('[name=csrfmiddlewaretoken]'); return el ? el.value : ''; }
+    function j(url, body, method) {
+        return fetch(url, { method: method || 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+            body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+    }
+    function esc(s) { return s == null ? '' : String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+    function fill(sel, items, placeholder) {
+        sel.innerHTML = (placeholder ? '<option value="">' + placeholder + '</option>' : '') +
+            items.map(i => '<option value="' + i.id + '">' + esc(i.text) + '</option>').join('');
+        sel.disabled = items.length === 0 && !placeholder;
+    }
+
+    // ---- IO yükle (istasyon seçilince) ----
+    function loadIO(scope, stationId) {
+        const param = scope.querySelector('.o-param'), out = scope.querySelector('.o-output'), dtype = scope.querySelector('.d-type');
+        if (!stationId) {
+            if (param) { param.innerHTML = ''; param.disabled = true; }
+            if (out) { out.innerHTML = '<option value="">' + I18N.none + '</option>'; out.disabled = true; }
+            if (dtype) dtype.innerHTML = '<option value="offline">' + I18N.offline + '</option>';
+            return;
+        }
+        fetch(URL_IO + '?station=' + stationId, { credentials: 'same-origin' }).then(r => r.json()).then(d => {
+            if (param) fill(param, d.analog, '—');
+            if (out) { fill(out, d.outputs, I18N.none); out.disabled = false; }
+            if (dtype) {
+                dtype.innerHTML = '<option value="offline">' + I18N.offline + '</option>' +
+                    d.digital.map(i => '<option value="' + i.id + '">' + esc(i.text) + '</option>').join('');
+            }
+        }).catch(() => {});
+    }
+
+    // ---- Ölçüm tab ----
+    const fo = document.getElementById('form-olcum');
+    fo.querySelector('.st-sel').addEventListener('change', e => loadIO(fo, e.target.value));
+    function toggleMinMax() {
+        const c = fo.querySelector('.o-cond').value;
+        fo.querySelector('.o-min-wrap').style.display = (c === 'max') ? 'none' : '';
+        fo.querySelector('.o-max-wrap').style.display = (c === 'min') ? 'none' : '';
+    }
+    fo.querySelector('.o-cond').addEventListener('change', toggleMinMax); toggleMinMax();
+    fo.querySelector('.o-save').addEventListener('click', function () {
+        const station = fo.querySelector('.st-sel').value;
+        if (!station) { alert(I18N.needStation); return; }
+        const msg = fo.querySelector('.o-msg').value.trim();
+        if (!msg) { alert(I18N.needMsg); return; }
+        const param = fo.querySelector('.o-param').value;
+        if (!param) { alert("{% trans 'Kanal seçin.' %}"); return; }
+        j(URL_RULES, {
+            rule_type: 'analog', station_id: Number(station), parameter_id: Number(param),
+            condition: fo.querySelector('.o-cond').value,
+            min_value: fo.querySelector('.o-min').value, max_value: fo.querySelector('.o-max').value,
+            trigger_output_id: fo.querySelector('.o-output').value || null,
+            period_minutes: Number(fo.querySelector('.o-period').value),
+            notify_all: fo.querySelector('.o-notify').value === '1',
+            send_sms: fo.querySelector('.o-sms').checked, send_email: fo.querySelector('.o-mail').checked,
+            message: msg,
+        }).then(d => { if (!d.ok) { alert(d.error || I18N.netErr); return; } fo.querySelector('.o-msg').value = ''; loadTable('analog'); })
+          .catch(() => alert(I18N.netErr));
+    });
+
+    // ---- Diagnostik tab ----
+    const fd = document.getElementById('form-diag');
+    fd.querySelector('.st-sel').addEventListener('change', e => loadIO(fd, e.target.value));
+    fd.querySelector('.d-save').addEventListener('click', function () {
+        const station = fd.querySelector('.st-sel').value;
+        if (!station) { alert(I18N.needStation); return; }
+        const msg = fd.querySelector('.d-msg').value.trim();
+        if (!msg) { alert(I18N.needMsg); return; }
+        const tval = fd.querySelector('.d-type').value;
+        const body = {
+            station_id: Number(station), period_minutes: Number(fd.querySelector('.d-period').value),
+            notify_all: fd.querySelector('.d-notify').value === '1',
+            send_sms: fd.querySelector('.d-sms').checked, send_email: fd.querySelector('.d-mail').checked,
+            message: msg,
+        };
+        if (tval === 'offline') { body.rule_type = 'offline'; }
+        else { body.rule_type = 'digital'; body.sensor_id = Number(tval); }
+        j(URL_RULES, body).then(d => { if (!d.ok) { alert(d.error || I18N.netErr); return; } fd.querySelector('.d-msg').value = ''; loadTable('diag'); })
+          .catch(() => alert(I18N.netErr));
+    });
+
+    // ---- Tablolar ----
+    function rowActions(id) {
+        return '<button class="btn btn-icon btn-sm btn-light-warning me-1 rule-toggle" data-id="' + id + '" title="Aktif/Pasif"><i class="ki-outline ki-switch fs-5"></i></button>' +
+               '<button class="btn btn-icon btn-sm btn-light-danger rule-del" data-id="' + id + '"><i class="ki-outline ki-trash fs-5"></i></button>';
+    }
+    function badge(on) { return on ? '<span class="badge badge-light-success">{% trans "Aktif" %}</span>' : '<span class="badge badge-light-secondary">{% trans "Pasif" %}</span>'; }
+    function loadTable(type) {
+        const rt = type === 'analog' ? 'analog' : 'diag';
+        fetch(URL_RULES + '?rule_type=' + rt, { credentials: 'same-origin' }).then(r => r.json()).then(d => {
+            const tb = document.getElementById(type === 'analog' ? 'tbl-olcum' : 'tbl-diag');
+            const rows = (d.results || []).map(r => {
+                if (type === 'analog') {
+                    return '<tr><td>' + esc(r.station) + '</td><td>' + esc(r.channel) + '</td><td>' + esc(r.period) + '</td><td>' + esc(r.type_label) +
+                        '</td><td>' + (r.min == null ? '-' : r.min) + '</td><td>' + (r.max == null ? '-' : r.max) + '</td><td>' + esc(r.output || '-') +
+                        '</td><td>' + esc(r.message) + '</td><td>' + badge(r.enabled) + '</td><td class="text-nowrap">' + rowActions(r.id) + '</td></tr>';
+                }
+                return '<tr><td>' + esc(r.station) + '</td><td>' + esc(r.period) + '</td><td>' + esc(r.type_label) +
+                    '</td><td>' + esc(r.message) + '</td><td>' + badge(r.enabled) + '</td><td class="text-nowrap">' + rowActions(r.id) + '</td></tr>';
+            }).join('');
+            tb.innerHTML = rows || '<tr><td colspan="' + (type === 'analog' ? 10 : 6) + '" class="text-center text-muted">{% trans "Kayıt yok." %}</td></tr>';
+        }).catch(() => {});
+    }
+    document.querySelector('.tab-content').addEventListener('click', function (e) {
+        const del = e.target.closest('.rule-del'), tog = e.target.closest('.rule-toggle');
+        if (del) { if (!confirm(I18N.confirmDel)) return; j(URL_RULES + '?id=' + del.dataset.id, null, 'DELETE').then(() => { loadTable('analog'); loadTable('diag'); }); }
+        else if (tog) { j(URL_RULES, { toggle_id: Number(tog.dataset.id) }).then(() => { loadTable('analog'); loadTable('diag'); }); }
+    });
+
+    loadTable('analog'); loadTable('diag');
+})();
+</script>
 {% endblock %}

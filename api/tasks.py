@@ -15,6 +15,19 @@ from django.core.management import call_command
 logger = logging.getLogger(__name__)
 
 
+@shared_task(name="api.tasks.run_alarms")
+def run_alarms():
+    """Aktif alarm kurallarını değerlendirir ve gereken SMS/e-posta'ları gönderir.
+
+    Lisans bitmişse alarm değerlendirmesi de durur (polling/yayın gibi).
+    """
+    from api.licensing import license_active
+    if not license_active():
+        return {"skipped": "license_inactive"}
+    from api import alarms
+    return alarms.run()
+
+
 @shared_task(name="api.tasks.aggregate_readings_15m")
 def aggregate_readings_15m():
     """15 dakikalık aggregate — son 2 saatlik aralığı yeniden hesaplar."""

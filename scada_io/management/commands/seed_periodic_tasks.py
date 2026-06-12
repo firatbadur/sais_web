@@ -28,6 +28,8 @@ INTERVAL_TASKS = [
     ("scada_io.tasks.dispatch_polls", 5),
     ("scada_io.tasks.dispatch_commands", 3),
     ("scada_io.tasks.expire_commands", 60),
+    # Alarm kurallarını her 60 sn'de değerlendir (SMS/e-posta gönderimi).
+    ("api.tasks.run_alarms", 60),
 ]
 
 CRONTAB_TASKS = [
