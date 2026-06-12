@@ -61,6 +61,18 @@ from .permissions import (
 User = get_user_model()
 
 
+def default_station_id():
+    """Rapor/form sayfalarında ön seçili gelecek varsayılan istasyon.
+
+    Önce pk=1 (seed'deki varsayılan istasyon) aktifse onu; yoksa ilk aktif
+    istasyonu; hiç yoksa None döner.
+    """
+    if Station.objects.filter(pk=1, active=True).exists():
+        return 1
+    s = Station.objects.filter(active=True).order_by("id").first()
+    return s.id if s else None
+
+
 # --------------------------------------------------------------------------- #
 # Authentication
 # --------------------------------------------------------------------------- #
@@ -162,6 +174,9 @@ class ReadingsReportView(RoleRequiredMixin, ListView):
             station_id = int(gp.get("station") or 0) or None
         except (TypeError, ValueError):
             station_id = None
+        # İstasyon seçilmemişse varsayılan istasyon (genelde id=1) ön seçili gelsin.
+        if station_id is None:
+            station_id = default_station_id()
 
         param_ids = []
         for raw in gp.getlist("parameter"):
@@ -332,6 +347,7 @@ class AlarmsView(OperatorRequiredMixin, TemplateView):
         from api.models import AlarmRule, MessageTemplate
         ctx = super().get_context_data(**kwargs)
         ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        ctx["default_station_id"] = default_station_id()
         ctx["period_choices"] = AlarmRule.PERIOD_CHOICES
         ctx["cond_choices"] = AlarmRule.COND_CHOICES
         ctx["message_templates"] = MessageTemplate.objects.all()[:200]

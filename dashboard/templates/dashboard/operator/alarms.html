@@ -49,7 +49,7 @@
                         <select class="form-select st-sel o-field" data-control="select2"
                                 data-placeholder='{% trans "İstasyon seçiniz" %}' data-allow-clear="true">
                             <option></option>
-                            {% for s in stations %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+                            {% for s in stations %}<option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
                         </select>
                     </div>
                     <div class="col-md-4">
@@ -155,7 +155,7 @@
                         <select class="form-select st-sel d-field" data-control="select2"
                                 data-placeholder='{% trans "İstasyon seçiniz" %}' data-allow-clear="true">
                             <option></option>
-                            {% for s in stations %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+                            {% for s in stations %}<option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
                         </select>
                     </div>
                     <div class="col-md-3">
@@ -421,6 +421,12 @@
         j(URL_RULES, { toggle_id: Number(tog.dataset.id) })
             .then(d => { tog.disabled = false; if (!d.ok) tog.checked = !tog.checked; })
             .catch(() => { tog.disabled = false; tog.checked = !tog.checked; });
+    });
+
+    // ---- Ön-seçili istasyon için IO'yu yükle (kanal/sensör dropdown'ları dolsun) ----
+    [fo, fd].forEach(function (f) {
+        const v = f.querySelector('.st-sel').value;
+        if (v) loadIO(f, v);
     });
 
     // ---- FOUC reveal ----
