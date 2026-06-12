@@ -57,6 +57,7 @@ MENU = [
     },
     {
         "label": _("Yönetim"),
+        "menu_key": "management",
         "icon": "ki-wifi",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
         "children": [
@@ -92,6 +93,7 @@ MENU = [
     },
     {
         "label": _("Ayarlar"),
+        "menu_key": "settings",
         "icon": "ki-setting-2",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
         "children": [
@@ -130,7 +132,7 @@ def _filter_menu(items, user):
 
 
 def _default_open_menu(user):
-    """Role göre sidebar'da varsayılan açık gelecek menü grubu (menu_key).
+    """Hiçbir grupta değilken (ör. anasayfa) role göre açık gelecek grup.
 
     rol 1 → Yönetici, rol 2 → Operatör, rol 3 (ve diğer) → Raporlama.
     """
@@ -141,11 +143,29 @@ def _default_open_menu(user):
     return "reports"
 
 
+def _active_menu_key(request):
+    """Mevcut sayfanın bağlı olduğu menü grubunun menu_key'i (yoksa None)."""
+    match = getattr(request, "resolver_match", None)
+    if not match:
+        return None
+    current = match.view_name  # ör. "dashboard:reports_readings"
+    for group in MENU:
+        for child in group.get("children", ()):
+            if child.get("url_name") == current:
+                return group.get("menu_key")
+    return None
+
+
 def menu(request):
-    """Sidebar partial'ı tarafından kullanılır."""
+    """Sidebar partial'ı tarafından kullanılır.
+
+    Açık gelecek grup: önce mevcut sayfanın grubu; o bir gruba ait değilse
+    (ör. anasayfa) role-bazlı varsayılan grup.
+    """
+    open_menu = _active_menu_key(request) or _default_open_menu(request.user)
     return {
         "dashboard_menu": _filter_menu(MENU, request.user),
-        "default_open_menu": _default_open_menu(request.user),
+        "default_open_menu": open_menu,
     }
 
 
