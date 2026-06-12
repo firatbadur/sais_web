@@ -193,6 +193,12 @@
         saveTitle:    "{% trans 'Sırayı Kaydet' %}"
     };
 
+    // Inline SVG ikonlar (font'a bağımlı değil → her zaman görünür).
+    const SVG_PLAY = '<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 2.6v10.8c0 .5.55.82 1 .53l8.4-5.4a.63.63 0 0 0 0-1.06L5.5 2.07c-.45-.29-1 .03-1 .53z"/></svg>';
+    const SVG_STOP = '<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>';
+    // Sürükleme tutamacı — 2x3 nokta ızgarası (drag indicator).
+    const SVG_DRAG = '<span class="drag-handle text-primary me-3" style="cursor:grab;display:inline-flex;vertical-align:middle"><svg width="12" height="18" viewBox="0 0 12 18" fill="currentColor"><circle cx="3" cy="3" r="1.7"/><circle cx="9" cy="3" r="1.7"/><circle cx="3" cy="9" r="1.7"/><circle cx="9" cy="9" r="1.7"/><circle cx="3" cy="15" r="1.7"/><circle cx="9" cy="15" r="1.7"/></svg></span>';
+
     const QUALITY_BADGE = {
         good:        'badge-light-success',
         bad:         'badge-light-danger',
@@ -378,11 +384,11 @@
                     let actionCell = '';
                     if (CAN_CONTROL) {
                         if (r.sensor_type === 3) {
-                            actionCell = `<td class="text-end text-nowrap">
-                                <button class="btn btn-icon btn-sm btn-light-success me-1 do-cmd" data-sid="${r.sensor_id}" data-action="start" title="${I18N.start}" ${isActive ? 'disabled' : ''}>
-                                    <i class="ki-outline ki-play fs-5"></i></button>
-                                <button class="btn btn-icon btn-sm btn-light-danger do-cmd" data-sid="${r.sensor_id}" data-action="stop" title="${I18N.stop}" ${!isActive ? 'disabled' : ''}>
-                                    <i class="ki-outline ki-cross-circle fs-5"></i></button></td>`;
+                            // Tek toggle: çalışıyorsa Durdur (kırmızı), değilse Başlat (yeşil).
+                            const btn = isActive
+                                ? `<button class="btn btn-icon btn-sm btn-light-danger do-cmd" data-sid="${r.sensor_id}" data-action="stop" title="${I18N.stop}">${SVG_STOP}</button>`
+                                : `<button class="btn btn-icon btn-sm btn-light-success do-cmd" data-sid="${r.sensor_id}" data-action="start" title="${I18N.start}">${SVG_PLAY}</button>`;
+                            actionCell = `<td class="text-end">${btn}</td>`;
                         } else {
                             actionCell = '<td></td>';
                         }
@@ -478,16 +484,13 @@
             const tbody = document.getElementById(btn.dataset.target);
             if (!tbody) return;
             const icon = btn.querySelector('.edit-order-icon');
-            // Satır başına sürükleme tutamacı ekle (yalnız düzenle modunda görünür).
+            // Satır başına sürükleme tutamacı (görsel ipucu; 2x3 nokta ızgarası).
+            // Sürükleme tüm satırdan yapılır — tutamaç yalnız "sürüklenebilir" işareti.
             function addHandles() {
                 tbody.querySelectorAll('tr[data-sid]').forEach(tr => {
                     const firstTd = tr.querySelector('td');
                     if (firstTd && !firstTd.querySelector('.drag-handle')) {
-                        const h = document.createElement('i');
-                        h.className = 'ki-outline ki-burger-menu fs-4 text-primary me-3 drag-handle';
-                        h.style.cursor = 'grab';
-                        h.title = I18N.saveTitle;
-                        firstTd.insertBefore(h, firstTd.firstChild);
+                        firstTd.insertAdjacentHTML('afterbegin', SVG_DRAG);
                     }
                 });
             }
@@ -497,12 +500,13 @@
             btn.addEventListener('click', () => {
                 const editing = type === 'analog' ? editAnalog : editDigital;
                 if (!editing) {
-                    // Düzenle moduna gir → tutamaçları ekle, satırları sürüklenebilir yap.
+                    // Düzenle moduna gir → tutamaçları ekle, tüm satır sürüklenebilir.
                     addHandles();
                     const inst = Sortable.create(tbody, {
                         animation: 150,
                         draggable: 'tr',
-                        handle: '.drag-handle',   // yalnız tutamaçtan sürükle
+                        filter: 'button, .do-cmd',   // butona tıklayınca sürükleme başlamasın
+                        preventOnFilter: false,       // buton click'i normal çalışsın
                         // Dijitalde DO(3) ile DI(2) gruplarını karıştırma (sunucu
                         // -sensor_type ile zaten DO'yu üste alır; karışım snap-back olur).
                         onMove: (evt) => {
