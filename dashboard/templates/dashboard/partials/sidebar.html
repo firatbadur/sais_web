@@ -27,8 +27,8 @@
 
                 {% for item in dashboard_menu %}
                     {% if item.children %}
-                        {# Grup menü — accordion #}
-                        <div data-kt-menu-trigger="click" class="menu-item menu-accordion">
+                        {# Grup menü — accordion. Role göre ilgili grup varsayılan açık. #}
+                        <div data-kt-menu-trigger="click" class="menu-item menu-accordion{% if item.menu_key and item.menu_key == default_open_menu %} here show{% endif %}">
                             <span class="menu-link">
                                 <span class="menu-icon">
                                     <i class="ki-outline {{ item.icon|default:'ki-element-plus' }} fs-2"></i>

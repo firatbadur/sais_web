@@ -23,6 +23,7 @@ MENU = [
     },
     {
         "label": _("Raporlama"),
+        "menu_key": "reports",
         "icon": "ki-chart-line-star",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
         "children": [
@@ -44,6 +45,7 @@ MENU = [
     },
     {
         "label": _("Operatör"),
+        "menu_key": "operator",
         "icon": "ki-notification-bing",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR),
         "children": [
@@ -68,6 +70,7 @@ MENU = [
     },
     {
         "label": _("Yönetici"),
+        "menu_key": "admin",
         "icon": "ki-shield-tick",
         "roles": (ROLE_ADMIN,),
         "children": [
@@ -126,9 +129,24 @@ def _filter_menu(items, user):
     return visible
 
 
+def _default_open_menu(user):
+    """Role göre sidebar'da varsayılan açık gelecek menü grubu (menu_key).
+
+    rol 1 → Yönetici, rol 2 → Operatör, rol 3 (ve diğer) → Raporlama.
+    """
+    if getattr(user, "is_superuser", False) or getattr(user, "rol", None) == ROLE_ADMIN:
+        return "admin"
+    if getattr(user, "rol", None) == ROLE_OPERATOR:
+        return "operator"
+    return "reports"
+
+
 def menu(request):
     """Sidebar partial'ı tarafından kullanılır."""
-    return {"dashboard_menu": _filter_menu(MENU, request.user)}
+    return {
+        "dashboard_menu": _filter_menu(MENU, request.user),
+        "default_open_menu": _default_open_menu(request.user),
+    }
 
 
 def available_languages(request):
