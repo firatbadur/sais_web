@@ -148,7 +148,6 @@
         save: "{% url 'dashboard:api_graph_save' %}",
         del: "{% url 'dashboard:api_graph_delete' %}",
     };
-    const STATIONS = [{% for s in stations %}{ id: {{ s.id }}, name: "{{ s.name|escapejs }}" },{% endfor %}];
     const I18N = {
         needName: "{% trans 'Tasarım adı zorunlu.' %}", netErr: "{% trans 'Ağ hatası' %}",
         saved: "{% trans 'Tasarım kaydedildi.' %}", confirmDel: "{% trans 'Bu tasarım silinsin mi?' %}",
@@ -168,17 +167,10 @@
         if (!msg) { b.classList.add('d-none'); return; }
         b.querySelector('span').textContent = msg; b.className = 'alert mb-0 py-2 ' + (cls || 'alert-warning');
     }
-    function stationOpts(sel) {
-        let h = '<option value="">—</option>';
-        STATIONS.forEach(s => h += `<option value="${s.id}" ${String(s.id) === String(sel) ? 'selected' : ''}>${s.name}</option>`);
-        return h;
-    }
-
     // ---- Node tanımları (title, ports, data, html) ----
     const NODES = {
-        sensor_analog: { cls: 'node-input', in: 0, out: 1, data: { station: '', parameter: '' },
+        sensor_analog: { cls: 'node-input', in: 0, out: 1, data: { parameter: '' },
             html: () => `<div class="node-title">${t('Sensör (Analog)')}</div><div class="node-body">
-                <label>${t('İstasyon')}</label><select df-station class="form-select">${stationOpts('')}</select>
                 <label>${t('Parametre')}</label><input df-parameter class="form-control" placeholder="pH">
             </div>` },
         avg_5m:  { cls: 'node-avg', in: 1, out: 1, data: {}, html: () => `<div class="node-title">${t('5 dk Ortalama')}</div><div class="node-body"><span class="text-muted fs-8">${t('Son 5 dk ortalaması')}</span></div>` },
@@ -193,9 +185,8 @@
             html: () => `<div class="node-title">${t('Sınır Dışında')}</div><div class="node-body">
                 <label>${t('Alt Sınır')}</label><input df-min type="number" step="any" class="form-control">
                 <label>${t('Üst Sınır')}</label><input df-max type="number" step="any" class="form-control"></div>` },
-        sensor_digital: { cls: 'node-input', in: 0, out: 1, data: { station: '', sensor: '', state: '1' },
+        sensor_digital: { cls: 'node-input', in: 0, out: 1, data: { sensor: '', state: '1' },
             html: () => `<div class="node-title">${t('Sensör (Dijital)')}</div><div class="node-body">
-                <label>${t('İstasyon')}</label><select df-station class="form-select">${stationOpts('')}</select>
                 <label>${t('Sensör')}</label><input df-sensor class="form-control" placeholder="Pompa1">
                 <label>${t('Durum')}</label><select df-state class="form-select"><option value="1">ON</option><option value="0">OFF</option></select>
             </div>` },
@@ -227,9 +218,8 @@
             html: () => `<div class="node-title">${t('Diagnostik')}</div><div class="node-body">
                 <label>${t('Tip No')}</label><select df-type_no class="form-select"><option value="701">701</option><option value="702">702</option></select>
                 <label>${t('Detay')}</label><input df-details class="form-control"></div>` },
-        command: { cls: 'node-output', in: 1, out: 0, data: { station: '', sensor: '', value: '1' },
+        command: { cls: 'node-output', in: 1, out: 0, data: { sensor: '', value: '1' },
             html: () => `<div class="node-title">${t('Komut')}</div><div class="node-body">
-                <label>${t('İstasyon')}</label><select df-station class="form-select">${stationOpts('')}</select>
                 <label>${t('Sensör')}</label><input df-sensor class="form-control" placeholder="NumuneAlma">
                 <label>${t('Değer')}</label><input df-value class="form-control" value="1"></div>` },
     };
