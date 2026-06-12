@@ -66,9 +66,9 @@
                         <i class="ki-outline ki-drop fs-7 me-1"></i><span id="analog-wash-badge-label"></span>
                     </span>
                     {% if can_control %}
-                    <button type="button" class="btn btn-sm btn-light-primary py-1 px-3 me-3 edit-order-btn"
-                            data-target="snapshot-body" data-type="analog">
-                        <i class="ki-outline ki-pencil fs-7"></i><span class="edit-order-label">{% trans "Düzenle" %}</span>
+                    <button type="button" class="btn btn-icon btn-sm btn-light-primary me-3 edit-order-btn"
+                            data-target="snapshot-body" data-type="analog" title="{% trans 'Sırayı Düzenle' %}">
+                        <i class="ki-outline ki-pencil fs-5 edit-order-icon"></i>
                     </button>
                     {% endif %}
                     <span class="text-muted fs-7">
@@ -107,9 +107,9 @@
                 <h3 class="card-title fw-bold text-gray-800">{% trans "Dijital Kanallar" %}</h3>
                 <div class="card-toolbar">
                     {% if can_control %}
-                    <button type="button" class="btn btn-sm btn-light-primary py-1 px-3 me-3 edit-order-btn"
-                            data-target="digital-body" data-type="digital">
-                        <i class="ki-outline ki-pencil fs-7"></i><span class="edit-order-label">{% trans "Düzenle" %}</span>
+                    <button type="button" class="btn btn-icon btn-sm btn-light-primary me-3 edit-order-btn"
+                            data-target="digital-body" data-type="digital" title="{% trans 'Sırayı Düzenle' %}">
+                        <i class="ki-outline ki-pencil fs-5 edit-order-icon"></i>
                     </button>
                     {% endif %}
                     <span class="text-muted fs-7">
@@ -189,8 +189,8 @@
         orderFail:    "{% trans 'Sıralama kaydedilemedi' %}",
         start:        "{% trans 'Başlat' %}",
         stop:         "{% trans 'Durdur' %}",
-        edit:         "{% trans 'Düzenle' %}",
-        save:         "{% trans 'Kaydet' %}"
+        editTitle:    "{% trans 'Sırayı Düzenle' %}",
+        saveTitle:    "{% trans 'Sırayı Kaydet' %}"
     };
 
     const QUALITY_BADGE = {
@@ -477,14 +477,32 @@
             const type = btn.dataset.type;
             const tbody = document.getElementById(btn.dataset.target);
             if (!tbody) return;
-            const label = btn.querySelector('.edit-order-label');
+            const icon = btn.querySelector('.edit-order-icon');
+            // Satır başına sürükleme tutamacı ekle (yalnız düzenle modunda görünür).
+            function addHandles() {
+                tbody.querySelectorAll('tr[data-sid]').forEach(tr => {
+                    const firstTd = tr.querySelector('td');
+                    if (firstTd && !firstTd.querySelector('.drag-handle')) {
+                        const h = document.createElement('i');
+                        h.className = 'ki-outline ki-burger-menu fs-4 text-primary me-3 drag-handle';
+                        h.style.cursor = 'grab';
+                        h.title = I18N.saveTitle;
+                        firstTd.insertBefore(h, firstTd.firstChild);
+                    }
+                });
+            }
+            function removeHandles() {
+                tbody.querySelectorAll('.drag-handle').forEach(h => h.remove());
+            }
             btn.addEventListener('click', () => {
                 const editing = type === 'analog' ? editAnalog : editDigital;
                 if (!editing) {
-                    // Düzenle moduna gir → satırları sürüklenebilir yap.
+                    // Düzenle moduna gir → tutamaçları ekle, satırları sürüklenebilir yap.
+                    addHandles();
                     const inst = Sortable.create(tbody, {
                         animation: 150,
                         draggable: 'tr',
+                        handle: '.drag-handle',   // yalnız tutamaçtan sürükle
                         // Dijitalde DO(3) ile DI(2) gruplarını karıştırma (sunucu
                         // -sensor_type ile zaten DO'yu üste alır; karışım snap-back olur).
                         onMove: (evt) => {
@@ -498,7 +516,8 @@
                     else { editDigital = true; sortDigital = inst; }
                     btn.classList.remove('btn-light-primary');
                     btn.classList.add('btn-primary', 'active');
-                    if (label) label.textContent = I18N.save;
+                    if (icon) { icon.classList.remove('ki-pencil'); icon.classList.add('ki-check'); }
+                    btn.title = I18N.saveTitle;
                 } else {
                     // Çık → sırayı topla, POST et, Sortable'ı kapat, polling devam.
                     const ids = [...tbody.querySelectorAll('tr[data-sid]')]
@@ -515,11 +534,13 @@
                     });
                     const inst = type === 'analog' ? sortAnalog : sortDigital;
                     if (inst) inst.destroy();
+                    removeHandles();
                     if (type === 'analog') { editAnalog = false; sortAnalog = null; }
                     else { editDigital = false; sortDigital = null; }
                     btn.classList.remove('btn-primary', 'active');
                     btn.classList.add('btn-light-primary');
-                    if (label) label.textContent = I18N.edit;
+                    if (icon) { icon.classList.remove('ki-check'); icon.classList.add('ki-pencil'); }
+                    btn.title = I18N.editTitle;
                 }
             });
         });

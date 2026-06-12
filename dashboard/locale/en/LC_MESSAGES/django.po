@@ -1363,3 +1363,9 @@ msgstr "Network error"
 
 msgid "Sıralama kaydedilemedi"
 msgstr "Order could not be saved"
+
+msgid "Sırayı Düzenle"
+msgstr "Edit Order"
+
+msgid "Sırayı Kaydet"
+msgstr "Save Order"
