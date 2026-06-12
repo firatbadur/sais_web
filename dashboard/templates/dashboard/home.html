@@ -139,33 +139,15 @@
     </div>
 </div>
 
-<!-- ============ SON OLAYLAR + YAKLAŞAN HATIRLATMALAR ============ -->
+<!-- ============ SON OLAYLAR ============ -->
 <div class="row g-5 g-xl-10">
-    <div class="col-xl-8">
-        <div class="card card-flush h-100">
+    <div class="col-12">
+        <div class="card card-flush">
             <div class="card-header pt-5">
                 <h3 class="card-title fw-bold text-gray-800">{% trans "Son Olaylar" %}</h3>
             </div>
             <div class="card-body pt-4" style="max-height:500px; overflow-y:auto;">
                 <div class="timeline timeline-border-dashed" id="events-list">
-                    <div class="text-muted">{% trans "Yükleniyor..." %}</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-4">
-        <div class="card card-flush h-100">
-            <div class="card-header pt-5">
-                <h3 class="card-title fw-bold text-gray-800">{% trans "Yaklaşan Hatırlatmalar" %}</h3>
-                <div class="card-toolbar">
-                    <a href="{% url 'dashboard:reminders' %}" class="btn btn-sm btn-light-primary">
-                        <i class="ki-outline ki-calendar fs-5"></i>{% trans "Takvim" %}
-                    </a>
-                </div>
-            </div>
-            <div class="card-body pt-4" style="max-height:500px; overflow-y:auto;">
-                <div id="reminders-widget">
                     <div class="text-muted">{% trans "Yükleniyor..." %}</div>
                 </div>
             </div>
@@ -182,8 +164,7 @@
     const URLS = {
         kpis:     "{% url 'dashboard:api_home_kpis' %}",
         snapshot: "{% url 'dashboard:api_home_snapshot' %}",
-        events:   "{% url 'dashboard:api_home_events' %}",
-        reminders:"{% url 'dashboard:api_reminders_feed' %}"
+        events:   "{% url 'dashboard:api_home_events' %}"
     };
 
     // Dijital output kontrol + sıralama düzenleme (rol 1/2). Sunucu ayrıca doğrular.
@@ -596,51 +577,13 @@
         });
     }
 
-    // --- Yaklaşan Hatırlatmalar widget'ı (every 60s) ---
-    const RMD_I18N = {
-        due:   "{% trans 'Vadesi geldi' %}",
-        none:  "{% trans 'Yaklaşan hatırlatma yok.' %}",
-        title: "{% trans 'Takvim Hatırlatıcı' %}"
-    };
-    function rmdPriorityBullet(p) {
-        return p === 'high' ? 'danger' : (p === 'low' ? 'info' : 'primary');
-    }
-    async function refreshReminders() {
-        const wrap = document.getElementById('reminders-widget');
-        if (!wrap) return;
-        let data;
-        try { data = await fetchJson(URLS.reminders); }
-        catch (e) { return; }
-        const items = [].concat(data.due || [], data.upcoming || []);
-        if (!items.length) {
-            wrap.innerHTML = `<div class="text-muted text-center py-10">${RMD_I18N.none}</div>`;
-            return;
-        }
-        wrap.innerHTML = items.slice(0, 12).map(r => {
-            const station = r.station
-                ? `<span class="badge badge-light-secondary fs-9 ms-1">${escapeHtml(r.station)}</span>` : '';
-            const dueB = r.is_due
-                ? `<span class="badge badge-light-danger fs-9 ms-1">${RMD_I18N.due}</span>` : '';
-            return `<div class="d-flex align-items-center mb-4">
-                <span class="bullet bullet-vertical h-35px bg-${rmdPriorityBullet(r.priority)} me-3"></span>
-                <div class="flex-grow-1">
-                    <div class="fw-semibold text-gray-800 fs-7">${escapeHtml(r.title)}${dueB}</div>
-                    <div class="text-muted fs-8">
-                        <i class="ki-outline ki-calendar fs-8 me-1"></i>${escapeHtml(formatDateTime(r.remind_at))}${station}
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
-    }
-
     // Initial load + intervals
     setupDigitalControl();
     setupReorder();
-    refreshKpis();      setInterval(refreshKpis, 30000);
-    refreshSnapshot();  setInterval(refreshSnapshot, 5000);
-    refreshDigital();   setInterval(refreshDigital, 5000);
-    refreshEvents();    setInterval(refreshEvents, 30000);
-    refreshReminders(); setInterval(refreshReminders, 60000);
+    refreshKpis();     setInterval(refreshKpis, 30000);
+    refreshSnapshot(); setInterval(refreshSnapshot, 5000);
+    refreshDigital();  setInterval(refreshDigital, 5000);
+    refreshEvents();   setInterval(refreshEvents, 30000);
 })();
 </script>
 {% endblock %}
