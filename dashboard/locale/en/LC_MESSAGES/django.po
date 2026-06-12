@@ -1626,3 +1626,7 @@ msgstr "Enter at least one of Min or Max value."
 
 msgid "Min ve/veya Max girin; en az biri zorunludur."
 msgstr "Enter Min and/or Max; at least one is required."
+
+# ---- Alarm v5 (kanal checkbox kaldirildi) ----
+msgid "Bildirim, kullanıcının SMS/e-posta tercihine göre gönderilir."
+msgstr "Notifications are sent based on each user's SMS/email preference."

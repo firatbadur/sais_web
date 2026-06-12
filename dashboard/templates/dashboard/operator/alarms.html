@@ -74,23 +74,6 @@
                         <div class="form-text">{% trans "Min ve/veya Max girin; en az biri zorunludur." %}</div>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">{% trans "Alarm Kullanıcıları" %}</label>
-                        <select class="form-select o-notify" data-control="select2" data-hide-search="true">
-                            <option value="1">{% trans "Tüm Yetkililer" %}</option>
-                            <option value="0">{% trans "Sadece Ben" %}</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4 d-flex align-items-end">
-                        <div class="d-flex gap-5 pb-2">
-                            <label class="form-check form-check-custom form-check-solid">
-                                <input class="form-check-input o-sms" type="checkbox" checked><span class="form-check-label ms-2">{% trans "SMS" %}</span>
-                            </label>
-                            <label class="form-check form-check-custom form-check-solid">
-                                <input class="form-check-input o-mail" type="checkbox" checked><span class="form-check-label ms-2">{% trans "E-posta" %}</span>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
                         <label class="form-label">{% trans "Hazır Mesaj" %}</label>
                         <select class="form-select tpl-sel o-tpl" data-control="select2"
                                 data-placeholder='{% trans "Hazır mesaj seç" %}' data-allow-clear="true">
@@ -130,7 +113,7 @@
                         <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
                             <th>{% trans "İstasyon" %}</th><th>{% trans "Kanal" %}</th><th>{% trans "Periyod" %}</th>
                             <th>{% trans "Alarm Tipi" %}</th><th class="text-end">Min</th><th class="text-end">Max</th>
-                            <th>{% trans "Bildirim" %}</th><th>{% trans "Mesaj" %}</th><th>{% trans "Aktif" %}</th><th class="text-end">{% trans "İşlem" %}</th>
+                            <th>{% trans "Mesaj" %}</th><th>{% trans "Aktif" %}</th><th class="text-end">{% trans "İşlem" %}</th>
                         </tr></thead>
                         <tbody>
                             {% for r in analog_rules %}
@@ -141,7 +124,6 @@
                                 <td>{{ r.type_label }}</td>
                                 <td class="text-end">{{ r.min_value|default_if_none:"—" }}</td>
                                 <td class="text-end">{{ r.max_value|default_if_none:"—" }}</td>
-                                <td class="text-muted fs-8">{% if r.send_sms %}SMS {% endif %}{% if r.send_email %}E-posta{% endif %}</td>
                                 <td>{{ r.message }}</td>
                                 <td data-order="{{ r.enabled|yesno:'1,0' }}">
                                     <label class="form-check form-switch form-check-custom form-check-solid">
@@ -195,23 +177,6 @@
                         </select>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">{% trans "Alarm Kullanıcıları" %}</label>
-                        <select class="form-select d-notify" data-control="select2" data-hide-search="true">
-                            <option value="1">{% trans "Tüm Yetkililer" %}</option>
-                            <option value="0">{% trans "Sadece Ben" %}</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4 d-flex align-items-end">
-                        <div class="d-flex gap-5 pb-2">
-                            <label class="form-check form-check-custom form-check-solid">
-                                <input class="form-check-input d-sms" type="checkbox" checked><span class="form-check-label ms-2">{% trans "SMS" %}</span>
-                            </label>
-                            <label class="form-check form-check-custom form-check-solid">
-                                <input class="form-check-input d-mail" type="checkbox" checked><span class="form-check-label ms-2">{% trans "E-posta" %}</span>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
                         <label class="form-label">{% trans "Hazır Mesaj" %}</label>
                         <select class="form-select tpl-sel d-tpl" data-control="select2"
                                 data-placeholder='{% trans "Hazır mesaj seç" %}' data-allow-clear="true">
@@ -249,7 +214,7 @@
                     <table id="tbl-diag" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
                         <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
                             <th>{% trans "İstasyon" %}</th><th>{% trans "Sensör" %}</th><th>{% trans "Durum" %}</th><th>{% trans "Periyod" %}</th>
-                            <th>{% trans "Bildirim" %}</th><th>{% trans "Mesaj" %}</th><th>{% trans "Aktif" %}</th><th class="text-end">{% trans "İşlem" %}</th>
+                            <th>{% trans "Mesaj" %}</th><th>{% trans "Aktif" %}</th><th class="text-end">{% trans "İşlem" %}</th>
                         </tr></thead>
                         <tbody>
                             {% for r in diag_rules %}
@@ -258,7 +223,6 @@
                                 <td>{{ r.sensor_label }}</td>
                                 <td>{% if r.trigger_state %}<span class="badge badge-light-success">{% trans "Aktif (ON)" %}</span>{% else %}<span class="badge badge-light-secondary">{% trans "Pasif (OFF)" %}</span>{% endif %}</td>
                                 <td>{{ r.get_period_minutes_display }}</td>
-                                <td class="text-muted fs-8">{% if r.send_sms %}SMS {% endif %}{% if r.send_email %}E-posta{% endif %}</td>
                                 <td>{{ r.message }}</td>
                                 <td data-order="{{ r.enabled|yesno:'1,0' }}">
                                     <label class="form-check form-switch form-check-custom form-check-solid">
@@ -416,8 +380,6 @@
             rule_type: 'analog', station_id: Number(station), parameter_id: Number(param),
             min_value: minV, max_value: maxV,
             period_minutes: Number(fo.querySelector('.o-period').value),
-            notify_all: fo.querySelector('.o-notify').value === '1',
-            send_sms: fo.querySelector('.o-sms').checked, send_email: fo.querySelector('.o-mail').checked,
             message: msg,
         }).then(d => { if (!d.ok) { showFormAlert(fo, '.o-alert', [d.error || I18N.netErr]); return; } location.reload(); })
           .catch(() => showFormAlert(fo, '.o-alert', [I18N.netErr]));
@@ -441,8 +403,6 @@
             rule_type: 'digital', station_id: Number(station), sensor_id: Number(sensor),
             trigger_state: fd.querySelector('.d-state').value === '1',
             period_minutes: Number(fd.querySelector('.d-period').value),
-            notify_all: fd.querySelector('.d-notify').value === '1',
-            send_sms: fd.querySelector('.d-sms').checked, send_email: fd.querySelector('.d-mail').checked,
             message: msg,
         }).then(d => { if (!d.ok) { showFormAlert(fd, '.d-alert', [d.error || I18N.netErr]); return; } location.reload(); })
           .catch(() => showFormAlert(fd, '.d-alert', [I18N.netErr]));
