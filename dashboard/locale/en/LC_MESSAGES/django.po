@@ -1630,3 +1630,7 @@ msgstr "Enter Min and/or Max; at least one is required."
 # ---- Alarm v5 (kanal checkbox kaldirildi) ----
 msgid "Bildirim, kullanıcının SMS/e-posta tercihine göre gönderilir."
 msgstr "Notifications are sent based on each user's SMS/email preference."
+
+# ---- Alarm v6 (placeholder duzeltme) ----
+msgid "Kanal seçiniz"
+msgstr "Select a channel"

@@ -123,7 +123,7 @@
                     {% endif %}
                 </select>
                 <div class="form-text" id="parameter-hint">
-                    {% trans "Önce bir istasyon seçin." %}
+                    {% if filters.station_id %}{% trans "Parametre seçilmezse o istasyonun tüm parametreleri gösterilir." %}{% else %}{% trans "Önce bir istasyon seçin." %}{% endif %}
                 </div>
             </div>
 
