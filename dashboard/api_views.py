@@ -1014,9 +1014,24 @@ def alarm_rules(request):
         if not pid:
             return JsonResponse({"ok": False, "error": "Kanal seçin."}, status=400)
         rule.parameter = P.objects.filter(pk=pid).first()
-        rule.condition = data.get("condition") or AlarmRule.COND_MINMAX
-        rule.min_value = data.get("min_value") if data.get("min_value") not in ("", None) else None
-        rule.max_value = data.get("max_value") if data.get("max_value") not in ("", None) else None
+        # Limit tipi min/max girişinden türetilir: ikisi de varsa minmax,
+        # sadece min varsa min (altı), sadece max varsa max (üstü). En az biri zorunlu.
+        mn, mx = data.get("min_value"), data.get("max_value")
+        has_min = mn not in ("", None)
+        has_max = mx not in ("", None)
+        if not has_min and not has_max:
+            return JsonResponse({"ok": False, "error": "Min veya Max değerinden en az biri zorunludur."}, status=400)
+        try:
+            rule.min_value = float(mn) if has_min else None
+            rule.max_value = float(mx) if has_max else None
+        except (TypeError, ValueError):
+            return JsonResponse({"ok": False, "error": "Min/Max sayısal bir değer olmalı."}, status=400)
+        if has_min and has_max:
+            rule.condition = AlarmRule.COND_MINMAX
+        elif has_min:
+            rule.condition = AlarmRule.COND_MIN
+        else:
+            rule.condition = AlarmRule.COND_MAX
     elif rule_type == AlarmRule.RULE_DIGITAL:
         sid = data.get("sensor_id")
         rule.sensor = S.objects.filter(pk=sid, sensor_type__in=(2, 3)).first()

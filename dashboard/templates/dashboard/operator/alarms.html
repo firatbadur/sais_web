@@ -64,18 +64,14 @@
                         </select>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">{% trans "Alarm Tipi" %}</label>
-                        <select class="form-select o-cond" data-control="select2" data-hide-search="true">
-                            {% for v, lbl in cond_choices %}<option value="{{ v }}" {% if v == 'minmax' %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-4 o-min-wrap">
                         <label class="form-label">{% trans "Min Değer" %}</label>
                         <input type="number" step="any" class="form-control o-min" placeholder="{% trans 'Min. Değer' %}">
+                        <div class="invalid-feedback"></div>
                     </div>
-                    <div class="col-md-4 o-max-wrap">
+                    <div class="col-md-4">
                         <label class="form-label">{% trans "Max Değer" %}</label>
                         <input type="number" step="any" class="form-control o-max" placeholder="{% trans 'Max. Değer' %}">
+                        <div class="form-text">{% trans "Min ve/veya Max girin; en az biri zorunludur." %}</div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">{% trans "Alarm Kullanıcıları" %}</label>
@@ -106,6 +102,11 @@
                         <label class="form-label">{% trans "Mesaj" %}</label>
                         <textarea class="form-control o-msg" rows="3" placeholder="{% trans 'Alarm için iletilecek mesajı ekleyiniz...' %}"></textarea>
                         <div class="form-text">{% trans "Hazır mesaj seçebilir veya kendi mesajınızı yazıp kaydedebilirsiniz." %}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="alert alert-warning d-none o-alert" role="alert">
+                            <i class="ki-outline ki-information-5 fs-2 me-2"></i><span class="o-alert-text"></span>
+                        </div>
                     </div>
                     <div class="col-12 d-flex justify-content-end gap-2">
                         <button type="button" class="btn btn-light-primary tpl-save" data-msg=".o-msg">
@@ -222,6 +223,11 @@
                         <label class="form-label">{% trans "Mesaj" %}</label>
                         <textarea class="form-control d-msg" rows="3" placeholder="{% trans 'Alarm için iletilecek mesajı ekleyiniz...' %}"></textarea>
                     </div>
+                    <div class="col-12">
+                        <div class="alert alert-warning d-none d-alert" role="alert">
+                            <i class="ki-outline ki-information-5 fs-2 me-2"></i><span class="d-alert-text"></span>
+                        </div>
+                    </div>
                     <div class="col-12 d-flex justify-content-end gap-2">
                         <button type="button" class="btn btn-light-primary tpl-save" data-msg=".d-msg">
                             <i class="ki-outline ki-save-2 fs-4"></i>{% trans "Hazır Mesaj Kaydet" %}
@@ -284,6 +290,8 @@
         needChannel: "{% trans 'Kanal seçin.' %}", confirmDel: "{% trans 'Bu alarm silinsin mi?' %}",
         netErr: "{% trans 'Ağ hatası' %}", offline: "{% trans 'İstasyon Offline' %}",
         titlePrompt: "{% trans 'Hazır mesaj başlığı:' %}",
+        needMinMax: "{% trans 'Min veya Max değerinden en az birini girin.' %}",
+        needSensor: "{% trans 'Dijital sensör seçin.' %}",
     };
     function csrf() { const el = document.querySelector('[name=csrfmiddlewaretoken]'); return el ? el.value : ''; }
     function j(url, body, method) {
@@ -377,32 +385,42 @@
         });
     });
 
-    // ---- Ölçüm tab ----
+    // Zorunlu alan uyarısı — form üstündeki alert kutusunu doldurur.
+    function showFormAlert(scope, alertSel, errors) {
+        const box = scope.querySelector(alertSel);
+        const txt = box.querySelector('span');
+        if (errors.length) { txt.textContent = errors.join(' • '); box.classList.remove('d-none'); }
+        else { box.classList.add('d-none'); }
+    }
+
+    // ---- Ölçüm tab (analog) ----
     const fo = document.getElementById('form-olcum');
     $(fo.querySelector('.st-sel')).on('change', function () { loadIO(fo, this.value); });
-    function toggleMinMax() {
-        const c = fo.querySelector('.o-cond').value;
-        fo.querySelector('.o-min-wrap').style.display = (c === 'max') ? 'none' : '';
-        fo.querySelector('.o-max-wrap').style.display = (c === 'min') ? 'none' : '';
-    }
-    $(fo.querySelector('.o-cond')).on('change', toggleMinMax); toggleMinMax();
     fo.querySelector('.o-save').addEventListener('click', function () {
         const station = fo.querySelector('.st-sel').value;
-        if (!station) { alert(I18N.needStation); return; }
         const param = fo.querySelector('.o-param').value;
-        if (!param) { alert(I18N.needChannel); return; }
+        const minV = fo.querySelector('.o-min').value.trim();
+        const maxV = fo.querySelector('.o-max').value.trim();
         const msg = fo.querySelector('.o-msg').value.trim();
-        if (!msg) { alert(I18N.needMsg); return; }
+        const errors = [];
+        if (!station) errors.push(I18N.needStation);
+        if (!param) errors.push(I18N.needChannel);
+        if (minV === '' && maxV === '') errors.push(I18N.needMinMax);
+        if (!msg) errors.push(I18N.needMsg);
+        // Görsel işaretler
+        fo.querySelector('.o-min').classList.toggle('is-invalid', minV === '' && maxV === '');
+        fo.querySelector('.o-msg').classList.toggle('is-invalid', !msg);
+        showFormAlert(fo, '.o-alert', errors);
+        if (errors.length) return;
         j(URL_RULES, {
             rule_type: 'analog', station_id: Number(station), parameter_id: Number(param),
-            condition: fo.querySelector('.o-cond').value,
-            min_value: fo.querySelector('.o-min').value, max_value: fo.querySelector('.o-max').value,
+            min_value: minV, max_value: maxV,
             period_minutes: Number(fo.querySelector('.o-period').value),
             notify_all: fo.querySelector('.o-notify').value === '1',
             send_sms: fo.querySelector('.o-sms').checked, send_email: fo.querySelector('.o-mail').checked,
             message: msg,
-        }).then(d => { if (!d.ok) { alert(d.error || I18N.netErr); return; } location.reload(); })
-          .catch(() => alert(I18N.netErr));
+        }).then(d => { if (!d.ok) { showFormAlert(fo, '.o-alert', [d.error || I18N.netErr]); return; } location.reload(); })
+          .catch(() => showFormAlert(fo, '.o-alert', [I18N.netErr]));
     });
 
     // ---- Diagnostik tab ----
@@ -410,11 +428,15 @@
     $(fd.querySelector('.st-sel')).on('change', function () { loadIO(fd, this.value); });
     fd.querySelector('.d-save').addEventListener('click', function () {
         const station = fd.querySelector('.st-sel').value;
-        if (!station) { alert(I18N.needStation); return; }
         const sensor = fd.querySelector('.d-sensor').value;
-        if (!sensor) { alert("{% trans 'Dijital sensör seçin.' %}"); return; }
         const msg = fd.querySelector('.d-msg').value.trim();
-        if (!msg) { alert(I18N.needMsg); return; }
+        const errors = [];
+        if (!station) errors.push(I18N.needStation);
+        if (!sensor) errors.push(I18N.needSensor);
+        if (!msg) errors.push(I18N.needMsg);
+        fd.querySelector('.d-msg').classList.toggle('is-invalid', !msg);
+        showFormAlert(fd, '.d-alert', errors);
+        if (errors.length) return;
         j(URL_RULES, {
             rule_type: 'digital', station_id: Number(station), sensor_id: Number(sensor),
             trigger_state: fd.querySelector('.d-state').value === '1',
@@ -422,8 +444,8 @@
             notify_all: fd.querySelector('.d-notify').value === '1',
             send_sms: fd.querySelector('.d-sms').checked, send_email: fd.querySelector('.d-mail').checked,
             message: msg,
-        }).then(d => { if (!d.ok) { alert(d.error || I18N.netErr); return; } location.reload(); })
-          .catch(() => alert(I18N.netErr));
+        }).then(d => { if (!d.ok) { showFormAlert(fd, '.d-alert', [d.error || I18N.netErr]); return; } location.reload(); })
+          .catch(() => showFormAlert(fd, '.d-alert', [I18N.netErr]));
     });
 
     // ---- Tablo işlemleri ----

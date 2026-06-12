@@ -1619,3 +1619,10 @@ msgstr "Select a digital sensor"
 
 msgid "Dijital sensör seçin."
 msgstr "Select a digital sensor."
+
+# ---- Alarm v4 (min/max zorunlu) ----
+msgid "Min veya Max değerinden en az birini girin."
+msgstr "Enter at least one of Min or Max value."
+
+msgid "Min ve/veya Max girin; en az biri zorunludur."
+msgstr "Enter Min and/or Max; at least one is required."
