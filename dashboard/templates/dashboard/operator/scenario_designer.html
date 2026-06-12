@@ -50,7 +50,8 @@
     .node-avg    .node-title { background: rgba(0,163,255,.12); color: #0079bf; }
     .node-cmp    .node-title { background: rgba(255,138,0,.14); color: #b35f00; }
     /* Kompakt (ikon tarzı) node'lar — ortalama / karşılaştırma / mantık / zaman */
-    .drawflow .drawflow-node.compact { min-width: auto; }
+    .drawflow .drawflow-node.compact { min-width: auto; width: auto; min-height: 0; }
+    .drawflow .drawflow-node.compact .drawflow_content_node { width: auto; }
     .drawflow .drawflow-node.compact .node-compact { display: flex; align-items: center; gap: .4rem;
         padding: .5rem .7rem; border-radius: .6rem; font-weight: 700; font-size: .85rem; white-space: nowrap; }
     .drawflow .drawflow-node.compact .node-compact .sym { font-size: 1.15rem; font-weight: 800; line-height: 1; }
@@ -257,34 +258,51 @@
     // ---- Yerleşik "Numune Alma" şablonu (client-side) ----
     function loadSampleTemplate() {
         editor.clearModuleSelected();
-        // Sensör → 15 dk Ortalama → Karşılaştırma(eşik) → OR
+        // --- Girişler: Sensör → 15 dk Ortalama → Karşılaştırma (eşik) ---
         const chain = (param, y, cmpType, ov) => {
             const s = addNode('sensor_analog', 20, y, { parameter: param });
             const a = addNode('avg_15m', 250, y);
-            const c = addNode(cmpType, 470, y, ov);
+            const c = addNode(cmpType, 460, y, ov);
             editor.addConnection(s, a, 'output_1', 'input_1');
             editor.addConnection(a, c, 'output_1', 'input_1');
             return c;
         };
-        const cPh  = chain('pH',  20,  'cmp_out', { min: 6, max: 9 });
-        const cAkm = chain('AKM', 240, 'cmp_gt',  { threshold: 1000 });
-        const cKoi = chain('KOi', 460, 'cmp_gt',  { threshold: 1000 });
-        const orn = addNode('logic_or', 700, 240);
+        const cPh  = chain('pH',  40,  'cmp_out', { min: 6, max: 9 });   // pH 6-9 dışında
+        const cAkm = chain('AKM', 240, 'cmp_gt',  { threshold: 350 });   // AKM > 350
+        const cKoi = chain('KOi', 440, 'cmp_gt',  { threshold: 800 });   // KOİ > 800
+
+        // --- Tetik: parametrelerden HERHANGİ biri sınırı aşarsa ---
+        const orn = addNode('logic_or', 660, 240);
         [cPh, cAkm, cKoi].forEach(c => editor.addConnection(c, orn, 'output_1', 'input_1'));
-        const d1 = addNode('delay', 920, 60, { seconds: 10, unit: '60' });       // 10 dk
-        editor.addConnection(orn, d1, 'output_1', 'input_1');
-        const getcode = addNode('ministry_get_code', 1160, 20);
-        const son = addNode('sampler_on', 1160, 120);
-        const diag = addNode('diagnostic', 1160, 220, { type_no: 701, details: 'Numune alınıyor' });
-        const notif = addNode('notify', 1160, 360, { message: 'Numune alınıyor' });
-        [getcode, son, diag, notif].forEach(o => editor.addConnection(d1, o, 'output_1', 'input_1'));
-        const d2 = addNode('delay', 920, 480, { seconds: 24, unit: '3600' });    // 24 saat
+
+        // --- Kademe 1 (anında): 1. alarm bildirimi ---
+        const n1 = addNode('notify', 900, 0, { message: '1. Alarm — limit aşımı tespit edildi' });
+        editor.addConnection(orn, n1, 'output_1', 'input_1');
+
+        // --- Kademe 2 (5 dk sonra): 2. alarm bildirimi ---
+        const d2 = addNode('delay', 900, 120, { seconds: 5, unit: '60' });
         editor.addConnection(orn, d2, 'output_1', 'input_1');
-        const cmpl = addNode('sim_complete', 1160, 480);
-        const diag2 = addNode('diagnostic', 1160, 580, { type_no: 702, details: 'Numune alındı' });
-        const soff = addNode('sampler_off', 1160, 700);
-        [cmpl, diag2, soff].forEach(o => editor.addConnection(d2, o, 'output_1', 'input_1'));
-        document.getElementById('dz-name').value = 'Numune Alma (Şablon)';
+        const n2 = addNode('notify', 1120, 120, { message: '2. Alarm — limit aşımı sürüyor' });
+        editor.addConnection(d2, n2, 'output_1', 'input_1');
+
+        // --- Kademe 3 (10 dk sonra): numune kodu al + alıcıyı aç + 701 + bildir ---
+        const d3 = addNode('delay', 900, 250, { seconds: 10, unit: '60' });
+        editor.addConnection(orn, d3, 'output_1', 'input_1');
+        const getcode = addNode('ministry_get_code', 1120, 220);
+        const son     = addNode('sampler_on', 1120, 320);
+        const diag1   = addNode('diagnostic', 1120, 420, { type_no: 701, details: 'Numune alınıyor' });
+        const n3      = addNode('notify', 1120, 520, { message: 'Numune alınıyor — tetik gönderildi' });
+        [getcode, son, diag1, n3].forEach(o => editor.addConnection(d3, o, 'output_1', 'input_1'));
+
+        // --- Kademe 4 (24 saat sonra): SIM tamamla + 702 + alıcıyı kapat ---
+        const d4 = addNode('delay', 900, 660, { seconds: 24, unit: '3600' });
+        editor.addConnection(orn, d4, 'output_1', 'input_1');
+        const cmpl  = addNode('sim_complete', 1120, 660);
+        const diag2 = addNode('diagnostic', 1120, 760, { type_no: 702, details: 'Numune alındı' });
+        const soff  = addNode('sampler_off', 1120, 860);
+        [cmpl, diag2, soff].forEach(o => editor.addConnection(d4, o, 'output_1', 'input_1'));
+
+        document.getElementById('dz-name').value = 'Otomatik Numune Alma Senaryosu';
         currentId = null; currentIsTemplate = false; alertBox('');
     }
 
