@@ -1915,3 +1915,9 @@ msgstr "SIM: Sample Error"
 
 msgid "Diagnostik Gönder (701/702)"
 msgstr "Send Diagnostic (701/702)"
+
+msgid "İptal Et"
+msgstr "Cancel"
+
+msgid "Bu çalışma iptal edilsin mi? (Numune alıcı kapatılır)"
+msgstr "Cancel this run? (Sampler will be turned off)"

@@ -106,6 +106,7 @@ urlpatterns = [
     path("api/scenario/status/", api_views.scenario_status, name="api_scenario_status"),
     path("api/scenario/history/", api_views.scenario_history, name="api_scenario_history"),
     path("api/scenario/ministry/", api_views.scenario_request_ministry, name="api_scenario_ministry"),
+    path("api/scenario/cancel-run/", api_views.scenario_cancel_run, name="api_scenario_cancel_run"),
     path("api/scenario/digital-sensors/", api_views.scenario_digital_sensors,
          name="api_scenario_digital_sensors"),
 ]

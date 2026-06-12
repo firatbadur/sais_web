@@ -1406,13 +1406,46 @@ def scenario_request_ministry(request):
     if station is None:
         return JsonResponse({"ok": False, "error": "İstasyon seçin."}, status=400)
 
-    run = request_ministry(station, code)
-    if run is None:
+    result, run = request_ministry(station, code)
+    if result == "no_scenario":
         return JsonResponse(
             {"ok": False, "error": "Bu istasyon için aktif Bakanlık senaryosu yok."},
             status=400,
         )
+    if result == "exists":
+        return JsonResponse({
+            "ok": False,
+            "error": (
+                f"Şu an devam eden bir Bakanlık talebi var (kod: {run.sample_code or '—'}). "
+                f"Yeni talep için önce mevcut çalışmayı 'Durum' sekmesinden iptal edin."
+            ),
+            "existing_run_id": run.pk,
+        }, status=409)
     return JsonResponse({"ok": True, "run_id": run.pk})
+
+
+@login_required
+def scenario_cancel_run(request):
+    """Açık bir senaryo çalışmasını iptal eder (numune alıcıyı kapatır)."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from sais_domain.scenario_engine import cancel_run
+
+    try:
+        run_id = json.loads(request.body or "{}").get("run_id")
+    except (ValueError, TypeError):
+        run_id = None
+
+    run = cancel_run(run_id)
+    if run is None:
+        return JsonResponse({"ok": False, "error": "Açık çalışma bulunamadı."}, status=404)
+    return JsonResponse({"ok": True})
 
 
 @login_required

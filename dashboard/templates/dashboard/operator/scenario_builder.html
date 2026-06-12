@@ -253,6 +253,7 @@
         status: "{% url 'dashboard:api_scenario_status' %}",
         history: "{% url 'dashboard:api_scenario_history' %}",
         ministry: "{% url 'dashboard:api_scenario_ministry' %}",
+        cancelRun: "{% url 'dashboard:api_scenario_cancel_run' %}",
         params: "{% url 'dashboard:api_station_parameters' %}",
         digital: "{% url 'dashboard:api_scenario_digital_sensors' %}",
     };
@@ -272,6 +273,8 @@
         paramPlaceholder: "{% trans 'Parametre seçiniz' %}",
         noRuns: "{% trans 'Devam eden senaryo çalışması yok.' %}",
         noActive: "{% trans 'Aktif senaryo yok.' %}",
+        confirmCancel: "{% trans 'Bu çalışma iptal edilsin mi? (Numune alıcı kapatılır)' %}",
+        cancelRun: "{% trans 'İptal Et' %}",
     };
 
     function csrf() { const el = document.querySelector('[name=csrfmiddlewaretoken]'); return el ? el.value : ''; }
@@ -650,10 +653,14 @@
             runs.innerHTML = (avg ? '<div class="row g-3 mb-4 sc-status-grid">' + avg + '</div>' : '') +
                 d.open_runs.map(r =>
                 `<div class="card mb-3"><div class="card-body py-4">
-                    <div class="d-flex justify-content-between flex-wrap">
+                    <div class="d-flex justify-content-between flex-wrap align-items-center">
                         <div><span class="fw-bold fs-5">${esc(r.scenario)}</span>
                           ${r.is_ministry ? '<span class="badge badge-light-danger ms-2">Bakanlık</span>' : '<span class="badge badge-light-primary ms-2">Otomatik</span>'}</div>
-                        <div class="text-muted">${esc(r.trigger_at)}</div>
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="text-muted">${esc(r.trigger_at)}</span>
+                            <button type="button" class="btn btn-sm btn-light-danger run-cancel" data-run-id="${r.id}">
+                                <i class="ki-outline ki-cross-circle fs-5"></i>${I18N.cancelRun}</button>
+                        </div>
                     </div>
                     <div class="mt-2 row g-3 sc-status-grid">
                         <div class="col-md-3"><div class="kpi"><div class="lbl">{% trans "İstasyon" %}</div><div class="val">${esc(r.station)}</div></div></div>
@@ -675,11 +682,28 @@
         if (!code) { box.querySelector('span').textContent = I18N.needCode; box.className = 'alert alert-warning'; return; }
         j(URLS.ministry, { code: code, station_id: Number(document.getElementById('min-station').value) }).then(d => {
             box.classList.remove('d-none');
-            if (!d.ok) { box.querySelector('span').textContent = d.error || I18N.netErr; box.className = 'alert alert-danger'; return; }
+            if (!d.ok) {
+                box.querySelector('span').textContent = d.error || I18N.netErr;
+                box.className = d.existing_run_id ? 'alert alert-warning' : 'alert alert-danger';
+                pollStatus();
+                return;
+            }
             box.querySelector('span').textContent = I18N.ministryOk; box.className = 'alert alert-success';
             document.getElementById('min-code').value = '';
             pollStatus();
         }).catch(() => {});
+    });
+
+    // Açık çalışmayı iptal et (delegasyon — open-runs her poll'da yeniden render)
+    document.getElementById('open-runs').addEventListener('click', function (e) {
+        const btn = e.target.closest('.run-cancel');
+        if (!btn) return;
+        if (!confirm(I18N.confirmCancel)) return;
+        btn.disabled = true;
+        j(URLS.cancelRun, { run_id: Number(btn.dataset.runId) }).then(d => {
+            if (!d.ok) alert(d.error || I18N.netErr);
+            pollStatus();
+        }).catch(() => { btn.disabled = false; });
     });
 
     // ===================================================================== //

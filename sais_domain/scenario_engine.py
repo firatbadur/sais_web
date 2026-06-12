@@ -411,7 +411,11 @@ def evaluate_auto(scenario, now):
 def request_ministry(station, code, now=None):
     """Bakanlık numune talebini başlatır — aktif ministry senaryosu için run açar.
 
-    Döner: oluşturulan/var olan ScenarioRun, ya da uygun senaryo yoksa None.
+    Döner: ``(result, run)`` —
+      - ``("no_scenario", None)``  : istasyonun aktif Bakanlık senaryosu yok.
+      - ``("exists", run)``        : zaten devam eden bir Bakanlık talebi var
+                                     (yeni talep açılmaz; mevcut run döner).
+      - ``("created", run)``       : yeni talep açıldı ve ilk adım yürütüldü.
     """
     from .models import Scenario, ScenarioRun
 
@@ -422,11 +426,11 @@ def request_ministry(station, code, now=None):
         .first()
     )
     if scenario is None:
-        return None
+        return ("no_scenario", None)
 
     run = _open_run(scenario, station.id)
     if run is not None:
-        return run  # zaten devam eden bir talep var
+        return ("exists", run)  # aynı anda yalnız bir açık Bakanlık talebi
 
     run = ScenarioRun.objects.create(
         scenario=scenario,
@@ -440,6 +444,47 @@ def request_ministry(station, code, now=None):
     )
     _log(scenario, run, kind="eval", message=f"Bakanlık numune talebi: {code}")
     _advance(scenario, run, triggered=True, now=now)
+    return ("created", run)
+
+
+def cancel_run(run_id, now=None):
+    """Açık (in_progress) bir senaryo çalışmasını iptal eder.
+
+    Güvenlik için numune alıcıyı kapatma komutu kuyruğa alır (varsa) ve run'ı
+    ``cancelled`` yapar — böylece yeni Bakanlık talebi kabul edilebilir.
+    Döner: iptal edilen ScenarioRun, ya da açık run yoksa None.
+    """
+    from datetime import timedelta
+
+    from .models import ScenarioRun
+
+    now = now or timezone.now()
+    run = (
+        ScenarioRun.objects
+        .filter(pk=run_id, status=ScenarioRun.STATUS_IN_PROGRESS)
+        .select_related("scenario", "scenario__station")
+        .first()
+    )
+    if run is None:
+        return None
+
+    scenario = run.scenario
+    sensor = scenario.effective_sampler_sensor()
+    if sensor is not None:
+        from api.models import Command
+        Command.objects.get_or_create(
+            idempotency_key=f"scenario:{run.id}:cancel:off",
+            defaults=dict(
+                sensor=sensor, value_type="bool", value=0, status="pending",
+                priority=10, source="rule", correlation_id=run.sample_code or None,
+                expires_at=now + timedelta(minutes=5), max_attempts=3,
+            ),
+        )
+
+    run.status = ScenarioRun.STATUS_CANCELLED
+    run.completed_at = now
+    run.save(update_fields=["status", "completed_at", "updated_at"])
+    _log(scenario, run, kind="step", message="Çalışma iptal edildi (operatör).")
     return run
 
 
