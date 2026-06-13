@@ -163,6 +163,12 @@ msgstr "Open Connections"
 msgid "Son 1 Saat Okuma"
 msgstr "Readings (Last Hour)"
 
+msgid "Son Veri İletimi"
+msgstr "Last Data Transmission"
+
+msgid "Bakanlık SIM’e son başarılı veri iletimi"
+msgstr "Last successful data transmission to the Ministry SIM"
+
 msgid "Anlık Sensör Değerleri"
 msgstr "Live Sensor Values"
 

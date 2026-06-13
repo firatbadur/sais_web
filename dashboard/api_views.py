@@ -25,9 +25,36 @@ from api.models import (
 )
 
 
+def _humanize_ago_tr(dt, now=None):
+    """Geçmiş bir an için kısa Türkçe görece zaman: 'az önce', '1 dk önce',
+    '2 sa önce', '3 gün önce', '4 ay önce', '1 yıl önce'. dt None ise None."""
+    if not dt:
+        return None
+    now = now or timezone.now()
+    secs = int((now - dt).total_seconds())
+    if secs < 0:
+        secs = 0
+    if secs < 60:
+        return "az önce"
+    mins = secs // 60
+    if mins < 60:
+        return f"{mins} dk önce"
+    hours = mins // 60
+    if hours < 24:
+        return f"{hours} sa önce"
+    days = hours // 24
+    if days < 30:
+        return f"{days} gün önce"
+    months = days // 30
+    if months < 12:
+        return f"{months} ay önce"
+    return f"{days // 365} yıl önce"
+
+
 @login_required
 def home_kpis(request):
-    """Üst KPI kartları — aktif istasyon, sensör, bağlantı, son saat reading sayısı."""
+    """Üst KPI kartları — aktif istasyon, sensör, bağlantı, son saat reading
+    sayısı + Bakanlık SIM'e son başarılı veri iletimi (görece zaman)."""
     now = timezone.now()
     last_hour = now - timedelta(hours=1)
 
@@ -37,6 +64,23 @@ def home_kpis(request):
         "connection_count": Connection.objects.filter(is_enabled=True).count(),
         "readings_last_hour": Reading.objects.filter(time_iso__gte=last_hour).count(),
     }
+
+    # Son veri iletimi (Sistem Kontrol'deki "Bakanlık SIM — Son İletim" ile aynı)
+    try:
+        from sais_domain.models import SystemSwitch
+        switch = SystemSwitch.load()
+        data["last_sim_ago"] = _humanize_ago_tr(switch.last_sim_success_at, now) or "—"
+        data["last_sim_at"] = (
+            switch.last_sim_success_at.isoformat() if switch.last_sim_success_at else None
+        )
+        data["last_sim_readtime"] = switch.last_sim_success_readtime or None
+        data["sim_enabled"] = switch.sim_enabled
+    except Exception:  # noqa: BLE001 — KPI'lar SIM verisi olmadan da çalışsın
+        data["last_sim_ago"] = "—"
+        data["last_sim_at"] = None
+        data["last_sim_readtime"] = None
+        data["sim_enabled"] = None
+
     return JsonResponse(data)
 
 

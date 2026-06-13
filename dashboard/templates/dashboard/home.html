@@ -8,8 +8,8 @@
 {% csrf_token %}
 
 <!-- ============ KPI CARDS ============ -->
-<div class="row g-5 g-xl-10 mb-5 mb-xl-10">
-    <div class="col-md-6 col-lg-3">
+<div class="row row-cols-1 row-cols-sm-2 row-cols-xl-5 g-5 g-xl-10 mb-5 mb-xl-10">
+    <div class="col">
         <div class="card h-100 shadow-sm">
             <div class="card-body py-5">
                 <span class="fs-6 fw-semibold text-gray-500">{% trans "Aktif İstasyon" %}</span>
@@ -20,7 +20,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-6 col-lg-3">
+    <div class="col">
         <div class="card h-100 shadow-sm">
             <div class="card-body py-5">
                 <span class="fs-6 fw-semibold text-gray-500">{% trans "Aktif Sensör" %}</span>
@@ -31,7 +31,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-6 col-lg-3">
+    <div class="col">
         <div class="card h-100 shadow-sm">
             <div class="card-body py-5">
                 <span class="fs-6 fw-semibold text-gray-500">{% trans "Açık Bağlantı" %}</span>
@@ -42,13 +42,24 @@
             </div>
         </div>
     </div>
-    <div class="col-md-6 col-lg-3">
+    <div class="col">
         <div class="card h-100 shadow-sm">
             <div class="card-body py-5">
                 <span class="fs-6 fw-semibold text-gray-500">{% trans "Son 1 Saat Okuma" %}</span>
                 <div class="d-flex align-items-center mt-2">
                     <i class="ki-outline ki-pulse fs-2hx text-warning me-3"></i>
                     <span class="fs-2hx fw-bolder text-gray-900" id="kpi-readings">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body py-5">
+                <span class="fs-6 fw-semibold text-gray-500">{% trans "Son Veri İletimi" %}</span>
+                <div class="d-flex align-items-center mt-2">
+                    <i class="ki-outline ki-cloud-change fs-2hx text-success me-3"></i>
+                    <span class="fs-2 fw-bolder text-gray-900" id="kpi-last-sim" title="{% trans 'Bakanlık SIM’e son başarılı veri iletimi' %}">-</span>
                 </div>
             </div>
         </div>
@@ -299,6 +310,11 @@
             document.getElementById('kpi-sensors').textContent = data.sensor_count ?? '-';
             document.getElementById('kpi-connections').textContent = data.connection_count ?? '-';
             document.getElementById('kpi-readings').textContent = data.readings_last_hour ?? '-';
+            const lastSim = document.getElementById('kpi-last-sim');
+            if (lastSim) {
+                lastSim.textContent = data.last_sim_ago ?? '—';
+                lastSim.classList.toggle('text-muted', (data.last_sim_ago ?? '—') === '—');
+            }
         } catch(e) { console.warn('KPI refresh fail:', e); }
     }
 
