@@ -344,12 +344,25 @@ def home_trend(request):
 
 @login_required
 def home_events(request):
-    """Son olaylar feed'i — SystemLog + PowerOff + kalite=bad son okumalar."""
+    """Son olaylar feed'i — SystemLog + PowerOff + kalite=bad son okumalar.
+
+    Normal kullanıcı (rol=3) kullanıcı hareketlerini (giriş/çıkış/komut/
+    yapılandırma/kullanıcı yönetimi/yedekleme/lisans) GÖREMEZ; yalnızca IO
+    değişikliklerini (dijital giriş/çıkış + PowerOff + bad reading) görür.
+    """
+    from api.events import EventType
+    from .permissions import ROLE_USER
+
     now = timezone.now()
 
     events = []
 
-    for log in SystemLog.objects.select_related("type", "user").order_by("-time_iso")[:15]:
+    log_qs = SystemLog.objects.select_related("type", "user").order_by("-time_iso")
+    if getattr(request.user, "rol", None) == ROLE_USER and not request.user.is_superuser:
+        # Salt-izleme: sadece IO değişiklikleri (kullanıcı audit trail'i gizli)
+        log_qs = log_qs.filter(type__name=EventType.DIGITAL_IO)
+
+    for log in log_qs[:15]:
         actor = log.user.get_username() if log.user_id else (log.username or "")
         meta_bits = []
         if actor:
