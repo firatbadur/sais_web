@@ -1,8 +1,8 @@
 {% extends "dashboard/base.html" %}
 {% load i18n dashboard_extras %}
 
-{% block title %}{% trans "Sistem Logları" %}{% endblock %}
-{% block page_title %}{% trans "Sistem Logları" %}{% endblock %}
+{% block title %}{% trans "Olaylar" %}{% endblock %}
+{% block page_title %}{% trans "Olaylar" %}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -16,15 +16,29 @@
 {% block content %}
 <div class="card mb-5 mb-xl-8">
     <div class="card-header border-0 pt-6">
-        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Sistem Logları" %}</h3>
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Olaylar" %}</h3>
     </div>
     <div class="card-body pt-2">
         <form method="get" id="report-filter-form" class="row g-5">
             <div class="col-md-3">
-                <label class="form-label fw-semibold">{% trans "Log Tipi" %}</label>
+                <label class="form-label fw-semibold">{% trans "Olay Tipi" %}</label>
                 <select name="type" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
                     <option value="">{% trans "Hepsi" %}</option>
                     {% for t in log_types %}<option value="{{ t.id }}" {% if filters.type_id == t.id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Önem Derecesi" %}</label>
+                <select name="severity" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
+                    <option value="">{% trans "Hepsi" %}</option>
+                    {% for val, label in severity_choices %}<option value="{{ val }}" {% if filters.severity == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Kullanıcı" %}</label>
+                <select name="user" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
+                    <option value="">{% trans "Hepsi" %}</option>
+                    {% for u in event_users %}<option value="{{ u.id }}" {% if filters.user_id == u.id %}selected{% endif %}>{{ u.get_username }}</option>{% endfor %}
                 </select>
             </div>
             <div class="col-md-3">
@@ -52,20 +66,33 @@
 
 <div class="card" id="report-results-card">
     <div class="card-header border-0 pt-6">
-        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Sistem Olayları" %}</h3>
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Olay Kayıtları" %}</h3>
         {% if not filters.submitted %}<div class="card-toolbar"><span class="badge badge-light-primary">{% blocktrans %}Son {{ default_limit }} kayıt{% endblocktrans %}</span></div>{% endif %}
     </div>
     <div class="card-body pt-2">
         <div class="table-responsive">
             <table id="report-table" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
                 <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
-                    <th>{% trans "Tarih" %}</th><th>{% trans "Tip" %}</th><th>{% trans "İstasyon" %}</th><th>{% trans "Açıklama" %}</th>
+                    <th>{% trans "Tarih" %}</th>
+                    <th>{% trans "Önem" %}</th>
+                    <th>{% trans "Tip" %}</th>
+                    <th>{% trans "Kullanıcı" %}</th>
+                    <th>{% trans "IP" %}</th>
+                    <th>{% trans "İstasyon" %}</th>
+                    <th>{% trans "Açıklama" %}</th>
                 </tr></thead>
                 <tbody>
                     {% for l in rows %}
                     <tr>
                         <td data-order="{{ l.time_iso|date:'U' }}">{{ l.time_iso|date:"d.m.Y H:i:s" }}</td>
+                        <td>
+                            {% if l.severity == 'critical' %}<span class="badge badge-light-danger">{% trans "Kritik" %}</span>
+                            {% elif l.severity == 'warning' %}<span class="badge badge-light-warning">{% trans "Uyarı" %}</span>
+                            {% else %}<span class="badge badge-light-success">{% trans "Bilgi" %}</span>{% endif %}
+                        </td>
                         <td><span class="badge badge-light-info">{{ l.type.name|default:"—" }}</span></td>
+                        <td>{{ l.user.get_username|default:l.username|default:"—" }}</td>
+                        <td>{{ l.ip_address|default:"—" }}</td>
                         <td>{{ l.station.name|default:"—" }}</td>
                         <td>{{ l.description|default:"" }}</td>
                     </tr>

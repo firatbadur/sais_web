@@ -1642,6 +1642,31 @@ msgstr "Sensor Selection"
 msgid "Sensör seçiniz (aranabilir)"
 msgstr "Select sensor (searchable)"
 
+# ---- Olaylar (event audit trail) ----
+msgid "Olaylar"
+msgstr "Events"
+
+msgid "Olay Tipi"
+msgstr "Event Type"
+
+msgid "Olay Kayıtları"
+msgstr "Event Records"
+
+msgid "Önem"
+msgstr "Severity"
+
+msgid "Önem Derecesi"
+msgstr "Severity"
+
+msgid "Uyarı"
+msgstr "Warning"
+
+msgid "Kritik"
+msgstr "Critical"
+
+msgid "IP"
+msgstr "IP"
+
 msgid "Sensör seçilmezse o istasyonun tüm sensörleri gösterilir."
 msgstr "If no sensor is selected, all sensors of that station are shown."
 

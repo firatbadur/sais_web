@@ -303,4 +303,37 @@ def persist_reading(
         defaults["last_saved_status"] = status
 
     SensorLatest.objects.update_or_create(sensor=sensor, defaults=defaults)
+
+    # --- Dijital giriş/çıkış olayı ---
+    # Bir dijital sensörün değeri DEĞİŞTİĞİNDE bu bir olaydır (gerçek SCADA
+    # event'i). İlk okumada (latest is None) tetiklemeyiz — sadece gerçek
+    # geçişler. Olay yazımı asla okuma akışını kesmez (log_event yutar).
+    if changed and latest is not None:
+        _maybe_log_digital_event(sensor, value)
+
     return reading
+
+
+def _maybe_log_digital_event(sensor, value: Any) -> None:
+    """Dijital sensör (input/output) durum değişimini olay kaydına yazar."""
+    is_digital = getattr(sensor, "sensor_type", None) in (2, 3) or \
+        getattr(sensor, "data_type", None) in ("bool", "bit")
+    if not is_digital:
+        return
+    from api.events import EventType, log_event
+
+    is_output = getattr(sensor, "sensor_type", None) == 3
+    kind = "Dijital Çıkış" if is_output else "Dijital Giriş"
+    try:
+        state = "AÇIK" if float(value) else "KAPALI"
+    except (TypeError, ValueError):
+        state = str(value)
+    sensor_label = getattr(sensor, "name", None) or f"sensör#{getattr(sensor, 'pk', '?')}"
+    station = None
+    if getattr(sensor, "connection_id", None) and hasattr(sensor, "connection"):
+        station = getattr(sensor.connection, "station", None)
+    log_event(
+        EventType.DIGITAL_IO,
+        f"{kind} değişti: {sensor_label} → {state}",
+        severity="info", station=station,
+    )

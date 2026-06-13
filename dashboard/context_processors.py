@@ -37,7 +37,7 @@ MENU = [
              "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER)},
             {"label": _("Komut Geçmişi"), "url_name": "dashboard:reports_commands",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
-            {"label": _("Sistem Logları"), "url_name": "dashboard:reports_system_logs",
+            {"label": _("Olaylar"), "url_name": "dashboard:reports_system_logs",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Alarm Raporları"), "url_name": "dashboard:reports_alarms",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},

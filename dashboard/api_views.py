@@ -209,6 +209,18 @@ def digital_output_command(request):
     except Exception as exc:  # noqa: BLE001 — UI hataya düşmesin
         return JsonResponse({"ok": False, "error": str(exc)}, status=500)
 
+    if created:
+        # Manuel dijital çıkış işlemi bir olaydır — kim, nereden, ne yaptı.
+        from api.events import EventType, log_event
+
+        action_label = "Start (AÇ)" if action == "start" else "Stop (KAPAT)"
+        station = getattr(sensor.connection, "station", None)
+        log_event(
+            EventType.COMMAND,
+            f"Manuel dijital çıkış: {sensor.name or ('sensör#' + str(sensor.pk))} → {action_label}",
+            severity="warning", request=request, station=station,
+        )
+
     return JsonResponse({
         "ok": True,
         "message": None if created else "Aynı komut zaten kuyrukta.",

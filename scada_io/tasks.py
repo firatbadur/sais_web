@@ -378,6 +378,25 @@ def execute_command(self, cmd_id: int):
             logger.exception("Writer close hatası")
 
 
+def _log_command_event(cmd: Command, *, status: str, message: str = "") -> None:
+    """Komut terminal durumunu (completed/failed/expired) olay kaydına yazar."""
+    from api.events import EventType, log_event
+
+    sensor = getattr(cmd, "sensor", None)
+    station = None
+    if sensor is not None and getattr(sensor, "connection_id", None):
+        station = getattr(sensor.connection, "station", None)
+    sensor_label = getattr(sensor, "name", None) or (f"sensör#{sensor.pk}" if sensor else "?")
+    severity = "info" if status == "completed" else "warning"
+    desc = f"Komut {status}: {sensor_label}"
+    if message:
+        desc += f" — {message}"
+    log_event(
+        EventType.COMMAND, desc, severity=severity,
+        user=getattr(cmd, "requested_by", None), station=station,
+    )
+
+
 def _retry_or_fail(cmd: Command, error: str) -> None:
     """attempt_count < max_attempts ise pending'e geri al, değilse failed."""
     now = timezone.now()
@@ -392,6 +411,7 @@ def _retry_or_fail(cmd: Command, error: str) -> None:
             completed_at=now,
             error_message=error[:500],
         )
+        _log_command_event(cmd, status="failed", message=error[:200])
 
 
 def _finalize_command(cmd: Command, *, status: str, error_message: str = "", response_data=None) -> None:
@@ -402,6 +422,9 @@ def _finalize_command(cmd: Command, *, status: str, error_message: str = "", res
         error_message=(error_message or "")[:500],
         response_data=response_data,
     )
+    # Terminal durumları olay kaydına yaz (retry-olmayan completed/failed).
+    if status in ("completed", "failed"):
+        _log_command_event(cmd, status=status, message=(error_message or "")[:200])
 
 
 @shared_task(name="scada_io.tasks.expire_commands")

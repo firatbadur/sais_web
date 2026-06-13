@@ -335,13 +335,20 @@ class LogTypeAdmin(admin.ModelAdmin):
 
 @admin.register(SystemLog)
 class SystemLogAdmin(admin.ModelAdmin):
-    list_display = ("id", "station", "type", "short_description", "time_iso")
-    list_filter = ("type", "station")
-    search_fields = ("description",)
+    list_display = ("id", "time_iso", "severity", "type", "user_label", "ip_address",
+                    "station", "short_description")
+    list_filter = ("severity", "type", "station")
+    search_fields = ("description", "username", "ip_address")
     date_hierarchy = "time_iso"
     readonly_fields = ("time_iso",)
-    autocomplete_fields = ("station",)
+    autocomplete_fields = ("station", "user")
     ordering = ("-time_iso",)
+
+    @admin.display(description="Kullanıcı")
+    def user_label(self, obj):
+        if obj.user_id:
+            return obj.user.get_username()
+        return obj.username or "—"
 
     @admin.display(description="Açıklama")
     def short_description(self, obj):

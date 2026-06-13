@@ -28,6 +28,7 @@ from django.views.generic import (
     View,
 )
 
+from api.events import EventType, log_event
 from api.models import (
     ApiLog,
     Calibration,
@@ -526,7 +527,9 @@ class CommandsReportView(OperatorRequiredMixin, ListView):
 
 
 class SystemLogsReportView(OperatorRequiredMixin, ListView):
-    """Sistem Logları — tip/istasyon/tarih filtreli, DataTables rapor."""
+    """Olaylar — tüm SCADA olaylarının (giriş/çıkış, komut, dijital G/Ç, manuel
+    işlem, sistem) tek raporu. Tip/önem/kullanıcı/istasyon/tarih filtreli,
+    DataTables tabanlı."""
     template_name = "dashboard/reports/system_logs.html"
     context_object_name = "rows"
     paginate_by = None
@@ -543,18 +546,30 @@ class SystemLogsReportView(OperatorRequiredMixin, ListView):
             station_id = int(gp.get("station") or 0) or None
         except (TypeError, ValueError):
             station_id = None
+        try:
+            user_id = int(gp.get("user") or 0) or None
+        except (TypeError, ValueError):
+            user_id = None
+        severity = gp.get("severity") or None
+        if severity not in {s for s, _l in SystemLog.SEVERITY_CHOICES}:
+            severity = None
         return {
             "submitted": bool(gp), "type_id": type_id, "station_id": station_id,
+            "user_id": user_id, "severity": severity,
             "start": parse_report_dt(gp.get("start")), "end": parse_report_dt(gp.get("end")),
         }
 
     def get_queryset(self):
         f = self._filters()
-        qs = SystemLog.objects.select_related("type", "station").order_by("-time_iso")
+        qs = SystemLog.objects.select_related("type", "station", "user").order_by("-time_iso")
         if f["type_id"]:
             qs = qs.filter(type_id=f["type_id"])
         if f["station_id"]:
             qs = qs.filter(station_id=f["station_id"])
+        if f["user_id"]:
+            qs = qs.filter(user_id=f["user_id"])
+        if f["severity"]:
+            qs = qs.filter(severity=f["severity"])
         if f["start"]:
             qs = qs.filter(time_iso__gte=f["start"])
         if f["end"]:
@@ -567,6 +582,11 @@ class SystemLogsReportView(OperatorRequiredMixin, ListView):
         ctx["filters"] = self._filters()
         ctx["log_types"] = LogType.objects.order_by("name")
         ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        ctx["severity_choices"] = SystemLog.SEVERITY_CHOICES
+        ctx["event_users"] = (
+            User.objects.filter(system_logs__isnull=False)
+            .distinct().order_by("username")
+        )
         ctx["default_limit"] = self.DEFAULT_LIMIT
         return ctx
 
@@ -825,8 +845,14 @@ class UserCreateView(AdminRequiredMixin, CreateView):
     success_url = reverse_lazy("dashboard:admin_users")
 
     def form_valid(self, form):
+        response = super().form_valid(form)
         messages.success(self.request, _("Kullanıcı oluşturuldu."))
-        return super().form_valid(form)
+        log_event(
+            EventType.USER_MGMT,
+            f"Kullanıcı oluşturuldu: {self.object.get_username()} (rol={getattr(self.object, 'rol', '?')})",
+            severity="warning", request=self.request,
+        )
+        return response
 
 
 class UserUpdateView(AdminRequiredMixin, UpdateView):
@@ -836,8 +862,14 @@ class UserUpdateView(AdminRequiredMixin, UpdateView):
     success_url = reverse_lazy("dashboard:admin_users")
 
     def form_valid(self, form):
+        response = super().form_valid(form)
         messages.success(self.request, _("Kullanıcı güncellendi."))
-        return super().form_valid(form)
+        log_event(
+            EventType.USER_MGMT,
+            f"Kullanıcı güncellendi: {self.object.get_username()}",
+            severity="warning", request=self.request,
+        )
+        return response
 
 
 class UserResetPasswordView(AdminRequiredMixin, TemplateView):
@@ -850,6 +882,11 @@ class UserResetPasswordView(AdminRequiredMixin, TemplateView):
         new_password = "".join(secrets.choice(alphabet) for _ in range(12))
         target.set_password(new_password)
         target.save()
+        log_event(
+            EventType.USER_MGMT,
+            f"Kullanıcı şifresi sıfırlandı: {target.get_username()}",
+            severity="warning", request=request,
+        )
         messages.success(
             request,
             _(
@@ -1150,6 +1187,10 @@ class BackupRestoreView(AdminRequiredMixin, TemplateView):
             if tier not in valid:
                 tier = "manual"
             backup_database_run.delay(tier=tier, force=True, user_id=request.user.id)
+            log_event(
+                EventType.BACKUP, f"Manuel yedekleme başlatıldı (tier={tier})",
+                severity="warning", request=request,
+            )
             messages.success(request, _("Yedekleme başlatıldı; birkaç saniye içinde listede görünür."))
 
         elif action == "run_restore":
@@ -1167,6 +1208,11 @@ class BackupRestoreView(AdminRequiredMixin, TemplateView):
                         backup_id=backup.id,
                         run_migrate=run_migrate,
                         user_id=request.user.id,
+                    )
+                    log_event(
+                        EventType.BACKUP,
+                        f"Veritabanı geri yükleme başlatıldı (yedek#{backup.id}, sürüm={backup.app_version})",
+                        severity="critical", request=request,
                     )
                     messages.warning(request, _(
                         "Geri yükleme başlatıldı. Sistem kısa süre kesintiye uğrayabilir; "
@@ -1197,6 +1243,7 @@ def _handle_license_action(request) -> None:
         try:
             lic = fetch_and_refresh()
             if lic.last_check_ok:
+                log_event(EventType.LICENSE, "Lisans yenilendi (manuel)", request=request)
                 messages.success(request, _("Lisans yenilendi."))
             else:
                 messages.warning(request, _("Lisans çekilemedi: %(e)s") % {"e": lic.last_error})
@@ -1212,6 +1259,10 @@ def _handle_license_action(request) -> None:
         try:
             token = json.loads(raw)
             apply_token(token, source="manual-ui")
+            log_event(
+                EventType.LICENSE, "Lisans token'ı elle uygulandı",
+                severity="warning", request=request,
+            )
             messages.success(request, _("Lisans uygulandı."))
         except json.JSONDecodeError:
             messages.error(request, _("Token JSON ayrıştırılamadı."))
@@ -1353,6 +1404,11 @@ class WebSettingsView(AdminRequiredMixin, TemplateView):
         ws.save()
         ok, error = web_proxy.apply(ws)
         if ok:
+            log_event(
+                EventType.CONFIG,
+                f"Web erişim ayarları değiştirildi (domain={ws.domain or '—'}, tls={ws.tls_mode})",
+                severity="warning", request=request,
+            )
             messages.success(request, _("Web erişim ayarları kaydedildi ve uygulandı."))
             if ws.tls_mode == ws.TLS_LETSENCRYPT and ws.enabled:
                 messages.info(request, _(

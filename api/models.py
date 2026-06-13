@@ -1014,14 +1014,45 @@ class LogType(models.Model):
 
 
 class SystemLog(models.Model):
-    """Sistem olay kaydı."""
+    """Sistem olay (event) kaydı — gerçek SCADA audit trail.
+
+    Tüm kullanıcı hareketleri (giriş/çıkış, manuel komut, yapılandırma
+    değişikliği), dijital giriş/çıkış tetiklemeleri ve sistem olayları tek bir
+    merkezi giriş noktasından (`api.events.log_event`) buraya yazılır. Kim
+    (`user`/`username`), nereden (`ip_address`), ne kadar önemli (`severity`)
+    bilgileri olayla birlikte saklanır.
+    """
+
+    SEVERITY_INFO = "info"
+    SEVERITY_WARNING = "warning"
+    SEVERITY_CRITICAL = "critical"
+    SEVERITY_CHOICES = [
+        (SEVERITY_INFO, "Bilgi"),
+        (SEVERITY_WARNING, "Uyarı"),
+        (SEVERITY_CRITICAL, "Kritik"),
+    ]
 
     station = models.ForeignKey(
         Station, on_delete=models.CASCADE, null=True, blank=True, related_name="system_logs",
     )
     type = models.ForeignKey(LogType, on_delete=models.CASCADE)
+    severity = models.CharField(
+        max_length=10, choices=SEVERITY_CHOICES, default=SEVERITY_INFO,
+        db_index=True, verbose_name="Önem Derecesi",
+    )
+    user = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="system_logs", verbose_name="Kullanıcı",
+    )
+    username = models.CharField(
+        max_length=150, blank=True, null=True, verbose_name="Kullanıcı Adı",
+        help_text="Olay anındaki kullanıcı adı (kullanıcı silinse/başarısız girişte de korunur).",
+    )
+    ip_address = models.GenericIPAddressField(
+        null=True, blank=True, verbose_name="IP Adresi",
+    )
     description = models.CharField(max_length=1000, blank=True, null=True, verbose_name="Açıklama")
-    time_iso = models.DateTimeField(auto_now_add=True, verbose_name="Kayıt Tarihi")
+    time_iso = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="Kayıt Tarihi")
 
     class Meta:
         db_table = "system_log"

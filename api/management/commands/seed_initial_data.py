@@ -10,7 +10,7 @@ Alan-özel (SAIS / Envisoft / Bakanlık) veriler için ayrı komut:
 """
 from django.core.management.base import BaseCommand
 
-from api.models import MessageTemplate, Parameter, RequestType, Station, StatusCode
+from api.models import LogType, MessageTemplate, Parameter, RequestType, Station, StatusCode
 
 
 # (parameter_name, parameter_txt, unit, unit_txt, device_channel_id,
@@ -202,11 +202,27 @@ class Command(BaseCommand):
             )
             created_msg += int(created)
 
+        # Olay (event) kategorileri — merkezi log_event motifinin kullandığı
+        # LogType kayıtları. Olay yazımı zaten get_or_create yapar; burada
+        # önceden tohumlamak rapor filtresinde tüm tiplerin görünmesini sağlar.
+        from api.events import EventType
+
+        created_logtype = 0
+        for name in (
+            EventType.LOGIN, EventType.LOGOUT, EventType.LOGIN_FAILED,
+            EventType.COMMAND, EventType.DIGITAL_IO, EventType.CONFIG,
+            EventType.USER_MGMT, EventType.BACKUP, EventType.LICENSE,
+            EventType.SCENARIO, EventType.CALIBRATION, EventType.SYSTEM,
+        ):
+            _, created = LogType.objects.get_or_create(name=name)
+            created_logtype += int(created)
+
         self.stdout.write(
             self.style.SUCCESS(
                 f"Parametreler: {created_params} yeni, "
                 f"Status kodları: {created_status} yeni, "
                 f"Talep tipleri: {created_request} yeni, "
-                f"Hazır mesajlar: {created_msg} yeni."
+                f"Hazır mesajlar: {created_msg} yeni, "
+                f"Olay tipleri: {created_logtype} yeni."
             )
         )
