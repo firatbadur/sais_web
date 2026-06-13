@@ -29,8 +29,6 @@ MENU = [
         "children": [
             {"label": _("Sensör Okumaları"), "url_name": "dashboard:reports_readings",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER)},
-            {"label": _("Aggregate (15dk/Saat/Gün)"), "url_name": "dashboard:reports_aggregates",
-             "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER)},
             {"label": _("Kalibrasyon Geçmişi"), "url_name": "dashboard:reports_calibrations",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER)},
             {"label": _("Kapanma Geçmişi"), "url_name": "dashboard:reports_power_offs",
@@ -65,22 +63,20 @@ MENU = [
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Kullanıcılar"), "url_name": "dashboard:admin_users",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
-            {"label": _("API Logları"), "url_name": "dashboard:admin_api_logs",
-             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
         ],
     },
     {
         "label": _("Yönetim"),
         "menu_key": "management",
         "icon": "ki-wifi",
-        "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
+        "roles": (ROLE_ADMIN, ROLE_OPERATOR),
         "children": [
             {"label": _("İstasyonlar"), "url_name": "dashboard:management_stations",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Bağlantılar"), "url_name": "dashboard:management_connections",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Sensörler"), "url_name": "dashboard:management_sensors",
-             "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER)},
+             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
         ],
     },
     {
@@ -104,6 +100,8 @@ MENU = [
             {"label": _("Lisans"), "url_name": "dashboard:admin_license",
              "roles": (ROLE_ADMIN,)},
             {"label": _("Web Erişim Ayarları"), "url_name": "dashboard:admin_web_settings",
+             "roles": (ROLE_ADMIN,)},
+            {"label": _("API Logları"), "url_name": "dashboard:admin_api_logs",
              "roles": (ROLE_ADMIN,)},
         ],
     },
@@ -147,18 +145,6 @@ def _filter_menu(items, user):
     return visible
 
 
-def _default_open_menu(user):
-    """Hiçbir grupta değilken (ör. anasayfa) role göre açık gelecek grup.
-
-    rol 1 → Yönetici, rol 2 → Operatör, rol 3 (ve diğer) → Raporlama.
-    """
-    if getattr(user, "is_superuser", False) or getattr(user, "rol", None) == ROLE_ADMIN:
-        return "admin"
-    if getattr(user, "rol", None) == ROLE_OPERATOR:
-        return "operator"
-    return "reports"
-
-
 def _active_menu_key(request):
     """Mevcut sayfanın bağlı olduğu menü grubunun menu_key'i (yoksa None)."""
     match = getattr(request, "resolver_match", None)
@@ -175,13 +161,12 @@ def _active_menu_key(request):
 def menu(request):
     """Sidebar partial'ı tarafından kullanılır.
 
-    Açık gelecek grup: önce mevcut sayfanın grubu; o bir gruba ait değilse
-    (ör. anasayfa) role-bazlı varsayılan grup.
+    Açık gelecek grup: yalnızca mevcut sayfanın bağlı olduğu grup. Bir gruba
+    ait olmayan sayfalarda (ör. anasayfa) hiçbir grup otomatik açılmaz.
     """
-    open_menu = _active_menu_key(request) or _default_open_menu(request.user)
     return {
         "dashboard_menu": _filter_menu(MENU, request.user),
-        "default_open_menu": open_menu,
+        "default_open_menu": _active_menu_key(request),
     }
 
 

@@ -818,7 +818,7 @@ class ConnectionsOverviewView(OperatorRequiredMixin, ListView):
     paginate_by = 50
 
 
-class SensorsOverviewView(RoleRequiredMixin, ListView):
+class SensorsOverviewView(OperatorRequiredMixin, ListView):
     model = Sensor
     template_name = "dashboard/management/sensors.html"
     context_object_name = "sensors"
@@ -908,7 +908,7 @@ class UserResetPasswordView(OperatorRequiredMixin, TemplateView):
         return redirect("dashboard:admin_user_edit", pk=target.pk)
 
 
-class ApiLogsView(OperatorRequiredMixin, ListView):
+class ApiLogsView(AdminRequiredMixin, ListView):
     """API Logları — gelen (inbound) + giden (outbound) HTTP trafiğinin standart
     rapor formatındaki görünümü. Yön/method/durum/arama/tarih filtreli,
     DataTables client-side. Filtre uygulanmadan son `DEFAULT_LIMIT` kayıt
