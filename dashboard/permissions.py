@@ -55,3 +55,14 @@ def user_has_role(user, *roles: int) -> bool:
     if user.is_superuser:
         return True
     return getattr(user, "rol", None) in roles
+
+
+def can_view_admin_events(user) -> bool:
+    """Sistem yöneticisinin (rol=1 / superuser) hareketlerini görme yetkisi.
+
+    Yalnızca admin/superuser, admin aktörlü olayları (SystemLog) görebilir;
+    operatör ve normal kullanıcı bu olayları ne raporlarda ne dashboard'da görür.
+    """
+    if getattr(user, "is_superuser", False):
+        return True
+    return getattr(user, "rol", None) == ROLE_ADMIN

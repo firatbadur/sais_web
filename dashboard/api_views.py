@@ -349,18 +349,25 @@ def home_events(request):
     Normal kullanıcı (rol=3) kullanıcı hareketlerini (giriş/çıkış/komut/
     yapılandırma/kullanıcı yönetimi/yedekleme/lisans) GÖREMEZ; yalnızca IO
     değişikliklerini (dijital giriş/çıkış + PowerOff + bad reading) görür.
+
+    Operatör (rol=2) sistem yöneticisinin (rol=1) hiçbir hareketini göremez;
+    admin aktörlü SystemLog kayıtları feed'den çıkarılır.
     """
     from api.events import EventType
-    from .permissions import ROLE_USER
+    from .permissions import ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER, can_view_admin_events
 
     now = timezone.now()
 
     events = []
 
     log_qs = SystemLog.objects.select_related("type", "user").order_by("-time_iso")
-    if getattr(request.user, "rol", None) == ROLE_USER and not request.user.is_superuser:
+    role = getattr(request.user, "rol", None)
+    if role == ROLE_USER and not request.user.is_superuser:
         # Salt-izleme: sadece IO değişiklikleri (kullanıcı audit trail'i gizli)
         log_qs = log_qs.filter(type__name=EventType.DIGITAL_IO)
+    elif role == ROLE_OPERATOR and not can_view_admin_events(request.user):
+        # Operatör sistem yöneticisinin hareketlerini göremez
+        log_qs = log_qs.exclude(user__rol=ROLE_ADMIN).exclude(user__is_superuser=True)
 
     for log in log_qs[:15]:
         actor = log.user.get_username() if log.user_id else (log.username or "")

@@ -67,6 +67,7 @@ from .permissions import (
     AdminRequiredMixin,
     OperatorRequiredMixin,
     RoleRequiredMixin,
+    can_view_admin_events,
     user_has_role,
 )
 
@@ -516,6 +517,9 @@ class CommandsReportView(OperatorRequiredMixin, ListView):
             qs = qs.filter(created_at__gte=f["start"])
         if f["end"]:
             qs = qs.filter(created_at__lte=f["end"])
+        # Operatör sistem yöneticisinin manuel komutlarını (hareketlerini) göremez.
+        if not can_view_admin_events(self.request.user):
+            qs = qs.exclude(requested_by__rol=ROLE_ADMIN).exclude(requested_by__is_superuser=True)
         return qs[: (self.MAX_ROWS if f["submitted"] else self.DEFAULT_LIMIT)]
 
     def get_context_data(self, **kwargs):
@@ -575,6 +579,9 @@ class SystemLogsReportView(OperatorRequiredMixin, ListView):
             qs = qs.filter(time_iso__gte=f["start"])
         if f["end"]:
             qs = qs.filter(time_iso__lte=f["end"])
+        # Operatör/normal kullanıcı sistem yöneticisinin hareketlerini göremez.
+        if not can_view_admin_events(self.request.user):
+            qs = qs.exclude(user__rol=ROLE_ADMIN).exclude(user__is_superuser=True)
         return qs[: (self.MAX_ROWS if f["submitted"] else self.DEFAULT_LIMIT)]
 
     def get_context_data(self, **kwargs):
@@ -584,10 +591,10 @@ class SystemLogsReportView(OperatorRequiredMixin, ListView):
         ctx["log_types"] = LogType.objects.order_by("name")
         ctx["stations"] = Station.objects.filter(active=True).order_by("name")
         ctx["severity_choices"] = SystemLog.SEVERITY_CHOICES
-        ctx["event_users"] = (
-            User.objects.filter(system_logs__isnull=False)
-            .distinct().order_by("username")
-        )
+        event_users = User.objects.filter(system_logs__isnull=False).distinct()
+        if not can_view_admin_events(self.request.user):
+            event_users = event_users.exclude(rol=ROLE_ADMIN).exclude(is_superuser=True)
+        ctx["event_users"] = event_users.order_by("username")
         ctx["default_limit"] = self.DEFAULT_LIMIT
         return ctx
 
