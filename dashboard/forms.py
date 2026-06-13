@@ -6,8 +6,26 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.utils.translation import gettext_lazy as _
 
+from .permissions import ROLE_ADMIN, user_has_role
+
 
 User = get_user_model()
+
+
+def _restrict_rol_for_operator(form, acting_user):
+    """Operatör rol atamasında 'Sistem Yöneticisi' (rol=1) seçemez.
+
+    Yönetici (rol=1 / superuser) tüm rolleri atayabilir; operatör için `rol`
+    alanının seçeneklerinden Sistem Yöneticisi çıkarılır. Choice listede
+    olmadığından bypass'lı POST'lar da form validasyonunda reddedilir.
+    """
+    if acting_user is None or user_has_role(acting_user, ROLE_ADMIN):
+        return
+    rol_field = form.fields.get("rol")
+    if rol_field is not None:
+        rol_field.choices = [
+            c for c in rol_field.choices if str(c[0]) != str(ROLE_ADMIN)
+        ]
 
 
 class DashboardLoginForm(AuthenticationForm):
@@ -39,13 +57,18 @@ class AdminUserCreateForm(UserCreationForm):
         fields = ("username", "email", "first_name", "last_name", "rol", "is_active",
                   "phone_number", "sms_enabled", "email_enabled")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, acting_user=None, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             if isinstance(field.widget, (forms.CheckboxInput,)):
                 field.widget.attrs.setdefault("class", "form-check-input")
             else:
                 field.widget.attrs.setdefault("class", "form-control form-control-solid")
+        # Yeni kullanıcıda SMS + e-posta bildirimi varsayılan açık gelsin.
+        if not self.is_bound:
+            self.fields["sms_enabled"].initial = True
+            self.fields["email_enabled"].initial = True
+        _restrict_rol_for_operator(self, acting_user)
 
 
 class AdminUserUpdateForm(forms.ModelForm):
@@ -56,13 +79,14 @@ class AdminUserUpdateForm(forms.ModelForm):
         fields = ("username", "email", "first_name", "last_name", "rol", "is_active",
                   "phone_number", "sms_enabled", "email_enabled")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, acting_user=None, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             if isinstance(field.widget, (forms.CheckboxInput,)):
                 field.widget.attrs.setdefault("class", "form-check-input")
             else:
                 field.widget.attrs.setdefault("class", "form-control form-control-solid")
+        _restrict_rol_for_operator(self, acting_user)
 
 
 class ProfileForm(forms.ModelForm):
