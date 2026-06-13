@@ -1,54 +1,115 @@
 {% extends "dashboard/base.html" %}
-{% load i18n %}
+{% load i18n dashboard_extras %}
 
 {% block title %}{% trans "API Logları" %}{% endblock %}
 {% block page_title %}{% trans "API Logları" %}{% endblock %}
 
+{% block extra_head %}
+<style>
+    #kt_app_content_container { opacity: 0; }
+    body.page-ready #kt_app_content_container { opacity: 1; transition: opacity 0.18s ease-in-out; }
+    #report-results-card .dt-buttons .btn { margin-right: 0.35rem; padding: 0.45rem 0.85rem; }
+    .flatpickr-calendar { z-index: 10000; }
+    #report-table td.url-cell { max-width: 360px; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="card">
-    <div class="card-header"><h3 class="card-title">{% trans "Gelen + Giden HTTP Trafiği" %}</h3></div>
-    <div class="card-body">
+<!-- ============ FİLTRE FORMU ============ -->
+<div class="card mb-5 mb-xl-8">
+    <div class="card-header border-0 pt-6">
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "API Logları" %}</h3>
+    </div>
+    <div class="card-body pt-2">
+        <form method="get" id="report-filter-form" class="row g-5">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Yön" %}</label>
+                <select name="direction" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
+                    <option value="">{% trans "Hepsi" %}</option>
+                    {% for val, label in direction_choices %}<option value="{{ val }}" {% if filters.direction == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Method" %}</label>
+                <select name="method" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
+                    <option value="">{% trans "Hepsi" %}</option>
+                    {% for m in methods %}<option value="{{ m }}" {% if filters.method == m %}selected{% endif %}>{{ m }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Durum" %}</label>
+                <select name="status_class" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
+                    <option value="">{% trans "Hepsi" %}</option>
+                    {% for val, label in status_class_choices %}<option value="{{ val }}" {% if filters.status_class == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Arama" %}</label>
+                <input type="text" name="q" class="form-control" value="{{ filters.search }}" placeholder="{% trans 'URL / host / modül / IP' %}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Başlangıç Tarihi" %}</label>
+                <input type="text" name="start" id="filter-start" class="form-control" value="{{ filters.start|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Bitiş Tarihi" %}</label>
+                <input type="text" name="end" id="filter-end" class="form-control" value="{{ filters.end|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary"><i class="ki-outline ki-magnifier fs-3"></i>{% trans "Filtrele" %}</button>
+                {% if filters.submitted %}<a href="{% url 'dashboard:admin_api_logs' %}" class="btn btn-light-warning ms-2"><i class="ki-outline ki-arrows-circle fs-3"></i>{% trans "Sıfırla" %}</a>{% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ============ RAPOR ÇIKTISI ============ -->
+<div class="card" id="report-results-card">
+    <div class="card-header border-0 pt-6">
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Gelen + Giden HTTP Trafiği" %}</h3>
+        {% if not filters.submitted %}<div class="card-toolbar"><span class="badge badge-light-primary">{% blocktrans %}Son {{ default_limit }} kayıt{% endblocktrans %}</span></div>{% endif %}
+    </div>
+    <div class="card-body pt-2">
         <div class="table-responsive">
-            <table class="table table-row-dashed align-middle gs-0 gy-3">
-                <thead class="fs-7 fw-bold text-uppercase text-gray-500">
-                    <tr>
-                        <th>{% trans "Zaman" %}</th>
-                        <th>{% trans "Yön" %}</th>
-                        <th>{% trans "Method" %}</th>
-                        <th>{% trans "URL" %}</th>
-                        <th class="text-end">{% trans "Status" %}</th>
-                        <th class="text-end">{% trans "ms" %}</th>
-                        <th>{% trans "IP / Host" %}</th>
-                        <th>{% trans "Kullanıcı" %}</th>
-                    </tr>
-                </thead>
+            <table id="report-table" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
+                <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
+                    <th>{% trans "Zaman" %}</th>
+                    <th>{% trans "Yön" %}</th>
+                    <th>{% trans "Method" %}</th>
+                    <th>{% trans "URL" %}</th>
+                    <th class="text-end">{% trans "Status" %}</th>
+                    <th class="text-end">{% trans "Süre (ms)" %}</th>
+                    <th>{% trans "IP / Host" %}</th>
+                    <th>{% trans "Kullanıcı / Modül" %}</th>
+                </tr></thead>
                 <tbody>
-                    {% for l in logs %}
-                        <tr>
-                            <td class="text-muted" style="white-space:nowrap;">{{ l.created_at|date:"Y-m-d H:i:s" }}</td>
-                            <td>
-                                {% if l.direction == 'in' %}<span class="badge badge-light-info">IN</span>
-                                {% else %}<span class="badge badge-light-warning">OUT</span>{% endif %}
-                            </td>
-                            <td class="fw-bold">{{ l.method }}</td>
-                            <td class="text-truncate" style="max-width:350px;" title="{{ l.url }}">{{ l.url }}</td>
-                            <td class="text-end">
-                                {% if l.response_status >= 500 %}<span class="text-danger fw-bold">{{ l.response_status }}</span>
-                                {% elif l.response_status >= 400 %}<span class="text-warning fw-bold">{{ l.response_status }}</span>
-                                {% elif l.response_status %}<span class="text-success">{{ l.response_status }}</span>
-                                {% else %}—{% endif %}
-                            </td>
-                            <td class="text-end text-muted">{{ l.duration_ms|default:"—" }}</td>
-                            <td class="text-muted">{{ l.remote_ip|default:l.target_host|default:"—" }}</td>
-                            <td class="text-muted">{{ l.user.username|default:"—" }}</td>
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="8" class="text-center text-muted py-5">{% trans "API log kaydı yok." %}</td></tr>
+                    {% for l in rows %}
+                    <tr>
+                        <td data-order="{{ l.created_at|date:'U' }}" style="white-space:nowrap;">{{ l.created_at|date:"d.m.Y H:i:s" }}</td>
+                        <td>
+                            {% if l.direction == 'in' %}<span class="badge badge-light-info">IN</span>
+                            {% else %}<span class="badge badge-light-warning">OUT</span>{% endif %}
+                        </td>
+                        <td class="fw-bold">{{ l.method }}</td>
+                        <td class="url-cell text-truncate" title="{{ l.url }}">{{ l.url }}</td>
+                        <td class="text-end" data-order="{{ l.response_status|default:0 }}">
+                            {% if l.response_status >= 500 %}<span class="text-danger fw-bold">{{ l.response_status }}</span>
+                            {% elif l.response_status >= 400 %}<span class="text-warning fw-bold">{{ l.response_status }}</span>
+                            {% elif l.response_status %}<span class="text-success fw-bold">{{ l.response_status }}</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-end text-muted" data-order="{{ l.duration_ms|default:0 }}">{{ l.duration_ms|default:"—" }}</td>
+                        <td class="text-muted">{{ l.remote_ip|default:l.target_host|default:"—" }}</td>
+                        <td class="text-muted">{{ l.user.get_username|default:l.source_component|default:"—" }}</td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        {% include "dashboard/partials/pagination.html" %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% include "dashboard/partials/report_table_js.html" with order_col=0 %}
 {% endblock %}

@@ -2304,3 +2304,42 @@ msgstr "Sat"
 
 msgid "Paz"
 msgstr "Sun"
+
+msgid "SMS / E-posta ayarları salt görüntülemedir; değiştirme yetkisi yöneticidedir."
+msgstr "SMS / e-mail settings are read-only; only an administrator can change them."
+
+msgid "SMS/E-posta ayarlarını değiştirme yetkiniz yok (salt görüntüleme)."
+msgstr "You are not authorized to change SMS/e-mail settings (read-only)."
+
+msgid "Süre (ms)"
+msgstr "Duration (ms)"
+
+msgid "Arama"
+msgstr "Search"
+
+msgid "2xx Başarılı"
+msgstr "2xx Success"
+
+msgid "3xx Yönlendirme"
+msgstr "3xx Redirect"
+
+msgid "4xx İstemci Hatası"
+msgstr "4xx Client Error"
+
+msgid "5xx Sunucu Hatası"
+msgstr "5xx Server Error"
+
+msgid "Hata (mesajlı)"
+msgstr "Error (with message)"
+
+msgid "Gelen (IN)"
+msgstr "Inbound (IN)"
+
+msgid "Giden (OUT)"
+msgstr "Outbound (OUT)"
+
+msgid "Kullanıcı / Modül"
+msgstr "User / Module"
+
+msgid "URL / host / modül / IP"
+msgstr "URL / host / module / IP"

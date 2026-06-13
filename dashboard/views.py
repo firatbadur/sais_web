@@ -14,6 +14,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
+from django.db.models import Q
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -844,6 +845,11 @@ class UserCreateView(OperatorRequiredMixin, CreateView):
     template_name = "dashboard/admin_pages/user_form.html"
     success_url = reverse_lazy("dashboard:admin_users")
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["acting_user"] = self.request.user  # operatör rol=1 atayamaz
+        return kwargs
+
     def form_valid(self, form):
         response = super().form_valid(form)
         messages.success(self.request, _("Kullanıcı oluşturuldu."))
@@ -860,6 +866,11 @@ class UserUpdateView(OperatorRequiredMixin, UpdateView):
     form_class = AdminUserUpdateForm
     template_name = "dashboard/admin_pages/user_form.html"
     success_url = reverse_lazy("dashboard:admin_users")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["acting_user"] = self.request.user  # operatör rol=1 atayamaz
+        return kwargs
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -898,11 +909,85 @@ class UserResetPasswordView(OperatorRequiredMixin, TemplateView):
 
 
 class ApiLogsView(OperatorRequiredMixin, ListView):
-    model = ApiLog
+    """API Logları — gelen (inbound) + giden (outbound) HTTP trafiğinin standart
+    rapor formatındaki görünümü. Yön/method/durum/arama/tarih filtreli,
+    DataTables client-side. Filtre uygulanmadan son `DEFAULT_LIMIT` kayıt
+    gösterilir; filtreyle `MAX_ROWS`'a kadar."""
     template_name = "dashboard/admin_pages/api_logs.html"
-    context_object_name = "logs"
-    paginate_by = 50
-    ordering = ["-created_at"]
+    context_object_name = "rows"
+    paginate_by = None
+    MAX_ROWS = 5000
+    DEFAULT_LIMIT = 200
+
+    DIRECTION_CHOICES = (
+        ("in", _("Gelen (IN)")),
+        ("out", _("Giden (OUT)")),
+    )
+    STATUS_CLASS_CHOICES = (
+        ("2xx", _("2xx Başarılı")),
+        ("3xx", _("3xx Yönlendirme")),
+        ("4xx", _("4xx İstemci Hatası")),
+        ("5xx", _("5xx Sunucu Hatası")),
+        ("err", _("Hata (mesajlı)")),
+    )
+
+    def _filters(self):
+        gp = self.request.GET
+        direction = gp.get("direction") or ""
+        if direction not in dict(self.DIRECTION_CHOICES):
+            direction = ""
+        method = (gp.get("method") or "").upper().strip()
+        status_class = gp.get("status_class") or ""
+        if status_class not in dict(self.STATUS_CLASS_CHOICES):
+            status_class = ""
+        return {
+            "submitted": bool(gp), "direction": direction, "method": method,
+            "status_class": status_class, "search": (gp.get("q") or "").strip(),
+            "start": parse_report_dt(gp.get("start")), "end": parse_report_dt(gp.get("end")),
+        }
+
+    def get_queryset(self):
+        f = self._filters()
+        qs = ApiLog.objects.select_related("user").order_by("-created_at")
+        if f["direction"]:
+            qs = qs.filter(direction=f["direction"])
+        if f["method"]:
+            qs = qs.filter(method=f["method"])
+        sc = f["status_class"]
+        if sc == "2xx":
+            qs = qs.filter(response_status__gte=200, response_status__lt=300)
+        elif sc == "3xx":
+            qs = qs.filter(response_status__gte=300, response_status__lt=400)
+        elif sc == "4xx":
+            qs = qs.filter(response_status__gte=400, response_status__lt=500)
+        elif sc == "5xx":
+            qs = qs.filter(response_status__gte=500)
+        elif sc == "err":
+            qs = qs.exclude(error_message="")
+        if f["search"]:
+            qs = qs.filter(
+                Q(url__icontains=f["search"])
+                | Q(target_host__icontains=f["search"])
+                | Q(source_component__icontains=f["search"])
+                | Q(remote_ip__icontains=f["search"])
+            )
+        if f["start"]:
+            qs = qs.filter(created_at__gte=f["start"])
+        if f["end"]:
+            qs = qs.filter(created_at__lte=f["end"])
+        return qs[: (self.MAX_ROWS if f["submitted"] else self.DEFAULT_LIMIT)]
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["filters"] = self._filters()
+        ctx["direction_choices"] = self.DIRECTION_CHOICES
+        ctx["status_class_choices"] = self.STATUS_CLASS_CHOICES
+        ctx["methods"] = list(
+            ApiLog.objects.exclude(method="")
+            .values_list("method", flat=True).distinct().order_by("method")
+        )
+        ctx["default_limit"] = self.DEFAULT_LIMIT
+        return ctx
 
 
 class SystemControlView(OperatorRequiredMixin, TemplateView):
@@ -1476,13 +1561,26 @@ class NotificationCenterView(OperatorRequiredMixin, TemplateView):
         from api.models import MessageTemplate, NotificationSettings
         ns = NotificationSettings.load()
         ctx = super().get_context_data(**kwargs)
-        ctx.setdefault("settings_form", NotificationSettingsForm(instance=ns))
+        can_edit = user_has_role(self.request.user, ROLE_ADMIN)
+        form = ctx.get("settings_form") or NotificationSettingsForm(instance=ns)
+        if not can_edit:
+            # Operatör salt görüntüleme: tüm ayar alanları kilitli. Django'da
+            # disabled=True hem render'da disabled attribute basar hem POST
+            # verisini yok sayar (sadece görünür, yazılamaz).
+            for field in form.fields.values():
+                field.disabled = True
+        ctx["settings_form"] = form
+        ctx["can_edit"] = can_edit
         ctx["ns"] = ns
         ctx["templates"] = MessageTemplate.objects.all()[:100]
         return ctx
 
     def post(self, request, *args, **kwargs):
         from api.models import NotificationSettings
+        # Ayar kaydı yalnızca yöneticide; operatör salt görüntüler.
+        if not user_has_role(request.user, ROLE_ADMIN):
+            messages.error(request, _("SMS/E-posta ayarlarını değiştirme yetkiniz yok (salt görüntüleme)."))
+            return redirect("dashboard:admin_notifications")
         ns = NotificationSettings.load()
         form = NotificationSettingsForm(request.POST, instance=ns)
         if not form.is_valid():
