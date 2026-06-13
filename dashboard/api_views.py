@@ -119,7 +119,7 @@ def home_snapshot(request):
             "sensor_type": stype,
             "station_name": station.name if station else None,
             "connection": connection.name if connection else None,
-            "parameter_name": (parameter.parameter_name if parameter else None) or "-",
+            "parameter_name": (parameter.display_name if parameter else None) or "-",
             "unit": (parameter.unit_txt if parameter else "") or (parameter.unit if parameter else "") or "",
             "value": latest.value,
             "is_active": is_active,
@@ -301,7 +301,7 @@ def home_trend(request):
 
     series = []
     for sensor in top_sensors:
-        label = sensor.parameter.parameter_name if sensor.parameter else f"Sensor-{sensor.id}"
+        label = sensor.parameter.display_name if sensor.parameter else f"Sensor-{sensor.id}"
 
         if bucket_level == "raw":
             readings = (
@@ -407,7 +407,7 @@ def home_events(request):
         sensor_label = "?"
         if r.sensor:
             param = getattr(r.sensor, "parameter", None)
-            sensor_label = param.parameter_name if param else f"Sensor-{r.sensor.id}"
+            sensor_label = param.display_name if param else f"Sensor-{r.sensor.id}"
         events.append({
             "kind": "bad_reading",
             "time": r.time_iso.isoformat() if r.time_iso else None,
@@ -484,7 +484,7 @@ def station_parameters(request):
         stype = sensors[0].sensor_type if sensors else None
         item = {
             "id": p.id,
-            "text": p.parameter_name or f"Parametre {p.id}",
+            "text": p.display_name,
             "unit": p.unit_txt or p.unit or "",
         }
         if stype in (0, 1):
@@ -939,8 +939,8 @@ def notification_templates(request):
 # --------------------------------------------------------------------------- #
 
 def _sensor_label(s):
-    if s.parameter and s.parameter.parameter_name:
-        return s.parameter.parameter_name
+    if s.parameter and (s.parameter.parameter_txt or s.parameter.parameter_name):
+        return s.parameter.display_name
     return s.brand or s.model or f"Sensor {s.pk}"
 
 
@@ -959,7 +959,7 @@ def alarm_io(request):
         return JsonResponse({"analog": [], "digital": []})
 
     analog = [
-        {"id": p.id, "text": p.parameter_name or f"Parametre {p.id}"}
+        {"id": p.id, "text": p.display_name}
         for p in Parameter.objects.filter(
             sensors__connection__station_id=station_id,
             sensors__sensor_type__in=(0, 1),
@@ -998,7 +998,7 @@ def alarm_rules(request):
             qs = qs.exclude(rule_type=AlarmRule.RULE_ANALOG)
         items = [{
             "id": r.pk, "station": r.station.name if r.station else "",
-            "channel": (r.parameter.parameter_name if r.parameter else "") if r.rule_type == AlarmRule.RULE_ANALOG else "",
+            "channel": (r.parameter.display_name if r.parameter else "") if r.rule_type == AlarmRule.RULE_ANALOG else "",
             "type_label": r.type_label, "period": r.get_period_minutes_display(),
             "min": r.min_value, "max": r.max_value,
             "channels": (("SMS " if r.send_sms else "") + ("E-posta" if r.send_email else "")).strip() or "-",
@@ -1120,7 +1120,7 @@ def _serialize_scenario(sc, *, full=False):
     if full:
         data["parameters"] = [{
             "parameter_id": p.parameter_id,
-            "parameter_name": p.parameter.parameter_name if p.parameter_id else "",
+            "parameter_name": p.parameter.display_name if p.parameter_id else "",
             "min_value": p.min_value,
             "max_value": p.max_value,
             "ministry_param_code": p.ministry_param_code,
@@ -1253,7 +1253,7 @@ def scenario_save(request):
             has_max = mx not in ("", None)
             if sc.kind == Scenario.KIND_AUTO and not has_min and not has_max:
                 return JsonResponse(
-                    {"ok": False, "error": f"{param.parameter_name}: Min veya Max zorunlu."},
+                    {"ok": False, "error": f"{param.display_name}: Min veya Max zorunlu."},
                     status=400,
                 )
             ScenarioParameter.objects.create(
@@ -1625,7 +1625,7 @@ def scenario_digital_sensors(request):
     )
     items = [{
         "id": s.id,
-        "text": (s.parameter.parameter_name if s.parameter_id else None) or f"Sensör {s.id}",
+        "text": (s.parameter.display_name if s.parameter_id else None) or f"Sensör {s.id}",
     } for s in sensors]
     return JsonResponse({"results": items})
 
@@ -1671,7 +1671,7 @@ def calibration_params(request):
         items.append({
             "sensor_id": s.id,
             "parameter_id": p.id,
-            "text": p.parameter_name or f"Parametre {p.id}",
+            "text": p.display_name,
             "unit": p.unit_txt or p.unit or "",
             "min_range": p.min_range,
             "max_range": p.max_range,

@@ -29,7 +29,7 @@
                     {% for s in sensors %}
                         <tr>
                             <td>{{ s.pk }}</td>
-                            <td class="fw-semibold">{{ s.parameter.parameter_name|default:"-" }}</td>
+                            <td class="fw-semibold">{{ s.parameter.display_name|default:"-" }}</td>
                             <td>{{ s.connection.name|default:"-" }}</td>
                             <td>{{ s.scan_group.name|default:"—" }}</td>
                             <td class="text-end">{{ s.slave_id|default:"—" }}</td>

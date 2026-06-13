@@ -337,6 +337,16 @@ class Parameter(models.Model):
     def __str__(self):
         return self.parameter_name or f"Parameter {self.pk}"
 
+    @property
+    def display_name(self):
+        """Kullanıcıya (dashboard) gösterilecek ad: okunabilir Türkçe metin
+        (`parameter_txt`) varsa onu, yoksa kod adını (`parameter_name`) döner.
+
+        `parameter_name` Bakanlık/Envisoft kanal kodudur ("CozunmusOksijen");
+        UI'da `parameter_txt` ("Çözünmüş Oksijen") tercih edilir.
+        """
+        return self.parameter_txt or self.parameter_name or f"Parameter {self.pk}"
+
 
 class ScanGroup(models.Model):
     """Modbus batch register okuma bloğu (Geo SCADA 'scanner' pattern).

@@ -90,11 +90,18 @@
                 {% for field in settings_form %}{% for e in field.errors %}<div>{{ field.label }}: {{ e }}</div>{% endfor %}{% endfor %}
             </div>
             {% endif %}
+            {% if can_edit %}
             <div class="d-flex justify-content-end mt-5">
                 <button type="submit" class="btn btn-primary">
                     <i class="ki-outline ki-check fs-4"></i>{% trans "Kaydet" %}
                 </button>
             </div>
+            {% else %}
+            <div class="alert alert-light-info d-flex align-items-center mt-5">
+                <i class="ki-outline ki-information-5 fs-2 text-info me-3"></i>
+                <span>{% trans "SMS / E-posta ayarları salt görüntülemedir; değiştirme yetkisi yöneticidedir." %}</span>
+            </div>
+            {% endif %}
         </form>
     </div>
 

@@ -98,7 +98,7 @@
                     <optgroup label="{% trans 'Analog' %}">
                         {% for p in parameters_analog %}
                             <option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>
-                                {{ p.parameter_name }}{% if p.unit_txt %} ({{ p.unit_txt }}){% elif p.unit %} ({{ p.unit }}){% endif %}
+                                {{ p.display_name }}{% if p.unit_txt %} ({{ p.unit_txt }}){% elif p.unit %} ({{ p.unit }}){% endif %}
                             </option>
                         {% endfor %}
                     </optgroup>
@@ -107,7 +107,7 @@
                     <optgroup label="{% trans 'Dijital' %}">
                         {% for p in parameters_digital %}
                             <option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>
-                                {{ p.parameter_name }}
+                                {{ p.display_name }}
                             </option>
                         {% endfor %}
                     </optgroup>
@@ -116,7 +116,7 @@
                     <optgroup label="{% trans 'Diğer' %}">
                         {% for p in parameters_other %}
                             <option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>
-                                {{ p.parameter_name }}{% if p.unit_txt %} ({{ p.unit_txt }}){% elif p.unit %} ({{ p.unit }}){% endif %}
+                                {{ p.display_name }}{% if p.unit_txt %} ({{ p.unit_txt }}){% elif p.unit %} ({{ p.unit }}){% endif %}
                             </option>
                         {% endfor %}
                     </optgroup>
@@ -244,7 +244,7 @@
                             <tr>
                                 {% if is_raw %}
                                     <td data-order="{{ r.time_iso|date:'U' }}">{{ r.time_iso|date:"d.m.Y H:i:s" }}</td>
-                                    <td>{{ r.sensor.parameter.parameter_name|default:r.sensor_id }}</td>
+                                    <td>{{ r.sensor.parameter.display_name|default:r.sensor_id }}</td>
                                     <td class="text-end fw-semibold" data-order="{{ r.value|default_if_none:'' }}">{{ r.value|default_if_none:"—" }}</td>
                                     <td class="text-muted">{{ r.sensor.parameter.unit_txt|default:r.sensor.parameter.unit|default:"" }}</td>
                                     <td>
@@ -259,7 +259,7 @@
                                     </td>
                                 {% else %}
                                     <td data-order="{{ r.bucket_start|date:'U' }}">{{ r.bucket_start|date:"d.m.Y H:i" }}</td>
-                                    <td>{{ r.sensor.parameter.parameter_name|default:r.sensor_id }}</td>
+                                    <td>{{ r.sensor.parameter.display_name|default:r.sensor_id }}</td>
                                     <td class="text-end fw-semibold" data-order="{{ r.avg_value|default_if_none:'' }}">{{ r.avg_value|default_if_none:"—" }}</td>
                                     <td class="text-end text-muted" data-order="{{ r.min_value|default_if_none:'' }}">{{ r.min_value|default_if_none:"—" }}</td>
                                     <td class="text-end text-muted" data-order="{{ r.max_value|default_if_none:'' }}">{{ r.max_value|default_if_none:"—" }}</td>

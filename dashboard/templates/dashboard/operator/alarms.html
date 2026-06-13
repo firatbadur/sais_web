@@ -119,7 +119,7 @@
                             {% for r in analog_rules %}
                             <tr>
                                 <td>{{ r.station.name }}</td>
-                                <td>{{ r.parameter.parameter_name|default:"—" }}</td>
+                                <td>{{ r.parameter.display_name|default:"—" }}</td>
                                 <td>{{ r.get_period_minutes_display }}</td>
                                 <td>{{ r.type_label }}</td>
                                 <td class="text-end">{{ r.min_value|default_if_none:"—" }}</td>

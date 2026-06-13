@@ -75,7 +75,7 @@
                     {% for c in rows %}
                     <tr>
                         <td data-order="{{ c.time_iso|date:'U' }}">{{ c.time_iso|date:"d.m.Y H:i:s" }}</td>
-                        <td>{{ c.sensor.parameter.parameter_name|default:c.sensor_id }}</td>
+                        <td>{{ c.sensor.parameter.display_name|default:c.sensor_id }}</td>
                         <td>{{ c.get_type_display }}</td>
                         <td class="text-end">{{ c.cal_ref|default_if_none:"—" }}</td>
                         <td class="text-end">{{ c.cal_average|default_if_none:"—" }}</td>

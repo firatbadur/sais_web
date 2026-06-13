@@ -30,9 +30,9 @@
             <div class="col-md-4">
                 <label class="form-label fw-semibold">{% trans "Sensör Seçimi" %}</label>
                 <select name="parameter" id="filter-parameters" class="form-select" data-control="select2" data-placeholder='{% trans "Sensör seçiniz (aranabilir)" %}' multiple>
-                    {% if parameters_analog %}<optgroup label="{% trans 'Analog' %}">{% for p in parameters_analog %}<option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>{{ p.parameter_name }}</option>{% endfor %}</optgroup>{% endif %}
-                    {% if parameters_digital %}<optgroup label="{% trans 'Dijital' %}">{% for p in parameters_digital %}<option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>{{ p.parameter_name }}</option>{% endfor %}</optgroup>{% endif %}
-                    {% if parameters_other %}<optgroup label="{% trans 'Diğer' %}">{% for p in parameters_other %}<option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>{{ p.parameter_name }}</option>{% endfor %}</optgroup>{% endif %}
+                    {% if parameters_analog %}<optgroup label="{% trans 'Analog' %}">{% for p in parameters_analog %}<option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>{{ p.display_name }}</option>{% endfor %}</optgroup>{% endif %}
+                    {% if parameters_digital %}<optgroup label="{% trans 'Dijital' %}">{% for p in parameters_digital %}<option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>{{ p.display_name }}</option>{% endfor %}</optgroup>{% endif %}
+                    {% if parameters_other %}<optgroup label="{% trans 'Diğer' %}">{% for p in parameters_other %}<option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>{{ p.display_name }}</option>{% endfor %}</optgroup>{% endif %}
                 </select>
                 <div class="form-text">{% trans "Sensör seçilmezse o istasyonun tüm sensörleri gösterilir." %}</div>
             </div>
@@ -79,7 +79,7 @@
                     {% for r in rows %}
                     <tr>
                         <td data-order="{{ r.bucket_start|date:'U' }}">{{ r.bucket_start|date:"d.m.Y H:i" }}</td>
-                        <td>{{ r.sensor.parameter.parameter_name|default:r.sensor_id }}</td>
+                        <td>{{ r.sensor.parameter.display_name|default:r.sensor_id }}</td>
                         <td class="text-end fw-semibold" data-order="{{ r.avg_value|default_if_none:'' }}">{{ r.avg_value|default_if_none:"—" }}</td>
                         <td class="text-end text-muted" data-order="{{ r.min_value|default_if_none:'' }}">{{ r.min_value|default_if_none:"—" }}</td>
                         <td class="text-end text-muted" data-order="{{ r.max_value|default_if_none:'' }}">{{ r.max_value|default_if_none:"—" }}</td>
