@@ -831,14 +831,14 @@ class SensorsOverviewView(RoleRequiredMixin, ListView):
 # Admin pages (rol=1 only)
 # --------------------------------------------------------------------------- #
 
-class UserListView(AdminRequiredMixin, ListView):
+class UserListView(OperatorRequiredMixin, ListView):
     model = User
     template_name = "dashboard/admin_pages/user_list.html"
     context_object_name = "users"
     paginate_by = 50
 
 
-class UserCreateView(AdminRequiredMixin, CreateView):
+class UserCreateView(OperatorRequiredMixin, CreateView):
     model = User
     form_class = AdminUserCreateForm
     template_name = "dashboard/admin_pages/user_form.html"
@@ -855,7 +855,7 @@ class UserCreateView(AdminRequiredMixin, CreateView):
         return response
 
 
-class UserUpdateView(AdminRequiredMixin, UpdateView):
+class UserUpdateView(OperatorRequiredMixin, UpdateView):
     model = User
     form_class = AdminUserUpdateForm
     template_name = "dashboard/admin_pages/user_form.html"
@@ -872,7 +872,7 @@ class UserUpdateView(AdminRequiredMixin, UpdateView):
         return response
 
 
-class UserResetPasswordView(AdminRequiredMixin, TemplateView):
+class UserResetPasswordView(OperatorRequiredMixin, TemplateView):
     """Admin, user'a rastgele geçici şifre atar — UI'da gösterilir."""
     template_name = "dashboard/admin_pages/user_reset_password.html"
 
@@ -897,7 +897,7 @@ class UserResetPasswordView(AdminRequiredMixin, TemplateView):
         return redirect("dashboard:admin_user_edit", pk=target.pk)
 
 
-class ApiLogsView(AdminRequiredMixin, ListView):
+class ApiLogsView(OperatorRequiredMixin, ListView):
     model = ApiLog
     template_name = "dashboard/admin_pages/api_logs.html"
     context_object_name = "logs"
@@ -905,7 +905,7 @@ class ApiLogsView(AdminRequiredMixin, ListView):
     ordering = ["-created_at"]
 
 
-class SystemControlView(AdminRequiredMixin, TemplateView):
+class SystemControlView(OperatorRequiredMixin, TemplateView):
     """Yönetici → Sistem Kontrol.
 
     Üç global aç/kapa (SIM, Envisoft, Polling) + manuel/haftalık yıkama
@@ -1106,7 +1106,7 @@ def _celery_status():
 # Yönetici: Veritabanı Yedekleme / Geri Yükleme
 # --------------------------------------------------------------------------- #
 
-class BackupRestoreView(AdminRequiredMixin, TemplateView):
+class BackupRestoreView(OperatorRequiredMixin, TemplateView):
     """Yönetici → Yedekleme.
 
     Tier (günlük/haftalık/aylık/yıllık/manuel) politikalarını yönetir, manuel
@@ -1463,7 +1463,7 @@ class WebSettingsView(AdminRequiredMixin, TemplateView):
         return redirect("dashboard:admin_web_settings")
 
 
-class NotificationCenterView(AdminRequiredMixin, TemplateView):
+class NotificationCenterView(OperatorRequiredMixin, TemplateView):
     """Yönetici → Bildirim Merkezi (SMS/E-posta).
 
     Sekme 1: SMS (NetGSM) + e-posta (SMTP) ayarları.

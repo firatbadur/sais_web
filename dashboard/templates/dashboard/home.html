@@ -438,7 +438,16 @@
                         power_off: 'ki-power text-warning',
                         bad_reading: 'ki-shield-cross text-danger'
                     };
-                    const iconClass = iconByKind[ev.kind] || 'ki-information-5 text-muted';
+                    // Olay (system_log) ikonunu önem derecesine göre renklendir.
+                    const iconBySeverity = {
+                        info: 'ki-information-5 text-info',
+                        warning: 'ki-information-5 text-warning',
+                        critical: 'ki-shield-cross text-danger'
+                    };
+                    let iconClass = iconByKind[ev.kind] || 'ki-information-5 text-muted';
+                    if (ev.kind === 'system_log' && ev.severity) {
+                        iconClass = iconBySeverity[ev.severity] || iconClass;
+                    }
                     return `<div class="timeline-item">
                         <div class="timeline-line w-40px"></div>
                         <div class="timeline-icon symbol symbol-circle symbol-40px">

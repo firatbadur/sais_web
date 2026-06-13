@@ -349,12 +349,22 @@ def home_events(request):
 
     events = []
 
-    for log in SystemLog.objects.select_related("type").order_by("-time_iso")[:10]:
+    for log in SystemLog.objects.select_related("type", "user").order_by("-time_iso")[:15]:
+        actor = log.user.get_username() if log.user_id else (log.username or "")
+        meta_bits = []
+        if actor:
+            meta_bits.append(actor)
+        if log.ip_address:
+            meta_bits.append(log.ip_address)
+        detail = log.description or ""
+        if meta_bits:
+            detail = (detail + " · " if detail else "") + " / ".join(meta_bits)
         events.append({
             "kind": "system_log",
+            "severity": log.severity or "info",
             "time": log.time_iso.isoformat() if log.time_iso else None,
-            "title": log.type.name if log.type else "Log",
-            "detail": log.description or "",
+            "title": log.type.name if log.type else "Olay",
+            "detail": detail,
         })
 
     for po in PowerOff.objects.select_related("station").order_by("-time_iso")[:5]:
@@ -505,7 +515,7 @@ def backup_status(request):
     Sayfa 5 sn'de bir poll'lar; `running` true→false geçince listeyi tazelemek
     için reload eder.
     """
-    denied = _require_admin(request)
+    denied = _require_operator(request)
     if denied:
         return denied
 
@@ -530,7 +540,7 @@ def backup_status(request):
 @login_required
 def backup_download(request, pk):
     """Bir .bak dosyasını indirir. Path traversal'a karşı sıkı doğrulama."""
-    denied = _require_admin(request)
+    denied = _require_operator(request)
     if denied:
         return denied
 
@@ -573,7 +583,7 @@ def version_info(request):
     """Çalışan sürüm + GHCR'daki en son sürüm. update_available=False ise
     'Güncelle' butonu kapatılır. GHCR_TOKEN yoksa/erişilemezse checked=False
     döner ve buton açık kalır (fallback — yine de elle yükseltilebilir)."""
-    denied = _require_admin(request)
+    denied = _require_operator(request)
     if denied:
         return denied
 
@@ -630,7 +640,7 @@ def trigger_update(request):
     image'a çeker + (yeni sürüm varsa) yeniden başlatır. Otomatik güncelleme
     KAPALI; yükseltme yalnız buradan tetiklenir.
     """
-    denied = _require_admin(request)
+    denied = _require_operator(request)
     if denied:
         return denied
     if request.method != "POST":
@@ -672,7 +682,7 @@ def server_info(request):
     (değişmişse yeni satır). Beat task'ı (`record_public_ip_task`) operatör
     sayfayı açmasa da değişimi yakalar; bu endpoint anlık görünüm + geçmiş verir.
     """
-    denied = _require_admin(request)
+    denied = _require_operator(request)
     if denied:
         return denied
 
@@ -713,7 +723,7 @@ def server_info(request):
 def port_check(request):
     """Sunucu dıştan 443'te erişilebilir mi? Public IP + yerel Caddy 443 +
     (best-effort) public IP:443 bağlantı denemesi + harici doğrulama linki."""
-    denied = _require_admin(request)
+    denied = _require_operator(request)
     if denied:
         return denied
 
@@ -774,7 +784,7 @@ def port_check(request):
 @login_required
 def notification_recipients(request):
     """Test paneli için aktif kullanıcı listesi (select2)."""
-    denied = _require_admin(request)
+    denied = _require_operator(request)
     if denied:
         return denied
 
@@ -809,7 +819,7 @@ def notification_send_test(request):
     """
     import json
 
-    denied = _require_admin(request)
+    denied = _require_operator(request)
     if denied:
         return denied
     if request.method != "POST":
@@ -865,7 +875,7 @@ def notification_templates(request):
     """Hazır mesaj CRUD. GET liste / POST {title,body,channel?} / DELETE ?id=."""
     import json
 
-    denied = _require_admin(request)
+    denied = _require_operator(request)
     if denied:
         return denied
 
