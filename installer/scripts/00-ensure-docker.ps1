@@ -42,6 +42,46 @@ function Test-DistroUsable([string]$d) {
     }
 }
 
+# Can the distro resolve a public host? (DNS sanity check, no hard fail)
+function Test-WslDns([string]$d) {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    try {
+        wsl.exe -d $d -u root -- bash -lc "getent hosts get.docker.com >/dev/null 2>&1" | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+}
+
+# WSL's auto-generated /etc/resolv.conf often points at a nameserver that cannot
+# resolve public hosts on some networks -> Docker install + GHCR image pulls fail
+# with "Could not resolve host: get.docker.com". If DNS is broken, stop WSL from
+# regenerating resolv.conf and pin public resolvers (Google + Cloudflare). This
+# mirrors the manual fix that unblocked the first site install.
+function Repair-WslDns([string]$d) {
+    if (Test-WslDns $d) { return }   # DNS already works -> leave the network alone
+
+    Write-Step "WSL cannot resolve public hosts - applying DNS fix ..."
+    # 1) Disable resolv.conf auto-generation (append once; keep existing sections).
+    wsl.exe -d $d -u root -- bash -lc `
+        "grep -q generateResolvConf /etc/wsl.conf 2>/dev/null || printf '\n[network]\ngenerateResolvConf = false\n' >> /etc/wsl.conf" *> $null
+    # 2) Restart WSL so the setting takes effect before we write resolv.conf.
+    wsl.exe --shutdown *> $null
+    Start-Sleep -Seconds 3
+    # 3) Pin working public DNS servers.
+    wsl.exe -d $d -u root -- bash -lc `
+        "rm -f /etc/resolv.conf; printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf" *> $null
+
+    if (Test-WslDns $d) {
+        Write-Ok "WSL DNS fixed (pinned 8.8.8.8 / 1.1.1.1)."
+    } else {
+        Write-WarnLine "WSL still cannot resolve public hosts - check firewall/proxy/DNS on this host."
+    }
+}
+
 if (Test-DockerReady) {
     Write-Ok "Docker is already available (running inside $Distro)."
     exit 0
@@ -63,13 +103,32 @@ if (-not (Test-DistroUsable $Distro)) {
         }
     }
 
+    # After a reboot-resume the network stack may not be up yet. wsl --update /
+    # --install download from Microsoft + GitHub and fail with
+    # WININET_E_NAME_NOT_RESOLVED if DNS isn't ready -> wait (up to ~60s) for
+    # host name resolution before starting the download.
+    Write-Step "Waiting for network (DNS) before WSL download ..."
+    for ($n = 0; $n -lt 20; $n++) {
+        try {
+            Resolve-DnsName -Name "raw.githubusercontent.com" -ErrorAction Stop | Out-Null
+            break
+        } catch { Start-Sleep -Seconds 3 }
+    }
+
     # Install WSL2 + distro (wsl --install also enables features). --no-launch
     # skips the interactive Ubuntu user setup (we use root). Output is NOT
-    # suppressed so progress/diagnostics are visible.
+    # suppressed so progress/diagnostics are visible. One retry covers a
+    # still-settling network right after the reboot-resume.
     Write-Step "Installing WSL2 + $Distro (wsl --install) ..."
     wsl.exe --update; Write-Host "   wsl --update exit=$LASTEXITCODE"
     wsl.exe --set-default-version 2; Write-Host "   wsl --set-default-version exit=$LASTEXITCODE"
     wsl.exe --install -d $Distro --no-launch; Write-Host "   wsl --install exit=$LASTEXITCODE"
+    if ($LASTEXITCODE -ne 0) {
+        Write-WarnLine "wsl --install failed (network not ready?) - retrying once in 8s ..."
+        Start-Sleep -Seconds 8
+        wsl.exe --update
+        wsl.exe --install -d $Distro --no-launch; Write-Host "   wsl --install retry exit=$LASTEXITCODE"
+    }
     Start-Sleep -Seconds 5
 
     if (-not (Test-DistroUsable $Distro)) {
@@ -81,6 +140,10 @@ if (-not (Test-DistroUsable $Distro)) {
 }
 
 Write-Ok "WSL2 + $Distro is usable."
+
+# Make sure the distro can resolve public hosts BEFORE we curl get.docker.com /
+# pull GHCR images (the #1 cause of fresh-install failures on real networks).
+Repair-WslDns $Distro
 
 $dockerInstall = @'
 set -e
