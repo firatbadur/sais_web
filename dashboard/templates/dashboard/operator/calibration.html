@@ -474,6 +474,7 @@
         invalid: "{% trans 'Geçersiz' %}",
         saved: "{% trans 'Kalibrasyon kaydedildi.' %}",
         sent: "{% trans 'Bakanlık SIM gönderimi başarılı.' %}",
+        ministryReplied: "{% trans 'Bakanlık yanıtı:' %}",
         sec: "{% trans 'sn' %}",
     };
     const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
@@ -884,8 +885,14 @@
         postJSON("{% url 'dashboard:api_calibration_send_sim' %}", { id: S.savedId })
             .then(({ ok, data }) => {
                 btn.removeAttribute('data-kt-indicator');
-                if (ok && data.ok) { showMsg(I18N.sent, 'success');
-                    btn.innerHTML = '<i class="ki-outline ki-check fs-4"></i>{% trans "Gönderildi" %}'; }
+                if (ok && data.ok) {
+                    // Bakanlık'ın döndürdüğü gerçek mesajı göster (yoksa sabit metin).
+                    const msg = (data.message && data.message.trim())
+                        ? I18N.sent + ' ' + I18N.ministryReplied + ' "' + data.message + '"'
+                        : I18N.sent;
+                    showMsg(msg, 'success');
+                    btn.innerHTML = '<i class="ki-outline ki-check fs-4"></i>{% trans "Gönderildi" %}';
+                }
                 else { btn.disabled = false; showMsg(data.error || 'Hata', 'danger'); }
             }).catch(() => { btn.removeAttribute('data-kt-indicator'); btn.disabled = false;
                 showMsg('Ağ hatası', 'danger'); });

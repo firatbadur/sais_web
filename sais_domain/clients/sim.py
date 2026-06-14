@@ -327,9 +327,14 @@ class SaisSimClient(BaseHttpClient):
     ) -> Any:
         """``/SAIS/SendCalibration`` — kalibrasyon kaydı.
 
-        Bakanlık'ın beklediği payload alanları (StationId, Parameter,
-        ZeroValue/SpanValue/...) bu katmanda zorlanmaz; çağıran şemayı
-        denetler. Çağrı + yanıt ApiLog'a düşer.
+        Bakanlık'ın beklediği payload alanları (StationId, DBColumnName,
+        Zero*/Span*/Result*) bu katmanda zorlanmaz; çağıran şemayı denetler.
+        Çağrı + yanıt ApiLog'a düşer.
+
+        Bu uçta ``objects`` her zaman ``null``'dır; anlamlı bilgi zarfın
+        ``result`` (bool) + ``message`` (str) alanlarındadır. Bu yüzden
+        ``_unwrap`` yerine **ham zarf** döndürülür ki çağıran Bakanlık'ın
+        mesajını kullanıcıya gösterebilsin.
         """
         response = self._post_authenticated(
             "/SAIS/SendCalibration",
@@ -337,7 +342,7 @@ class SaisSimClient(BaseHttpClient):
             triggered_by=triggered_by,
             log_component=f"{self.component}.send_calibration",
         )
-        return self._unwrap(response, allow_non_dict=True)
+        return self._envelope(response)
 
     def sample_request_start(
         self,
@@ -421,6 +426,29 @@ class SaisSimClient(BaseHttpClient):
             log_component=f"{self.component}.{label}",
         )
         return self._unwrap(response, allow_non_dict=True)
+
+    @staticmethod
+    def _envelope(response: requests.Response) -> Any:
+        """Bakanlık ``{result, message, objects}`` zarfını **ham** döndür.
+
+        ``objects``'i açmaz — ``SendCalibration`` gibi ``objects=null`` dönüp
+        anlamı ``result``/``message``'da taşıyan uçlar içindir. HTTP hatası veya
+        JSON olmayan yanıtta ``SaisResponseError`` yükselir.
+        """
+        if response.status_code >= 400:
+            raise SaisResponseError(
+                f"Bakanlık HTTP {response.status_code}",
+                status_code=response.status_code,
+                response_text=response.text or "",
+            )
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise SaisResponseError(
+                f"Bakanlık yanıtı JSON değil (HTTP {response.status_code})",
+                status_code=response.status_code,
+                response_text=response.text or "",
+            ) from exc
 
     @staticmethod
     def _unwrap(

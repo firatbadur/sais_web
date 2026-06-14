@@ -1870,13 +1870,27 @@ def calibration_send_sim(request):
     payload = CalibrationResultSerializer(cal).data
     try:
         client = SaisSimClient(cabinet)
-        result = client.send_calibration(payload, triggered_by=request.user)
+        envelope = client.send_calibration(payload, triggered_by=request.user)
     except Exception as exc:  # noqa: BLE001 — kullanıcıya hata mesajı dön
         return JsonResponse(
             {"ok": False, "error": f"Bakanlık gönderimi başarısız: {exc}"},
             status=502,
         )
-    return JsonResponse({"ok": True, "result": result})
+
+    # Bakanlık zarfı: {"result": bool, "message": str, "objects": null}.
+    # ``message``'ı (ve red durumunda hatayı) doğrudan kullanıcıya yansıt.
+    if isinstance(envelope, dict):
+        ministry_ok = bool(envelope.get("result", True))
+        ministry_msg = (envelope.get("message") or "").strip()
+    else:
+        ministry_ok, ministry_msg = True, ""
+
+    if not ministry_ok:
+        return JsonResponse(
+            {"ok": False, "error": ministry_msg or "Bakanlık gönderimi reddetti."},
+            status=502,
+        )
+    return JsonResponse({"ok": True, "message": ministry_msg, "result": envelope})
 
 
 # ---------------------------------------------------------------------------
