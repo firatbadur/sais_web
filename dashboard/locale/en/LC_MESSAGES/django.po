@@ -2349,3 +2349,12 @@ msgstr "User / Module"
 
 msgid "URL / host / modül / IP"
 msgstr "URL / host / module / IP"
+
+msgid "UPS"
+msgstr "UPS"
+
+msgid "Süre doldu"
+msgstr "Time elapsed"
+
+msgid "UPS aktif — kalan süre"
+msgstr "UPS active — time remaining"

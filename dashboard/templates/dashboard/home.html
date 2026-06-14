@@ -8,7 +8,7 @@
 {% csrf_token %}
 
 <!-- ============ KPI CARDS ============ -->
-<div class="row row-cols-1 row-cols-sm-2 row-cols-xl-4 g-5 g-xl-10 mb-5 mb-xl-10">
+<div class="row row-cols-1 row-cols-sm-2 row-cols-xl-5 g-5 g-xl-10 mb-5 mb-xl-10">
     <div class="col">
         <div class="card h-100 shadow-sm">
             <div class="card-body py-5">
@@ -39,6 +39,18 @@
                     <i class="ki-outline ki-cloud-change fs-2hx text-success me-3"></i>
                     <span class="fs-2 fw-bolder text-gray-900" id="kpi-last-sim" title="{% trans 'Bakanlık SIM’e son başarılı veri iletimi' %}">-</span>
                 </div>
+            </div>
+        </div>
+    </div>
+    <div class="col d-none" id="kpi-ups-col">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body py-5">
+                <span class="fs-6 fw-semibold text-gray-500">{% trans "UPS" %}</span>
+                <div class="d-flex align-items-center mt-2">
+                    <i class="ki-outline ki-electricity fs-2hx text-warning me-3" id="kpi-ups-icon"></i>
+                    <span class="fs-2hx fw-bolder text-gray-900" id="kpi-ups">-</span>
+                </div>
+                <span class="badge badge-light-success fs-7 mt-2 d-none" id="kpi-ups-countdown" title="{% trans 'UPS aktif — kalan süre' %}"></span>
             </div>
         </div>
     </div>
@@ -303,7 +315,70 @@
                 lastSim.textContent = data.last_sim_ago ?? '—';
                 lastSim.classList.toggle('text-muted', (data.last_sim_ago ?? '—') === '—');
             }
+            updateUps(data);
         } catch(e) { console.warn('KPI refresh fail:', e); }
+    }
+
+    // --- UPS kartı + 60 dk geri sayım ---
+    let upsCountdownTimer = null;
+    const UPS_DURATION_SEC = 60 * 60;  // aktif olunca 60 dk geri say
+
+    function clearUpsCountdown() {
+        if (upsCountdownTimer) { clearInterval(upsCountdownTimer); upsCountdownTimer = null; }
+    }
+
+    function renderUpsCountdown(sinceIso) {
+        const badge = document.getElementById('kpi-ups-countdown');
+        if (!badge) return;
+        const start = new Date(sinceIso).getTime();
+        clearUpsCountdown();
+        badge.classList.remove('badge-light-danger', 'd-none');
+        badge.classList.add('badge-light-success');
+        function tick() {
+            const remain = UPS_DURATION_SEC - Math.floor((Date.now() - start) / 1000);
+            if (remain <= 0) {
+                badge.textContent = "{% trans 'Süre doldu' %}";
+                badge.classList.remove('badge-light-success');
+                badge.classList.add('badge-light-danger');
+                clearUpsCountdown();
+                return;
+            }
+            const m = Math.floor(remain / 60);
+            const s = remain % 60;
+            badge.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        }
+        tick();
+        upsCountdownTimer = setInterval(tick, 1000);
+    }
+
+    function updateUps(data) {
+        const col = document.getElementById('kpi-ups-col');
+        const val = document.getElementById('kpi-ups');
+        const icon = document.getElementById('kpi-ups-icon');
+        const badge = document.getElementById('kpi-ups-countdown');
+        if (!col) return;
+        if (!data.ups_present) {
+            col.classList.add('d-none');
+            clearUpsCountdown();
+            return;
+        }
+        col.classList.remove('d-none');
+        const active = !!data.ups_active;
+        if (val) {
+            val.textContent = active ? "{% trans 'Aktif' %}" : "{% trans 'Pasif' %}";
+            val.classList.toggle('text-warning', active);
+            val.classList.toggle('text-gray-900', !active);
+        }
+        if (icon) {
+            icon.classList.toggle('text-warning', active);
+            icon.classList.toggle('text-gray-400', !active);
+        }
+        if (active && data.ups_since) {
+            renderUpsCountdown(data.ups_since);
+        } else {
+            clearUpsCountdown();
+            if (badge) badge.classList.add('d-none');
+        }
     }
 
     // Analog kart başlığındaki yıkama uyarı rozeti — wash aktifken görünür,
