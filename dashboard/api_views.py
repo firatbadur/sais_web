@@ -20,7 +20,6 @@ from api.models import (
     ReadingHourly,
     Sensor,
     SensorLatest,
-    Station,
     SystemLog,
 )
 
@@ -53,13 +52,12 @@ def _humanize_ago_tr(dt, now=None):
 
 @login_required
 def home_kpis(request):
-    """Üst KPI kartları — aktif istasyon, sensör, bağlantı, son saat reading
+    """Üst KPI kartları — açık bağlantı, aktif sensör, son saat reading
     sayısı + Bakanlık SIM'e son başarılı veri iletimi (görece zaman)."""
     now = timezone.now()
     last_hour = now - timedelta(hours=1)
 
     data = {
-        "station_count": Station.objects.filter(active=True).count(),
         "sensor_count": Sensor.objects.filter(is_active=True).count(),
         "connection_count": Connection.objects.filter(is_enabled=True).count(),
         "readings_last_hour": Reading.objects.filter(time_iso__gte=last_hour).count(),
