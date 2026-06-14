@@ -630,7 +630,6 @@
             // modunda görsel olarak vurgulanır.
             const menuEl = btn.closest('[data-kt-menu]');
             const trigger = menuEl ? menuEl.previousElementSibling : null;
-            const triggerIcon = trigger ? trigger.querySelector('i') : null;
             // Satır başına sürükleme tutamacı (görsel ipucu; 2x3 nokta ızgarası).
             // Sürükleme tüm satırdan yapılır — tutamaç yalnız "sürüklenebilir" işareti.
             function addHandles() {
@@ -669,8 +668,6 @@
                     if (icon) { icon.classList.remove('ki-pencil'); icon.classList.add('ki-check'); }
                     if (label) label.textContent = I18N.saveTitle;
                     if (trigger) { trigger.classList.add('active'); trigger.title = I18N.saveTitle; }
-                    // Kebab kapanınca .active sıfırlanabilir → ikonu da değiştir (kalıcı ipucu).
-                    if (triggerIcon) { triggerIcon.classList.remove('ki-dots-vertical'); triggerIcon.classList.add('ki-check', 'text-primary'); }
                 } else {
                     // Çık → sırayı topla, POST et, Sortable'ı kapat, polling devam.
                     const ids = [...tbody.querySelectorAll('tr[data-sid]')]
@@ -693,7 +690,6 @@
                     if (icon) { icon.classList.remove('ki-check'); icon.classList.add('ki-pencil'); }
                     if (label) label.textContent = I18N.editTitle;
                     if (trigger) { trigger.classList.remove('active'); trigger.title = "{% trans 'Seçenekler' %}"; }
-                    if (triggerIcon) { triggerIcon.classList.remove('ki-check', 'text-primary'); triggerIcon.classList.add('ki-dots-vertical'); }
                 }
             });
         });
