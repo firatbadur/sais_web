@@ -2358,3 +2358,6 @@ msgstr "Time elapsed"
 
 msgid "UPS aktif — kalan süre"
 msgstr "UPS active — time remaining"
+
+msgid "Seçenekler"
+msgstr "Options"

@@ -64,32 +64,36 @@ def home_kpis(request):
     }
 
     # UPS durumu — dijital girişler (sensor_type 2/3) içinde adı "UPS" geçen bir
-    # sensör varsa aktif/pasif döndür. Aktifleştiği an (last_change_at) frontend'in
+    # sensör tanımlıysa kart görünür. Tespit Sensor'den yapılır (henüz hiç okuma
+    # alınmamış olabilir, SensorLatest oluşmamış olabilir); değer/aktiflik varsa
+    # SensorLatest'ten okunur. Aktifleştiği an (last_change_at) frontend'in
     # 60 dk'lık geri sayımı için verilir.
     data["ups_present"] = False
     data["ups_active"] = None
     data["ups_since"] = None
     try:
         from django.db.models import Q
-        ups_latest = (
-            SensorLatest.objects
-            .select_related("sensor", "sensor__parameter")
-            .filter(sensor__sensor_type__in=(2, 3))
+        ups_sensor = (
+            Sensor.objects
+            .filter(is_active=True, sensor_type__in=(2, 3))
             .filter(
-                Q(sensor__parameter__parameter_txt__icontains="ups")
-                | Q(sensor__parameter__parameter_name__icontains="ups")
+                Q(parameter__parameter_txt__icontains="ups")
+                | Q(parameter__parameter_name__icontains="ups")
             )
-            .order_by("sensor__display_order", "sensor_id")
+            .order_by("display_order", "id")
             .first()
         )
-        if ups_latest and ups_latest.sensor:
-            raw = bool(ups_latest.value) if ups_latest.value is not None else False
-            if ups_latest.sensor.digital_inverse:
-                raw = not raw
+        if ups_sensor:
             data["ups_present"] = True
+            latest = SensorLatest.objects.filter(sensor=ups_sensor).first()
+            raw = False
+            if latest and latest.value is not None:
+                raw = bool(latest.value)
+                if ups_sensor.digital_inverse:
+                    raw = not raw
             data["ups_active"] = raw
-            if raw and ups_latest.last_change_at:
-                data["ups_since"] = ups_latest.last_change_at.isoformat()
+            if raw and latest and latest.last_change_at:
+                data["ups_since"] = latest.last_change_at.isoformat()
     except Exception:  # noqa: BLE001 — UPS verisi olmadan da KPI'lar çalışsın
         pass
 
