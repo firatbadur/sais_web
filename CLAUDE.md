@@ -193,8 +193,12 @@ gönderiyorlar). İki compose dosyası var:
 multi-stage build → `ghcr.io/firatbadur/sais_web` iki tag ile:
 `:vX.Y.Z` (değişmez, rollback) + `:stable` (kayan). Her sahadaki Watchtower `:stable` etiketli
 **app** container'larını (web/worker/beat — `com.centurylinklabs.watchtower.enable=true` label'lı)
-5 dk'da bir kontrol eder; yeni digest gelince çeker + recreate eder. `db` (MSSQL) ve `redis`
-**label'sız → asla otomatik güncellenmez**, volume'leri korunur.
+günceller. **Otomatik periyodik tarama YOK** (`WATCHTOWER_HTTP_API_UPDATE=true` → poll döngüsü
+kapalı, `WATCHTOWER_POLL_INTERVAL`/`--schedule` tanımlı değil): tag push'lamak sahalarda hiçbir
+şeyi otomatik tetiklemez, yalnızca GHCR'a yeni image basar. Güncelleme **manuel** — dashboard
+"Şimdi Güncelle" butonu Watchtower HTTP API'sini (`WATCHTOWER_API_TOKEN` ile) çağırınca yeni digest
+çekilir + container recreate edilir. `db` (MSSQL) ve `redis` **label'sız → asla güncellenmez**,
+volume'leri korunur.
 
 - **Saha kimliği state'tir, image değil.** Station / Connection / Sensor / **SaisCabinet (Bakanlık
   SIM ID)** / SystemSwitch → DB volume'de; `.env` → hostta lokal. Güncelleme bunlara dokunmaz.
@@ -206,7 +210,7 @@ multi-stage build → `ghcr.io/firatbadur/sais_web` iki tag ile:
 
 **Sürüm çıkarma (tek komut, tüm filo):**
 ```bash
-git tag v1.2.0 && git push origin v1.2.0   # Actions build+push :stable → sahalar 5 dk'da çeker
+git tag v1.2.0 && git push origin v1.2.0   # Actions build+push :stable → GHCR'da hazır; sahalar dashboard "Şimdi Güncelle" ile çeker
 ```
 **Rollback / dondurma (tek saha):** o sahanın `.env`'inde `IMAGE_TAG=v1.1.0` → `docker compose -f
 docker-compose.prod.yml --env-file .env up -d`.
@@ -216,7 +220,7 @@ docker-compose.prod.yml --env-file .env up -d`.
 (read:packages PAT) + `pull` + `up -d`; `-FirstRun`/`FIRST_RUN=1` ile bir kez
 `seed_initial_data` + `seed_sais_data` + superuser. Sonra admin'den saha-özel kayıtlar girilir.
 
-İlgili `.env` değişkenleri: `GHCR_IMAGE`, `IMAGE_TAG`, `WATCHTOWER_POLL_INTERVAL`, `WEB_PORT`.
+İlgili `.env` değişkenleri: `GHCR_IMAGE`, `IMAGE_TAG`, `WATCHTOWER_API_TOKEN` (dashboard "Şimdi Güncelle" HTTP API token'ı), `WEB_PORT`.
 
 ## Veritabanı yedekleme / geri yükleme (sürüm-bilinçli)
 
