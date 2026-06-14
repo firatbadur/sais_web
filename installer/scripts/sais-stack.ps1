@@ -29,25 +29,24 @@ $script:WslDistro = $Distro
 # Docker runs inside WSL2; in NAT mode WSL only mirrors published ports to the
 # host's 127.0.0.1, NOT to the LAN/public interface -> external HTTPS (Caddy
 # 80/443) times out even when the modem/firewall forwards correctly. We bridge
-# the host's outbound interface to the WSL2 VM with `netsh portproxy`. The WSL2
-# IP changes on every boot, so this re-runs each loop with the CURRENT IP. The
-# logon task runs with Highest privileges, so netsh/firewall calls succeed.
+# the host to the WSL2 VM with `netsh portproxy`. The WSL2 IP changes on every
+# boot, so this re-runs each loop with the CURRENT IP. The logon task runs with
+# Highest privileges, so netsh/firewall calls succeed.
+#
+# listenaddress=0.0.0.0 (ALL interfaces) on purpose: binding to a specific LAN
+# IP proved unreliable on real sites (e.g. 10.x corporate NICs) - the portproxy
+# rule shows up in `show all` but never actually forwards, so external HTTPS
+# stays closed even though Caddy works locally. 0.0.0.0 catches every interface
+# and removes any listen-IP mismatch (verified fix at first site).
 function Set-PortProxy([string]$Distro) {
     try {
         $wslIp = (wsl.exe -d $Distro -- hostname -I 2>$null)
         if ($wslIp) { $wslIp = $wslIp.Trim().Split(" ")[0] }
         if ($wslIp -notmatch '^\d+\.\d+\.\d+\.\d+$') { return }
 
-        # IP of the interface that carries the default route (internet-facing).
-        $ifIndex = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
-            Sort-Object RouteMetric | Select-Object -First 1).ifIndex
-        $lanIp = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $ifIndex -ErrorAction SilentlyContinue |
-            Where-Object { $_.IPAddress -notlike '169.*' } | Select-Object -First 1).IPAddress
-        if (-not $lanIp) { $lanIp = '0.0.0.0' }
-
         netsh interface portproxy reset 2>$null | Out-Null
         foreach ($port in 80, 443) {
-            netsh interface portproxy add v4tov4 listenaddress=$lanIp listenport=$port `
+            netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=$port `
                 connectaddress=$wslIp connectport=$port 2>$null | Out-Null
         }
         New-NetFirewallRule -DisplayName "EnvisoftWebX HTTP"  -Direction Inbound -Protocol TCP -LocalPort 80  -Action Allow -ErrorAction SilentlyContinue | Out-Null
