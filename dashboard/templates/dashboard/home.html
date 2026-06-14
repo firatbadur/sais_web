@@ -391,7 +391,7 @@
         if (row) { row.classList.add('row-cols-xl-5'); row.classList.remove('row-cols-xl-4'); }
         const active = !!data.ups_active;
         if (val) {
-            val.textContent = active ? "{% trans 'Aktif' %}" : "{% trans 'Pasif' %}";
+            val.textContent = active ? "{% trans 'Aktif' %}" : "--";
             val.classList.toggle('text-warning', active);
             val.classList.toggle('text-gray-900', !active);
         }
