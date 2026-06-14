@@ -454,7 +454,7 @@
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between border border-dashed border-gray-300 rounded p-5 mb-4">
                     <span class="fw-bold fs-5 text-gray-900">{% trans "Çalışan sürüm" %}</span>
-                    <span class="badge badge-light-primary fs-5">{{ app_version }}</span>
+                    <span id="running-version" class="badge badge-light-primary fs-5">{{ app_version }}</span>
                 </div>
                 <div id="version-status" class="mb-4 fs-7 text-muted">
                     <span class="spinner-border spinner-border-sm me-2"></span>{% trans "Sürüm kontrol ediliyor..." %}
@@ -734,19 +734,82 @@
             });
 
         if (btnUp) {
+            const I18N_UP = {
+                restarting: "{% trans 'Güncelleme başlatıldı. Uygulama yeniden başlatılıyor, lütfen bekleyin (birkaç dakika)...' %}",
+                done: "{% trans 'Güncelleme tamamlandı. Sayfa yenileniyor...' %}",
+                manual: "{% trans 'Güncelleme tetiklendi. Uygulama birkaç dakika içinde geri gelecek; sayfayı elle yenileyip çalışan sürümü kontrol edin.' %}",
+                forbidden: "{% trans 'Yetkilendirme/CSRF hatası (403). Bu domain güvenilir kaynaklarda tanımlı olmayabilir — yöneticinize başvurun.' %}"
+            };
+
+            // Web container güncelleme sırasında kendini recreate ettiğinden bu isteği
+            // taşıyan bağlantı düşer (Caddy 502 HTML döner) — bu BEKLENEN durumdur, hata
+            // değil. JSON parse edilemezse / bağlantı koparsa "yeniden başlatılıyor" kabul
+            // edip web geri gelene + sürüm değişene dek version endpoint'ini poll'larız.
+            function watchForRestart(startVersion) {
+                let tries = 0;
+                const maxTries = 90;  // ~6 dk (4 sn aralık)
+                const timer = setInterval(function () {
+                    tries++;
+                    fetch("{% url 'dashboard:api_version_info' %}", { cache: 'no-store' })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) {
+                            // Web ayakta. Sürüm değiştiyse güncelleme bitti -> reload.
+                            if (d && d.current && d.current !== startVersion) {
+                                clearInterval(timer);
+                                upRes.innerHTML = '<div class="alert alert-success">' + I18N_UP.done + '</div>';
+                                setTimeout(function () { location.reload(); }, 1500);
+                            }
+                            // Aynı sürümse: henüz recreate olmadı ya da iş henüz bitmedi -> poll'a devam.
+                        })
+                        .catch(function () { /* web restart sırasında ulaşılamaz -> beklemeye devam */ });
+                    if (tries >= maxTries) {
+                        clearInterval(timer);
+                        btnUp.disabled = false;
+                        upRes.innerHTML = '<div class="alert alert-info">' + I18N_UP.manual + '</div>';
+                    }
+                }, 4000);
+            }
+
             btnUp.addEventListener('click', function () {
                 if (!confirm("{% trans 'En son sürüme güncellenecek ve uygulama yeniden başlatılacak. Birkaç dakika kısa kesinti olur. Devam edilsin mi?' %}")) return;
+                const rvEl = document.getElementById('running-version');
+                const startVersion = rvEl ? rvEl.textContent.trim() : '';
                 btnUp.disabled = true;
                 upRes.innerHTML = '<div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>{% trans "Güncelleme tetikleniyor..." %}</div>';
                 fetch("{% url 'dashboard:api_trigger_update' %}", { method: 'POST', headers: { 'X-CSRFToken': csrf() } })
-                    .then(r => r.json())
-                    .then(d => {
-                        btnUp.disabled = false;
-                        upRes.innerHTML = d.ok
-                            ? '<div class="alert alert-success">' + (d.message || 'OK') + '</div>'
-                            : '<div class="alert alert-danger">' + (d.error || 'Hata') + '</div>';
+                    .then(function (r) {
+                        return r.text().then(function (text) {
+                            let d = null;
+                            try { d = JSON.parse(text); } catch (e) { /* HTML (502 vb.) */ }
+                            if (d) {
+                                // Temiz JSON döndü: web bu istek boyunca ayakta kaldı.
+                                if (d.ok) {
+                                    // Tetiklendi; recreate olacaksa watch yakalar, olmayacaksa
+                                    // (yeni sürüm yok) timeout sonunda "elle kontrol" mesajı verir.
+                                    upRes.innerHTML = '<div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>' + I18N_UP.restarting + '</div>';
+                                    watchForRestart(startVersion);
+                                } else {
+                                    btnUp.disabled = false;
+                                    upRes.innerHTML = '<div class="alert alert-danger">' + (d.error || 'Hata') + '</div>';
+                                }
+                                return;
+                            }
+                            // JSON değil. 403 -> gerçek CSRF/yetki hatası (web restart DEĞİL).
+                            if (r.status === 403) {
+                                btnUp.disabled = false;
+                                upRes.innerHTML = '<div class="alert alert-danger">' + I18N_UP.forbidden + '</div>';
+                                return;
+                            }
+                            // 502/504 vb. -> web güncelleme için recreate ediliyor. Beklenen.
+                            upRes.innerHTML = '<div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>' + I18N_UP.restarting + '</div>';
+                            watchForRestart(startVersion);
+                        });
                     })
-                    .catch(e => { btnUp.disabled = false; upRes.innerHTML = '<div class="alert alert-danger">' + e + '</div>'; });
+                    .catch(function () {
+                        // Bağlantı koptu -> web restart sırasında socket düştü. Beklenen.
+                        upRes.innerHTML = '<div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>' + I18N_UP.restarting + '</div>';
+                        watchForRestart(startVersion);
+                    });
             });
         }
 

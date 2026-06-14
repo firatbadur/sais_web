@@ -2361,3 +2361,15 @@ msgstr "UPS active — time remaining"
 
 msgid "Seçenekler"
 msgstr "Options"
+
+msgid "Güncelleme başlatıldı. Uygulama yeniden başlatılıyor, lütfen bekleyin (birkaç dakika)..."
+msgstr "Update started. The application is restarting, please wait (a few minutes)..."
+
+msgid "Güncelleme tamamlandı. Sayfa yenileniyor..."
+msgstr "Update complete. Reloading the page..."
+
+msgid "Güncelleme tetiklendi. Uygulama birkaç dakika içinde geri gelecek; sayfayı elle yenileyip çalışan sürümü kontrol edin."
+msgstr "Update triggered. The application will be back in a few minutes; refresh the page manually and check the running version."
+
+msgid "Yetkilendirme/CSRF hatası (403). Bu domain güvenilir kaynaklarda tanımlı olmayabilir — yöneticinize başvurun."
+msgstr "Authorization/CSRF error (403). This domain may not be listed as a trusted origin — contact your administrator."
