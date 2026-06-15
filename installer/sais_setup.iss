@@ -69,7 +69,7 @@ Source: "payload\nssm.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\EnvisoftWebX.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Envisoft WebX Dashboard"; Filename: "https://{code:GetDomain}/dashboard/"; IconFilename: "{app}\EnvisoftWebX.ico"
+Name: "{group}\Envisoft WebX Dashboard"; Filename: "http://localhost/dashboard/"; IconFilename: "{app}\EnvisoftWebX.ico"
 Name: "{group}\Uninstall Envisoft WebX"; Filename: "{uninstallexe}"
 ; Desktop shortcut that opens the dashboard in the default browser via the
 ; local Caddy :80 fallback (works regardless of DNS/domain/SSL state).
@@ -191,11 +191,6 @@ begin
   TlsCombo.OnChange := @FieldChanged;
   AdminPage.Edits[0].OnChange := @FieldChanged;
   AdminPage.Edits[2].OnChange := @FieldChanged;
-end;
-
-function GetDomain(Param: String): String;
-begin
-  Result := SitePage.Values[0];
 end;
 
 function JsonEscape(const S: String): String;
