@@ -342,6 +342,31 @@ class SensorConfigForm(forms.ModelForm):
         )
 
 
+class ConnectionForm(forms.ModelForm):
+    """Scan Grubu sihirbazı (step 1) — bağlantı oluştur/düzenle.
+
+    Admin `ConnectionAdmin` ile aynı düzenlenebilir alan seti (runtime/meta
+    salt-okunur alanlar hariç).
+    """
+
+    class Meta:
+        from api.models import Connection  # lazy
+
+        model = Connection
+        fields = (
+            "station", "name", "description", "is_enabled",
+            "protocol", "transport", "host", "port",
+            "serial_port", "baudrate", "parity", "stop_bits", "byte_size",
+            "xonxoff", "rtscts", "dsrdtr",
+            "poll_interval_sec", "save_interval_sec", "timeout_ms", "retry_count",
+            "auto_reconnect", "reconnect_delay_sec",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _apply_metronic_classes(self)
+
+
 class GroupSensorForm(forms.ModelForm):
     """Scan Grubu sihirbazı (step 2) — gruba bağlı sensörün özlü formu.
 

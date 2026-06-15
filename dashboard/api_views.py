@@ -2385,6 +2385,89 @@ def scangroup_test_run(request):
 
 
 # ---------------------------------------------------------------------------
+# Scan Grubu Sihirbazı — bağlantı kaydet/detay (step 1)
+# ---------------------------------------------------------------------------
+
+# ConnectionForm.Meta.fields ile aynı düzenlenebilir alan seti (detay döndürürken).
+_CONNECTION_FIELDS = (
+    "station", "name", "description", "is_enabled",
+    "protocol", "transport", "host", "port",
+    "serial_port", "baudrate", "parity", "stop_bits", "byte_size",
+    "xonxoff", "rtscts", "dsrdtr",
+    "poll_interval_sec", "save_interval_sec", "timeout_ms", "retry_count",
+    "auto_reconnect", "reconnect_delay_sec",
+)
+
+
+@login_required
+def connection_save(request):
+    """Bağlantı oluştur/güncelle (sihirbaz step 1). POST JSON.
+
+    Döner: {ok, id, name, protocol} veya {ok:false, errors:{alan:[mesaj]}}.
+    """
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from dashboard.forms import ConnectionForm
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    instance = None
+    if data.get("id"):
+        instance = Connection.objects.filter(pk=data["id"]).first()
+        if instance is None:
+            return JsonResponse({"ok": False, "error": "Bağlantı bulunamadı."}, status=404)
+
+    form = ConnectionForm(data, instance=instance)
+    if not form.is_valid():
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+
+    conn = form.save()
+    log_event(
+        EventType.CONFIG,
+        f"Bağlantı {'güncellendi' if instance else 'oluşturuldu'} (sihirbaz): {conn}",
+        severity="warning", request=request,
+    )
+    return JsonResponse({
+        "ok": True,
+        "id": conn.id,
+        "name": conn.name,
+        "protocol": conn.protocol,
+        "station": conn.station.name if conn.station_id else None,
+    })
+
+
+@login_required
+def connection_detail(request):
+    """Bir bağlantının düzenlenebilir alanları (sihirbaz step 1 prefill). GET ?connection="""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    try:
+        conn_id = int(request.GET.get("connection") or 0) or None
+    except (TypeError, ValueError):
+        conn_id = None
+    if not conn_id:
+        return JsonResponse({"ok": False, "error": "Bağlantı seçilmedi."}, status=400)
+
+    conn = Connection.objects.filter(pk=conn_id).first()
+    if conn is None:
+        return JsonResponse({"ok": False, "error": "Bağlantı bulunamadı."}, status=404)
+
+    fields = {f: getattr(conn, f if f != "station" else "station_id") for f in _CONNECTION_FIELDS}
+    return JsonResponse({"ok": True, "fields": fields})
+
+
+# ---------------------------------------------------------------------------
 # Scan Grubu Sihirbazı — grup kaydet + gruba bağlı sensör CRUD (AJAX)
 # ---------------------------------------------------------------------------
 

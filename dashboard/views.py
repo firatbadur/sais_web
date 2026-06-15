@@ -884,6 +884,14 @@ class ScanGroupWizardView(OperatorRequiredMixin, TemplateView):
         ctx["sensor_type_choices"] = Sensor.SENSOR_TYPE
         ctx["data_type_choices"] = Sensor.DATA_TYPES
         ctx["byte_order_choices"] = Sensor.BYTE_ORDER
+        # Step 1 (Bağlantı) seçenekleri
+        ctx["stations"] = Station.objects.order_by("name")
+        ctx["protocol_choices"] = Connection.PROTOCOL_CHOICES
+        ctx["transport_choices"] = Connection.TRANSPORT_CHOICES
+        ctx["baudrate_choices"] = Connection.BAUDRATES
+        ctx["parity_choices"] = Connection.PARITY
+        ctx["stop_bits_choices"] = Connection.STOP_BITS
+        ctx["byte_size_choices"] = Connection.BYTE_SIZE
         return ctx
 
 

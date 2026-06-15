@@ -2605,3 +2605,80 @@ msgstr "Digital Input"
 
 msgid "Dijital Çıkış"
 msgstr "Digital Output"
+
+# --- Bağlantı adımı (otomatik eklendi) ---
+
+msgid "Cihaz bağlantısını tanımlayın. Mevcut bir bağlantıyı düzenlemek için listeden seçin; yeni oluşturmak için boş bırakın."
+msgstr "Define the device connection. Select from the list to edit an existing connection, or leave empty to create a new one."
+
+msgid "Mevcut Bağlantı (düzenle)"
+msgstr "Existing Connection (edit)"
+
+msgid "Yeni bağlantı için boş bırakın"
+msgstr "Leave empty for a new connection"
+
+msgid "İstasyon seçin"
+msgstr "Select a station"
+
+msgid "Bağlantı Adı"
+msgstr "Connection Name"
+
+msgid "Taşıma Katmanı"
+msgstr "Transport Layer"
+
+msgid "Network (TCP)"
+msgstr "Network (TCP)"
+
+msgid "Host / IP"
+msgstr "Host / IP"
+
+msgid "Port"
+msgstr "Port"
+
+msgid "Serial Ayarları (RS-232/485)"
+msgstr "Serial Settings (RS-232/485)"
+
+msgid "Serial Port"
+msgstr "Serial Port"
+
+msgid "Baudrate"
+msgstr "Baudrate"
+
+msgid "Parity"
+msgstr "Parity"
+
+msgid "Stop Bits"
+msgstr "Stop Bits"
+
+msgid "Data Bits"
+msgstr "Data Bits"
+
+msgid "Polling / Kayıt / Güvenilirlik"
+msgstr "Polling / Saving / Reliability"
+
+msgid "Okuma Periyodu (sn)"
+msgstr "Poll Interval (s)"
+
+msgid "Kayıt Periyodu (sn)"
+msgstr "Save Interval (s)"
+
+msgid "boş = her okuma"
+msgstr "empty = every read"
+
+msgid "Timeout (ms)"
+msgstr "Timeout (ms)"
+
+msgid "Retry Sayısı"
+msgstr "Retry Count"
+
+msgid "Yeniden Bağlanma (sn)"
+msgstr "Reconnect Delay (s)"
+
+msgid "Otomatik Yeniden Bağlan"
+msgstr "Auto Reconnect"
+
+msgid "Önce bağlantıyı kaydedin."
+msgstr "Save the connection first."
+
+msgid "Önce scan grubunu kaydedin."
+msgstr "Save the scan group first."
