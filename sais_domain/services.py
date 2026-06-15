@@ -11,9 +11,10 @@ ve deterministik — task içinde ayrıca mock'lamadan birim test yazılabilir.
 """
 from __future__ import annotations
 
+import bisect
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any
+from datetime import datetime, timedelta
+from typing import Any, Iterable
 
 from django.db.models import QuerySet
 
@@ -145,6 +146,143 @@ def build_sim_payload(
         values=values,
         period=period or cabinet.data_period or 1,
     )
+
+
+def build_sim_payloads_for_times(
+    cabinet: SaisCabinet,
+    target_times: Iterable[datetime],
+    *,
+    period: int | None = None,
+    lookback_minutes: int = 10,
+) -> list[SimSendDataPayload]:
+    """Geçmiş dakikalar için SIM ``SendData`` payload'ları üretir (eksik veri backfill).
+
+    ``build_sim_payload``'ın **tarihsel** karşılığı: güncel ``SensorLatest``
+    snapshot'ı yerine ``Reading`` historian'ından her hedef dakika için o
+    dakikadaki sensör değerini kullanır. Eksik veri yeniden gönderim job'ı
+    (``resend_missing_data``) Bakanlık ``GetMissingDates``'in döndürdüğü
+    dakikaları bu fonksiyonla doldurur.
+
+    Yalnız **analog** sensörler dahildir (``build_sim_payload`` ile aynı kapsam).
+    Her hedef dakika için:
+
+    - Sensörün o dakika sonuna (``target + 60s``) kadarki **son** okuması alınır
+      (SCADA değer-tutma / report-by-exception semantiği: değer bir sonraki
+      değişime dek geçerlidir).
+    - O dakikada *aktivite* (sensörlerden en az birinin ``[target - lookback,
+      target + 60s)`` penceresinde okuması) yoksa dakika **atlanır** — PC kapalıydı
+      veya polling durmuştu; uydurma ``-9999`` satırı gönderilmez (eksik kalır,
+      Bakanlık tarafında PowerOff/diagnostic ile yönetilir).
+
+    ``SimStatusPolicy`` filtresi ``build_sim_payload`` ile birebir uygulanır
+    (engellenen status → fallback). Yıkama ``force_status`` override'ı geçmiş
+    veriye uygulanmaz; o dakikada kaydedilen ham status gönderilir.
+
+    Dönen liste yalnız veri bulunan (boş olmayan) dakikaları içerir; çağıran
+    sırayla ``send_data`` eder.
+    """
+    from api.models import Reading
+    from api.models import Sensor
+
+    from .models import SimStatusPolicy
+
+    targets = sorted({t for t in target_times if t is not None})
+    if not targets:
+        return []
+
+    sensors = list(
+        Sensor.objects
+        .filter(
+            connection__station_id=cabinet.station_id,
+            is_active=True,
+            parameter__isnull=False,
+            sensor_type__in=(0, 1),
+        )
+        .select_related("parameter")
+    )
+    if not sensors:
+        return []
+
+    policy = SimStatusPolicy.load()
+    blocked = policy.blocked_code_set()
+    fallback = policy.fallback_status_code
+
+    lookback = timedelta(minutes=max(1, lookback_minutes))
+    window_start = targets[0] - lookback
+    window_end = targets[-1] + timedelta(seconds=60)
+
+    sensor_ids = [s.id for s in sensors]
+    # Tüm pencere için tek sorgu → bellekte sensör başına sıralı liste.
+    rows = (
+        Reading.objects
+        .filter(
+            sensor_id__in=sensor_ids,
+            time_iso__gte=window_start,
+            time_iso__lt=window_end,
+        )
+        .order_by("sensor_id", "time_iso")
+        .values_list("sensor_id", "time_iso", "value", "status__code")
+    )
+
+    # sensor_id → (times[], values[], status_codes[])  — bisect için ayrık listeler.
+    per_sensor: dict[int, tuple[list, list, list]] = {
+        sid: ([], [], []) for sid in sensor_ids
+    }
+    all_times: list[datetime] = []
+    for sid, t_iso, value, status_code in rows:
+        times, values_l, codes = per_sensor[sid]
+        times.append(t_iso)
+        values_l.append(value)
+        codes.append(status_code)
+        all_times.append(t_iso)
+    all_times.sort()
+
+    payloads: list[SimSendDataPayload] = []
+    for target in targets:
+        minute_end = target + timedelta(seconds=60)
+        activity_floor = target - lookback
+
+        # O dakikada hiç aktivite yoksa (PC kapalı / polling durmuş) atla.
+        lo = bisect.bisect_left(all_times, activity_floor)
+        hi = bisect.bisect_left(all_times, minute_end)
+        if hi <= lo:
+            continue
+
+        values: dict[str, Any] = {}
+        for sensor in sensors:
+            times, values_l, codes = per_sensor[sensor.id]
+            if not times:
+                continue
+            # target dakika sonuna kadarki son okuma (held value).
+            idx = bisect.bisect_right(times, minute_end) - 1
+            if idx < 0:
+                continue
+            # Çok eski tutulan değeri gönderme — lookback ile sınırla.
+            if times[idx] < activity_floor:
+                continue
+
+            param = sensor.parameter
+            param_name = (param.parameter_name or param.parameter_txt or "").strip()
+            if not param_name:
+                continue
+
+            raw_value = values_l[idx]
+            value = raw_value if raw_value is not None else -9999
+            status_code = codes[idx] if codes[idx] is not None else 0
+            if blocked and status_code in blocked:
+                status_code = fallback
+            values[param_name] = value
+            values[f"{param_name}_Status"] = status_code
+
+        if not values:
+            continue
+        payloads.append(SimSendDataPayload(
+            readtime=_format_readtime(target),
+            values=values,
+            period=period or cabinet.data_period or 1,
+        ))
+
+    return payloads
 
 
 # ---------------------------------------------------------------- Envisoft

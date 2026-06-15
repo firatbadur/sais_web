@@ -18,6 +18,7 @@ Bu komut beat scheduler'ın okuyacağı periyodik task'ları DB'ye yazar:
   - api.tasks.record_public_ip_task          (cron: 17 * * * *)  — public IP değişimini izle
   - sais_domain.tasks.publish_minute_data    (cron: * * * * *)   — her dakika SIM + Envisoft gönderimi
   - sais_domain.tasks.run_scenarios          (cron: * * * * *)   — her dakika numune senaryosu değerlendirme
+  - sais_domain.tasks.resend_missing_data    (cron: 0 */6 * * *) — eksik veri yeniden gönderimi
 
 Tüm kayıtlar `enabled=True` ile yaratılır; istemediğiniz task'ı admin'den
 disable edebilirsiniz. Komut idempotenttir — aynı task adıyla mevcut kayıt
@@ -53,6 +54,8 @@ CRONTAB_TASKS = [
     ("sais_domain.tasks.publish_minute_data", "*",   "*", "*", "*", "*"),
     # Numune alma senaryolarını değerlendir (eşik/kademe + Bakanlık talebi) — her dakika.
     ("sais_domain.tasks.run_scenarios",       "*",   "*", "*", "*", "*"),
+    # Bakanlık'ın eksik bildirdiği verileri yeniden gönder (GetMissingDates) — 6 saatte bir.
+    ("sais_domain.tasks.resend_missing_data", "0",   "*/6", "*", "*", "*"),
 ]
 
 # DB yedekleme — tek task (`backup_database_run`) farklı tier kwargs'ı ile.

@@ -176,6 +176,28 @@ class SystemSwitch(models.Model):
         help_text="Bakanlık'ın 200 ile kabul ettiği verinin dakika damgası.",
     )
 
+    # --- Eksik veri yeniden gönderim servisi (resend_missing_data) durumu ---
+    last_missing_check_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name="Eksik Veri Son Kontrol",
+        help_text="GetMissingDates servisinin en son çalıştığı an (6 saatte bir).",
+    )
+    last_missing_found_count = models.IntegerField(
+        default=0,
+        verbose_name="Son Bulunan Eksik Dakika",
+        help_text="Son kontrolde Bakanlık'ın eksik bildirdiği dakika sayısı.",
+    )
+    last_missing_resent_count = models.IntegerField(
+        default=0,
+        verbose_name="Son Yeniden Gönderilen",
+        help_text="Son kontrolde başarıyla yeniden gönderilen eksik dakika sayısı.",
+    )
+    last_missing_error = models.CharField(
+        max_length=300, null=True, blank=True,
+        verbose_name="Eksik Veri Son Hata",
+        help_text="Son kontrol hata ile bittiyse mesajı; başarılıysa boş.",
+    )
+
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Son Güncelleme")
     updated_by = models.ForeignKey(
         CustomUser,
@@ -237,6 +259,19 @@ class SystemSwitch(models.Model):
         cls.objects.filter(pk=1).update(
             last_sim_success_at=timezone.now(),
             last_sim_success_readtime=(readtime or "")[:25] or None,
+        )
+
+    @classmethod
+    def mark_missing_run(cls, *, found, resent, error=""):
+        """Eksik veri yeniden gönderim run'ı bitince çağrılır — durum damgasını
+        yazar (Sistem Kontrol sayfasında görüntülenir). Tüm kabinler toplanmış
+        sayılarla bir kez çağrılır."""
+        from django.utils import timezone
+        cls.objects.filter(pk=1).update(
+            last_missing_check_at=timezone.now(),
+            last_missing_found_count=int(found or 0),
+            last_missing_resent_count=int(resent or 0),
+            last_missing_error=(error or "")[:300] or None,
         )
 
 

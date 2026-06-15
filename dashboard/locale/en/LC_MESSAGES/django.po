@@ -2900,3 +2900,24 @@ msgstr "Network error."
 
 msgid "sn"
 msgstr "s"
+
+msgid "Eksik Veri Gönderim Servisi"
+msgstr "Missing Data Resend Service"
+
+msgid "Pasif (SIM iletimi kapalı)"
+msgstr "Inactive (SIM transmission off)"
+
+msgid "Bakanlık'ın son 48 saatte eksik bildirdiği verileri her 6 saatte bir GetMissingDates ile sorgulayıp tarihsel okumalardan yeniden gönderir. 'SIM Veri İletimi' kapatılınca bu servis de durur."
+msgstr "Every 6 hours it queries the Ministry's missing data of the last 48 hours via GetMissingDates and resends it from historical readings. This service stops when 'SIM Data Transmission' is turned off."
+
+msgid "Son kontrol"
+msgstr "Last check"
+
+msgid "Bulunan eksik dakika"
+msgstr "Missing minutes found"
+
+msgid "Yeniden gönderilen"
+msgstr "Resent"
+
+msgid "Son hata:"
+msgstr "Last error:"

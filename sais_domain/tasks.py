@@ -16,13 +16,19 @@ için ``ApiLog(direction='out')`` satırları otomatik yazılır.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 
 from celery import shared_task
+from django.conf import settings
 from django.utils import timezone
 
 from .clients import EnvisoftClient, SaisClientError, SaisSimClient
 from .models import SaisCabinet, SystemSwitch
-from .services import build_envisoft_rows, build_sim_payload
+from .services import (
+    build_envisoft_rows,
+    build_sim_payload,
+    build_sim_payloads_for_times,
+)
 
 
 logger = logging.getLogger("sais_domain.tasks")
@@ -152,6 +158,147 @@ def _publish_sim(cabinet: SaisCabinet, readtime, *, force_status: int | None = N
             "SIM SendData beklenmedik hata (cabinet=%s)", cabinet.id,
         )
         return {"sent": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+@shared_task(name="sais_domain.tasks.resend_missing_data")
+def resend_missing_data() -> dict:
+    """Bakanlık'ın eksik bildirdiği (son 48 saat) verileri yeniden gönderir.
+
+    Beat tarafından **6 saatte bir** çağrılır. Her aktif kabin için Bakanlık
+    ``GetMissingDates`` servisini sorgular; dönen eksik dakikaları ``Reading``
+    historian'ından doldurup ``SendData`` ile yeniden iletir.
+
+    Gate'ler (ikisi de ``publish_minute_data`` ile aynı mantık):
+
+    - Lisans aktif değilse → no-op.
+    - ``SystemSwitch.sim_enabled`` kapalıysa → no-op. (Kullanıcı isteği: "SIM'e
+      veri gönder" pasifken eksik veri gönderimi de pasif olur.)
+
+    Tek run'da gönderilen dakika sayısı ``SAIS_MISSING_RESEND_MAX_MINUTES`` ile
+    sınırlı; kalan dakikalar bir sonraki run'da toparlanır (eksik kümesi
+    küçüldükçe yakınsar). Sonuç ``SystemSwitch``'e damgalanır (Sistem Kontrol
+    sayfasında görüntülenir).
+    """
+    from api.licensing import license_active
+    if not license_active():
+        return {"skipped": "license_inactive"}
+
+    switch = SystemSwitch.load()
+    if not switch.sim_enabled:
+        return {"skipped": "sim_disabled"}
+
+    cabinets = list(
+        SaisCabinet.objects
+        .select_related("station")
+        .filter(station__active=True)
+    )
+
+    total_found = 0
+    total_resent = 0
+    errors: list[str] = []
+    for cabinet in cabinets:
+        try:
+            result = _resend_cabinet_missing(cabinet)
+            total_found += result["found"]
+            total_resent += result["resent"]
+        except Exception as exc:  # noqa: BLE001 — bir kabin diğerlerini durdurmasın
+            logger.exception(
+                "resend_missing_data: cabinet=%s başarısız", cabinet.id,
+            )
+            errors.append(f"{cabinet.device_id}: {type(exc).__name__}: {exc}")
+
+    SystemSwitch.mark_missing_run(
+        found=total_found,
+        resent=total_resent,
+        error="; ".join(errors),
+    )
+    logger.info(
+        "resend_missing_data: %d kabin, %d eksik dakika bulundu, %d yeniden gönderildi",
+        len(cabinets), total_found, total_resent,
+    )
+    return {
+        "cabinets": len(cabinets),
+        "found": total_found,
+        "resent": total_resent,
+        "errors": errors,
+    }
+
+
+def _resend_cabinet_missing(cabinet: SaisCabinet) -> dict:
+    """Tek kabin için ``GetMissingDates`` → backfill → ``SendData`` akışı.
+
+    Bakanlık'ın eksik dakika listesini çeker, son 48 saatle sınırlar, en eski
+    dakikalardan başlayarak ``SAIS_MISSING_RESEND_MAX_MINUTES`` kadarını
+    ``Reading`` historian'ından doldurup gönderir. ``found`` = eksik dakika
+    sayısı (cap sonrası işlenmeye aday), ``resent`` = Bakanlık'ın 200 + result
+    ile kabul ettiği dakika sayısı.
+    """
+    max_minutes = int(getattr(settings, "SAIS_MISSING_RESEND_MAX_MINUTES", 720))
+    lookback = int(getattr(settings, "SAIS_MISSING_BACKFILL_LOOKBACK_MIN", 10))
+
+    with SaisSimClient(cabinet) as client:
+        objects = client.get_missing_dates()
+        raw_dates = []
+        if isinstance(objects, dict):
+            raw_dates = objects.get("MissingDates") or []
+
+        targets = _parse_missing_dates(raw_dates)
+        if not targets:
+            return {"found": 0, "resent": 0}
+
+        # En eskiden başla; cap aşılırsa kalan sonraki run'da toparlanır.
+        targets = targets[:max_minutes]
+
+        payloads = build_sim_payloads_for_times(
+            cabinet, targets, lookback_minutes=lookback,
+        )
+
+        resent = 0
+        for payload in payloads:
+            if payload.is_empty:
+                continue
+            try:
+                result = client.send_data(
+                    readtime=payload.readtime,
+                    values=payload.values,
+                    period=payload.period,
+                )
+            except SaisClientError as exc:
+                logger.warning(
+                    "resend_missing_data SendData başarısız (cabinet=%s, readtime=%s): %s",
+                    cabinet.id, payload.readtime, exc,
+                )
+                continue
+            accepted = True
+            if isinstance(result, dict) and "result" in result:
+                accepted = bool(result["result"])
+            if accepted:
+                resent += 1
+
+        return {"found": len(targets), "resent": resent}
+
+
+def _parse_missing_dates(raw_dates) -> list[datetime]:
+    """Bakanlık ISO tarih string'lerini TZ-aware datetime listesine çevirir.
+
+    Bakanlık naive yerel saat verir (``2020-11-24T00:55:00``). Yalnız son 48
+    saatteki dakikalar tutulur (servis sözleşmesi de 48 saatle sınırlı; defansif
+    filtre). Sıralı + tekilleştirilmiş döner (en eski → en yeni).
+    """
+    cutoff = timezone.now() - timedelta(hours=48)
+    out: set[datetime] = set()
+    for item in raw_dates:
+        if not item:
+            continue
+        try:
+            dt = datetime.fromisoformat(str(item))
+        except ValueError:
+            continue
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+        if dt >= cutoff:
+            out.add(dt)
+    return sorted(out)
 
 
 def _publish_envisoft(cabinet: SaisCabinet, readtime, *, force_status: int | None = None) -> dict:

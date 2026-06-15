@@ -716,6 +716,14 @@ def system_control_status(request):
             switch.wash_started_by.username if switch.wash_started_by else None
         ),
         "wash_remaining_seconds": switch.wash_remaining_seconds(),
+        # Eksik veri yeniden gönderim servisi durumu (6 saatte bir).
+        "sim_enabled": switch.sim_enabled,
+        "missing_check_at": (
+            switch.last_missing_check_at.isoformat() if switch.last_missing_check_at else None
+        ),
+        "missing_found_count": switch.last_missing_found_count,
+        "missing_resent_count": switch.last_missing_resent_count,
+        "missing_error": switch.last_missing_error or None,
     })
 
 

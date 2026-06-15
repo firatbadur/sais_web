@@ -327,6 +327,14 @@ SAIS_SIM_SOFTWARE_VERSION = os.getenv("SAIS_SIM_SOFTWARE_VERSION", "EnvisoftV.2"
 # olarak ticket yenilemeyi tetikler — TTL sadece üst sınır.
 SAIS_SIM_TICKET_TTL = int(os.getenv("SAIS_SIM_TICKET_TTL", str(60 * 60)))
 
+# Eksik veri yeniden gönderim job'ı (sais_domain.tasks.resend_missing_data):
+# Bakanlık GetMissingDates'ten dönen eksik dakikaların kaçı tek run'da yeniden
+# gönderilir (üst sınır — kalan dakikalar bir sonraki 6 saatlik run'da toparlanır).
+SAIS_MISSING_RESEND_MAX_MINUTES = int(os.getenv("SAIS_MISSING_RESEND_MAX_MINUTES", "720"))
+# Her eksik dakika için sensörün "tutulan" (held) değerini bulurken geriye kaç
+# dakika bakılır; o dakikada aktivite (en az bir okuma) bu pencere içinde aranır.
+SAIS_MISSING_BACKFILL_LOOKBACK_MIN = int(os.getenv("SAIS_MISSING_BACKFILL_LOOKBACK_MIN", "10"))
+
 # Envisoft (scada/entegration.onlinecevre.com.tr) — EnvisoftClient
 ENVISOFT_DIAGNOSTIC_URL = os.getenv(
     "ENVISOFT_DIAGNOSTIC_URL",

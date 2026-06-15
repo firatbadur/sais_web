@@ -308,6 +308,65 @@
     </div>
 </div>
 
+{# ------------------------------------------------------------------ #}
+{#  Eksik veri yeniden gönderim servisi durumu (GetMissingDates, 6 saat)#}
+{# ------------------------------------------------------------------ #}
+<div class="row g-5 mt-2">
+    <div class="col-12">
+        <div class="card card-flush">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-arrows-circle fs-2 me-2 text-primary"></i>
+                    {% trans "Eksik Veri Gönderim Servisi" %}
+                </h3>
+                <div class="card-toolbar">
+                    {% if switch.sim_enabled %}
+                        <span class="badge badge-light-success" id="missing-state-badge">{% trans "Aktif" %}</span>
+                    {% else %}
+                        <span class="badge badge-light-warning" id="missing-state-badge">{% trans "Pasif (SIM iletimi kapalı)" %}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="text-muted fs-8 mb-4">
+                    {% trans "Bakanlık'ın son 48 saatte eksik bildirdiği verileri her 6 saatte bir GetMissingDates ile sorgulayıp tarihsel okumalardan yeniden gönderir. 'SIM Veri İletimi' kapatılınca bu servis de durur." %}
+                </div>
+                <div class="row g-5">
+                    <div class="col-md-4">
+                        <div class="d-flex flex-column border border-dashed border-gray-300 rounded p-5">
+                            <span class="text-muted fs-8 mb-1">{% trans "Son kontrol" %}</span>
+                            <span class="fs-4 fw-semibold text-gray-800" id="missing-check-at">
+                                {% if switch.last_missing_check_at %}
+                                    {{ switch.last_missing_check_at|date:"d.m.Y H:i:s" }}
+                                    <span class="text-muted fs-7">({{ switch.last_missing_check_at|timesince }} {% trans "önce" %})</span>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex flex-column border border-dashed border-gray-300 rounded p-5">
+                            <span class="text-muted fs-8 mb-1">{% trans "Bulunan eksik dakika" %}</span>
+                            <span class="fs-2 fw-bold text-gray-900" id="missing-found">{{ switch.last_missing_found_count }}</span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex flex-column border border-dashed border-gray-300 rounded p-5">
+                            <span class="text-muted fs-8 mb-1">{% trans "Yeniden gönderilen" %}</span>
+                            <span class="fs-2 fw-bold text-success" id="missing-resent">{{ switch.last_missing_resent_count }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-danger mt-4 {% if not switch.last_missing_error %}d-none{% endif %}" id="missing-error">
+                    <span class="fw-semibold">{% trans "Son hata:" %}</span>
+                    <span id="missing-error-text">{{ switch.last_missing_error|default:"" }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {# =============================================================== #}
 {#  Manuel İşlemler — Yıkama / Haftalık Yıkama                      #}
 {# =============================================================== #}
@@ -686,6 +745,7 @@
             beatLastRun: "{% trans 'Son tetik' %}",
             ago: "{% trans 'önce' %}",
             beatStale: "{% trans '2 dakikadan eski tetik, beat durmuş olabilir.' %}",
+            missingPassive: "{% trans 'Pasif (SIM iletimi kapalı)' %}",
         };
 
         function humanAgo(iso) {
@@ -728,6 +788,39 @@
                     beatText = I18N.beatNever;
                 }
                 document.getElementById("beat-detail").textContent = beatText;
+
+                // --- Eksik veri gönderim servisi ---
+                const mBadge = document.getElementById("missing-state-badge");
+                if (mBadge) {
+                    mBadge.classList.remove("badge-light-success", "badge-light-warning");
+                    if (data.sim_enabled) {
+                        mBadge.classList.add("badge-light-success");
+                        mBadge.textContent = I18N.active;
+                    } else {
+                        mBadge.classList.add("badge-light-warning");
+                        mBadge.textContent = I18N.missingPassive;
+                    }
+                }
+                const mCheck = document.getElementById("missing-check-at");
+                if (mCheck) {
+                    mCheck.textContent = data.missing_check_at
+                        ? (new Date(data.missing_check_at).toLocaleString("tr-TR")
+                            + " (" + humanAgo(data.missing_check_at) + " " + I18N.ago + ")")
+                        : "—";
+                }
+                const mFound = document.getElementById("missing-found");
+                if (mFound) mFound.textContent = data.missing_found_count ?? 0;
+                const mResent = document.getElementById("missing-resent");
+                if (mResent) mResent.textContent = data.missing_resent_count ?? 0;
+                const mErr = document.getElementById("missing-error");
+                if (mErr) {
+                    if (data.missing_error) {
+                        mErr.classList.remove("d-none");
+                        document.getElementById("missing-error-text").textContent = data.missing_error;
+                    } else {
+                        mErr.classList.add("d-none");
+                    }
+                }
             } catch (e) { /* network error — sessizce sıradaki tick'i bekle */ }
         }
 
