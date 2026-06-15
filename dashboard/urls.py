@@ -38,11 +38,6 @@ urlpatterns = [
          name="operator_calibration"),
     path("operator/alarms/", views.AlarmsView.as_view(), name="operator_alarms"),
 
-    # --- Management (readonly) ---
-    path("management/stations/", views.StationsOverviewView.as_view(), name="management_stations"),
-    path("management/connections/", views.ConnectionsOverviewView.as_view(), name="management_connections"),
-    path("management/sensors/", views.SensorsOverviewView.as_view(), name="management_sensors"),
-
     # --- Sensör Ayarları (operatör + yönetici): Bağlantı → Scan Grubu → Sensör ---
     path("sensor-config/connections/", views.ConnectionConfigListView.as_view(),
          name="sensorcfg_connections"),

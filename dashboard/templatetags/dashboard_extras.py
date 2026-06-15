@@ -40,7 +40,6 @@ def menu_parent_active(context, group_label: str, css_class: str = "here show") 
     prefix_map = {
         "reports": "/dashboard/reports/",
         "operator": "/dashboard/operator/",
-        "management": "/dashboard/management/",
         "admin": "/dashboard/admin-pages/",
         "settings": "/dashboard/settings/",
     }

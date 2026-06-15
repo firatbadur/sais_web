@@ -835,34 +835,6 @@ class MimicDashboardView(AdminRequiredMixin, TemplateView):
 
 
 # --------------------------------------------------------------------------- #
-# Management overview (readonly)
-# --------------------------------------------------------------------------- #
-
-class StationsOverviewView(OperatorRequiredMixin, ListView):
-    model = Station
-    template_name = "dashboard/management/stations.html"
-    context_object_name = "stations"
-    paginate_by = 50
-
-
-class ConnectionsOverviewView(OperatorRequiredMixin, ListView):
-    model = Connection
-    template_name = "dashboard/management/connections.html"
-    context_object_name = "connections"
-    paginate_by = 50
-
-
-class SensorsOverviewView(OperatorRequiredMixin, ListView):
-    model = Sensor
-    template_name = "dashboard/management/sensors.html"
-    context_object_name = "sensors"
-    paginate_by = 50
-
-    def get_queryset(self):
-        return super().get_queryset().select_related("parameter", "connection", "scan_group")
-
-
-# --------------------------------------------------------------------------- #
 # Sensör Ayarları (operatör + yönetici): Scan Grubu + Sensör CRUD + Canlı Test
 # --------------------------------------------------------------------------- #
 

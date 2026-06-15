@@ -66,20 +66,6 @@ MENU = [
         ],
     },
     {
-        "label": _("Yönetim"),
-        "menu_key": "management",
-        "icon": "ki-wifi",
-        "roles": (ROLE_ADMIN, ROLE_OPERATOR),
-        "children": [
-            {"label": _("İstasyonlar"), "url_name": "dashboard:management_stations",
-             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
-            {"label": _("Bağlantılar"), "url_name": "dashboard:management_connections",
-             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
-            {"label": _("Sensörler"), "url_name": "dashboard:management_sensors",
-             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
-        ],
-    },
-    {
         "label": _("Sensör Ayarları"),
         "menu_key": "sensorcfg",
         "icon": "ki-abstract-26",
