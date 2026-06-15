@@ -49,12 +49,19 @@
         <!-- ================= STEP 1: Bağlantı ================= -->
         <div class="wz-pane active" data-pane="1">
             <input type="hidden" id="c-id" value="{{ connection.pk|default:'' }}">
-            <div class="alert alert-light-info d-flex align-items-center mb-7">
+            <div class="alert alert-light-info d-flex align-items-center mb-6">
                 <i class="ki-outline ki-information fs-2 text-info me-3"></i>
                 <div class="text-gray-700 fs-7">
-                    {% trans "Cihaz bağlantısını tanımlayın. Kaydedince sonraki adımda bu bağlantının scan gruplarını yönetebilirsiniz." %}
+                    {% trans "Cihaz bağlantısını tanımlayın. Düzenlemek için aşağıdaki başlığa tıklayıp bağlantı bilgilerini açın." %}
                 </div>
             </div>
+            <div class="card card-bordered mb-6">
+                <div class="card-header collapsible cursor-pointer rotate collapsed" data-bs-toggle="collapse" data-bs-target="#c-form-body" role="button">
+                    <h3 class="card-title fs-6">{% trans "Bağlantı Bilgileri" %}</h3>
+                    <div class="card-toolbar rotate-180"><i class="ki-outline ki-down fs-2"></i></div>
+                </div>
+                <div id="c-form-body" class="collapse">
+                <div class="card-body">
             <div class="row">
                 <div class="col-md-6 mb-5">
                     <label class="form-label">{% trans "İstasyon" %}</label>
@@ -187,6 +194,9 @@
                     </div>
                 </div>
             </div>
+                </div>
+                </div>
+            </div>
 
             <div class="d-flex justify-content-between mt-5">
                 <a href="{% url 'dashboard:sensorcfg_connections' %}" class="btn btn-light">{% trans "İptal" %}</a>
@@ -299,7 +309,11 @@
             <div id="group-test-result" class="d-none mb-5"></div>
 
             <div class="card card-bordered mb-6">
-                <div class="card-header"><h3 class="card-title fs-6" id="sensor-form-title">{% trans "Yeni Sensör Ekle" %}</h3></div>
+                <div class="card-header collapsible cursor-pointer rotate collapsed" data-bs-toggle="collapse" data-bs-target="#s-form-body" role="button">
+                    <h3 class="card-title fs-6" id="sensor-form-title">{% trans "Yeni Sensör Ekle" %}</h3>
+                    <div class="card-toolbar rotate-180"><i class="ki-outline ki-down fs-2"></i></div>
+                </div>
+                <div id="s-form-body" class="collapse">
                 <div class="card-body">
                     <input type="hidden" id="s-id" value="">
                     <div class="alert alert-light-info d-flex align-items-center mb-5 py-3">
@@ -385,6 +399,13 @@
                         <button id="s-save" class="btn btn-primary btn-sm"><i class="ki-outline ki-check fs-4 me-1"></i>{% trans "Sensörü Kaydet" %}</button>
                     </div>
                 </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end mb-4">
+                <button id="s-new" class="btn btn-sm btn-light-primary">
+                    <i class="ki-outline ki-plus fs-5 me-1"></i>{% trans "Yeni Sensör Ekle" %}
+                </button>
             </div>
 
             <div class="table-responsive">
@@ -476,6 +497,15 @@
     const C_S2 = ['station'];
 
     function clearCErrors(){ document.querySelectorAll('[data-cerr]').forEach(e=>e.textContent=''); }
+    // Bağlantı formu açılır/kapanır (default kapalı — yanlışlıkla düzenlemeyi önler).
+    function setConnForm(open){
+        const el=g('c-form-body'); if(!el) return;
+        if(window.bootstrap && bootstrap.Collapse){
+            bootstrap.Collapse.getOrCreateInstance(el, {toggle:false})[open?'show':'hide']();
+        } else { el.classList.toggle('show', open); }
+        const hdr=document.querySelector('.card-header[data-bs-target="#c-form-body"]');
+        if(hdr) hdr.classList.toggle('collapsed', !open);
+    }
     function buildConnPayload(){
         const p={ id: g('c-id').value || undefined };
         Object.keys(CMAP).forEach(f=>{ const el=g(CMAP[f]);
@@ -500,7 +530,7 @@
         clearCErrors(); const btn=this; btn.disabled=true;
         postJSON("{% url 'dashboard:api_sensorcfg_connection_save' %}", buildConnPayload()).then(j=>{
             btn.disabled=false;
-            if(!j.ok){ if(j.errors){ Object.keys(j.errors).forEach(k=>{const el=document.querySelector('[data-cerr="'+k+'"]'); if(el) el.textContent=(j.errors[k]||[]).join(' ');}); } else alert(j.error||I18N.failed); return; }
+            if(!j.ok){ if(j.errors){ Object.keys(j.errors).forEach(k=>{const el=document.querySelector('[data-cerr="'+k+'"]'); if(el) el.textContent=(j.errors[k]||[]).join(' ');}); setConnForm(true); } else alert(j.error||I18N.failed); return; }
             connId=j.id; g('c-id').value=j.id;
             g('s2-conn-name').textContent=(j.station?j.station+' / ':'')+j.name+' ('+j.protocol+')';
             loadGroups(); gotoStep(2);
@@ -640,6 +670,16 @@
         }).catch(()=>{ cell.innerHTML='<span class="text-danger">'+I18N.failed+'</span>'; });
     }
     function clearSErrors(){ document.querySelectorAll('[data-serr]').forEach(e=>e.textContent=''); }
+    // Sensör formu açılır/kapanır (default kapalı — yanlışlıkla düzenlemeyi önler).
+    function setSensorForm(open){
+        const el=g('s-form-body'); if(!el) return;
+        if(window.bootstrap && bootstrap.Collapse){
+            bootstrap.Collapse.getOrCreateInstance(el, {toggle:false})[open?'show':'hide']();
+        } else { el.classList.toggle('show', open); }
+        const hdr=document.querySelector('.card-header[data-bs-target="#s-form-body"]');
+        if(hdr) hdr.classList.toggle('collapsed', !open);
+    }
+    g('s-new').addEventListener('click', e=>{ e.preventDefault(); resetSensorForm(); setSensorForm(true); window.scrollTo({top:0,behavior:'smooth'}); });
     function resetSensorForm(){
         g('s-id').value=''; $('#s-parameter').val('').trigger('change');
         g('s-type').value=''; g('s-address').value='';
@@ -662,7 +702,7 @@
         g('s-offset').value=(s.offset==null?'':s.offset); g('s-decimals').value=(s.decimals==null?'':s.decimals);
         g('s-quantity').value=(s.quantity==null?'':s.quantity); g('s-active').checked=!!s.is_active; g('s-sim').checked=!!s.is_simulated;
         g('s-simmin').value=(s.sim_min==null?'':s.sim_min); g('s-simmax').value=(s.sim_max==null?'':s.sim_max); toggleSimRange();
-        g('sensor-form-title').textContent=I18N.editSensor; clearSErrors(); window.scrollTo({top:0,behavior:'smooth'});
+        g('sensor-form-title').textContent=I18N.editSensor; clearSErrors(); setSensorForm(true); window.scrollTo({top:0,behavior:'smooth'});
     }
     g('s-clear').addEventListener('click', e=>{ e.preventDefault(); resetSensorForm(); });
     g('s-save').addEventListener('click', function(e){
@@ -678,8 +718,8 @@
         const btn=this; btn.disabled=true;
         postJSON("{% url 'dashboard:api_sensorcfg_group_sensor_save' %}", payload).then(j=>{
             btn.disabled=false;
-            if(!j.ok){ if(j.errors){ Object.keys(j.errors).forEach(k=>{const el=document.querySelector('[data-serr="'+k+'"]'); if(el) el.textContent=(j.errors[k]||[]).join(' ');}); } else alert(j.error||I18N.failed); return; }
-            resetSensorForm(); loadSensors();
+            if(!j.ok){ if(j.errors){ Object.keys(j.errors).forEach(k=>{const el=document.querySelector('[data-serr="'+k+'"]'); if(el) el.textContent=(j.errors[k]||[]).join(' ');}); setSensorForm(true); } else alert(j.error||I18N.failed); return; }
+            resetSensorForm(); setSensorForm(false); loadSensors();
         }).catch(()=>{ btn.disabled=false; alert(I18N.failed); });
     });
     function deleteSensor(s){
