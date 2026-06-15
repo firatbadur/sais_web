@@ -71,8 +71,9 @@ Source: "assets\EnvisoftWebX.ico"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{group}\Envisoft WebX Dashboard"; Filename: "https://{code:GetDomain}/dashboard/"; IconFilename: "{app}\EnvisoftWebX.ico"
 Name: "{group}\Uninstall Envisoft WebX"; Filename: "{uninstallexe}"
-; Desktop shortcut that opens the dashboard in the default browser.
-Name: "{commondesktop}\Envisoft WebX"; Filename: "https://{code:GetDomain}/dashboard/"; IconFilename: "{app}\EnvisoftWebX.ico"
+; Desktop shortcut that opens the dashboard in the default browser via the
+; local Caddy :80 fallback (works regardless of DNS/domain/SSL state).
+Name: "{commondesktop}\Envisoft WebX"; Filename: "http://localhost/dashboard/"; IconFilename: "{app}\EnvisoftWebX.ico"
 
 [Run]
 ; No runhidden -> the install runs in a VISIBLE console; install.ps1 keeps the
