@@ -2735,3 +2735,24 @@ msgstr "Are you sure you want to delete this scan group? Its sensors fall back t
 
 msgid "Bağlantı silindi."
 msgstr "Connection deleted."
+
+msgid "Açık Bağlantıları Kapat"
+msgstr "Close Open Connections"
+
+msgid "Sensör Okuması anahtarını kapatmak bağlantıyı kapatmaz; worker gateway bağlantısını açık tutar. Bu düğme açık TCP/serial socket bağlantılarını kapatır ve worker süreçlerini tazeler."
+msgstr "Turning off the Sensor Reading switch does not close the connection; the worker keeps the gateway connection open. This button closes open TCP/serial sockets and refreshes the worker processes."
+
+msgid "Açık tüm SCADA bağlantıları kapatılacak ve worker süreçleri tazelenecek. Devam edilsin mi?"
+msgstr "All open SCADA connections will be closed and worker processes refreshed. Continue?"
+
+msgid "Bağlantıları Kapat"
+msgstr "Close Connections"
+
+msgid "Bağlantı kapatma isteği gönderilemedi: %(e)s"
+msgstr "Failed to send connection close request: %(e)s"
+
+msgid "Hiçbir worker yanıt vermedi — worker çalışmıyor olabilir. Gerekirse worker'ı yeniden başlatın."
+msgstr "No worker responded — the worker may not be running. Restart the worker if needed."
+
+msgid "Açık bağlantılar kapatıldı: %(w)d worker, %(c)d bağlantı kapatıldı; worker process'leri tazelendi."
+msgstr "Open connections closed: %(w)d worker(s), %(c)d connection(s) closed; worker processes refreshed."

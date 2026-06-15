@@ -108,14 +108,20 @@ def record_failure(conn_id: int) -> bool:
         return _FAILURES[conn_id] >= MAX_CONSECUTIVE_FAILED_CYCLES
 
 
-def close_all() -> None:
-    """Worker shutdown'da çağrılır — tüm cached socket'leri kapatır."""
+def close_all(reason: str = "shutdown") -> int:
+    """Tüm cached socket'leri kapatır. Kapatılan bağlantı sayısını döner.
+
+    Worker shutdown'da (worker_shutdown sinyali) ve dashboard "Açık Bağlantıları
+    Kapat" düğmesinden (`close_scada_pool` control command) çağrılır.
+    """
     with _LOCK:
+        count = len(_POOL)
         for conn_id, reader in list(_POOL.items()):
             _safe_close(reader)
-            logger.info("connection_pool: shutdown close conn=%s", conn_id)
+            logger.info("connection_pool: %s close conn=%s", reason, conn_id)
         _POOL.clear()
         _FAILURES.clear()
+        return count
 
 
 def stats() -> dict:

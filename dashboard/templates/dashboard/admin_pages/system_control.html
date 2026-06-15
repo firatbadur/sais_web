@@ -179,6 +179,27 @@
                     </span>
                 </div>
 
+                {# Açık bağlantıları kapat #}
+                <div class="notice d-flex flex-stack bg-light-warning rounded border-warning border border-dashed p-5 mt-6">
+                    <div class="d-flex align-items-center">
+                        <i class="ki-outline ki-plug fs-2x text-warning me-4"></i>
+                        <div class="d-flex flex-column">
+                            <h5 class="text-gray-900 fw-bold mb-1">{% trans "Açık Bağlantıları Kapat" %}</h5>
+                            <span class="text-gray-700 fs-7">
+                                {% trans "Sensör Okuması anahtarını kapatmak bağlantıyı kapatmaz; worker gateway bağlantısını açık tutar. Bu düğme açık TCP/serial socket bağlantılarını kapatır ve worker süreçlerini tazeler." %}
+                            </span>
+                        </div>
+                    </div>
+                    <form method="post" class="ms-4"
+                          onsubmit="return confirm('{% trans "Açık tüm SCADA bağlantıları kapatılacak ve worker süreçleri tazelenecek. Devam edilsin mi?" %}');">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="close_connections">
+                        <button type="submit" class="btn btn-sm btn-warning text-nowrap">
+                            <i class="ki-outline ki-cross-circle fs-5 me-1"></i>{% trans "Bağlantıları Kapat" %}
+                        </button>
+                    </form>
+                </div>
+
                 {# Restart bilgi notu #}
                 <div class="notice d-flex bg-light-primary rounded border-primary border border-dashed p-5 mt-6">
                     <i class="ki-outline ki-information fs-2x text-primary me-4"></i>

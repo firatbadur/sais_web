@@ -1250,6 +1250,9 @@ class SystemControlView(OperatorRequiredMixin, TemplateView):
             switch.save()
             messages.success(request, _("Yıkama durduruldu."))
 
+        elif action == "close_connections":
+            self._close_scada_connections(request)
+
         else:  # save_switches — mevcut davranış
             switch.sim_enabled = request.POST.get("sim_enabled") == "on"
             switch.envisoft_enabled = request.POST.get("envisoft_enabled") == "on"
@@ -1259,6 +1262,68 @@ class SystemControlView(OperatorRequiredMixin, TemplateView):
             messages.success(request, _("Sistem kontrol ayarları kaydedildi."))
 
         return redirect("dashboard:admin_system_control")
+
+    def _close_scada_connections(self, request) -> None:
+        """Worker'ların açık tuttuğu persistent TCP/serial socket'leri kapatır.
+
+        Sistem kontrol sayfasından "Sensör Okuması" anahtarını kapatmak yalnız
+        yeni okuma görevlerinin kuyruğa alınmasını durdurur; worker process'inin
+        belleğinde (`scada_io.connection_pool._POOL`) açık olan socket gateway'e
+        bağlı kalır. Bu socket'leri kapatmanın tek yolu worker process'inin
+        içinden geçer:
+
+          - solo pool (dev): `close_scada_pool` control command ana process'teki
+            pool'u doğrudan kapatır.
+          - prefork pool (prod, --concurrency=4): açık socket'ler child
+            process'lerin belleğinde; `pool_restart` ile child'lar geri
+            dönüştürülür (process ölünce OS socket'i kapatır).
+
+        İki yöntem de broker üzerinden tüm worker node'larına broadcast edilir;
+        biri ilgisiz pool tipinde no-op olur, zararsızdır.
+        """
+        from sais_web.celery import app
+
+        closed = 0
+        workers = 0
+        try:
+            replies = app.control.broadcast(
+                "close_scada_pool",
+                arguments={"reason": request.user.username or "manual"},
+                reply=True, timeout=3,
+            ) or []
+            for reply in replies:
+                for _node, payload in reply.items():
+                    workers += 1
+                    if isinstance(payload, dict):
+                        closed += int(payload.get("closed") or 0)
+        except Exception as exc:  # noqa: BLE001 — broker erişilemez vb.
+            messages.error(
+                request,
+                _("Bağlantı kapatma isteği gönderilemedi: %(e)s") % {"e": exc},
+            )
+            return
+
+        # prefork child'larını geri dönüştür (idle child socket'leri için).
+        try:
+            app.control.broadcast(
+                "pool_restart", arguments={"reload": False}, reply=False,
+            )
+        except Exception:  # noqa: BLE001 — solo pool desteklemez, zararsız
+            pass
+
+        if workers == 0:
+            messages.warning(
+                request,
+                _("Hiçbir worker yanıt vermedi — worker çalışmıyor olabilir. "
+                  "Gerekirse worker'ı yeniden başlatın."),
+            )
+        else:
+            messages.success(
+                request,
+                _("Açık bağlantılar kapatıldı: %(w)d worker, %(c)d bağlantı "
+                  "kapatıldı; worker process'leri tazelendi.")
+                % {"w": workers, "c": closed},
+            )
 
     def _save_sim_status_policy(self, request) -> None:
         """SIM status filtresini kaydeder: işaretli ('SIM'e Gönder') statuslar

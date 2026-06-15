@@ -17,6 +17,7 @@ import random
 from datetime import timedelta
 
 from celery import shared_task
+from celery.worker.control import control_command
 from django.db import transaction
 from django.utils import timezone
 
@@ -30,6 +31,28 @@ from .writers import build_writer
 
 
 logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------------------------------- #
+# Remote control command — açık bağlantı pool'unu kapat
+# --------------------------------------------------------------------------- #
+@control_command()
+def close_scada_pool(state, reason: str = "manual"):
+    """Worker'ın persistent connection pool'undaki tüm socket'leri kapatır.
+
+    Dashboard "Açık Bağlantıları Kapat" düğmesinden `app.control.broadcast(
+    "close_scada_pool", ...)` ile çağrılır. Pool worker process'ine özel
+    (module-global) olduğu için yalnız o process içinden kapatılabilir; bu
+    komut worker'ın kendi belleğindeki socket'leri kapatır.
+
+    Not: prefork pool'da (prod, --concurrency=4) bu komut yalnız MainProcess'te
+    çalışır; child process'lerdeki socket'ler `pool_restart` ile process geri
+    dönüştürülerek (OS socket'i kapatır) temizlenir. Solo pool'da (dev) ana
+    process pool'u tuttuğu için komut doğrudan kapatır.
+    """
+    closed = connection_pool.close_all(reason=f"control:{reason}")
+    logger.info("close_scada_pool control command: %d bağlantı kapatıldı", closed)
+    return {"ok": True, "closed": closed}
 
 
 # --------------------------------------------------------------------------- #

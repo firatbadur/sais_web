@@ -20,6 +20,11 @@ app = Celery("sais_web")
 # settings.py içindeki CELERY_* anahtarlarını yükle
 app.config_from_object("django.conf:settings", namespace="CELERY")
 
+# Dashboard "Açık Bağlantıları Kapat" düğmesi prefork child process'lerini geri
+# dönüştürerek (pool_restart) açık socket'leri kapatır — bu özellik default
+# kapalıdır, açıkça etkinleştirilmeli.
+app.conf.worker_pool_restarts = True
+
 # Yüklü tüm app'lerin tasks.py modülünü otomatik keşfet
 app.autodiscover_tasks()
 
