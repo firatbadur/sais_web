@@ -2682,3 +2682,56 @@ msgstr "Save the connection first."
 
 msgid "Önce scan grubunu kaydedin."
 msgstr "Save the scan group first."
+
+# --- Bağlantı landing + sihirbaz yeniden düzenleme (otomatik) ---
+
+msgid "Sensör Ayarları — Bağlantılar"
+msgstr "Sensor Settings — Connections"
+
+msgid "Yeni Bağlantı"
+msgstr "New Connection"
+
+msgid "Kurulum sırası: Bağlantı → Scan Grupları → Sensörler. Bir bağlantıyı düzenleyince sihirbaz açılır; orada o bağlantının scan gruplarını ve sensörlerini yönetir, canlı test edersiniz."
+msgstr "Setup order: Connection → Scan Groups → Sensors. Editing a connection opens the wizard, where you manage its scan groups and sensors and run live tests."
+
+msgid "Düzenle / Sihirbaz"
+msgstr "Edit / Wizard"
+
+msgid "Yapılandır"
+msgstr "Configure"
+
+msgid "Bağlantı Sil"
+msgstr "Delete Connection"
+
+msgid "Bağlantıyı Sil"
+msgstr "Delete Connection"
+
+msgid "Dikkat: Bu bağlantıya bağlı tüm scan grupları, sensörler ve onların geçmiş okumaları (Reading) da silinir. Bu işlem geri alınamaz."
+msgstr "Warning: all scan groups, sensors and their historical readings (Reading) belonging to this connection are also deleted. This action cannot be undone."
+
+msgid "Bağlantı Yapılandır"
+msgstr "Configure Connection"
+
+msgid "Kurulum Sihirbazı"
+msgstr "Setup Wizard"
+
+msgid "Cihaz bağlantısını tanımlayın. Kaydedince sonraki adımda bu bağlantının scan gruplarını yönetebilirsiniz."
+msgstr "Define the device connection. After saving, you can manage this connection's scan groups in the next step."
+
+msgid "Henüz scan grubu yok."
+msgstr "No scan groups yet."
+
+msgid "Grubu Kaydet"
+msgstr "Save Group"
+
+msgid "Register limiti: Holding/Input (fn 3/4) max 125, Coil/Discrete (fn 1/2) max 2000."
+msgstr "Register limit: Holding/Input (fn 3/4) max 125, Coil/Discrete (fn 1/2) max 2000."
+
+msgid "Scan Gruplarına Dön"
+msgstr "Back to Scan Groups"
+
+msgid "Bu scan grubunu silmek istediğinize emin misiniz? Bağlı sensörler legacy moda düşer."
+msgstr "Are you sure you want to delete this scan group? Its sensors fall back to legacy mode."
+
+msgid "Bağlantı silindi."
+msgstr "Connection deleted."

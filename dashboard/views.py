@@ -841,44 +841,46 @@ class SensorsOverviewView(OperatorRequiredMixin, ListView):
 # Sensör Ayarları (operatör + yönetici): Scan Grubu + Sensör CRUD + Canlı Test
 # --------------------------------------------------------------------------- #
 
-class ScanGroupListView(OperatorRequiredMixin, ListView):
-    model = ScanGroup
-    template_name = "dashboard/sensor_config/scangroup_list.html"
-    context_object_name = "scan_groups"
+class ConnectionConfigListView(OperatorRequiredMixin, ListView):
+    """Sensör Ayarları landing — bağlantılar listesi (düzenlenebilir).
+
+    Hiyerarşi: Bağlantı → Scan Grupları → Sensörler. Bu sayfa giriş noktası;
+    her satır sihirbaza (bağlantı bazlı) gider.
+    """
+    model = Connection
+    template_name = "dashboard/sensor_config/connection_list.html"
+    context_object_name = "connections"
     paginate_by = 50
 
     def get_queryset(self):
         return (
             super().get_queryset()
-            .select_related("connection", "connection__station")
-            .annotate(sensor_total=Count("sensors"))
-            .order_by("connection__name", "slave_id", "start_address")
+            .select_related("station")
+            .annotate(scangroup_total=Count("scan_groups", distinct=True),
+                      sensor_total=Count("sensors", distinct=True))
+            .order_by("station__name", "name")
         )
 
 
 class ScanGroupWizardView(OperatorRequiredMixin, TemplateView):
-    """İki adımlı scan grubu sihirbazı.
+    """Üç adımlı kurulum sihirbazı: Bağlantı → Scan Grupları → Sensörler.
 
-    Step 1: scan grubu tanımı (AJAX `scangroup_save` ile kaydedilir → id döner).
-    Step 2: o gruba ait sensör detayları (AJAX `group_sensor_*`), her sensör
-    satırında canlı **test** butonu (`sensor_test_run`). Düzenleme modunda
-    `pk` verilir; sihirbaz mevcut grupla açılır.
+    Step 1: bağlantı oluştur/düzenle (AJAX `connection_save`/`connection_detail`).
+    Step 2: o bağlantının scan gruplarını yönet (AJAX `scangroup_*`).
+    Step 3: seçili gruba sensör ekle + her sensörde canlı **test** butonu.
+    Düzenleme modunda `pk` = Connection.id; sihirbaz o bağlantı ile açılır.
     """
     template_name = "dashboard/sensor_config/scangroup_wizard.html"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         pk = self.kwargs.get("pk")
-        scan_group = None
+        connection = None
         if pk:
-            scan_group = (
-                ScanGroup.objects.select_related("connection", "connection__station")
-                .filter(pk=pk).first()
+            connection = (
+                Connection.objects.select_related("station").filter(pk=pk).first()
             )
-        ctx["scan_group"] = scan_group
-        ctx["connections"] = (
-            Connection.objects.select_related("station").order_by("station", "name")
-        )
+        ctx["connection"] = connection
         ctx["parameters"] = Parameter.objects.order_by("parameter_txt", "parameter_name", "id")
         ctx["function_choices"] = ScanGroup.READ_FUNCTIONS
         ctx["sensor_type_choices"] = Sensor.SENSOR_TYPE
@@ -895,19 +897,19 @@ class ScanGroupWizardView(OperatorRequiredMixin, TemplateView):
         return ctx
 
 
-class ScanGroupDeleteView(OperatorRequiredMixin, DeleteView):
-    model = ScanGroup
-    template_name = "dashboard/sensor_config/scangroup_confirm_delete.html"
-    success_url = reverse_lazy("dashboard:sensorcfg_scangroups")
-    context_object_name = "scan_group"
+class ConnectionConfigDeleteView(OperatorRequiredMixin, DeleteView):
+    model = Connection
+    template_name = "dashboard/sensor_config/connection_confirm_delete.html"
+    success_url = reverse_lazy("dashboard:sensorcfg_connections")
+    context_object_name = "connection"
 
     def form_valid(self, form):
         label = str(self.object)
         response = super().form_valid(form)
-        messages.success(self.request, _("Scan grubu silindi."))
+        messages.success(self.request, _("Bağlantı silindi."))
         log_event(
             EventType.CONFIG,
-            f"Scan grubu silindi: {label}",
+            f"Bağlantı silindi: {label}",
             severity="warning", request=self.request,
         )
         return response

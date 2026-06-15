@@ -2546,6 +2546,71 @@ def scangroup_save(request):
 
 
 @login_required
+def scangroup_rows(request):
+    """Bir bağlantının scan grupları (sihirbaz step 2 tablosu). GET ?connection="""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    try:
+        conn_id = int(request.GET.get("connection") or 0) or None
+    except (TypeError, ValueError):
+        conn_id = None
+    if not conn_id:
+        return JsonResponse({"ok": True, "groups": []})
+
+    from django.db.models import Count
+
+    from api.models import ScanGroup
+
+    groups = (
+        ScanGroup.objects.filter(connection_id=conn_id)
+        .annotate(sensor_total=Count("sensors"))
+        .order_by("slave_id", "start_address")
+    )
+    rows = [{
+        "id": g.id, "name": g.name, "slave_id": g.slave_id, "function": g.function,
+        "start_address": g.start_address, "quantity": g.quantity,
+        "end_address": g.end_address, "is_active": g.is_active,
+        "sensor_total": g.sensor_total,
+    } for g in groups]
+    return JsonResponse({"ok": True, "groups": rows})
+
+
+@login_required
+def scangroup_delete(request):
+    """Scan grubu sil (sihirbaz step 2). POST JSON {id}.
+
+    Bağlı sensörler silinmez; scan_group SET_NULL ile boşalır (legacy mod).
+    """
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from api.models import ScanGroup
+
+    try:
+        gid = json.loads(request.body or "{}").get("id")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    sg = ScanGroup.objects.filter(pk=gid).first()
+    if sg is None:
+        return JsonResponse({"ok": False, "error": "Scan grubu bulunamadı."}, status=404)
+    label = str(sg)
+    sg.delete()
+    log_event(
+        EventType.CONFIG, f"Scan grubu silindi (sihirbaz): {label}",
+        severity="warning", request=request,
+    )
+    return JsonResponse({"ok": True})
+
+
+@login_required
 def group_sensor_list(request):
     """Bir scan grubunun sensörleri (sihirbaz step 2 tablosu). GET ?scan_group="""
     denied = _require_operator(request)

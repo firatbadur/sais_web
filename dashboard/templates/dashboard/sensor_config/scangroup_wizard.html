@@ -1,8 +1,8 @@
 {% extends "dashboard/base.html" %}
 {% load i18n %}
 
-{% block title %}{% if scan_group %}{% trans "Scan Grubu Düzenle" %}{% else %}{% trans "Yeni Scan Grubu" %}{% endif %}{% endblock %}
-{% block page_title %}{% trans "Scan Grubu Sihirbazı" %}{% endblock %}
+{% block title %}{% if connection %}{% trans "Bağlantı Yapılandır" %}{% else %}{% trans "Yeni Bağlantı" %}{% endif %}{% endblock %}
+{% block page_title %}{% trans "Kurulum Sihirbazı" %}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -35,49 +35,26 @@
 
 {% block content %}
 {% csrf_token %}
-<input type="hidden" id="wz-group-id" value="{{ scan_group.pk|default:'' }}">
-<input type="hidden" id="wz-conn-id" value="{{ scan_group.connection_id|default:'' }}">
+<input type="hidden" id="wz-conn-id" value="{{ connection.pk|default:'' }}">
 
 <div class="card">
     <div class="card-body">
         <!-- Stepper -->
         <div class="wz-stepper">
-            <div class="wz-step is-active" data-step="1">
-                <div class="wz-node">1</div>
-                <div class="wz-label">{% trans "Bağlantı" %}</div>
-            </div>
-            <div class="wz-step" data-step="2">
-                <div class="wz-node">2</div>
-                <div class="wz-label">{% trans "Scan Grubu" %}</div>
-            </div>
-            <div class="wz-step" data-step="3">
-                <div class="wz-node">3</div>
-                <div class="wz-label">{% trans "Sensörler & Test" %}</div>
-            </div>
+            <div class="wz-step is-active" data-step="1"><div class="wz-node">1</div><div class="wz-label">{% trans "Bağlantı" %}</div></div>
+            <div class="wz-step" data-step="2"><div class="wz-node">2</div><div class="wz-label">{% trans "Scan Grupları" %}</div></div>
+            <div class="wz-step" data-step="3"><div class="wz-node">3</div><div class="wz-label">{% trans "Sensörler & Test" %}</div></div>
         </div>
 
         <!-- ================= STEP 1: Bağlantı ================= -->
         <div class="wz-pane active" data-pane="1">
-            <input type="hidden" id="c-id" value="">
+            <input type="hidden" id="c-id" value="{{ connection.pk|default:'' }}">
             <div class="alert alert-light-info d-flex align-items-center mb-7">
                 <i class="ki-outline ki-information fs-2 text-info me-3"></i>
                 <div class="text-gray-700 fs-7">
-                    {% trans "Cihaz bağlantısını tanımlayın. Mevcut bir bağlantıyı düzenlemek için listeden seçin; yeni oluşturmak için boş bırakın." %}
+                    {% trans "Cihaz bağlantısını tanımlayın. Kaydedince sonraki adımda bu bağlantının scan gruplarını yönetebilirsiniz." %}
                 </div>
             </div>
-
-            <div class="mb-7">
-                <label class="form-label">{% trans "Mevcut Bağlantı (düzenle)" %}</label>
-                <select id="c-existing" class="form-select form-select-solid" data-control="select2" data-placeholder="{% trans 'Yeni bağlantı için boş bırakın' %}" data-allow-clear="true">
-                    <option></option>
-                    {% for c in connections %}
-                        <option value="{{ c.id }}">{% if c.station_id %}{{ c.station.name }} / {% endif %}{{ c.name }} ({{ c.protocol }})</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="separator separator-dashed mb-7"></div>
-
             <div class="row">
                 <div class="col-md-6 mb-5">
                     <label class="form-label">{% trans "İstasyon" %}</label>
@@ -119,7 +96,6 @@
                 </div>
             </div>
 
-            <!-- Network (TCP) -->
             <h4 class="fs-6 fw-bold text-gray-700 mt-3 mb-3">{% trans "Network (TCP)" %}</h4>
             <div class="row">
                 <div class="col-md-8 mb-5">
@@ -134,7 +110,6 @@
                 </div>
             </div>
 
-            <!-- Serial (collapse) -->
             <div class="mb-5">
                 <a class="btn btn-sm btn-light-primary" data-bs-toggle="collapse" href="#c-serial">
                     <i class="ki-outline ki-down fs-5 me-1"></i>{% trans "Serial Ayarları (RS-232/485)" %}
@@ -171,20 +146,13 @@
                         </select>
                     </div>
                     <div class="col-md-12 mb-5 d-flex gap-6">
-                        <label class="form-check form-switch form-check-custom form-check-solid">
-                            <input id="c-xonxoff" class="form-check-input" type="checkbox"><span class="form-check-label fs-8">XON/XOFF</span>
-                        </label>
-                        <label class="form-check form-switch form-check-custom form-check-solid">
-                            <input id="c-rtscts" class="form-check-input" type="checkbox"><span class="form-check-label fs-8">RTS/CTS</span>
-                        </label>
-                        <label class="form-check form-switch form-check-custom form-check-solid">
-                            <input id="c-dsrdtr" class="form-check-input" type="checkbox"><span class="form-check-label fs-8">DSR/DTR</span>
-                        </label>
+                        <label class="form-check form-switch form-check-custom form-check-solid"><input id="c-xonxoff" class="form-check-input" type="checkbox"><span class="form-check-label fs-8">XON/XOFF</span></label>
+                        <label class="form-check form-switch form-check-custom form-check-solid"><input id="c-rtscts" class="form-check-input" type="checkbox"><span class="form-check-label fs-8">RTS/CTS</span></label>
+                        <label class="form-check form-switch form-check-custom form-check-solid"><input id="c-dsrdtr" class="form-check-input" type="checkbox"><span class="form-check-label fs-8">DSR/DTR</span></label>
                     </div>
                 </div>
             </div>
 
-            <!-- Polling -->
             <h4 class="fs-6 fw-bold text-gray-700 mt-3 mb-3">{% trans "Polling / Kayıt / Güvenilirlik" %}</h4>
             <div class="row">
                 <div class="col-md-4 mb-5">
@@ -221,69 +189,90 @@
             </div>
 
             <div class="d-flex justify-content-between mt-5">
-                <a href="{% url 'dashboard:sensorcfg_scangroups' %}" class="btn btn-light">{% trans "İptal" %}</a>
-                <button id="wz-next-1" class="btn btn-primary">
-                    {% trans "Kaydet ve Devam" %} <i class="ki-outline ki-arrow-right fs-4 ms-1"></i>
-                </button>
+                <a href="{% url 'dashboard:sensorcfg_connections' %}" class="btn btn-light">{% trans "İptal" %}</a>
+                <button id="wz-next-1" class="btn btn-primary">{% trans "Kaydet ve Devam" %} <i class="ki-outline ki-arrow-right fs-4 ms-1"></i></button>
             </div>
         </div>
 
-        <!-- ================= STEP 2: Scan Grubu ================= -->
+        <!-- ================= STEP 2: Scan Grupları ================= -->
         <div class="wz-pane" data-pane="2">
             <div class="alert alert-light-primary d-flex align-items-center mb-7">
                 <i class="ki-outline ki-router fs-2 text-primary me-3"></i>
-                <div class="text-gray-700 fs-7">
-                    {% trans "Bağlantı" %}: <b id="s2-conn-name" class="ms-1">—</b>
-                </div>
+                <div class="text-gray-700 fs-7">{% trans "Bağlantı" %}: <b id="s2-conn-name" class="ms-1">—</b></div>
             </div>
-            <div class="alert alert-light-info d-flex align-items-center mb-7">
-                <i class="ki-outline ki-information fs-2 text-info me-3"></i>
-                <div class="text-gray-700 fs-7">
-                    {% trans "Modbus toplu okuma bloğu tanımlayın. Register limiti: Holding/Input Register (fn 3/4) için en fazla 125, Coil/Discrete (fn 1/2) için en fazla 2000." %}
-                </div>
-            </div>
-            <div class="row">
-                <div class="col-md-6 mb-5">
-                    <label class="form-label required">{% trans "Grup Adı" %}</label>
-                    <input id="g-name" type="text" class="form-control form-control-solid" value="{{ scan_group.name|default:'' }}">
-                    <div class="text-danger small" data-err="name"></div>
-                </div>
-                <div class="col-md-3 mb-5">
-                    <label class="form-label required">{% trans "Slave ID" %}</label>
-                    <input id="g-slave" type="number" class="form-control form-control-solid" value="{{ scan_group.slave_id|default:'1' }}">
-                    <div class="text-danger small" data-err="slave_id"></div>
-                </div>
-                <div class="col-md-3 mb-5">
-                    <label class="form-label">{% trans "Aktif" %}</label>
-                    <div class="form-check form-switch form-check-custom form-check-solid mt-2">
-                        <input id="g-active" class="form-check-input" type="checkbox" {% if not scan_group or scan_group.is_active %}checked{% endif %}>
+
+            <div class="card card-bordered mb-6">
+                <div class="card-header"><h3 class="card-title fs-6" id="group-form-title">{% trans "Yeni Scan Grubu" %}</h3></div>
+                <div class="card-body">
+                    <input type="hidden" id="g-id" value="">
+                    <div class="alert alert-light-info d-flex align-items-center mb-5 py-3">
+                        <i class="ki-outline ki-information-5 fs-3 text-info me-3"></i>
+                        <div class="text-gray-700 fs-8">{% trans "Register limiti: Holding/Input (fn 3/4) max 125, Coil/Discrete (fn 1/2) max 2000." %}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-4">
+                            <label class="form-label required">{% trans "Grup Adı" %}</label>
+                            <input id="g-name" type="text" class="form-control form-control-solid form-control-sm">
+                            <div class="text-danger small" data-gerr="name"></div>
+                        </div>
+                        <div class="col-md-2 mb-4">
+                            <label class="form-label required">{% trans "Slave ID" %}</label>
+                            <input id="g-slave" type="number" class="form-control form-control-solid form-control-sm" value="1">
+                            <div class="text-danger small" data-gerr="slave_id"></div>
+                        </div>
+                        <div class="col-md-3 mb-4">
+                            <label class="form-label required">{% trans "Fonksiyon" %}</label>
+                            <select id="g-function" class="form-select form-select-solid form-select-sm">
+                                {% for val, label in function_choices %}<option value="{{ val }}" {% if val == 3 %}selected{% endif %}>{{ val }} — {{ label }}</option>{% endfor %}
+                            </select>
+                            <div class="text-danger small" data-gerr="function"></div>
+                        </div>
+                        <div class="col-md-3 mb-4 d-flex align-items-end">
+                            <label class="form-check form-switch form-check-custom form-check-solid">
+                                <input id="g-active" class="form-check-input" type="checkbox" checked>
+                                <span class="form-check-label fs-8">{% trans "Aktif" %}</span>
+                            </label>
+                        </div>
+                        <div class="col-md-3 mb-4">
+                            <label class="form-label required">{% trans "Başlangıç Adresi" %}</label>
+                            <input id="g-start" type="number" class="form-control form-control-solid form-control-sm" value="0">
+                            <div class="text-danger small" data-gerr="start_address"></div>
+                        </div>
+                        <div class="col-md-3 mb-4">
+                            <label class="form-label required">{% trans "Register Sayısı" %}</label>
+                            <input id="g-quantity" type="number" class="form-control form-control-solid form-control-sm">
+                            <div class="text-danger small" data-gerr="quantity"></div>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2">
+                        <button id="g-clear" class="btn btn-light btn-sm">{% trans "Temizle" %}</button>
+                        <button id="g-save" class="btn btn-primary btn-sm"><i class="ki-outline ki-check fs-4 me-1"></i>{% trans "Grubu Kaydet" %}</button>
                     </div>
                 </div>
-                <div class="col-md-4 mb-5">
-                    <label class="form-label required">{% trans "Fonksiyon" %}</label>
-                    <select id="g-function" class="form-select form-select-solid">
-                        {% for val, label in function_choices %}
-                            <option value="{{ val }}" {% if scan_group and scan_group.function == val %}selected{% elif not scan_group and val == 3 %}selected{% endif %}>{{ val }} — {{ label }}</option>
-                        {% endfor %}
-                    </select>
-                    <div class="text-danger small" data-err="function"></div>
-                </div>
-                <div class="col-md-4 mb-5">
-                    <label class="form-label required">{% trans "Başlangıç Adresi" %}</label>
-                    <input id="g-start" type="number" class="form-control form-control-solid" value="{{ scan_group.start_address|default:'0' }}">
-                    <div class="text-danger small" data-err="start_address"></div>
-                </div>
-                <div class="col-md-4 mb-5">
-                    <label class="form-label required">{% trans "Register Sayısı" %}</label>
-                    <input id="g-quantity" type="number" class="form-control form-control-solid" value="{{ scan_group.quantity|default:'' }}">
-                    <div class="text-danger small" data-err="quantity"></div>
-                </div>
             </div>
-            <div class="d-flex justify-content-between mt-5">
+
+            <div class="table-responsive">
+                <table class="table table-row-bordered align-middle gs-0 gy-3">
+                    <thead class="fs-8 fw-bold text-uppercase text-gray-500">
+                        <tr>
+                            <th>{% trans "Grup Adı" %}</th>
+                            <th>{% trans "Slave" %}</th>
+                            <th>{% trans "Fn" %}</th>
+                            <th>{% trans "Aralık" %}</th>
+                            <th class="text-end">{% trans "Sensör" %}</th>
+                            <th>{% trans "Aktif" %}</th>
+                            <th class="text-end">{% trans "İşlem" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody id="group-tbody">
+                        <tr><td colspan="7" class="text-center text-muted py-5">{% trans "Henüz scan grubu yok." %}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="d-flex justify-content-between mt-7">
                 <button id="wz-back-2" class="btn btn-light"><i class="ki-outline ki-arrow-left fs-4 me-1"></i>{% trans "Geri" %}</button>
-                <button id="wz-next-2" class="btn btn-primary">
-                    {% trans "Kaydet ve Devam" %} <i class="ki-outline ki-arrow-right fs-4 ms-1"></i>
-                </button>
+                <a href="{% url 'dashboard:sensorcfg_connections' %}" class="btn btn-success"><i class="ki-outline ki-check-circle fs-4 me-1"></i>{% trans "Bitir" %}</a>
             </div>
         </div>
 
@@ -294,22 +283,17 @@
                     <h3 class="fs-4 fw-bold mb-1" id="s3-group-name">—</h3>
                     <span class="text-muted fs-7" id="s3-group-meta"></span>
                 </div>
-                <button id="wz-group-test" class="btn btn-light-info btn-sm">
-                    <i class="ki-outline ki-pulse fs-4 me-1"></i>{% trans "Tüm Grubu Test Et" %}
-                </button>
+                <button id="wz-group-test" class="btn btn-light-info btn-sm"><i class="ki-outline ki-pulse fs-4 me-1"></i>{% trans "Tüm Grubu Test Et" %}</button>
             </div>
             <div id="group-test-result" class="d-none mb-5"></div>
 
-            <!-- Sensör ekle/düzenle formu -->
             <div class="card card-bordered mb-6">
                 <div class="card-header"><h3 class="card-title fs-6" id="sensor-form-title">{% trans "Yeni Sensör Ekle" %}</h3></div>
                 <div class="card-body">
                     <input type="hidden" id="s-id" value="">
                     <div class="alert alert-light-info d-flex align-items-center mb-5 py-3">
                         <i class="ki-outline ki-information-5 fs-3 text-info me-3"></i>
-                        <div class="text-gray-700 fs-8">
-                            {% trans "Slave, fonksiyon ve bağlantı gruptan miras alınır. Adres, grubun aralığı içinde olmalıdır." %}
-                        </div>
+                        <div class="text-gray-700 fs-8">{% trans "Slave, fonksiyon ve bağlantı gruptan miras alınır. Adres, grubun aralığı içinde olmalıdır." %}</div>
                     </div>
                     <div class="row">
                         <div class="col-md-4 mb-4">
@@ -373,26 +357,17 @@
                             <input id="s-quantity" type="number" class="form-control form-control-solid form-control-sm" placeholder="{% trans 'string/raw' %}">
                         </div>
                         <div class="col-md-4 mb-4 d-flex align-items-end gap-4">
-                            <label class="form-check form-switch form-check-custom form-check-solid">
-                                <input id="s-active" class="form-check-input" type="checkbox" checked>
-                                <span class="form-check-label fs-8">{% trans "Aktif" %}</span>
-                            </label>
-                            <label class="form-check form-switch form-check-custom form-check-solid">
-                                <input id="s-sim" class="form-check-input" type="checkbox">
-                                <span class="form-check-label fs-8">{% trans "Simülasyon" %}</span>
-                            </label>
+                            <label class="form-check form-switch form-check-custom form-check-solid"><input id="s-active" class="form-check-input" type="checkbox" checked><span class="form-check-label fs-8">{% trans "Aktif" %}</span></label>
+                            <label class="form-check form-switch form-check-custom form-check-solid"><input id="s-sim" class="form-check-input" type="checkbox"><span class="form-check-label fs-8">{% trans "Simülasyon" %}</span></label>
                         </div>
                     </div>
                     <div class="d-flex justify-content-end gap-2">
                         <button id="s-clear" class="btn btn-light btn-sm">{% trans "Temizle" %}</button>
-                        <button id="s-save" class="btn btn-primary btn-sm">
-                            <i class="ki-outline ki-check fs-4 me-1"></i>{% trans "Sensörü Kaydet" %}
-                        </button>
+                        <button id="s-save" class="btn btn-primary btn-sm"><i class="ki-outline ki-check fs-4 me-1"></i>{% trans "Sensörü Kaydet" %}</button>
                     </div>
                 </div>
             </div>
 
-            <!-- Sensör tablosu -->
             <div class="table-responsive">
                 <table class="table table-row-bordered align-middle gs-0 gy-3">
                     <thead class="fs-8 fw-bold text-uppercase text-gray-500">
@@ -413,10 +388,8 @@
             </div>
 
             <div class="d-flex justify-content-between mt-7">
-                <button id="wz-back-3" class="btn btn-light"><i class="ki-outline ki-arrow-left fs-4 me-1"></i>{% trans "Geri" %}</button>
-                <a href="{% url 'dashboard:sensorcfg_scangroups' %}" class="btn btn-success">
-                    <i class="ki-outline ki-check-circle fs-4 me-1"></i>{% trans "Bitir" %}
-                </a>
+                <button id="wz-back-3" class="btn btn-light"><i class="ki-outline ki-arrow-left fs-4 me-1"></i>{% trans "Scan Gruplarına Dön" %}</button>
+                <a href="{% url 'dashboard:sensorcfg_connections' %}" class="btn btn-success"><i class="ki-outline ki-check-circle fs-4 me-1"></i>{% trans "Bitir" %}</a>
             </div>
         </div>
     </div>
@@ -428,18 +401,16 @@
 (function () {
     const $ = window.jQuery;
     const I18N = {
-        saved: "{% trans 'Kaydedildi' %}",
-        confirmDel: "{% trans 'Bu sensörü silmek istediğinize emin misiniz?' %}",
-        newSensor: "{% trans 'Yeni Sensör Ekle' %}",
-        editSensor: "{% trans 'Sensör Düzenle' %}",
-        noSensors: "{% trans 'Henüz sensör yok.' %}",
-        failed: "{% trans 'İstek başarısız' %}",
-        testing: "{% trans 'okunuyor…' %}",
-        value: "{% trans 'Değer' %}",
-        address: "{% trans 'Adres' %}",
+        confirmDelSensor: "{% trans 'Bu sensörü silmek istediğinize emin misiniz?' %}",
+        confirmDelGroup: "{% trans 'Bu scan grubunu silmek istediğinize emin misiniz? Bağlı sensörler legacy moda düşer.' %}",
+        newSensor: "{% trans 'Yeni Sensör Ekle' %}", editSensor: "{% trans 'Sensör Düzenle' %}",
+        newGroup: "{% trans 'Yeni Scan Grubu' %}", editGroup: "{% trans 'Scan Grubu Düzenle' %}",
+        noSensors: "{% trans 'Henüz sensör yok.' %}", noGroups: "{% trans 'Henüz scan grubu yok.' %}",
+        failed: "{% trans 'İstek başarısız' %}", testing: "{% trans 'okunuyor…' %}",
+        value: "{% trans 'Değer' %}", address: "{% trans 'Adres' %}",
         yes: "{% trans 'Evet' %}", no: "{% trans 'Hayır' %}",
-        needGroup: "{% trans 'Önce scan grubunu kaydedin.' %}",
-        needConn: "{% trans 'Önce bağlantıyı kaydedin.' %}",
+        needGroup: "{% trans 'Önce scan grubunu kaydedin.' %}", needConn: "{% trans 'Önce bağlantıyı kaydedin.' %}",
+        sensorsBtn: "{% trans 'Sensörler' %}",
     };
     const TYPE_LABELS = {0:"{% trans 'Analog Giriş' %}",1:"{% trans 'Analog Çıkış' %}",2:"{% trans 'Dijital Giriş' %}",3:"{% trans 'Dijital Çıkış' %}"};
 
@@ -450,7 +421,8 @@
     const g=id=>document.getElementById(id);
 
     let connId = g('wz-conn-id').value || null;
-    let groupId = g('wz-group-id').value || null;
+    let groupId = null;          // step3 için seçili scan grubu
+    let groupMeta = null;
 
     // ---------- Stepper ----------
     function gotoStep(n){
@@ -469,107 +441,131 @@
             const n=+st.dataset.step;
             if(n>=2 && !connId) return;
             if(n>=3 && !groupId) return;
+            if(n===2) loadGroups();
             gotoStep(n);
         });
     });
 
     // ============ STEP 1: Bağlantı ============
-    const CMAP = {
-        station:'c-station', name:'c-name', description:'c-description', is_enabled:'c-enabled',
+    const CMAP = { station:'c-station', name:'c-name', description:'c-description', is_enabled:'c-enabled',
         protocol:'c-protocol', transport:'c-transport', host:'c-host', port:'c-port',
-        serial_port:'c-serialport', baudrate:'c-baudrate', parity:'c-parity',
-        stop_bits:'c-stopbits', byte_size:'c-bytesize', xonxoff:'c-xonxoff', rtscts:'c-rtscts',
-        dsrdtr:'c-dsrdtr', poll_interval_sec:'c-poll', save_interval_sec:'c-save',
-        timeout_ms:'c-timeout', retry_count:'c-retry', auto_reconnect:'c-autoreconnect',
-        reconnect_delay_sec:'c-reconnectdelay'
-    };
+        serial_port:'c-serialport', baudrate:'c-baudrate', parity:'c-parity', stop_bits:'c-stopbits',
+        byte_size:'c-bytesize', xonxoff:'c-xonxoff', rtscts:'c-rtscts', dsrdtr:'c-dsrdtr',
+        poll_interval_sec:'c-poll', save_interval_sec:'c-save', timeout_ms:'c-timeout', retry_count:'c-retry',
+        auto_reconnect:'c-autoreconnect', reconnect_delay_sec:'c-reconnectdelay' };
     const C_CHECK = ['is_enabled','xonxoff','rtscts','dsrdtr','auto_reconnect'];
-    const C_S2 = ['station']; // select2 alanları
+    const C_S2 = ['station'];
 
     function clearCErrors(){ document.querySelectorAll('[data-cerr]').forEach(e=>e.textContent=''); }
     function buildConnPayload(){
         const p={ id: g('c-id').value || undefined };
-        Object.keys(CMAP).forEach(f=>{
-            const el=g(CMAP[f]);
+        Object.keys(CMAP).forEach(f=>{ const el=g(CMAP[f]);
             if(C_CHECK.includes(f)) p[f]=el.checked;
             else if(C_S2.includes(f)) p[f]=$('#'+CMAP[f]).val() || '';
-            else p[f]=el.value;
-        });
+            else p[f]=el.value; });
         return p;
     }
     function setConnFields(d){
-        Object.keys(CMAP).forEach(f=>{
-            const el=g(CMAP[f]); const v=d[f];
+        Object.keys(CMAP).forEach(f=>{ const el=g(CMAP[f]); const v=d[f];
             if(C_CHECK.includes(f)) el.checked=!!v;
             else if(C_S2.includes(f)) $('#'+CMAP[f]).val(v?String(v):'').trigger('change');
-            else el.value=(v==null?'':v);
-        });
+            else el.value=(v==null?'':v); });
     }
     function loadConnDetail(id){
         getJSON("{% url 'dashboard:api_sensorcfg_connection_detail' %}?connection="+id).then(j=>{
-            if(j.ok){
-                g('c-id').value=id; setConnFields(j.fields);
-                const f=j.fields;
-                g('s2-conn-name').textContent=(f.name||'')+' ('+(f.protocol||'')+')';
-            }
+            if(j.ok){ g('c-id').value=id; setConnFields(j.fields);
+                g('s2-conn-name').textContent=(j.fields.name||'')+' ('+(j.fields.protocol||'')+')'; }
         });
     }
-    $('#c-existing').on('change', function(){
-        const v=$(this).val();
-        if(v) loadConnDetail(v);
-        else { g('c-id').value=''; }
-    });
-
     g('wz-next-1').addEventListener('click', function(){
-        clearCErrors();
-        const btn=this; btn.disabled=true;
+        clearCErrors(); const btn=this; btn.disabled=true;
         postJSON("{% url 'dashboard:api_sensorcfg_connection_save' %}", buildConnPayload()).then(j=>{
             btn.disabled=false;
-            if(!j.ok){
-                if(j.errors){ Object.keys(j.errors).forEach(k=>{const el=document.querySelector('[data-cerr="'+k+'"]'); if(el) el.textContent=(j.errors[k]||[]).join(' ');}); }
-                else alert(j.error||I18N.failed);
-                return;
-            }
+            if(!j.ok){ if(j.errors){ Object.keys(j.errors).forEach(k=>{const el=document.querySelector('[data-cerr="'+k+'"]'); if(el) el.textContent=(j.errors[k]||[]).join(' ');}); } else alert(j.error||I18N.failed); return; }
             connId=j.id; g('c-id').value=j.id;
             g('s2-conn-name').textContent=(j.station?j.station+' / ':'')+j.name+' ('+j.protocol+')';
-            gotoStep(2);
+            loadGroups(); gotoStep(2);
         }).catch(()=>{ btn.disabled=false; alert(I18N.failed); });
     });
 
-    // ============ STEP 2: Scan Grubu ============
-    function clearGErrors(){ document.querySelectorAll('[data-err]').forEach(e=>e.textContent=''); }
+    // ============ STEP 2: Scan Grupları ============
     g('wz-back-2').addEventListener('click', ()=>gotoStep(1));
-    g('wz-next-2').addEventListener('click', function(){
+    function clearGErrors(){ document.querySelectorAll('[data-gerr]').forEach(e=>e.textContent=''); }
+    function resetGroupForm(){
+        g('g-id').value=''; g('g-name').value=''; g('g-slave').value='1'; g('g-function').value='3';
+        g('g-start').value='0'; g('g-quantity').value=''; g('g-active').checked=true;
+        g('group-form-title').textContent=I18N.newGroup; clearGErrors();
+    }
+    function editGroup(gr){
+        g('g-id').value=gr.id; g('g-name').value=gr.name||''; g('g-slave').value=gr.slave_id;
+        g('g-function').value=gr.function; g('g-start').value=gr.start_address; g('g-quantity').value=gr.quantity;
+        g('g-active').checked=!!gr.is_active; g('group-form-title').textContent=I18N.editGroup; clearGErrors();
+        window.scrollTo({top:0,behavior:'smooth'});
+    }
+    function loadGroups(){
+        if(!connId) return;
+        getJSON("{% url 'dashboard:api_sensorcfg_scangroup_rows' %}?connection="+connId).then(j=>renderGroups(j.groups||[]));
+    }
+    function renderGroups(rows){
+        const tb=g('group-tbody');
+        if(!rows.length){ tb.innerHTML='<tr><td colspan="7" class="text-center text-muted py-5">'+I18N.noGroups+'</td></tr>'; return; }
+        tb.innerHTML='';
+        rows.forEach(gr=>{
+            const tr=document.createElement('tr'); tr.dataset.group=JSON.stringify(gr);
+            tr.innerHTML=
+                '<td class="fw-semibold">'+esc(gr.name)+'</td>'+
+                '<td class="text-end">'+esc(gr.slave_id)+'</td>'+
+                '<td class="text-end">'+esc(gr.function)+'</td>'+
+                '<td>'+esc(gr.start_address)+'..'+esc(gr.end_address)+' ('+esc(gr.quantity)+')</td>'+
+                '<td class="text-end">'+esc(gr.sensor_total)+'</td>'+
+                '<td>'+(gr.is_active?'<span class="badge badge-light-success">'+I18N.yes+'</span>':'<span class="badge badge-light-secondary">'+I18N.no+'</span>')+'</td>'+
+                '<td class="text-end text-nowrap">'+
+                    '<button class="btn btn-sm btn-light-success g-sensors"><i class="ki-outline ki-abstract-26 fs-5 me-1"></i>'+I18N.sensorsBtn+'</button> '+
+                    '<button class="btn btn-sm btn-light-primary btn-icon g-edit" title="Düzenle"><i class="ki-outline ki-pencil fs-5"></i></button> '+
+                    '<button class="btn btn-sm btn-light-danger btn-icon g-del" title="Sil"><i class="ki-outline ki-trash fs-5"></i></button>'+
+                '</td>';
+            tb.appendChild(tr);
+        });
+    }
+    g('group-tbody').addEventListener('click', function(e){
+        const tr=e.target.closest('tr[data-group]'); if(!tr) return;
+        const gr=JSON.parse(tr.dataset.group);
+        if(e.target.closest('.g-sensors')) return openSensors(gr);
+        if(e.target.closest('.g-edit')) return editGroup(gr);
+        if(e.target.closest('.g-del')) return deleteGroup(gr);
+    });
+    g('g-clear').addEventListener('click', e=>{ e.preventDefault(); resetGroupForm(); });
+    g('g-save').addEventListener('click', function(e){
+        e.preventDefault();
         if(!connId){ alert(I18N.needConn); gotoStep(1); return; }
         clearGErrors();
-        const payload={
-            id: groupId || undefined,
-            connection: connId,
-            name: g('g-name').value,
-            slave_id: g('g-slave').value,
-            function: g('g-function').value,
-            start_address: g('g-start').value,
-            quantity: g('g-quantity').value,
-            is_active: g('g-active').checked,
-        };
+        const payload={ id: g('g-id').value || undefined, connection: connId,
+            name: g('g-name').value, slave_id: g('g-slave').value, function: g('g-function').value,
+            start_address: g('g-start').value, quantity: g('g-quantity').value, is_active: g('g-active').checked };
         const btn=this; btn.disabled=true;
         postJSON("{% url 'dashboard:api_sensorcfg_scangroup_save' %}", payload).then(j=>{
             btn.disabled=false;
-            if(!j.ok){
-                if(j.errors){ Object.keys(j.errors).forEach(k=>{const el=document.querySelector('[data-err="'+k+'"]'); if(el) el.textContent=(j.errors[k]||[]).join(' ');}); }
-                else alert(j.error||I18N.failed);
-                return;
-            }
-            groupId=j.id; g('wz-group-id').value=j.id;
-            g('s3-group-name').textContent=j.name;
-            g('s3-group-meta').textContent='slave='+j.slave_id+' · fn='+j.function+' · '+j.start_address+'..'+j.end_address+' ('+j.quantity+') · '+j.protocol;
-            loadSensors();
-            gotoStep(3);
+            if(!j.ok){ if(j.errors){ Object.keys(j.errors).forEach(k=>{const el=document.querySelector('[data-gerr="'+k+'"]'); if(el) el.textContent=(j.errors[k]||[]).join(' ');}); } else alert(j.error||I18N.failed); return; }
+            resetGroupForm(); loadGroups();
         }).catch(()=>{ btn.disabled=false; alert(I18N.failed); });
     });
+    function deleteGroup(gr){
+        if(!confirm(I18N.confirmDelGroup)) return;
+        postJSON("{% url 'dashboard:api_sensorcfg_scangroup_delete' %}", {id:gr.id}).then(j=>{
+            if(!j.ok){ alert(j.error||I18N.failed); return; }
+            loadGroups();
+        });
+    }
 
     // ============ STEP 3: Sensörler ============
-    g('wz-back-3').addEventListener('click', ()=>gotoStep(2));
+    function openSensors(gr){
+        groupId=gr.id; groupMeta=gr;
+        g('s3-group-name').textContent=gr.name;
+        g('s3-group-meta').textContent='slave='+gr.slave_id+' · fn='+gr.function+' · '+gr.start_address+'..'+gr.end_address+' ('+gr.quantity+')';
+        g('group-test-result').classList.add('d-none');
+        resetSensorForm(); loadSensors(); gotoStep(3);
+    }
+    g('wz-back-3').addEventListener('click', ()=>{ loadGroups(); gotoStep(2); });
 
     function loadSensors(){
         if(!groupId) return;
@@ -580,8 +576,7 @@
         if(!rows.length){ tb.innerHTML='<tr><td colspan="7" class="text-center text-muted py-5">'+I18N.noSensors+'</td></tr>'; return; }
         tb.innerHTML='';
         rows.forEach(s=>{
-            const tr=document.createElement('tr');
-            tr.dataset.sensor=JSON.stringify(s);
+            const tr=document.createElement('tr'); tr.dataset.sensor=JSON.stringify(s);
             tr.innerHTML=
                 '<td class="fw-semibold">'+esc(s.parameter)+'</td>'+
                 '<td>'+esc(TYPE_LABELS[s.sensor_type]||'—')+'</td>'+
@@ -614,65 +609,48 @@
             cell.innerHTML='<span class="fw-bold '+(ok?'text-success':'text-danger')+'">'+esc(j.value==null?'—':j.value)+unit+'</span> <span class="text-muted">('+esc(j.quality)+', '+esc(j.elapsed_ms)+'ms)</span>';
         }).catch(()=>{ cell.innerHTML='<span class="text-danger">'+I18N.failed+'</span>'; });
     }
-
     function clearSErrors(){ document.querySelectorAll('[data-serr]').forEach(e=>e.textContent=''); }
     function resetSensorForm(){
         g('s-id').value=''; $('#s-parameter').val('').trigger('change');
         g('s-type').value=''; g('s-address').value='';
         g('s-datatype').value='float32'; g('s-byte').value='big'; g('s-word').value='little';
         g('s-bit').value=''; g('s-scale').value='1.0'; g('s-offset').value='0.0';
-        g('s-decimals').value='2'; g('s-quantity').value='';
-        g('s-active').checked=true; g('s-sim').checked=false;
+        g('s-decimals').value='2'; g('s-quantity').value=''; g('s-active').checked=true; g('s-sim').checked=false;
         g('sensor-form-title').textContent=I18N.newSensor; clearSErrors();
     }
     function editSensor(s){
-        g('s-id').value=s.id;
-        $('#s-parameter').val(s.parameter_id?String(s.parameter_id):'').trigger('change');
-        g('s-type').value=(s.sensor_type==null?'':s.sensor_type);
-        g('s-address').value=(s.address==null?'':s.address);
-        g('s-datatype').value=s.data_type||'float32';
-        g('s-byte').value=s.byte_order||'big'; g('s-word').value=s.word_order||'little';
-        g('s-bit').value=(s.bit_position==null?'':s.bit_position);
-        g('s-scale').value=(s.scale==null?'':s.scale); g('s-offset').value=(s.offset==null?'':s.offset);
-        g('s-decimals').value=(s.decimals==null?'':s.decimals); g('s-quantity').value=(s.quantity==null?'':s.quantity);
-        g('s-active').checked=!!s.is_active; g('s-sim').checked=!!s.is_simulated;
-        g('sensor-form-title').textContent=I18N.editSensor; clearSErrors();
-        window.scrollTo({top:0,behavior:'smooth'});
+        g('s-id').value=s.id; $('#s-parameter').val(s.parameter_id?String(s.parameter_id):'').trigger('change');
+        g('s-type').value=(s.sensor_type==null?'':s.sensor_type); g('s-address').value=(s.address==null?'':s.address);
+        g('s-datatype').value=s.data_type||'float32'; g('s-byte').value=s.byte_order||'big'; g('s-word').value=s.word_order||'little';
+        g('s-bit').value=(s.bit_position==null?'':s.bit_position); g('s-scale').value=(s.scale==null?'':s.scale);
+        g('s-offset').value=(s.offset==null?'':s.offset); g('s-decimals').value=(s.decimals==null?'':s.decimals);
+        g('s-quantity').value=(s.quantity==null?'':s.quantity); g('s-active').checked=!!s.is_active; g('s-sim').checked=!!s.is_simulated;
+        g('sensor-form-title').textContent=I18N.editSensor; clearSErrors(); window.scrollTo({top:0,behavior:'smooth'});
     }
     g('s-clear').addEventListener('click', e=>{ e.preventDefault(); resetSensorForm(); });
     g('s-save').addEventListener('click', function(e){
         e.preventDefault();
         if(!groupId){ alert(I18N.needGroup); return; }
         clearSErrors();
-        const payload={
-            id: g('s-id').value || undefined, scan_group: groupId,
-            parameter: $('#s-parameter').val() || '', sensor_type: g('s-type').value,
-            address: g('s-address').value, data_type: g('s-datatype').value,
-            byte_order: g('s-byte').value, word_order: g('s-word').value,
+        const payload={ id: g('s-id').value || undefined, scan_group: groupId,
+            parameter: $('#s-parameter').val() || '', sensor_type: g('s-type').value, address: g('s-address').value,
+            data_type: g('s-datatype').value, byte_order: g('s-byte').value, word_order: g('s-word').value,
             bit_position: g('s-bit').value, scale: g('s-scale').value, offset: g('s-offset').value,
-            decimals: g('s-decimals').value, quantity: g('s-quantity').value,
-            is_active: g('s-active').checked, is_simulated: g('s-sim').checked,
-        };
+            decimals: g('s-decimals').value, quantity: g('s-quantity').value, is_active: g('s-active').checked, is_simulated: g('s-sim').checked };
         const btn=this; btn.disabled=true;
         postJSON("{% url 'dashboard:api_sensorcfg_group_sensor_save' %}", payload).then(j=>{
             btn.disabled=false;
-            if(!j.ok){
-                if(j.errors){ Object.keys(j.errors).forEach(k=>{const el=document.querySelector('[data-serr="'+k+'"]'); if(el) el.textContent=(j.errors[k]||[]).join(' ');}); }
-                else alert(j.error||I18N.failed);
-                return;
-            }
+            if(!j.ok){ if(j.errors){ Object.keys(j.errors).forEach(k=>{const el=document.querySelector('[data-serr="'+k+'"]'); if(el) el.textContent=(j.errors[k]||[]).join(' ');}); } else alert(j.error||I18N.failed); return; }
             resetSensorForm(); loadSensors();
         }).catch(()=>{ btn.disabled=false; alert(I18N.failed); });
     });
     function deleteSensor(s){
-        if(!confirm(I18N.confirmDel)) return;
+        if(!confirm(I18N.confirmDelSensor)) return;
         postJSON("{% url 'dashboard:api_sensorcfg_group_sensor_delete' %}", {id:s.id}).then(j=>{
             if(!j.ok){ alert(j.error||I18N.failed); return; }
             loadSensors();
         });
     }
-
-    // ---------- Grup testi ----------
     g('wz-group-test').addEventListener('click', function(){
         if(!groupId) return;
         const box=g('group-test-result'); box.classList.remove('d-none');
@@ -690,8 +668,7 @@
             html+='</div></div>'; box.innerHTML=html;
             if(Array.isArray(j.sensors)){
                 document.querySelectorAll('#sensor-tbody tr[data-sensor]').forEach(tr=>{
-                    const sid=JSON.parse(tr.dataset.sensor).id;
-                    const found=j.sensors.find(x=>x.id===sid);
+                    const sid=JSON.parse(tr.dataset.sensor).id; const found=j.sensors.find(x=>x.id===sid);
                     if(found){ tr.querySelector('.t-result').innerHTML=found.error?'<span class="text-danger">'+esc(found.error)+'</span>':'<span class="fw-bold text-success">'+esc(found.value==null?'—':found.value)+'</span>'; }
                 });
             }
@@ -701,16 +678,8 @@
     // ---------- init ----------
     $(function(){
         $('[data-control="select2"]').select2({width:'100%'});
-        if(connId){
-            $('#c-existing').val(String(connId)).trigger('change.select2');
-            loadConnDetail(connId);   // düzenleme: bağlantı alanlarını doldur
-        }
+        if(connId){ loadConnDetail(connId); }   // düzenleme: bağlantı alanlarını doldur
     });
-    {% if scan_group %}
-    g('s3-group-name').textContent="{{ scan_group.name|escapejs }}" || "—";
-    g('s3-group-meta').textContent="slave={{ scan_group.slave_id }} · fn={{ scan_group.function }} · {{ scan_group.start_address }}..{{ scan_group.end_address }} ({{ scan_group.quantity }})";
-    {% endif %}
-    if(groupId){ loadSensors(); }            // düzenleme: sensörleri hazırla
 })();
 </script>
 {% endblock %}

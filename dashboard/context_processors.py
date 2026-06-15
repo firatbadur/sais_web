@@ -85,7 +85,7 @@ MENU = [
         "icon": "ki-abstract-26",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR),
         "children": [
-            {"label": _("Scan Grupları"), "url_name": "dashboard:sensorcfg_scangroups",
+            {"label": _("Bağlantılar"), "url_name": "dashboard:sensorcfg_connections",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Sensörler"), "url_name": "dashboard:sensorcfg_sensors",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
