@@ -2501,3 +2501,107 @@ msgstr "Request failed"
 
 msgid "İyi"
 msgstr "Good"
+
+# --- Scan Grubu Sihirbazı (otomatik eklendi) ---
+
+msgid "Scan Grubu Sihirbazı"
+msgstr "Scan Group Wizard"
+
+msgid "Sensörler & Test"
+msgstr "Sensors & Test"
+
+msgid "Modbus toplu okuma bloğu tanımlayın. Register limiti: Holding/Input Register (fn 3/4) için en fazla 125, Coil/Discrete (fn 1/2) için en fazla 2000. Kaydedince sonraki adımda bu gruba sensör ekleyip test edebilirsiniz."
+msgstr "Define a Modbus batch read block. Register limit: up to 125 for Holding/Input Registers (fn 3/4), up to 2000 for Coils/Discrete (fn 1/2). After saving, you can add and test sensors for this group in the next step."
+
+msgid "Slave ID"
+msgstr "Slave ID"
+
+msgid "Fonksiyon"
+msgstr "Function"
+
+msgid "Başlangıç Adresi"
+msgstr "Start Address"
+
+msgid "Register Sayısı"
+msgstr "Register Count"
+
+msgid "Kaydet ve Devam"
+msgstr "Save and Continue"
+
+msgid "Tüm Grubu Test Et"
+msgstr "Test Whole Group"
+
+msgid "Yeni Sensör Ekle"
+msgstr "Add New Sensor"
+
+msgid "Slave, fonksiyon ve bağlantı gruptan miras alınır. Adres, grubun aralığı içinde olmalıdır."
+msgstr "Slave, function and connection are inherited from the group. The address must be within the group range."
+
+msgid "Parametre seçin"
+msgstr "Select a parameter"
+
+msgid "— seçin —"
+msgstr "— select —"
+
+msgid "Byte Order"
+msgstr "Byte Order"
+
+msgid "Word Order"
+msgstr "Word Order"
+
+msgid "Bit Pozisyonu"
+msgstr "Bit Position"
+
+msgid "Ölçek"
+msgstr "Scale"
+
+msgid "Ofset"
+msgstr "Offset"
+
+msgid "Ondalık"
+msgstr "Decimals"
+
+msgid "Adres Aralığı"
+msgstr "Address Range"
+
+msgid "string/raw"
+msgstr "string/raw"
+
+msgid "Simülasyon"
+msgstr "Simulation"
+
+msgid "Sensörü Kaydet"
+msgstr "Save Sensor"
+
+msgid "Henüz sensör yok."
+msgstr "No sensors yet."
+
+msgid "Bitir"
+msgstr "Finish"
+
+msgid "Kaydedildi"
+msgstr "Saved"
+
+msgid "Bu sensörü silmek istediğinize emin misiniz?"
+msgstr "Are you sure you want to delete this sensor?"
+
+msgid "okunuyor…"
+msgstr "reading…"
+
+msgid "Evet"
+msgstr "Yes"
+
+msgid "Hayır"
+msgstr "No"
+
+msgid "Analog Giriş"
+msgstr "Analog Input"
+
+msgid "Analog Çıkış"
+msgstr "Analog Output"
+
+msgid "Dijital Giriş"
+msgstr "Digital Input"
+
+msgid "Dijital Çıkış"
+msgstr "Digital Output"

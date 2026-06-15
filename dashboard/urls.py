@@ -46,9 +46,9 @@ urlpatterns = [
     # --- Sensör Ayarları (operatör + yönetici): Scan Grubu + Sensör CRUD + Test ---
     path("sensor-config/scan-groups/", views.ScanGroupListView.as_view(),
          name="sensorcfg_scangroups"),
-    path("sensor-config/scan-groups/create/", views.ScanGroupCreateView.as_view(),
+    path("sensor-config/scan-groups/create/", views.ScanGroupWizardView.as_view(),
          name="sensorcfg_scangroup_create"),
-    path("sensor-config/scan-groups/<int:pk>/edit/", views.ScanGroupUpdateView.as_view(),
+    path("sensor-config/scan-groups/<int:pk>/edit/", views.ScanGroupWizardView.as_view(),
          name="sensorcfg_scangroup_edit"),
     path("sensor-config/scan-groups/<int:pk>/delete/", views.ScanGroupDeleteView.as_view(),
          name="sensorcfg_scangroup_delete"),
@@ -118,6 +118,14 @@ urlpatterns = [
          name="api_sensorcfg_test_sensor"),
     path("api/sensor-config/test-scangroup/", api_views.scangroup_test_run,
          name="api_sensorcfg_test_scangroup"),
+    path("api/sensor-config/scangroup-save/", api_views.scangroup_save,
+         name="api_sensorcfg_scangroup_save"),
+    path("api/sensor-config/group-sensors/", api_views.group_sensor_list,
+         name="api_sensorcfg_group_sensors"),
+    path("api/sensor-config/group-sensor-save/", api_views.group_sensor_save,
+         name="api_sensorcfg_group_sensor_save"),
+    path("api/sensor-config/group-sensor-delete/", api_views.group_sensor_delete,
+         name="api_sensorcfg_group_sensor_delete"),
 
     # --- AJAX API (Takvim Hatırlatıcı) ---
     path("api/reminders/list/", api_views.reminders_list, name="api_reminders_list"),

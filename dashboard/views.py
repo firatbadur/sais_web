@@ -58,7 +58,6 @@ from .forms import (
     DocumentUploadForm,
     NotificationSettingsForm,
     ProfileForm,
-    ScanGroupForm,
     SensorConfigForm,
     WebSettingsForm,
 )
@@ -857,38 +856,35 @@ class ScanGroupListView(OperatorRequiredMixin, ListView):
         )
 
 
-class ScanGroupCreateView(OperatorRequiredMixin, CreateView):
-    model = ScanGroup
-    form_class = ScanGroupForm
-    template_name = "dashboard/sensor_config/scangroup_form.html"
-    success_url = reverse_lazy("dashboard:sensorcfg_scangroups")
+class ScanGroupWizardView(OperatorRequiredMixin, TemplateView):
+    """İki adımlı scan grubu sihirbazı.
 
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        messages.success(self.request, _("Scan grubu oluşturuldu."))
-        log_event(
-            EventType.CONFIG,
-            f"Scan grubu oluşturuldu: {self.object} (bağlantı={self.object.connection})",
-            severity="warning", request=self.request,
+    Step 1: scan grubu tanımı (AJAX `scangroup_save` ile kaydedilir → id döner).
+    Step 2: o gruba ait sensör detayları (AJAX `group_sensor_*`), her sensör
+    satırında canlı **test** butonu (`sensor_test_run`). Düzenleme modunda
+    `pk` verilir; sihirbaz mevcut grupla açılır.
+    """
+    template_name = "dashboard/sensor_config/scangroup_wizard.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        pk = self.kwargs.get("pk")
+        scan_group = None
+        if pk:
+            scan_group = (
+                ScanGroup.objects.select_related("connection", "connection__station")
+                .filter(pk=pk).first()
+            )
+        ctx["scan_group"] = scan_group
+        ctx["connections"] = (
+            Connection.objects.select_related("station").order_by("station", "name")
         )
-        return response
-
-
-class ScanGroupUpdateView(OperatorRequiredMixin, UpdateView):
-    model = ScanGroup
-    form_class = ScanGroupForm
-    template_name = "dashboard/sensor_config/scangroup_form.html"
-    success_url = reverse_lazy("dashboard:sensorcfg_scangroups")
-
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        messages.success(self.request, _("Scan grubu güncellendi."))
-        log_event(
-            EventType.CONFIG,
-            f"Scan grubu güncellendi: {self.object} (bağlantı={self.object.connection})",
-            severity="warning", request=self.request,
-        )
-        return response
+        ctx["parameters"] = Parameter.objects.order_by("parameter_txt", "parameter_name", "id")
+        ctx["function_choices"] = ScanGroup.READ_FUNCTIONS
+        ctx["sensor_type_choices"] = Sensor.SENSOR_TYPE
+        ctx["data_type_choices"] = Sensor.DATA_TYPES
+        ctx["byte_order_choices"] = Sensor.BYTE_ORDER
+        return ctx
 
 
 class ScanGroupDeleteView(OperatorRequiredMixin, DeleteView):

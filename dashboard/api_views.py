@@ -11,6 +11,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.utils import timezone
 
+from api.events import EventType, log_event
 from api.models import (
     Connection,
     Parameter,
@@ -2381,5 +2382,179 @@ def scangroup_test_run(request):
         "quantity": sg.quantity,
         "protocol": sg.connection.protocol,
     })
+
+
+# ---------------------------------------------------------------------------
+# Scan Grubu Sihirbazı — grup kaydet + gruba bağlı sensör CRUD (AJAX)
+# ---------------------------------------------------------------------------
+
+def _serialize_group_sensor(s):
+    """Sihirbaz step 2 tablosu için bir sensör satırı."""
+    return {
+        "id": s.id,
+        "parameter_id": s.parameter_id,
+        "parameter": (s.parameter.display_name if s.parameter_id else None) or f"Sensör {s.id}",
+        "sensor_type": s.sensor_type,
+        "address": s.address,
+        "data_type": s.data_type,
+        "quantity": s.quantity,
+        "byte_order": s.byte_order,
+        "word_order": s.word_order,
+        "bit_position": s.bit_position,
+        "scale": s.scale,
+        "offset": s.offset,
+        "decimals": s.decimals,
+        "digital_inverse": s.digital_inverse,
+        "is_active": s.is_active,
+        "is_simulated": s.is_simulated,
+    }
+
+
+@login_required
+def scangroup_save(request):
+    """Scan grubu oluştur/güncelle (sihirbaz step 1). POST JSON.
+
+    Döner: {ok, id, ...grup özeti} veya {ok:false, errors:{alan:[mesaj]}}.
+    """
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from api.models import ScanGroup
+    from dashboard.forms import ScanGroupForm
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    instance = None
+    if data.get("id"):
+        instance = ScanGroup.objects.filter(pk=data["id"]).first()
+        if instance is None:
+            return JsonResponse({"ok": False, "error": "Scan grubu bulunamadı."}, status=404)
+
+    form = ScanGroupForm(data, instance=instance)
+    if not form.is_valid():
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+
+    sg = form.save()
+    log_event(
+        EventType.CONFIG,
+        f"Scan grubu {'güncellendi' if instance else 'oluşturuldu'} (sihirbaz): {sg}",
+        severity="warning", request=request,
+    )
+    return JsonResponse({
+        "ok": True,
+        "id": sg.id,
+        "name": sg.name,
+        "connection_id": sg.connection_id,
+        "protocol": sg.connection.protocol,
+        "slave_id": sg.slave_id,
+        "function": sg.function,
+        "start_address": sg.start_address,
+        "quantity": sg.quantity,
+        "end_address": sg.end_address,
+    })
+
+
+@login_required
+def group_sensor_list(request):
+    """Bir scan grubunun sensörleri (sihirbaz step 2 tablosu). GET ?scan_group="""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    try:
+        sg_id = int(request.GET.get("scan_group") or 0) or None
+    except (TypeError, ValueError):
+        sg_id = None
+    if not sg_id:
+        return JsonResponse({"ok": True, "sensors": []})
+
+    sensors = (
+        Sensor.objects.filter(scan_group_id=sg_id)
+        .select_related("parameter")
+        .order_by("address", "id")
+    )
+    return JsonResponse({"ok": True, "sensors": [_serialize_group_sensor(s) for s in sensors]})
+
+
+@login_required
+def group_sensor_save(request):
+    """Gruba bağlı sensör oluştur/güncelle (sihirbaz step 2). POST JSON.
+
+    scan_group payload'dan zorlanır; connection/slave/function gruptan miras
+    alınır (model). address range model validasyonuyla doğrulanır.
+    """
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from api.models import ScanGroup
+    from dashboard.forms import GroupSensorForm
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    sg = ScanGroup.objects.filter(pk=data.get("scan_group")).first()
+    if sg is None:
+        return JsonResponse({"ok": False, "error": "Önce scan grubunu kaydedin."}, status=400)
+
+    instance = None
+    if data.get("id"):
+        instance = Sensor.objects.filter(pk=data["id"]).first()
+        if instance is None:
+            return JsonResponse({"ok": False, "error": "Sensör bulunamadı."}, status=404)
+
+    form = GroupSensorForm(data, instance=instance)
+    if not form.is_valid():
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+
+    sensor = form.save()
+    log_event(
+        EventType.CONFIG,
+        f"Sensör {'güncellendi' if instance else 'oluşturuldu'} (sihirbaz): {sensor} (grup={sg})",
+        severity="warning", request=request,
+    )
+    return JsonResponse({"ok": True, "sensor": _serialize_group_sensor(sensor)})
+
+
+@login_required
+def group_sensor_delete(request):
+    """Gruba bağlı sensörü sil (sihirbaz step 2). POST JSON {id}."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    try:
+        sid = json.loads(request.body or "{}").get("id")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    sensor = Sensor.objects.filter(pk=sid).first()
+    if sensor is None:
+        return JsonResponse({"ok": False, "error": "Sensör bulunamadı."}, status=404)
+    label = str(sensor)
+    sensor.delete()
+    log_event(
+        EventType.CONFIG, f"Sensör silindi (sihirbaz): {label}",
+        severity="warning", request=request,
+    )
+    return JsonResponse({"ok": True})
 
 

@@ -342,6 +342,37 @@ class SensorConfigForm(forms.ModelForm):
         )
 
 
+class GroupSensorForm(forms.ModelForm):
+    """Scan Grubu sihirbazı (step 2) — gruba bağlı sensörün özlü formu.
+
+    Admin `_ScanGroupSensorInline` ile aynı alan seti. connection/slave_id/
+    function gruptan miras alınır (model `_inherit_from_scan_group`); bu yüzden
+    formda yer almaz. `sensor_type` zorunlu (admin formuyla aynı davranış).
+    `scan_group` AJAX kaydında zorlanır.
+    """
+
+    def __init__(self, *args, **kwargs):
+        from api.models import Sensor  # lazy
+
+        super().__init__(*args, **kwargs)
+        self.fields["sensor_type"] = forms.TypedChoiceField(
+            choices=[("", _("— Sensör tipi seçin —"))] + list(Sensor.SENSOR_TYPE),
+            coerce=int, required=True, label=_("Sensör Tipi"),
+        )
+        _apply_metronic_classes(self)
+
+    class Meta:
+        from api.models import Sensor  # lazy
+
+        model = Sensor
+        fields = (
+            "scan_group", "parameter", "sensor_type", "address", "data_type",
+            "quantity", "byte_order", "word_order", "bit_position",
+            "scale", "offset", "decimals",
+            "is_active", "is_simulated",
+        )
+
+
 class DocumentUploadForm(forms.ModelForm):
     """Doküman yükleme — yalnızca belge dosyalarına izin verir (resim/video yasak)."""
 
