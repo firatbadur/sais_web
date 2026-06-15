@@ -828,6 +828,30 @@
 
 {% block extra_scripts %}
 <script>
+    // ----- Aktif sekmeyi hatırla (manuel işlem POST'undan sonra geri dön) -----
+    (function () {
+        const KEY = "sysctrl-active-tab";
+        const links = Array.from(document.querySelectorAll('[data-bs-toggle="tab"]'));
+        if (!links.length) return;
+
+        // Sayfa yüklenince: kayıtlı sekmeyi geri getir (varsa ve hâlâ mevcutsa).
+        const saved = localStorage.getItem(KEY);
+        if (saved) {
+            const target = links.find(a => a.getAttribute('href') === saved);
+            if (target && !target.classList.contains('active')) {
+                try { bootstrap.Tab.getOrCreateInstance(target).show(); }
+                catch (e) { target.click(); }
+            }
+        }
+
+        // Sekme değişince kaydet.
+        links.forEach(function (a) {
+            a.addEventListener('shown.bs.tab', function () {
+                localStorage.setItem(KEY, a.getAttribute('href'));
+            });
+        });
+    })();
+
     (function () {
         const STATUS_URL = "{% url 'dashboard:api_system_control_status' %}";
         const POLL_MS = 10000;
