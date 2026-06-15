@@ -1,8 +1,10 @@
 """
-MSSQL veritabanının tam yedeğini (.bak) alır ve retention politikasını uygular.
+PostgreSQL veritabanının tam yedeğini (.dump) alır ve retention politikasını
+uygular.
 
-Yedek dosyaları `settings.BACKUP_DIR` altına yazılır (db container'ı ile app
-container'larına ortak mount edilen volume). Her yedek alındığı `APP_VERSION` +
+Yedek dosyaları `settings.BACKUP_DIR` altına yazılır (app + celery_worker
+container'larına mount edilen volume). `pg_dump -Fc` (custom format) ile alınır;
+sıkıştırma + selective restore içerir. Her yedek alındığı `APP_VERSION` +
 migration durumuyla damgalanır — geri yüklemede şema uyumu için.
 
 Kullanım:
@@ -17,17 +19,18 @@ Tier'lar: daily / weekly / monthly / yearly / manual. Otomatik (beat) çağrıla
 from __future__ import annotations
 
 import os
+import subprocess
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from api.db_admin import current_migration_state, database_name, master_connection
+from api.db_admin import current_migration_state, database_name, pg_env
 from api.models import BackupPolicy, DatabaseBackup
 
 
 class Command(BaseCommand):
-    help = "MSSQL veritabanının tam yedeğini alır ve retention uygular."
+    help = "PostgreSQL veritabanının tam yedeğini alır ve retention uygular."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -69,15 +72,15 @@ class Command(BaseCommand):
 
         backup_dir = settings.BACKUP_DIR
         if not dry_run and not os.path.isdir(backup_dir):
-            # Volume mount edilmemiş olabilir (örn. harici DB). Net hata ver.
+            # Volume mount edilmemiş olabilir. Net hata ver.
             raise CommandError(
-                f"BACKUP_DIR erişilemez: {backup_dir}. Bundled MSSQL container + "
-                f"mssql_backups volume mount gerekiyor (harici DB desteklenmiyor)."
+                f"BACKUP_DIR erişilemez: {backup_dir}. pg_backups volume mount "
+                f"gerekiyor (app/celery_worker container'larına)."
             )
 
         db = database_name()
         now = timezone.localtime()
-        filename = f"{db}__{tier}__{now.strftime('%Y%m%d_%H%M%S')}.bak"
+        filename = f"{db}__{tier}__{now.strftime('%Y%m%d_%H%M%S')}.dump"
         path = os.path.join(backup_dir, filename)
 
         if dry_run:
@@ -115,45 +118,33 @@ class Command(BaseCommand):
             self._prune(tier, policy.retention)
 
     def _run_backup(self, db: str, path: str):
-        conn = master_connection()
-        try:
-            cur = conn.cursor()
-            # COPY_ONLY: diff/log backup zincirini bozma. CHECKSUM: bütünlük.
-            # COMPRESSION sadece Standard/Enterprise/Developer (+Azure)'da desteklenir;
-            # Express'te hata verir — edition'a göre koşullu ekle.
-            opts = ["COPY_ONLY", "INIT", "FORMAT", "CHECKSUM", "STATS = 10"]
-            if self._supports_compression(cur):
-                opts.insert(1, "COMPRESSION")
-            cur.execute(
-                f"BACKUP DATABASE [{db}] TO DISK = ? WITH " + ", ".join(opts),
-                path,
-            )
-            # STATS mesajlarını tüket (sürücü bazı durumlarda result set döndürür).
-            while cur.nextset():
-                pass
-        finally:
-            conn.close()
-
-    @staticmethod
-    def _supports_compression(cur) -> bool:
-        """EngineEdition: 2=Standard, 3=Enterprise/Developer/Eval, 5=Azure DB,
-        8=Azure MI → compression destekli. 4=Express, 1=Personal → desteksiz."""
-        try:
-            cur.execute("SELECT CAST(SERVERPROPERTY('EngineEdition') AS INT)")
-            edition = cur.fetchone()[0]
-            return edition in (2, 3, 5, 8)
-        except Exception:  # noqa: BLE001 — tespit edilemezse güvenli tarafta kal
-            return False
+        conn = settings.DATABASES["default"]
+        # -Fc: custom format (sıkıştırma + selective/clean restore + blok CRC).
+        # -Z 6: orta seviye sıkıştırma. --no-owner/--no-privileges: restore'da
+        # rol/yetki çakışmasını önler (yeni DB'de aynı roller olmayabilir).
+        cmd = [
+            "pg_dump",
+            "-h", str(conn.get("HOST") or "localhost"),
+            "-p", str(conn.get("PORT") or "5432"),
+            "-U", str(conn.get("USER") or ""),
+            "-d", db,
+            "-Fc", "-Z", "6",
+            "--no-owner", "--no-privileges",
+            "-f", path,
+        ]
+        proc = subprocess.run(cmd, env=pg_env(), capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise CommandError(f"pg_dump başarısız: {proc.stderr.strip()}")
 
     def _verify(self, path: str):
-        conn = master_connection()
-        try:
-            cur = conn.cursor()
-            cur.execute("RESTORE VERIFYONLY FROM DISK = ? WITH CHECKSUM", path)
-            while cur.nextset():
-                pass
-        finally:
-            conn.close()
+        # Custom-format dump'ın içerik listesini (TOC) oku — bozuk/yarım dosyayı
+        # yakalar. pg_restore --list dosyaya yazmadan yalnızca okur.
+        proc = subprocess.run(
+            ["pg_restore", "--list", path],
+            env=pg_env(), capture_output=True, text=True,
+        )
+        if proc.returncode != 0:
+            raise CommandError(f"Yedek doğrulanamadı: {proc.stderr.strip()}")
 
     def _prune(self, tier: str, retention: int):
         """Bu tier'da `retention` adetten fazla başarılı yedeğin dosyasını sil."""

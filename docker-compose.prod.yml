@@ -3,7 +3,7 @@ name: sais_web
 # ── SAHA (üretim) compose dosyası ───────────────────────────────────────────
 # Yerel build YOK; image GHCR'dan çekilir. Watchtower :stable etiketini izleyip
 # yeni sürüm geldiğinde SADECE app container'larını (web/worker/beat) yeniler.
-# db (MSSQL) ve redis Watchtower'ın kapsamı DIŞINDA — verileri volume'de korunur.
+# db (PostgreSQL) ve redis Watchtower'ın kapsamı DIŞINDA — verileri volume'de korunur.
 #
 # Kullanım (saha):
 #   docker login ghcr.io            # read:packages PAT ile (bir kez)
@@ -14,34 +14,15 @@ name: sais_web
 x-app-image: &app-image ${GHCR_IMAGE:-ghcr.io/firatbadur/sais_web}:${IMAGE_TAG:-stable}
 
 x-app-env: &app-env
-  MSSQL_HOST: db
-  MSSQL_PORT: 1433
+  POSTGRES_HOST: db
+  POSTGRES_PORT: 5432
   REDIS_URL: redis://redis:6379/1
   CELERY_BROKER_URL: redis://redis:6379/2
   CELERY_RESULT_BACKEND: django-db
-  MSSQL_DRIVER: "ODBC Driver 18 for SQL Server"
   # Dashboard "Şimdi Güncelle" butonu Watchtower HTTP API'sini bu token'la çağırır.
   WATCHTOWER_API_TOKEN: "${WATCHTOWER_API_TOKEN:-envisoft-update-token}"
 
 services:
-  # Yedek volume izinlerini hazırla (SQL Server yazar, app siler/indirir).
-  backup_init:
-    image: busybox
-    command: sh -c "mkdir -p /backups && chmod 0777 /backups"
-    volumes:
-      - mssql_backups:/backups
-
-  # SQL Server .bak dosyalarını app (non-root, uid 100) okuyabilsin diye sürekli
-  # okunabilir yapar. MSSQL backup'ları mssql-owned 0660 yazıyor; app okuyamıyor
-  # -> dashboard'dan İNDİRME 500 veriyordu (download = app'in ilk okuması).
-  # Bu sidecar (root) a+r yapar -> indirme çalışır.
-  backup_perms:
-    image: busybox
-    restart: unless-stopped
-    command: sh -c "while true; do chmod -R a+rX /backups 2>/dev/null; sleep 10; done"
-    volumes:
-      - mssql_backups:/backups
-
   # Caddy config volume izinlerini hazırla: web (non-root app) Caddyfile + cert
   # yazsın, caddy okusun.
   caddy_config_init:
@@ -51,29 +32,22 @@ services:
       - caddy_config:/etc/caddy
 
   db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: postgres:16
     restart: unless-stopped
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: ${MSSQL_PASSWORD:-Envisoft-21!}
-      MSSQL_PID: ${MSSQL_PID:-Developer}
+      POSTGRES_DB: ${POSTGRES_DB:-envisoft}
+      POSTGRES_USER: ${POSTGRES_USER:-envisoft}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-envisoft}
     volumes:
-      - mssql_data:/var/opt/mssql
-      - mssql_backups:/var/opt/mssql/backups
-    depends_on:
-      backup_init:
-        condition: service_completed_successfully
+      - pg_data:/var/lib/postgresql/data
     ports:
-      - "${MSSQL_PORT:-1433}:1433"
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: [
-        "CMD-SHELL",
-        "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\" || exit 1"
-      ]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 30s
+      start_period: 20s
     # NOT: Watchtower label'ı YOK → asla otomatik güncellenmez (veri güvenliği).
 
   redis:
@@ -106,7 +80,7 @@ services:
     volumes:
       - media_data:/app/media
       - static_data:/app/staticfiles_root
-      - mssql_backups:/var/opt/mssql/backups
+      - pg_backups:/backups
       - caddy_config:/etc/caddy
     # NOT: web artık host'a publish edilmez; ingress Caddy (80/443) üzerinden.
     expose:
@@ -157,7 +131,7 @@ services:
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     volumes:
-      - mssql_backups:/var/opt/mssql/backups
+      - pg_backups:/backups
     # Image'in HEALTHCHECK'i web (localhost:8000) icindir; celery HTTP sunmaz ->
     # devre disi (yoksa container "unhealthy" gorunur).
     healthcheck:
@@ -210,8 +184,8 @@ services:
       - ${DOCKER_CONFIG_DIR:-/root/.docker}/config.json:/config.json:ro
 
 volumes:
-  mssql_data:
-  mssql_backups:
+  pg_data:
+  pg_backups:
   redis_data:
   media_data:
   static_data:

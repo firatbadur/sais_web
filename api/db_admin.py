@@ -1,10 +1,11 @@
 """
 Veritabanı yönetim yardımcıları — yedekleme / geri yükleme için.
 
-MSSQL `BACKUP DATABASE` / `RESTORE DATABASE` komutları kullanıcı transaction'ı
-içinde çalışamaz ve geri yükleme hedef DB'ye bağlıyken yapılamaz. Bu yüzden
-Django'nun default connection'ı yerine `master` veritabanına ayrı, autocommit
-bir pyodbc bağlantısı açarız.
+PostgreSQL'de `DROP DATABASE` / `CREATE DATABASE` bir transaction içinde
+çalışamaz ve hedef DB'ye bağlıyken yapılamaz. Bu yüzden Django'nun default
+connection'ı yerine bakım veritabanına (`postgres`) ayrı, autocommit bir
+psycopg bağlantısı açarız. Asıl yedek alma/geri yükleme `pg_dump` / `pg_restore`
+CLI ile yapılır (bkz. backup_database.py / restore_database.py).
 
 Sürüm-bilinçli geri yükleme: her yedek alınırken uygulanmış migration durumu
 (`{app: son_migration}`) damgalanır. Geri yüklemede `compare_schema` bu damgayı
@@ -13,40 +14,39 @@ verdict'i üretir.
 """
 from __future__ import annotations
 
+import os
+
 from django.conf import settings
 
 
-def master_connection():
-    """`master` DB'ye autocommit pyodbc bağlantısı (BACKUP/RESTORE için).
+def maintenance_connection():
+    """`postgres` bakım DB'sine autocommit psycopg bağlantısı (DROP/CREATE için).
 
-    Bağlantı parametrelerini `settings.DATABASES['default']`'tan türetir.
-    Çağıran kapatmaktan sorumludur (context manager yok — autocommit DDL).
+    Bağlantı parametrelerini `settings.DATABASES['default']`'tan türetir; ama
+    hedef DB'ye DEĞİL, `postgres` bakım DB'sine bağlanır (hedef DB drop/create
+    edilebilsin diye). Çağıran kapatmaktan sorumludur (autocommit DDL).
     """
-    import pyodbc
+    import psycopg
 
     db = settings.DATABASES["default"]
-    opts = db.get("OPTIONS", {})
-    driver = opts.get("driver", "ODBC Driver 17 for SQL Server")
-    host = db.get("HOST") or "localhost"
-    port = db.get("PORT") or "1433"
+    return psycopg.connect(
+        host=db.get("HOST") or "localhost",
+        port=db.get("PORT") or "5432",
+        dbname="postgres",
+        user=db.get("USER") or "",
+        password=db.get("PASSWORD") or "",
+        autocommit=True,
+        connect_timeout=30,
+    )
 
-    parts = [
-        f"DRIVER={{{driver}}}",
-        f"SERVER={host},{port}",
-        "DATABASE=master",
-    ]
-    if opts.get("trusted_connection") == "yes":
-        parts.append("Trusted_Connection=yes")
-    else:
-        parts.append(f"UID={db.get('USER', '')}")
-        parts.append(f"PWD={db.get('PASSWORD', '')}")
-    # extra_params (örn. TrustServerCertificate=yes) — ';' ile ayrılmış olabilir.
-    extra = opts.get("extra_params")
-    if extra:
-        parts.append(extra)
 
-    conn_str = ";".join(parts) + ";"
-    return pyodbc.connect(conn_str, autocommit=True, timeout=30)
+def pg_env() -> dict:
+    """pg_dump / pg_restore için PGPASSWORD enjekte edilmiş ortam değişkenleri."""
+    env = os.environ.copy()
+    db = settings.DATABASES["default"]
+    if db.get("PASSWORD"):
+        env["PGPASSWORD"] = str(db["PASSWORD"])
+    return env
 
 
 def database_name() -> str:

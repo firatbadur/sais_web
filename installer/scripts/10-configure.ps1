@@ -3,7 +3,7 @@
     Render env.template with the wizard answers into InstallDir\.env.
 
 .DESCRIPTION
-    Generates a strong random DJANGO_SECRET_KEY + (if not supplied) MSSQL
+    Generates a strong random DJANGO_SECRET_KEY + (if not supplied) PostgreSQL
     password. Derives fleet-wide wildcard ALLOWED_HOSTS/CSRF from the domain.
     Admin credentials are NOT written to .env (passed to 30-firstrun instead).
 
@@ -14,8 +14,7 @@ param(
     [Parameter(Mandatory)] [string]$Domain,
     [string]$TlsMode = "letsencrypt",
     [string]$LeEmail = "",
-    [string]$MssqlPassword = "",
-    [string]$MssqlPid = "Standard",
+    [string]$PgPassword = "",
     [string]$LicenseKey = "",
     [string]$LicenseUrl = "",
     [string]$GhcrImage = "ghcr.io/firatbadur/sais_web",
@@ -36,7 +35,8 @@ function New-RandomSecret([int]$len = 50) {
 Write-Step "Generating .env ..."
 
 $secret = New-RandomSecret 50
-if (-not $MssqlPassword) { $MssqlPassword = (New-RandomSecret 24) + "Aa1!" }
+# PostgreSQL has no special complexity policy; a 28-char random secret is plenty.
+if (-not $PgPassword) { $PgPassword = New-RandomSecret 28 }
 
 # Derive a fleet-wide wildcard from the domain:
 # sais-tesis1.envisoft.com.tr -> .envisoft.com.tr
@@ -68,8 +68,7 @@ $map = @{
     "__SECRET_KEY__"          = $secret
     "__ALLOWED_HOSTS__"       = $allowedHosts
     "__CSRF_TRUSTED_ORIGINS__"= $csrf
-    "__MSSQL_PASSWORD__"      = $MssqlPassword
-    "__MSSQL_PID__"           = $MssqlPid
+    "__POSTGRES_PASSWORD__"   = $PgPassword
     "__LICENSE_KEY__"         = $LicenseKey
     "__LICENSE_URL__"         = $LicenseUrl
 }

@@ -29,7 +29,7 @@ if (Test-Path $marker) {
 Assert-Docker
 
 # The web container runs `ensure_database && migrate && ...` on startup; that can
-# take a couple of minutes (SQL Server cold start + migrations). Seeding before
+# take up to a minute (PostgreSQL cold start + migrations). Seeding before
 # it finishes hits a still-initializing/crash-looping container -> exec is killed
 # (exit 137) or tables don't exist yet. Wait until `migrate --check` reports all
 # migrations applied (redirect INSIDE bash so no NativeCommandError under Stop).

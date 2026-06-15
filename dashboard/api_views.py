@@ -896,7 +896,7 @@ def backup_status(request):
 
 @login_required
 def backup_download(request, pk):
-    """Bir .bak dosyasını indirir. Path traversal'a karşı sıkı doğrulama."""
+    """Bir .dump dosyasını indirir. Path traversal'a karşı sıkı doğrulama."""
     denied = _require_operator(request)
     if denied:
         return denied

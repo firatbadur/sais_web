@@ -10,11 +10,10 @@ whitenoise[brotli]>=6.9,<7.0
 Markdown>=3.8,<4.0
 jsonify==0.5
 
-# Database drivers — Microsoft SQL Server
-# "ODBC Driver 18 for SQL Server" sistemde kurulu olmalı
-# (Windows: Microsoft ODBC Driver 18; Docker imajı kendi setup'ını yapıyor)
-mssql-django>=1.5,<2.0
-pyodbc>=5.2,<6.0
+# Database driver — PostgreSQL (psycopg 3)
+# Binary wheel; sistemde libpq/derleme gerektirmez. pg_dump/pg_restore (yedekleme)
+# için Docker imajına postgresql-client kurulur (bkz. Dockerfile).
+psycopg[binary]>=3.2,<4.0
 
 # Modbus / SCADA
 pymodbus>=3.11,<4.0

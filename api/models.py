@@ -1405,7 +1405,7 @@ class BackupPolicy(models.Model):
 
 
 class DatabaseBackup(models.Model):
-    """Alınmış bir veritabanı yedeğinin (.bak) kaydı + sürüm damgası.
+    """Alınmış bir veritabanı yedeğinin (.dump) kaydı + sürüm damgası.
 
     `app_version` ve `migration_state`, geri yüklemede şema uyumluluğunu
     (exact / forward / block) hesaplamak için kullanılır.
@@ -1452,7 +1452,7 @@ class DatabaseBackup(models.Model):
     )
     pruned = models.BooleanField(
         default=False, verbose_name="Dosya Silindi",
-        help_text="Retention politikası gereği .bak dosyası silindi (kayıt audit için kalır).",
+        help_text="Retention politikası gereği .dump dosyası silindi (kayıt audit için kalır).",
     )
 
     class Meta:

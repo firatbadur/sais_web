@@ -213,7 +213,7 @@ try {
     Write-Host ">> [2/5] Generating configuration (.env)..." -ForegroundColor Cyan
     $code = Invoke-Step "10-configure.ps1" (Build-Args ([ordered]@{
         InstallDir = $InstallDir; Domain = $a.Domain; TlsMode = $a.TlsMode;
-        LeEmail = $a.LeEmail; MssqlPassword = $a.MssqlPassword; MssqlPid = $a.MssqlPid;
+        LeEmail = $a.LeEmail; PgPassword = $a.PgPassword;
         LicenseKey = $a.LicenseKey; LicenseUrl = $a.LicenseUrl;
         GhcrImage = $a.GhcrImage; ImageTag = $a.ImageTag; GhcrToken = $a.GhcrToken }))
     if ($code -ne 0) { throw "Configuration failed (exit $code)." }

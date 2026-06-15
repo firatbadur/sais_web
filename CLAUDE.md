@@ -42,7 +42,7 @@ Mimari üç katmana ayrıldı:
 | Web framework | Django 5.2 LTS |
 | API | Django REST Framework + dj-rest-auth |
 | Admin tema | django-jazzmin |
-| Veritabanı | Microsoft SQL Server 2022 (mssql-django + pyodbc, ODBC Driver 17/18) |
+| Veritabanı | PostgreSQL 16 (psycopg 3) |
 | Cache | Redis 7 (django-redis) |
 | Statik | whitenoise (brotli) |
 | Endüstriyel IO | pymodbus 3.x, pyserial |
@@ -176,9 +176,9 @@ docker compose exec web python manage.py seed_sais_data
 docker compose exec web python manage.py createsuperuser
 ```
 
-Servisler: `web` (Django), `celery_worker`, `celery_beat`, `db` (MSSQL Server 2022), `redis` (Redis 7).
+Servisler: `web` (Django), `celery_worker`, `celery_beat`, `db` (PostgreSQL 16), `redis` (Redis 7).
 
-> **Yerel geliştirme ön koşulu:** Host Windows'da **Microsoft ODBC Driver 17 veya 18 for SQL Server** kurulu olmalı. Kontrol: `python -c "import pyodbc; print(pyodbc.drivers())"`. Kurulu değilse [Microsoft indirme sayfasından](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server) yüklenir.
+> **Yerel geliştirme ön koşulu:** Bir PostgreSQL sunucusu erişilebilir olmalı. En kolayı `docker compose up -d db` ile bundled `postgres:16` container'ını kaldırmak; alternatif olarak hostta yerel PostgreSQL kurup `.env`'deki `POSTGRES_*` alanlarını ona göre ayarlamak. `psycopg[binary]` Python tarafında ek sistem bağımlılığı (ODBC/libpq derleme) gerektirmez.
 
 ## Filo dağıtımı / sürüm güncelleme (çok-sahalı)
 
@@ -197,7 +197,7 @@ günceller. **Otomatik periyodik tarama YOK** (`WATCHTOWER_HTTP_API_UPDATE=true`
 kapalı, `WATCHTOWER_POLL_INTERVAL`/`--schedule` tanımlı değil): tag push'lamak sahalarda hiçbir
 şeyi otomatik tetiklemez, yalnızca GHCR'a yeni image basar. Güncelleme **manuel** — dashboard
 "Şimdi Güncelle" butonu Watchtower HTTP API'sini (`WATCHTOWER_API_TOKEN` ile) çağırınca yeni digest
-çekilir + container recreate edilir. `db` (MSSQL) ve `redis` **label'sız → asla güncellenmez**,
+çekilir + container recreate edilir. `db` (PostgreSQL) ve `redis` **label'sız → asla güncellenmez**,
 volume'leri korunur.
 
 - **Saha kimliği state'tir, image değil.** Station / Connection / Sensor / **SaisCabinet (Bakanlık
@@ -224,11 +224,11 @@ docker-compose.prod.yml --env-file .env up -d`.
 
 ## Veritabanı yedekleme / geri yükleme (sürüm-bilinçli)
 
-MSSQL native `BACKUP DATABASE`/`RESTORE DATABASE` ile tam yedek (.bak). Generic SCADA altyapısı →
-`api/`. Dosyalar paylaşımlı `mssql_backups` volume'ünde (`settings.BACKUP_DIR`,
-`/var/opt/mssql/backups`); `db` + `web` + `celery_worker` container'larına mount (`backup_init`
-busybox servisi 0777 ile izin verir → SQL yazar, app siler/indirir). **Hedef bundled MSSQL
-container'ı**; `MSSQL_HOST` harici ise dosya uzakta kalır, UI bunu uyarır.
+`pg_dump -Fc` (custom format) ile tam yedek (.dump), `pg_restore` ile geri yükleme. Generic SCADA
+altyapısı → `api/`. Dosyalar paylaşımlı `pg_backups` volume'ünde (`settings.BACKUP_DIR`, `/backups`);
+`web` + `celery_worker` container'larına mount. **pg_dump'ı app container çalıştırır** (binary imajda,
+`postgresql-client-16`) → dosyayı doğrudan app yazar, izin sorunu yok (ayrı `backup_perms` sidecar'ı
+gerekmez); `db` container'a mount bile şart değil. TCP üzerinden bağlanır.
 
 - **Tier'lar**: daily/weekly/monthly/yearly (Celery beat ile otomatik) + manual (sadece UI).
   Her tier'ın `enabled` + `retention` (GFS saklama adedi) ayarı `BackupPolicy`'de — dashboard
@@ -238,7 +238,7 @@ container'ı**; `MSSQL_HOST` harici ise dosya uzakta kalır, UI bunu uyarır.
   `app_version` + `migration_state`), `DatabaseRestore`. **Komutlar**:
   `backup_database --tier=daily [--force]`, `restore_database --backup-id=N --yes [--no-migrate]`.
   **Task'lar**: `api.tasks.backup_database_run` / `restore_database_run`. Yardımcılar
-  [api/db_admin.py](api/db_admin.py) (`master_connection`, `compare_schema`).
+  [api/db_admin.py](api/db_admin.py) (`maintenance_connection`, `pg_env`, `compare_schema`).
 - **Sürüm-bilinçli geri yükleme** (kritik — *"eski sürümün veritabanı problemli olabilir"*): her
   yedek alındığı APP_VERSION + migration durumuyla damgalanır. Geri yüklemede `compare_schema`
   çalışan kodun migration grafiğiyle karşılaştırır:
@@ -246,14 +246,38 @@ container'ı**; `MSSQL_HOST` harici ise dosya uzakta kalır, UI bunu uyarır.
   - **forward** (yedek eski) → RESTORE → otomatik `migrate` (şemayı ileri taşı).
   - **block** (yedek koddan yeni) → reddedilir. **Filo ile bağ**: önce `.env` `IMAGE_TAG=<yedeğin
     sürümü>` → `up -d` (sahayı o sürüme indir), sonra geri yükle → exact match.
-- **Geri yükleme yıkıcıdır**: hedef DB `SINGLE_USER WITH ROLLBACK IMMEDIATE` ile izole edilir
-  (açık bağlantılar düşer), RESTORE, `MULTI_USER`. Kısa kesinti olur; sonrasında
+- **Geri yükleme yıkıcıdır**: `postgres` bakım DB'si üzerinden hedef DB'ye yeni bağlantı
+  engellenir (`datallowconn=false`), açık oturumlar `pg_terminate_backend` ile düşürülür, DB
+  drop + create edilir, `pg_restore` ile yedek yazılır. Kısa kesinti olur; sonrasında
   `celery_worker`/`celery_beat` restart önerilir. UI confirm modal'ı DB adını yazmayı ister.
-- **Web'den**: yedek listesi + boyut + sürüm + uyumluluk rozeti; `.bak` indirme
+- **Web'den**: yedek listesi + boyut + sürüm + uyumluluk rozeti; `.dump` indirme
   (`api_backup_download`, path-traversal korumalı, rol=1); manuel "Şimdi Yedekle"; geri yükleme
   geçmişi. Sayfa `api_backup_status`'ı 5 sn'de bir poll'lar, çalışan iş bitince yeniler.
 - Beat task'ları [seed_periodic_tasks.py](scada_io/management/commands/seed_periodic_tasks.py)
   `BACKUP_TASKS`'ta — yeni sahada `seed_periodic_tasks` ile gelir. `.env`: `BACKUP_DIR`.
+
+## MSSQL → PostgreSQL config göçü (tek seferlik)
+
+Sistem MSSQL'den **PostgreSQL 16**'ya taşındı. Mevcut bir MSSQL sahasını taşırken **yalnız
+konfigürasyon** taşınır (historian/Reading geçmişi taşınmaz, yeni DB'de sıfırdan birikir). İki
+yönetim komutu (`api/management/commands/`): `export_config` (MSSQL'deyken `dumpdata`) +
+`import_config` (yeni PG DB'de `loaddata` + **PostgreSQL sequence reset**). Taşınan/taşınmayan model
+listesi [api/config_migration.py](api/config_migration.py) `CONFIG_MODELS`'te (sabit).
+
+**Sıra zorunlu** (seed'lerden ÖNCE import; aksi halde `Station.get_or_create(id=1)` gibi sabit-PK
+seed'lerle çakışır — `import_config` boşluk kontrolü bunu yakalar):
+```
+# Eski MSSQL sistem ayaktayken:
+python manage.py export_config --output /tmp/config_export.json
+# Yeni PostgreSQL boş DB:
+python manage.py migrate --noinput
+python manage.py import_config --file /tmp/config_export.json   # seed'lerden ÖNCE
+python manage.py seed_initial_data && python manage.py seed_sais_data && python manage.py seed_periodic_tasks
+```
+`export_config` `use_natural_foreign_keys=True` kullanır: Django'nun yerleşik `auth.Permission` /
+`ContentType` referansları doğal anahtarla yazılır (migrate yeniden ürettiğinde PK farkı sorun
+olmaz); CONFIG modellerinin kendi FK'leri sayısal PK ile korunur. **Sequence reset atlanamaz** —
+yoksa import çalışmış görünür, ilk yeni kayıtta duplicate-PK ile patlar (`import_config` otomatik yapar).
 
 ## Lisanslama (kurulum bazlı, imzalı, uzaktan)
 
@@ -333,7 +357,7 @@ başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows ser
 - **Akış**: [sais_setup.iss](installer/sais_setup.iss) sihirbazı (lisans/DB/domain-TLS/admin) →
   answers JSON → [install.ps1](installer/scripts/install.ps1) orkestratör → `00-ensure-docker`
   (WSL2+Docker CE; reboot gerekirse RunOnce ile devam) → `10-configure` (env.template → `.env`, secret +
-  MSSQL şifresi üret, domain'den wildcard türet) → `20-up` (gömülü read-only GHCR token ile login → pull
+  PostgreSQL şifresi üret, domain'den wildcard türet) → `20-up` (gömülü read-only GHCR token ile login → pull
   → up -d) → `30-firstrun` (seed_initial/sais/admin + WebSettings bootstrap, marker ile idempotent) →
   `40-register-service` (NSSM `SAISScada` → `sais-stack.ps1`).
 - **Docker erişimi**: tüm `docker compose` çağrıları WSL2 içinde çalışır
@@ -341,7 +365,7 @@ başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows ser
   WSL `/mnt/c/SAIS`'ten erişir.
 - **Admin (rol=1)**: [users/seed_admin_user](users/management/commands/seed_admin_user.py) non-interactive
   (env `DJANGO_SUPERUSER_*`) — `createsuperuser --noinput` CustomUser `rol` alanını set edemediği için.
-- **DB**: lisanslı **SQL Server Standard** (`.env` `MSSQL_PID=Standard`; bundled container, lisans müşteride).
+- **DB**: **PostgreSQL 16** (açık kaynak, lisans gerektirmez; bundled `postgres:16` container). Şifre installer'da otomatik üretilir (`POSTGRES_PASSWORD`).
 - **GHCR image private** → installer'a `read:packages` scope'lu token build-time gömülür (release.yml
   `windows-installer` job, repo secret `INSTALLER_GHCR_TOKEN`). Asıl kullanım gate'i **Ed25519 lisans**,
   image gizliliği değil. `nssm.exe` build'de [nssm.cc](https://nssm.cc)'den çekilir (repo'ya commitlenmez).
@@ -372,7 +396,7 @@ başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows ser
 - **API request logging:** `api.middleware.ApiLoggingMiddleware` her gelen isteği `ApiLog(direction='in')` olarak kaydeder; süre ölçer, `request.user`/IP/user-agent yakalar, hassas header (`Authorization`/`Cookie`/`X-API-Key`) ve body key'leri (`password`/`secret`/`token`/`api_key`) maskeli. Skip path'ler: `/static/`, `/media/`, `/__debug__/`, `/admin/jsi18n/`, `/favicon.ico`. Giden HTTP çağrıları için `api.api_logging.log_outbound_call` decorator veya `record_outbound_call(...)` helper kullanılır.
 - **Retention:**
   - `prune_api_logs` (`API_LOG_RETENTION_DAYS`, default 90gün) — günlük cron.
-  - `prune_readings` 4 seviye (`READING_RETENTION_RAW_DAYS=90`, `..._15M_DAYS=365`, `..._HOURLY_DAYS=1825`, `..._DAILY_DAYS=99999`) — günlük cron. Batch delete (10K/transaction) ile MSSQL tek büyük transaction'dan kaçınır.
+  - `prune_readings` 4 seviye (`READING_RETENTION_RAW_DAYS=90`, `..._15M_DAYS=365`, `..._HOURLY_DAYS=1825`, `..._DAILY_DAYS=99999`) — günlük cron. Batch delete (10K/transaction) ile tek büyük transaction / uzun kilitten kaçınır.
 - **PC kapanma kaydı (PowerOff, heartbeat bazlı):** Çalışan stack `api.tasks.heartbeat_task` ile her dakika `SystemHeartbeat` (singleton pk=1) `last_seen` damgasını tazeler. Container açılış zincirinde `detect_power_off` (migrate sonrası) son damga ile şimdiki zaman arasındaki boşluğu ölçer; `POWEROFF_DETECT_THRESHOLD_MIN` (default 5dk) aşılırsa o aralığı **her istasyon için** bir `PowerOff` kaydına yazar (`start_date`=son damga ≈ kapanma anı, `end_date`=açılış). Elektrik kesintisi/sert kapanmayı da yakalar (graceful sinyale bağlı değil); kısa container restart'ları (Watchtower) eşik altında kalıp kayıt üretmez. Heartbeat task lisans-gate'siz (PC ayaktayken damga durmamalı). Eski SIGTERM bazlı `api/signals.py` kaldırıldı.
 - **Dashboard arayüz** (`/dashboard/`): Metronic 8.2 tabanlı light-sidebar layout. Giriş `/dashboard/login/` (Metronic corporate template, sosyal login/signup yok); "şifremi unuttum" admin'e yönlendiren info sayfası. Ana sayfa 4 widget'lı (KPI/grid/trend/events) AJAX polling ile canlı. Role mapping: rol=1 (admin) her menüyü görür, rol=2 (operatör) admin dışı, rol=3 (user) salt-izleme (komut/sistem log yok). Session cookie 24h (`SESSION_COOKIE_AGE=86400`); "Beni hatırla" işaretlenirse 30 gün.
 - **Dil desteği (i18n):** `USE_I18N=True`, `LANGUAGES=[("tr","Türkçe"),("en","English")]`, `LOCALE_PATHS=[dashboard/locale]`. TR default, EN çevirisi `dashboard/locale/en/LC_MESSAGES/django.po` (178 entry). `django.mo` dosyası commit'te; gettext binary olmadan Python script ile compile edildi. Yeni string eklendiğinde ya Linux/Docker'da `python manage.py compilemessages` ya da `_compile_po.py` benzeri bir script kullanılmalı (Windows gettext eksik).
@@ -415,7 +439,7 @@ python manage.py resend_missing_data_once              # eksik veri yeniden gön
 
 - Mevcut dosyaların biçim stiline sadık kal (Türkçe verbose_name/help_text, snake_case tablo adları).
 - **App sınırını koru:** jenerik SCADA kavramları `api/`'a, SAIS/Bakanlık/Envisoft özelinde olanlar `sais_domain/`'e gider. Yeni bir model/seed/komut eklerken hangi tarafa ait olduğunu sor.
-- Veritabanı şema değişikliklerinde `python manage.py makemigrations` + `migrate` üret. MSSQL'de bazı manuel migration'lar (`SeparateDatabaseAndState`) gerekebilir; bkz. `api/migrations/0006_apilog_rebuild.py`.
+- Veritabanı şema değişikliklerinde `python manage.py makemigrations` + `migrate` üret. Migration seti tamamen ORM-tabanlı (raw `RunSQL` yok) → PostgreSQL'de temiz uygulanır.
 - Yeni secret/ayar eklerken hem `.env.example` hem `settings.py`'yi güncelle.
 - `api/views.py` — **Response sözleşmesi** tüm endpoint'lerde aynı: `{"result": bool, "message": str | null, "objects": any}`. Yeni endpoint eklerken bu formatı koru.
 - REST endpoint default `IsAuthenticated`; public uç nokta eklenirken `permission_classes` açıkça override edilmeli.
@@ -594,8 +618,8 @@ Beklenen yük: cycle 1.5-2.5 sn, 17 Reading insert/sn, ~1.4M satır/gün, 90 gü
 - **`users` uygulamasının `views.py`'si minimal** — rol bazlı ön yüz akışı ileride eklenecek.
 - **Plaintext credentials** — `SaisCabinet.auth_secret` plaintext; `django-fernet-fields` veya bir KMS ile şifrelenmeli (TODO).
 - **Per-sensor poll override yok** — `Sensor.poll_interval_sec` alanı modelde var ama dispatcher kullanmıyor; tüm sensörler bağlı oldukları connection'ın periyoduyla okunur. İleride hibrit dispatch eklenebilir.
-- **Aggregate Python-side** — `aggregate_readings` pandas-benzeri Python groupby kullanır; 1500+ tag ölçeğinde MSSQL `GROUP BY` SQL rewrite gerekir.
-- **DB partition yok** — `Reading` tek tablo; 3000+ tag uzun vadeli operasyonda aylık partition (MSSQL partitioned tables) gerekir.
+- **Aggregate Python-side** — `aggregate_readings` pandas-benzeri Python groupby kullanır; 1500+ tag ölçeğinde PostgreSQL `GROUP BY` SQL rewrite gerekir.
+- **DB partition yok** — `Reading` tek tablo; 3000+ tag uzun vadeli operasyonda aylık partition (PostgreSQL declarative partitioning) gerekir.
 - **Celery worker monitoring** — Flower kurulu değil; isteğe göre `pip install flower` + `celery -A sais_web flower` ile eklenebilir.
 - **Windows'ta lokal Celery** — `-B` (worker+beat tek process) desteklenmiyor; iki ayrı terminal aç veya `-P solo` ile worker + ayrı terminal'de beat. Prefork pool Windows'ta sorunlu, `-P solo` zorunlu.
 - **TLS Modbus** — pymodbus 3.x henüz native desteklemiyor; out of scope.

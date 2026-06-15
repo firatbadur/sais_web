@@ -12,7 +12,7 @@
     <div>
         <h4 class="mb-1 text-danger">{% trans "Yedek dizini erişilemez" %}</h4>
         <span class="fs-7">
-            {% blocktrans %}Yedek dizini ({{ backup_dir }}) bulunamadı. Bu özellik paketlenmiş MSSQL container'ı + <code>mssql_backups</code> volume mount gerektirir. Harici/managed veritabanı kullanıyorsanız bu altyapı geçerli değildir.{% endblocktrans %}
+            {% blocktrans %}Yedek dizini ({{ backup_dir }}) bulunamadı. Bu özellik <code>pg_backups</code> volume mount'unu gerektirir (app + celery_worker container'larına). Volume mount edilmemişse bu altyapı geçerli değildir.{% endblocktrans %}
         </span>
     </div>
 </div>

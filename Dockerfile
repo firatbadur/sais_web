@@ -3,8 +3,9 @@
 ############################
 # Builder: wheels'leri hazırla
 ############################
-# NOT: bookworm'a sabitli — Debian 13 (trixie) için Microsoft ODBC (msodbcsql18)
-# prod.list deposu henüz yok; "slim" trixie'ye kayınca build kırılıyor.
+# psycopg[binary] + pandas/numpy/cryptography hepsi manylinux binary wheel ile
+# gelir; derleme araçları gerekmez. build-essential yine de saf-kaynak bir
+# bağımlılık çıkarsa diye güvenlik için tutulur.
 FROM python:3.12-slim-bookworm AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -13,11 +14,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        build-essential \
-        unixodbc-dev \
-        gcc \
-        g++ \
+    && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -28,7 +25,7 @@ RUN pip install --upgrade pip \
 
 
 ############################
-# Runtime: ince imaj (MSSQL ODBC Driver 18 ile)
+# Runtime: ince imaj (PostgreSQL client 16 ile)
 ############################
 FROM python:3.12-slim-bookworm AS runtime
 
@@ -36,8 +33,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    DJANGO_SETTINGS_MODULE=sais_web.settings \
-    ACCEPT_EULA=Y
+    DJANGO_SETTINGS_MODULE=sais_web.settings
 
 # Sürüm etiketi — CI build sırasında git tag'inden doldurulur (build-arg).
 # Dashboard footer'ında gösterilir; filo genelinde hangi sahanın hangi
@@ -45,21 +41,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
 
-# Microsoft ODBC Driver 18 for SQL Server (Debian 12 / bookworm).
-# NOT: prod.list'i çekip sed'lemek yerine source satırını DOĞRUDAN yazıyoruz —
-# Microsoft prod.list formatını değiştirdi ve curl+sed "Malformed entry (URI
-# parse)" ile kırılıyordu. Taban imaj bookworm'a sabit olduğundan değerler sabit.
+# PostgreSQL client 16 (pg_dump / pg_restore — yedekleme/geri yükleme app
+# container'ından çalışır). Bookworm'un kendi paketi 15; compose `db` postgres:16
+# olduğundan sürüm uyumu için PGDG deposundan client-16 kurulur (pg_dump major
+# >= server major olmalı).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl gnupg ca-certificates \
-    && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
-        | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
-    && echo "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" \
-        > /etc/apt/sources.list.d/mssql-release.list \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
-    && ACCEPT_EULA=Y apt-get install -y --no-install-recommends \
-        msodbcsql18 \
-        unixodbc \
-        libodbc2 \
+    && apt-get install -y --no-install-recommends postgresql-client-16 \
     && apt-get purge -y --auto-remove curl gnupg \
     && rm -rf /var/lib/apt/lists/* \
     && addgroup --system app \
@@ -74,8 +67,12 @@ RUN pip install --no-index --find-links=/wheels -r requirements.txt \
 
 COPY --chown=app:app . /app
 
-RUN mkdir -p /app/staticfiles_root /app/media \
-    && chown -R app:app /app
+# /backups: pg_backups named volume buraya mount edilir. Mount noktasını imajda
+# app sahipliğiyle oluşturursak, ilk mount'ta named volume bu sahipliği devralır
+# → non-root app kullanıcısı pg_dump çıktısını yazabilir (ayrı chmod sidecar'ı
+# gerekmez).
+RUN mkdir -p /app/staticfiles_root /app/media /backups \
+    && chown -R app:app /app /backups
 
 USER app
 

@@ -1069,8 +1069,8 @@ msgstr "Migrate the schema to the running version after restore (recommended)"
 msgid "Vazgeç"
 msgstr "Cancel"
 
-msgid "Yedek dizini (%(backup_dir)s) bulunamadı. Bu özellik paketlenmiş MSSQL container'ı + <code>mssql_backups</code> volume mount gerektirir. Harici/managed veritabanı kullanıyorsanız bu altyapı geçerli değildir."
-msgstr "The backup directory (%(backup_dir)s) was not found. This feature requires the bundled MSSQL container + <code>mssql_backups</code> volume mount. It does not apply when using an external/managed database."
+msgid "Yedek dizini (%(backup_dir)s) bulunamadı. Bu özellik <code>pg_backups</code> volume mount'unu gerektirir (app + celery_worker container'larına). Volume mount edilmemişse bu altyapı geçerli değildir."
+msgstr "The backup directory (%(backup_dir)s) was not found. This feature requires the <code>pg_backups</code> volume mounted into the app + celery_worker containers. It does not apply when the volume is not mounted."
 
 msgid "Onaylamak için veritabanı adını yazın: <code>%(db_name)s</code>"
 msgstr "To confirm, type the database name: <code>%(db_name)s</code>"

@@ -137,11 +137,9 @@ begin
 
   { Database }
   DbPage := CreateInputQueryPage(LicensePage.ID,
-    'Database', 'SQL Server settings',
-    'SA password for the bundled SQL Server Standard. Leave blank to auto-generate a strong one.');
-  DbPage.Add('SA password (blank = auto):', True);
-  DbPage.Add('SQL Server edition (MSSQL_PID):', False);
-  DbPage.Values[1] := 'Standard';
+    'Database', 'PostgreSQL settings',
+    'Password for the bundled PostgreSQL database. Leave blank to auto-generate a strong one.');
+  DbPage.Add('Database password (blank = auto):', True);
 
   { Site / domain }
   SitePage := CreateInputQueryPage(DbPage.ID,
@@ -234,8 +232,7 @@ begin
     '  "Domain": "' + JsonEscape(SitePage.Values[0]) + '",' + #13#10 +
     '  "TlsMode": "' + TlsCombo.Text + '",' + #13#10 +
     '  "LeEmail": "' + JsonEscape(SitePage.Values[1]) + '",' + #13#10 +
-    '  "MssqlPassword": "' + JsonEscape(DbPage.Values[0]) + '",' + #13#10 +
-    '  "MssqlPid": "' + JsonEscape(DbPage.Values[1]) + '",' + #13#10 +
+    '  "PgPassword": "' + JsonEscape(DbPage.Values[0]) + '",' + #13#10 +
     '  "LicenseKey": "' + JsonEscape(LicensePage.Values[0]) + '",' + #13#10 +
     '  "LicenseUrl": "' + JsonEscape(LicensePage.Values[1]) + '",' + #13#10 +
     '  "GhcrUser": "{#GHCR_USER}",' + #13#10 +

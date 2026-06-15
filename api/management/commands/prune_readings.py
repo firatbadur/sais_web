@@ -23,7 +23,7 @@ Kullanım:
     python manage.py prune_readings --days=30        # tek-seviye modunda retention override
     python manage.py prune_readings --dry-run        # silmeden sayım
 
-Büyük silmelerde MSSQL'in tek-transaction şişmesini önlemek için
+Büyük silmelerde tek-transaction şişmesini / uzun kilit süresini önlemek için
 batch delete yapar (default 10000).
 """
 from __future__ import annotations
@@ -128,7 +128,7 @@ class Command(BaseCommand):
 
     @staticmethod
     def _prune(target: RetentionTarget, cutoff, *, batch_size: int, dry_run: bool) -> int:
-        """Batch'ler halinde sil; MSSQL tek büyük transaction'dan kaçın."""
+        """Batch'ler halinde sil; tek büyük transaction / uzun kilitten kaçın."""
         filter_kwargs = {f"{target.timestamp_field}__lt": cutoff}
         qs = target.model.objects.filter(**filter_kwargs)
 

@@ -1,23 +1,25 @@
 """
-Bir `.bak` yedeğinden MSSQL veritabanını geri yükler (RESTORE) — sürüm-bilinçli.
+Bir `.dump` yedeğinden PostgreSQL veritabanını geri yükler (pg_restore) —
+sürüm-bilinçli.
 
-Geri yükleme YIKICI bir işlemdir: hedef DB SINGLE_USER moda alınır (açık tüm
-bağlantılar düşürülür), üzerine yedek yazılır, sonra MULTI_USER'a döndürülür.
-Kısa bir kesinti yaratır.
+Geri yükleme YIKICI bir işlemdir: hedef DB'ye açık tüm bağlantılar düşürülür
+(`pg_terminate_backend`), DB drop + create edilir, sonra `pg_restore` ile yedek
+yazılır. Kısa bir kesinti yaratır.
 
 Sürüm uyumu (`api.db_admin.compare_schema`):
-  - exact   → RESTORE; migrate yok.
-  - forward → RESTORE → migrate (eski şemayı çalışan koda ileri taşı).
+  - exact   → restore; migrate yok.
+  - forward → restore → migrate (eski şemayı çalışan koda ileri taşı).
   - block   → reddedilir (yedek koddan yeni). `--force-unsafe` ile zorlanabilir.
 
 Kullanım:
     python manage.py restore_database --backup-id=12 --yes
     python manage.py restore_database --backup-id=12 --yes --no-migrate
-    python manage.py restore_database --file=envisoft__manual__20260608_120000.bak --yes
+    python manage.py restore_database --file=envisoft__manual__20260608_120000.dump --yes
 """
 from __future__ import annotations
 
 import os
+import subprocess
 
 from django.conf import settings
 from django.core.management import call_command
@@ -25,18 +27,18 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import connections
 from django.utils import timezone
 
-from api.db_admin import compare_schema, database_name, master_connection
+from api.db_admin import compare_schema, database_name, maintenance_connection, pg_env
 from api.models import DatabaseBackup, DatabaseRestore
 
 
 class Command(BaseCommand):
-    help = "Bir .bak yedeğinden veritabanını geri yükler (sürüm-bilinçli)."
+    help = "Bir .dump yedeğinden veritabanını geri yükler (sürüm-bilinçli)."
 
     def add_arguments(self, parser):
         parser.add_argument("--backup-id", type=int, default=None,
                             help="DatabaseBackup id'si.")
         parser.add_argument("--file", type=str, default=None,
-                            help="BACKUP_DIR altındaki .bak dosya adı (backup-id alternatifi).")
+                            help="BACKUP_DIR altındaki .dump dosya adı (backup-id alternatifi).")
         parser.add_argument("--no-migrate", action="store_true",
                             help="forward durumunda restore sonrası migrate'i atla.")
         parser.add_argument("--yes", action="store_true",
@@ -61,41 +63,64 @@ class Command(BaseCommand):
         run_migrate = (verdict["verdict"] == "forward") and not options["no_migrate"]
         compatibility = "forced" if (verdict["verdict"] == "block") else verdict["verdict"]
 
+        # 'running' kaydı: restore DB'yi DEĞİŞTİRMEDEN önce başarısız olursa
+        # (dosya yok / terminate hatası) audit'i yakalar. Başarılı restore tüm
+        # DB'yi yedeğin içeriğiyle değiştirir → bu satır kaybolur; o yüzden
+        # başarı durumunda restore SONRASI taze bir kayıt INSERT ederiz.
+        filename = os.path.basename(path)
         restore = DatabaseRestore.objects.create(
             source_backup=backup,
-            source_filename=os.path.basename(path),
+            source_filename=filename,
             status="running",
             compatibility=compatibility,
             ran_migrate=False,
             app_version_at_backup=app_version_at_backup,
             triggered_by_id=options["user_id"],
         )
+        restore_pk = restore.pk
 
         db = database_name()
         try:
             self._run_restore(db, path)
-            # Django'nun (SINGLE_USER ile düşürülmüş) bağlantılarını kapat → taze reconnect.
+            # Django'nun (drop edilmiş DB'ye ait, artık geçersiz) bağlantılarını
+            # kapat → yeni DB'ye taze reconnect.
             connections.close_all()
+            ran_migrate = False
             if run_migrate:
                 self.stdout.write("Şema migrate ediliyor (forward)...")
                 call_command("migrate", "--noinput")
-                restore.ran_migrate = True
-            restore.status = "success"
-            restore.finished_at = timezone.now()
-            restore.save(update_fields=["status", "finished_at", "ran_migrate"])
+                ran_migrate = True
+            # DB artık yedeğin içeriği — 'running' kaydı yok. Audit'i taze yaz.
+            # FK yalnız yedek satırı geri yüklenen DB'de mevcutsa bağlanır.
+            backup_fk = (
+                backup if backup and DatabaseBackup.objects.filter(pk=backup.pk).exists()
+                else None
+            )
+            DatabaseRestore.objects.create(
+                source_backup=backup_fk,
+                source_filename=filename,
+                status="success",
+                compatibility=compatibility,
+                ran_migrate=ran_migrate,
+                app_version_at_backup=app_version_at_backup,
+                triggered_by_id=options["user_id"],
+                finished_at=timezone.now(),
+            )
             self.stdout.write(self.style.SUCCESS(
-                f"Geri yükleme tamamlandı: {restore.source_filename} "
-                f"(uyumluluk={compatibility}, migrate={'evet' if restore.ran_migrate else 'hayır'})."
+                f"Geri yükleme tamamlandı: {filename} "
+                f"(uyumluluk={compatibility}, migrate={'evet' if ran_migrate else 'hayır'})."
             ))
             self.stdout.write(self.style.WARNING(
                 "Not: Uzun-ömürlü Celery worker/beat bağlantıları için container'ları "
                 "yeniden başlatmanız önerilir."
             ))
         except Exception as exc:  # noqa: BLE001
-            restore.status = "failed"
-            restore.error = str(exc)[:4000]
-            restore.finished_at = timezone.now()
-            restore.save(update_fields=["status", "error", "finished_at"])
+            # 'running' satırı hâlâ duruyorsa (restore DB'yi değiştirmeden önce
+            # patladıysa) güncelle; satır yoksa update() no-op'tur (save'in
+            # "did not affect any rows" hatasından kaçınır).
+            DatabaseRestore.objects.filter(pk=restore_pk).update(
+                status="failed", error=str(exc)[:4000], finished_at=timezone.now(),
+            )
             raise CommandError(f"Geri yükleme başarısız: {exc}")
 
     def _resolve(self, options):
@@ -127,25 +152,55 @@ class Command(BaseCommand):
         return backup, path, state, version
 
     def _run_restore(self, db: str, path: str):
-        """Tek master bağlantısında: SINGLE_USER → RESTORE → MULTI_USER."""
-        conn = master_connection()
+        """Bakım DB'si üzerinden: bağlantıları kes → DROP → CREATE → pg_restore.
+
+        Uygulamanın bağlı olduğu DB'yi geri yükleyebilmek için `postgres` bakım
+        DB'sine bağlanılır; hedef DB'ye yeni bağlantı engellenir (datallowconn),
+        açık oturumlar düşürülür, DB drop+create edilir. MSSQL'deki
+        `SINGLE_USER WITH ROLLBACK IMMEDIATE`'in PostgreSQL karşılığı budur.
+        """
+        if not db or not db.replace("_", "").isalnum():
+            raise CommandError(f"Güvensiz veritabanı adı, reddedildi: {db!r}")
+
+        conn = maintenance_connection()
         try:
             cur = conn.cursor()
-            # Açık bağlantıları düşür (kendi master bağlantımız hariç).
-            cur.execute(f"ALTER DATABASE [{db}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
-            while cur.nextset():
-                pass
+            # Yeni bağlantıları engelle + açık oturumları düşür (DROP penceresinde
+            # gunicorn/worker/beat pool'ları reconnect edip DROP'u bloke etmesin).
+            cur.execute(
+                "UPDATE pg_database SET datallowconn = false WHERE datname = %s", (db,)
+            )
+            cur.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname = %s AND pid <> pg_backend_pid()",
+                (db,),
+            )
             try:
+                cur.execute(f'DROP DATABASE IF EXISTS "{db}"')
+                # Yeni DB datallowconn=true ile gelir; ayrıca CONNECT yetkisi açık.
+                cur.execute(f'CREATE DATABASE "{db}"')
+            except Exception:
+                # DROP başarısızsa eski DB'ye erişimi geri aç (kilitli kalmasın).
                 cur.execute(
-                    f"RESTORE DATABASE [{db}] FROM DISK = ? WITH REPLACE, RECOVERY, STATS = 10",
-                    path,
+                    "UPDATE pg_database SET datallowconn = true WHERE datname = %s",
+                    (db,),
                 )
-                while cur.nextset():
-                    pass
-            finally:
-                # Ne olursa olsun DB'yi tekrar çok-kullanıcılı yap.
-                cur.execute(f"ALTER DATABASE [{db}] SET MULTI_USER")
-                while cur.nextset():
-                    pass
+                raise
         finally:
             conn.close()
+
+        # Yeni boş DB'ye custom-format dump'ı geri yükle.
+        proc = subprocess.run(
+            [
+                "pg_restore",
+                "-h", str(settings.DATABASES["default"].get("HOST") or "localhost"),
+                "-p", str(settings.DATABASES["default"].get("PORT") or "5432"),
+                "-U", str(settings.DATABASES["default"].get("USER") or ""),
+                "-d", db,
+                "--no-owner", "--no-privileges",
+                path,
+            ],
+            env=pg_env(), capture_output=True, text=True,
+        )
+        if proc.returncode != 0:
+            raise CommandError(f"pg_restore başarısız: {proc.stderr.strip()}")

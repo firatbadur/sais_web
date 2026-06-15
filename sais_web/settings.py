@@ -42,9 +42,10 @@ CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "")
 # (git tag). Lokal/dev'de "dev" kalır. Dashboard footer'ında gösterilir.
 APP_VERSION = os.getenv("APP_VERSION", "dev")
 
-# DB yedek dosyalarının (.bak) yazılacağı dizin. db container'ı ile app
-# container'larına ortak mount edilen mssql_backups volume'ünün yolu.
-BACKUP_DIR = os.getenv("BACKUP_DIR", "/var/opt/mssql/backups")
+# DB yedek dosyalarının (.dump) yazılacağı dizin. app + celery_worker
+# container'larına mount edilen pg_backups volume'ünün yolu (pg_dump'ı app
+# container çalıştırır; db container'a mount şart değil).
+BACKUP_DIR = os.getenv("BACKUP_DIR", "/backups")
 
 # ---- Web erişim / Caddy reverse proxy ----
 # WebSettings → api.web_proxy bu yolları kullanarak Caddyfile + manuel cert
@@ -143,25 +144,16 @@ WSGI_APPLICATION = "sais_web.wsgi.application"
 ASGI_APPLICATION = "sais_web.asgi.application"
 
 
-# Database — Microsoft SQL Server (mssql-django)
-_mssql_options = {
-    "driver": os.getenv("MSSQL_DRIVER", "ODBC Driver 17 for SQL Server"),
-}
-if env_bool("MSSQL_TRUSTED_CONNECTION", default=False):
-    _mssql_options["trusted_connection"] = "yes"
-if env_bool("MSSQL_TRUST_SERVER_CERTIFICATE", default=True):
-    _mssql_options["extra_params"] = "TrustServerCertificate=yes"
-
+# Database — PostgreSQL (psycopg 3)
 DATABASES = {
     "default": {
-        "ENGINE": "mssql",
-        "NAME": os.getenv("MSSQL_DB", "envisoft"),
-        "USER": os.getenv("MSSQL_USER", "sa"),
-        "PASSWORD": os.getenv("MSSQL_PASSWORD", ""),
-        "HOST": os.getenv("MSSQL_HOST", "localhost"),
-        "PORT": os.getenv("MSSQL_PORT", "1433"),
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.getenv("POSTGRES_DB", "envisoft"),
+        "USER": os.getenv("POSTGRES_USER", "envisoft"),
+        "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
+        "HOST": os.getenv("POSTGRES_HOST", "localhost"),
+        "PORT": os.getenv("POSTGRES_PORT", "5432"),
         "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
-        "OPTIONS": _mssql_options,
     }
 }
 
