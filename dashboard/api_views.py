@@ -2123,3 +2123,263 @@ def reminder_delete(request):
     return JsonResponse({"ok": True})
 
 
+# ---------------------------------------------------------------------------
+# Sensör Ayarları — Scan Grubu + Sensör listeleme & canlı test endpoint'leri
+# ---------------------------------------------------------------------------
+
+# read_raw destekleyen Modbus protokolleri (scan grubu testi bu protokollerde
+# anlamlı; ASCII custom batch okumaz).
+_MODBUS_PROTOCOLS = (
+    "modbus_tcp", "modbus_rtu", "modbus_ascii",
+    "modbus_rtu_over_tcp", "modbus_ascii_over_tcp",
+)
+
+
+@login_required
+def connection_scangroups(request):
+    """Bir bağlantının scan gruplarını JSON döner — sensör testi dropdown'u."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    try:
+        conn_id = int(request.GET.get("connection") or 0) or None
+    except (TypeError, ValueError):
+        conn_id = None
+    if not conn_id:
+        return JsonResponse({"results": []})
+
+    from api.models import ScanGroup
+
+    groups = ScanGroup.objects.filter(connection_id=conn_id).order_by("slave_id", "start_address")
+    items = [{
+        "id": g.id,
+        "text": f"{g.name} (slave={g.slave_id} fn={g.function} {g.start_address}..{g.end_address})",
+    } for g in groups]
+    return JsonResponse({"results": items})
+
+
+@login_required
+def connection_sensors(request):
+    """Bir bağlantının sensörlerini JSON döner — sensör testi dropdown'u."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    try:
+        conn_id = int(request.GET.get("connection") or 0) or None
+    except (TypeError, ValueError):
+        conn_id = None
+    if not conn_id:
+        return JsonResponse({"results": []})
+
+    sensors = (
+        Sensor.objects.filter(connection_id=conn_id)
+        .select_related("parameter")
+        .order_by("display_order", "id")
+    )
+    items = []
+    for s in sensors:
+        label = (s.parameter.display_name if s.parameter_id else None) or f"Sensör {s.id}"
+        if s.address is not None:
+            label = f"{label} — adr {s.address} ({s.data_type or '?'})"
+        items.append({"id": s.id, "text": label})
+    return JsonResponse({"results": items})
+
+
+def _safe_value(v):
+    """JSON serileştirilemez değerleri (bytes vb.) string'e indir."""
+    if isinstance(v, (bool, int, float, str)) or v is None:
+        return v
+    try:
+        return str(v)
+    except Exception:  # noqa: BLE001
+        return repr(v)
+
+
+@login_required
+def sensor_test_run(request):
+    """Kayıtlı bir sensörü anlık cihazdan oku (canlı test).
+
+    POST JSON {sensor_id}. Reader'ı taze açar (worker pool'a dokunmaz), tek
+    okuma yapar, kapatır. Döner: değer + ham register + kalite + hata + süre.
+    Cihaza erişilemese bile UI çökmeden quality=bad + hata mesajı döner.
+    """
+    import json
+    import time
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    try:
+        sensor_id = int(json.loads(request.body or "{}").get("sensor_id") or 0) or None
+    except (ValueError, TypeError):
+        sensor_id = None
+    if not sensor_id:
+        return JsonResponse({"ok": False, "error": "Sensör seçilmedi."}, status=400)
+
+    sensor = (
+        Sensor.objects.select_related("connection", "scan_group", "parameter")
+        .filter(pk=sensor_id)
+        .first()
+    )
+    if sensor is None:
+        return JsonResponse({"ok": False, "error": "Sensör bulunamadı."}, status=404)
+    if sensor.connection_id is None:
+        return JsonResponse({"ok": False, "error": "Sensörün bağlantısı tanımlı değil."}, status=400)
+
+    from scada_io.readers.factory import build_reader
+
+    started = time.monotonic()
+    try:
+        reader = build_reader(sensor.connection)
+    except ValueError as exc:
+        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+
+    result = {"value": None, "quality": "bad", "raw": None, "error": ""}
+    try:
+        if not reader.open():
+            result["error"] = reader.last_error or "Bağlantı kurulamadı."
+        else:
+            rr = reader.read(sensor)
+            result["value"] = _safe_value(rr.value)
+            result["quality"] = rr.quality
+            result["raw"] = _safe_value(rr.raw)
+            result["error"] = rr.error or ""
+    except Exception as exc:  # noqa: BLE001 — test asla UI'yı kırmasın
+        result["error"] = f"{type(exc).__name__}: {exc}"
+    finally:
+        try:
+            reader.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    return JsonResponse({
+        "ok": True,
+        "value": result["value"],
+        "quality": result["quality"],
+        "raw": result["raw"],
+        "error": result["error"],
+        "elapsed_ms": elapsed_ms,
+        "unit": (sensor.parameter.unit_txt or sensor.parameter.unit or "")
+                if sensor.parameter_id else "",
+        "sensor": str(sensor),
+        "protocol": sensor.connection.protocol,
+        "slave_id": sensor.slave_id,
+        "function": sensor.function,
+        "address": sensor.address,
+        "data_type": sensor.data_type,
+    })
+
+
+@login_required
+def scangroup_test_run(request):
+    """Bir scan grubunu anlık cihazdan oku (batch).
+
+    POST JSON {scan_group_id}. read_raw ile ham register dizisi okunur; gruba
+    bağlı her sensör batch'ten decode edilerek mühendislik değeriyle döner —
+    personel hangi adresin hangi değere denk geldiğini görür. Sadece Modbus
+    protokolleri (read_raw destekli).
+    """
+    import json
+    import time
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    try:
+        sg_id = int(json.loads(request.body or "{}").get("scan_group_id") or 0) or None
+    except (ValueError, TypeError):
+        sg_id = None
+    if not sg_id:
+        return JsonResponse({"ok": False, "error": "Scan grubu seçilmedi."}, status=400)
+
+    from api.models import ScanGroup
+
+    sg = ScanGroup.objects.select_related("connection").filter(pk=sg_id).first()
+    if sg is None:
+        return JsonResponse({"ok": False, "error": "Scan grubu bulunamadı."}, status=404)
+    if sg.connection.protocol not in _MODBUS_PROTOCOLS:
+        return JsonResponse({
+            "ok": False,
+            "error": "Scan grubu testi yalnızca Modbus protokollerinde geçerli "
+                     f"(bağlantı protokolü: {sg.connection.protocol}).",
+        }, status=400)
+
+    from scada_io.decoders import decode_sensor_from_batch
+    from scada_io.readers.factory import build_reader
+
+    started = time.monotonic()
+    try:
+        reader = build_reader(sg.connection)
+    except ValueError as exc:
+        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+
+    regs = None
+    err = ""
+    try:
+        if not reader.open():
+            err = reader.last_error or "Bağlantı kurulamadı."
+        else:
+            regs, err = reader.read_raw(
+                slave_id=sg.slave_id, function=sg.function,
+                address=sg.start_address, count=sg.quantity,
+            )
+    except Exception as exc:  # noqa: BLE001
+        err = f"{type(exc).__name__}: {exc}"
+    finally:
+        try:
+            reader.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+
+    if regs is None:
+        return JsonResponse({
+            "ok": True, "registers": None, "error": err or "Okuma başarısız.",
+            "elapsed_ms": elapsed_ms, "sensors": [],
+            "start_address": sg.start_address, "quantity": sg.quantity,
+        })
+
+    # Ham register'ları adres → değer çiftleriyle döndür.
+    registers = [
+        {"address": sg.start_address + i, "value": int(v)} for i, v in enumerate(regs)
+    ]
+
+    # Gruba bağlı sensörleri batch'ten decode et.
+    sensors_out = []
+    for s in sg.sensors.select_related("parameter").order_by("address", "id"):
+        row = {
+            "id": s.id,
+            "label": (s.parameter.display_name if s.parameter_id else None) or f"Sensör {s.id}",
+            "address": s.address,
+            "data_type": s.data_type,
+            "value": None,
+            "error": "",
+        }
+        try:
+            row["value"] = _safe_value(decode_sensor_from_batch(regs, sg.start_address, s))
+        except Exception as exc:  # noqa: BLE001 — tek sensör hatası diğerlerini engellemesin
+            row["error"] = str(exc)
+        sensors_out.append(row)
+
+    return JsonResponse({
+        "ok": True,
+        "registers": registers,
+        "error": err or "",
+        "elapsed_ms": elapsed_ms,
+        "sensors": sensors_out,
+        "start_address": sg.start_address,
+        "quantity": sg.quantity,
+        "protocol": sg.connection.protocol,
+    })
+
+

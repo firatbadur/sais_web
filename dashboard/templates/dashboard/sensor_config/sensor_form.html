@@ -1,0 +1,148 @@
+{% extends "dashboard/base.html" %}
+{% load i18n %}
+
+{% block title %}{% if object %}{% trans "Sensör Düzenle" %}{% else %}{% trans "Yeni Sensör" %}{% endif %}{% endblock %}
+{% block page_title %}{% if object %}{% trans "Sensör Düzenle" %}{% else %}{% trans "Yeni Sensör" %}{% endif %}{% endblock %}
+
+{% block content %}
+<form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    {# --- Kimlik --- #}
+    <div class="card mb-6">
+        <div class="card-header"><h3 class="card-title">{% trans "Kimlik" %}</h3></div>
+        <div class="card-body">
+            <div class="row">
+                {% include "dashboard/sensor_config/_field.html" with field=form.parameter %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.sensor_type %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.signal_type %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.brand %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.model %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.serial_number %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.is_active %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.dashboard_hidden %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.is_simulated %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.report_status %}
+            </div>
+        </div>
+    </div>
+
+    {# --- Bağlantı --- #}
+    <div class="card mb-6">
+        <div class="card-header"><h3 class="card-title">{% trans "Bağlantı" %}</h3></div>
+        <div class="card-body">
+            <div class="alert alert-light-info d-flex align-items-center mb-6">
+                <i class="ki-outline ki-information fs-2 text-info me-3"></i>
+                <div class="text-gray-700 fs-7">
+                    {% trans "Bir scan grubu seçerseniz slave, fonksiyon ve bağlantı gruptan otomatik miras alınır; adres grubun aralığı içinde olmalıdır. Grup seçilmezse sensör tek tek (legacy) okunur." %}
+                </div>
+            </div>
+            <div class="row">
+                {% include "dashboard/sensor_config/_field.html" with field=form.connection %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.scan_group %}
+            </div>
+        </div>
+    </div>
+
+    {# --- Modbus --- #}
+    <div class="card mb-6">
+        <div class="card-header"><h3 class="card-title">{% trans "Modbus" %}</h3></div>
+        <div class="card-body">
+            <div class="row">
+                {% include "dashboard/sensor_config/_field.html" with field=form.slave_id %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.function %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.address %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.quantity %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.byte_order %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.word_order %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.bit_position %}
+            </div>
+        </div>
+    </div>
+
+    {# --- Veri Tipi & Ölçekleme --- #}
+    <div class="card mb-6">
+        <div class="card-header"><h3 class="card-title">{% trans "Veri Tipi & Ölçekleme" %}</h3></div>
+        <div class="card-body">
+            <div class="row">
+                {% include "dashboard/sensor_config/_field.html" with field=form.data_type %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.scale %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.offset %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.decimals %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.digital_inverse %}
+            </div>
+        </div>
+    </div>
+
+    {# --- ASCII Protokolü (collapse) --- #}
+    <div class="card mb-6">
+        <div class="card-header collapsible cursor-pointer rotate" data-bs-toggle="collapse" data-bs-target="#sc_ascii">
+            <h3 class="card-title">{% trans "ASCII Protokolü" %}</h3>
+            <div class="card-toolbar rotate-180"><i class="ki-outline ki-down fs-1"></i></div>
+        </div>
+        <div id="sc_ascii" class="collapse">
+            <div class="card-body">
+                <div class="row">
+                    {% include "dashboard/sensor_config/_field.html" with field=form.ascii_code %}
+                    {% include "dashboard/sensor_config/_field.html" with field=form.ascii_request %}
+                    {% include "dashboard/sensor_config/_field.html" with field=form.ascii_response_regex %}
+                    {% include "dashboard/sensor_config/_field.html" with field=form.ascii_line_terminator %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# --- Polling / Zamanlama (collapse) --- #}
+    <div class="card mb-6">
+        <div class="card-header collapsible cursor-pointer rotate collapsed" data-bs-toggle="collapse" data-bs-target="#sc_poll">
+            <h3 class="card-title">{% trans "Polling / Zamanlama" %}</h3>
+            <div class="card-toolbar rotate-180"><i class="ki-outline ki-down fs-1"></i></div>
+        </div>
+        <div id="sc_poll" class="collapse">
+            <div class="card-body">
+                <div class="row">
+                    {% include "dashboard/sensor_config/_field.html" with field=form.poll_interval_sec %}
+                    {% include "dashboard/sensor_config/_field.html" with field=form.timeout_ms %}
+                    {% include "dashboard/sensor_config/_field.html" with field=form.retry_count %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# --- Değişimde Kaydet (COV) (collapse) --- #}
+    <div class="card mb-6">
+        <div class="card-header collapsible cursor-pointer rotate collapsed" data-bs-toggle="collapse" data-bs-target="#sc_cov">
+            <h3 class="card-title">{% trans "Kayıt / Değişimde Kaydet (COV)" %}</h3>
+            <div class="card-toolbar rotate-180"><i class="ki-outline ki-down fs-1"></i></div>
+        </div>
+        <div id="sc_cov" class="collapse">
+            <div class="card-body">
+                <div class="row">
+                    {% include "dashboard/sensor_config/_field.html" with field=form.save_on_change %}
+                    {% include "dashboard/sensor_config/_field.html" with field=form.deadband %}
+                    {% include "dashboard/sensor_config/_field.html" with field=form.cov_heartbeat_sec %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 mb-10">
+        <a href="{% url 'dashboard:sensorcfg_sensors' %}" class="btn btn-light">{% trans "İptal" %}</a>
+        <button type="submit" class="btn btn-primary">{% trans "Kaydet" %}</button>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// FK alanlarını aranabilir select2 yap (Metronik plugin'leri global yüklü).
+document.addEventListener("DOMContentLoaded", function () {
+    if (window.jQuery && jQuery.fn.select2) {
+        jQuery('[data-control="select2"]').select2({ width: '100%' });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,260 @@
+{% extends "dashboard/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Sensör Testi" %}{% endblock %}
+{% block page_title %}{% trans "Sensör Testi" %}{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<div class="row g-6">
+    <!-- Sol: test ayarları -->
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">{% trans "Canlı Okuma Testi" %}</h3></div>
+            <div class="card-body">
+                <div class="alert alert-light-info d-flex align-items-center mb-7">
+                    <i class="ki-outline ki-information fs-2 text-info me-3"></i>
+                    <div class="text-gray-700 fs-7">
+                        {% trans "Seçilen sensör veya scan grubu cihazdan anlık okunur. Girdiğiniz ayarın doğru olup olmadığını (değer + ham register) hemen görürsünüz. Cihaza ulaşılamazsa hata mesajı gösterilir." %}
+                    </div>
+                </div>
+
+                <div class="mb-5">
+                    <label class="form-label required">{% trans "Bağlantı" %}</label>
+                    <select id="t-connection" class="form-select form-select-solid" data-control="select2" data-placeholder="{% trans 'Bağlantı seçin' %}">
+                        <option></option>
+                        {% for c in connections %}
+                            <option value="{{ c.id }}" data-protocol="{{ c.protocol }}">
+                                {% if c.station_id %}{{ c.station.name }} / {% endif %}{{ c.name }} ({{ c.protocol }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <ul class="nav nav-tabs nav-line-tabs mb-5 fs-6" role="tablist">
+                    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#t-tab-sensor">{% trans "Sensör" %}</a></li>
+                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#t-tab-group">{% trans "Scan Grubu" %}</a></li>
+                </ul>
+
+                <div class="tab-content">
+                    <!-- Sensör testi -->
+                    <div class="tab-pane fade show active" id="t-tab-sensor">
+                        <div class="mb-5">
+                            <label class="form-label">{% trans "Sensör" %}</label>
+                            <select id="t-sensor" class="form-select form-select-solid" data-control="select2" data-placeholder="{% trans 'Önce bağlantı seçin' %}" disabled>
+                                <option></option>
+                            </select>
+                        </div>
+                        <button id="t-run-sensor" class="btn btn-primary w-100" disabled>
+                            <i class="ki-outline ki-pulse fs-4 me-1"></i>{% trans "Sensörü Test Et" %}
+                        </button>
+                    </div>
+
+                    <!-- Scan grubu testi -->
+                    <div class="tab-pane fade" id="t-tab-group">
+                        <div class="mb-5">
+                            <label class="form-label">{% trans "Scan Grubu" %}</label>
+                            <select id="t-group" class="form-select form-select-solid" data-control="select2" data-placeholder="{% trans 'Önce bağlantı seçin' %}" disabled>
+                                <option></option>
+                            </select>
+                        </div>
+                        <button id="t-run-group" class="btn btn-primary w-100" disabled>
+                            <i class="ki-outline ki-pulse fs-4 me-1"></i>{% trans "Grubu Test Et" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sağ: sonuç -->
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">{% trans "Test Sonucu" %}</h3></div>
+            <div class="card-body">
+                <div id="t-empty" class="text-center text-muted py-10">
+                    <i class="ki-outline ki-pulse fs-3x text-gray-400 mb-3 d-block"></i>
+                    {% trans "Test çalıştırmak için bağlantı ve sensör/grup seçip butona basın." %}
+                </div>
+                <div id="t-loading" class="text-center text-muted py-10 d-none">
+                    <span class="spinner-border text-primary mb-3"></span>
+                    <div>{% trans "Cihazdan okunuyor…" %}</div>
+                </div>
+                <div id="t-result" class="d-none"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    const I18N = {
+        value: "{% trans 'Değer' %}",
+        quality: "{% trans 'Kalite' %}",
+        error: "{% trans 'Hata' %}",
+        elapsed: "{% trans 'Süre' %}",
+        raw: "{% trans 'Ham Veri' %}",
+        registers: "{% trans 'Ham Register Listesi' %}",
+        address: "{% trans 'Adres' %}",
+        sensorsInGroup: "{% trans 'Gruptaki Sensörler' %}",
+        sensor: "{% trans 'Sensör' %}",
+        dataType: "{% trans 'Veri Tipi' %}",
+        noValue: "{% trans 'Değer yok' %}",
+        failed: "{% trans 'İstek başarısız' %}",
+        good: "{% trans 'İyi' %}",
+    };
+
+    function getCookie(name) {
+        const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+        return m ? m.pop() : '';
+    }
+    const $ = window.jQuery;
+
+    const $conn = $('#t-connection');
+    const $sensor = $('#t-sensor');
+    const $group = $('#t-group');
+    const elEmpty = document.getElementById('t-empty');
+    const elLoading = document.getElementById('t-loading');
+    const elResult = document.getElementById('t-result');
+    const btnSensor = document.getElementById('t-run-sensor');
+    const btnGroup = document.getElementById('t-run-group');
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+            {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+        ));
+    }
+    function qualityBadge(q) {
+        const map = {good: 'success', bad: 'danger', uncertain: 'warning', stale: 'secondary'};
+        const cls = map[q] || 'secondary';
+        return '<span class="badge badge-light-' + cls + ' fs-6">' + esc(q) + '</span>';
+    }
+    function show(which) {
+        elEmpty.classList.toggle('d-none', which !== 'empty');
+        elLoading.classList.toggle('d-none', which !== 'loading');
+        elResult.classList.toggle('d-none', which !== 'result');
+    }
+
+    function refreshButtons() {
+        const hasConn = !!$conn.val();
+        btnSensor.disabled = !(hasConn && $sensor.val());
+        btnGroup.disabled = !(hasConn && $group.val());
+    }
+
+    function loadOptions(url, $sel, placeholder) {
+        $sel.prop('disabled', true).empty().append('<option></option>');
+        const connId = $conn.val();
+        if (!connId) { refreshButtons(); return; }
+        $.getJSON(url + '?connection=' + encodeURIComponent(connId), function (data) {
+            (data.results || []).forEach(function (it) {
+                $sel.append(new Option(it.text, it.id, false, false));
+            });
+            $sel.prop('disabled', false);
+            refreshButtons();
+        });
+    }
+
+    $conn.on('change', function () {
+        loadOptions("{% url 'dashboard:api_sensorcfg_sensors' %}", $sensor);
+        loadOptions("{% url 'dashboard:api_sensorcfg_scangroups' %}", $group);
+    });
+    $sensor.on('change', refreshButtons);
+    $group.on('change', refreshButtons);
+
+    function post(url, body, render) {
+        show('loading');
+        fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+            body: JSON.stringify(body),
+        }).then(r => r.json().then(j => ({status: r.status, j})))
+          .then(({status, j}) => {
+              if (!j.ok) {
+                  elResult.innerHTML = '<div class="alert alert-danger">' + esc(j.error || I18N.failed) + '</div>';
+                  show('result');
+                  return;
+              }
+              render(j);
+              show('result');
+          })
+          .catch(() => {
+              elResult.innerHTML = '<div class="alert alert-danger">' + I18N.failed + '</div>';
+              show('result');
+          });
+    }
+
+    function renderSensor(j) {
+        const valStr = (j.value === null || j.value === undefined) ? '—' : esc(j.value);
+        let rawHtml = '';
+        if (Array.isArray(j.raw)) {
+            rawHtml = '<div class="text-muted fs-7 mt-2">' + I18N.raw + ': <code>[' + j.raw.map(esc).join(', ') + ']</code></div>';
+        } else if (j.raw !== null && j.raw !== undefined) {
+            rawHtml = '<div class="text-muted fs-7 mt-2">' + I18N.raw + ': <code>' + esc(j.raw) + '</code></div>';
+        }
+        let html = '';
+        if (j.error) {
+            html += '<div class="alert alert-danger d-flex align-items-center"><i class="ki-outline ki-cross-circle fs-2 text-danger me-3"></i>' + esc(j.error) + '</div>';
+        }
+        html += '<div class="d-flex flex-column align-items-center py-5">' +
+            '<div class="fs-7 text-muted text-uppercase">' + I18N.value + '</div>' +
+            '<div class="fs-2hx fw-bold ' + (j.quality === 'good' ? 'text-gray-900' : 'text-danger') + '">' + valStr +
+            (j.unit ? ' <span class="fs-4 text-muted">' + esc(j.unit) + '</span>' : '') + '</div>' +
+            '<div class="mt-2">' + qualityBadge(j.quality) + '</div>' +
+            rawHtml + '</div>';
+        html += '<div class="separator my-4"></div>';
+        html += '<div class="row text-center fs-7">' +
+            '<div class="col"><div class="text-muted">' + I18N.dataType + '</div><div class="fw-semibold">' + esc(j.data_type || '—') + '</div></div>' +
+            '<div class="col"><div class="text-muted">' + I18N.address + '</div><div class="fw-semibold">' + esc(j.address == null ? '—' : j.address) + '</div></div>' +
+            '<div class="col"><div class="text-muted">Slave/Fn</div><div class="fw-semibold">' + esc(j.slave_id == null ? '—' : j.slave_id) + ' / ' + esc(j.function == null ? '—' : j.function) + '</div></div>' +
+            '<div class="col"><div class="text-muted">' + I18N.elapsed + '</div><div class="fw-semibold">' + esc(j.elapsed_ms) + ' ms</div></div>' +
+            '</div>';
+        elResult.innerHTML = html;
+    }
+
+    function renderGroup(j) {
+        let html = '';
+        if (j.error) {
+            html += '<div class="alert alert-danger d-flex align-items-center"><i class="ki-outline ki-cross-circle fs-2 text-danger me-3"></i>' + esc(j.error) + '</div>';
+        }
+        html += '<div class="text-muted fs-7 mb-3">' + I18N.elapsed + ': <b>' + esc(j.elapsed_ms) + ' ms</b></div>';
+
+        if (Array.isArray(j.sensors) && j.sensors.length) {
+            html += '<h4 class="fs-6 fw-bold mb-2">' + I18N.sensorsInGroup + '</h4>';
+            html += '<div class="table-responsive mb-5"><table class="table table-row-bordered align-middle fs-7">' +
+                '<thead class="text-muted"><tr><th>' + I18N.sensor + '</th><th>' + I18N.address + '</th><th>' + I18N.dataType + '</th><th class="text-end">' + I18N.value + '</th></tr></thead><tbody>';
+            j.sensors.forEach(function (s) {
+                const v = s.error ? '<span class="text-danger">' + esc(s.error) + '</span>'
+                                  : '<b>' + esc(s.value == null ? '—' : s.value) + '</b>';
+                html += '<tr><td>' + esc(s.label) + '</td><td>' + esc(s.address == null ? '—' : s.address) + '</td><td>' + esc(s.data_type || '—') + '</td><td class="text-end">' + v + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+        }
+
+        if (Array.isArray(j.registers)) {
+            html += '<h4 class="fs-6 fw-bold mb-2">' + I18N.registers + ' (' + j.registers.length + ')</h4>';
+            html += '<div class="table-responsive" style="max-height:320px;overflow:auto"><table class="table table-row-bordered table-row-gray-300 fs-8">' +
+                '<thead class="text-muted"><tr><th>' + I18N.address + '</th><th class="text-end">' + I18N.value + ' (dec)</th><th class="text-end">hex</th></tr></thead><tbody>';
+            j.registers.forEach(function (r) {
+                const hex = '0x' + (r.value & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+                html += '<tr><td>' + esc(r.address) + '</td><td class="text-end">' + esc(r.value) + '</td><td class="text-end text-muted">' + hex + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+        }
+        elResult.innerHTML = html || '<div class="text-muted">' + I18N.noValue + '</div>';
+    }
+
+    btnSensor.addEventListener('click', function () {
+        if (!$sensor.val()) return;
+        post("{% url 'dashboard:api_sensorcfg_test_sensor' %}", {sensor_id: parseInt($sensor.val(), 10)}, renderSensor);
+    });
+    btnGroup.addEventListener('click', function () {
+        if (!$group.val()) return;
+        post("{% url 'dashboard:api_sensorcfg_test_scangroup' %}", {scan_group_id: parseInt($group.val(), 10)}, renderGroup);
+    });
+
+    refreshButtons();
+})();
+</script>
+{% endblock %}

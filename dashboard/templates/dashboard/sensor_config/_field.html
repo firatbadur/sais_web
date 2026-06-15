@@ -1,0 +1,8 @@
+{% load i18n %}
+{# Tek bir bound form alanını Metronik stiliyle render eder. `field` ile çağır. #}
+<div class="col-md-6 mb-5">
+    <label class="form-label{% if field.field.required %} required{% endif %}">{{ field.label }}</label>
+    {{ field }}
+    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+    {% if field.errors %}<div class="text-danger small">{{ field.errors.0 }}</div>{% endif %}
+</div>

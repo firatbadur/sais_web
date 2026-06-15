@@ -2373,3 +2373,131 @@ msgstr "Update triggered. The application will be back in a few minutes; refresh
 
 msgid "Yetkilendirme/CSRF hatası (403). Bu domain güvenilir kaynaklarda tanımlı olmayabilir — yöneticinize başvurun."
 msgstr "Authorization/CSRF error (403). This domain may not be listed as a trusted origin — contact your administrator."
+
+# --- Sensör Ayarları (otomatik eklendi) ---
+
+msgid "Sensör Ayarları"
+msgstr "Sensor Settings"
+
+msgid "Scan Grupları"
+msgstr "Scan Groups"
+
+msgid "Sensör Testi"
+msgstr "Sensor Test"
+
+msgid "Modbus Scan Grupları"
+msgstr "Modbus Scan Groups"
+
+msgid "Yeni Scan Grubu"
+msgstr "New Scan Group"
+
+msgid "Grup Adı"
+msgstr "Group Name"
+
+msgid "Scan grubu yok."
+msgstr "No scan groups."
+
+msgid "Scan Grubu Düzenle"
+msgstr "Edit Scan Group"
+
+msgid "Modbus toplu okuma bloğu. Register limiti: Holding/Input Register (fn 3/4) için en fazla 125, Coil/Discrete (fn 1/2) için en fazla 2000."
+msgstr "Modbus batch read block. Register limit: up to 125 for Holding/Input Registers (fn 3/4), up to 2000 for Coils/Discrete (fn 1/2)."
+
+msgid "Scan Grubu Sil"
+msgstr "Delete Scan Group"
+
+msgid "Scan Grubunu Sil"
+msgstr "Delete Scan Group"
+
+msgid "Bu gruba bağlı sensörler silinmez; yalnızca grupları boşaltılır (legacy moda düşer — her sensör tek tek okunur). Sensör ayarlarından yeniden bir gruba atayabilirsiniz."
+msgstr "Sensors in this group are not deleted; only their group is cleared (they fall back to legacy mode — each sensor is read individually). You can reassign them to a group from sensor settings."
+
+msgid "Evet, Sil"
+msgstr "Yes, Delete"
+
+msgid "Sensör Sil"
+msgstr "Delete Sensor"
+
+msgid "Sensörü Sil"
+msgstr "Delete Sensor"
+
+msgid "Dikkat: Bu sensöre ait tüm geçmiş okumalar (Reading) ve anlık değer (SensorLatest) de silinir. Bu işlem geri alınamaz."
+msgstr "Warning: all historical readings (Reading) and the latest value (SensorLatest) for this sensor are also deleted. This action cannot be undone."
+
+msgid "Yeni Sensör"
+msgstr "New Sensor"
+
+msgid "Sensör Düzenle"
+msgstr "Edit Sensor"
+
+msgid "Kimlik"
+msgstr "Identity"
+
+msgid "Bağlantı"
+msgstr "Connection"
+
+msgid "Bir scan grubu seçerseniz slave, fonksiyon ve bağlantı gruptan otomatik miras alınır; adres grubun aralığı içinde olmalıdır. Grup seçilmezse sensör tek tek (legacy) okunur."
+msgstr "If you select a scan group, slave, function and connection are inherited from the group; the address must be within the group range. If no group is selected, the sensor is read individually (legacy)."
+
+msgid "Modbus"
+msgstr "Modbus"
+
+msgid "Veri Tipi & Ölçekleme"
+msgstr "Data Type & Scaling"
+
+msgid "ASCII Protokolü"
+msgstr "ASCII Protocol"
+
+msgid "Polling / Zamanlama"
+msgstr "Polling / Timing"
+
+msgid "Kayıt / Değişimde Kaydet (COV)"
+msgstr "Save / Save on Change (COV)"
+
+msgid "Canlı Okuma Testi"
+msgstr "Live Read Test"
+
+msgid "Seçilen sensör veya scan grubu cihazdan anlık okunur. Girdiğiniz ayarın doğru olup olmadığını (değer + ham register) hemen görürsünüz. Cihaza ulaşılamazsa hata mesajı gösterilir."
+msgstr "The selected sensor or scan group is read live from the device. You immediately see whether your settings are correct (value + raw registers). If the device is unreachable, an error message is shown."
+
+msgid "Bağlantı seçin"
+msgstr "Select a connection"
+
+msgid "Önce bağlantı seçin"
+msgstr "Select a connection first"
+
+msgid "Sensörü Test Et"
+msgstr "Test Sensor"
+
+msgid "Grubu Test Et"
+msgstr "Test Group"
+
+msgid "Test Sonucu"
+msgstr "Test Result"
+
+msgid "Test çalıştırmak için bağlantı ve sensör/grup seçip butona basın."
+msgstr "Select a connection and a sensor/group, then press the button to run a test."
+
+msgid "Cihazdan okunuyor…"
+msgstr "Reading from device…"
+
+msgid "Ham Veri"
+msgstr "Raw Data"
+
+msgid "Ham Register Listesi"
+msgstr "Raw Registers"
+
+msgid "Gruptaki Sensörler"
+msgstr "Sensors in Group"
+
+msgid "Veri Tipi"
+msgstr "Data Type"
+
+msgid "Değer yok"
+msgstr "No value"
+
+msgid "İstek başarısız"
+msgstr "Request failed"
+
+msgid "İyi"
+msgstr "Good"

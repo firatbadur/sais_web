@@ -14,7 +14,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -42,6 +42,7 @@ from api.models import (
     ReadingDaily,
     ReadingFifteenMin,
     ReadingHourly,
+    ScanGroup,
     Sensor,
     Station,
     StatusCode,
@@ -57,6 +58,8 @@ from .forms import (
     DocumentUploadForm,
     NotificationSettingsForm,
     ProfileForm,
+    ScanGroupForm,
+    SensorConfigForm,
     WebSettingsForm,
 )
 from .models import Document
@@ -833,6 +836,157 @@ class SensorsOverviewView(OperatorRequiredMixin, ListView):
 
     def get_queryset(self):
         return super().get_queryset().select_related("parameter", "connection", "scan_group")
+
+
+# --------------------------------------------------------------------------- #
+# Sensör Ayarları (operatör + yönetici): Scan Grubu + Sensör CRUD + Canlı Test
+# --------------------------------------------------------------------------- #
+
+class ScanGroupListView(OperatorRequiredMixin, ListView):
+    model = ScanGroup
+    template_name = "dashboard/sensor_config/scangroup_list.html"
+    context_object_name = "scan_groups"
+    paginate_by = 50
+
+    def get_queryset(self):
+        return (
+            super().get_queryset()
+            .select_related("connection", "connection__station")
+            .annotate(sensor_total=Count("sensors"))
+            .order_by("connection__name", "slave_id", "start_address")
+        )
+
+
+class ScanGroupCreateView(OperatorRequiredMixin, CreateView):
+    model = ScanGroup
+    form_class = ScanGroupForm
+    template_name = "dashboard/sensor_config/scangroup_form.html"
+    success_url = reverse_lazy("dashboard:sensorcfg_scangroups")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, _("Scan grubu oluşturuldu."))
+        log_event(
+            EventType.CONFIG,
+            f"Scan grubu oluşturuldu: {self.object} (bağlantı={self.object.connection})",
+            severity="warning", request=self.request,
+        )
+        return response
+
+
+class ScanGroupUpdateView(OperatorRequiredMixin, UpdateView):
+    model = ScanGroup
+    form_class = ScanGroupForm
+    template_name = "dashboard/sensor_config/scangroup_form.html"
+    success_url = reverse_lazy("dashboard:sensorcfg_scangroups")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, _("Scan grubu güncellendi."))
+        log_event(
+            EventType.CONFIG,
+            f"Scan grubu güncellendi: {self.object} (bağlantı={self.object.connection})",
+            severity="warning", request=self.request,
+        )
+        return response
+
+
+class ScanGroupDeleteView(OperatorRequiredMixin, DeleteView):
+    model = ScanGroup
+    template_name = "dashboard/sensor_config/scangroup_confirm_delete.html"
+    success_url = reverse_lazy("dashboard:sensorcfg_scangroups")
+    context_object_name = "scan_group"
+
+    def form_valid(self, form):
+        label = str(self.object)
+        response = super().form_valid(form)
+        messages.success(self.request, _("Scan grubu silindi."))
+        log_event(
+            EventType.CONFIG,
+            f"Scan grubu silindi: {label}",
+            severity="warning", request=self.request,
+        )
+        return response
+
+
+class SensorConfigListView(OperatorRequiredMixin, ListView):
+    model = Sensor
+    template_name = "dashboard/sensor_config/sensor_list.html"
+    context_object_name = "sensors"
+    paginate_by = 50
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("parameter", "connection", "scan_group")
+
+
+class SensorConfigCreateView(OperatorRequiredMixin, CreateView):
+    model = Sensor
+    form_class = SensorConfigForm
+    template_name = "dashboard/sensor_config/sensor_form.html"
+    success_url = reverse_lazy("dashboard:sensorcfg_sensors")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, _("Sensör oluşturuldu."))
+        log_event(
+            EventType.CONFIG,
+            f"Sensör oluşturuldu: {self.object} (bağlantı={self.object.connection})",
+            severity="warning", request=self.request,
+        )
+        return response
+
+
+class SensorConfigUpdateView(OperatorRequiredMixin, UpdateView):
+    model = Sensor
+    form_class = SensorConfigForm
+    template_name = "dashboard/sensor_config/sensor_form.html"
+    success_url = reverse_lazy("dashboard:sensorcfg_sensors")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, _("Sensör güncellendi."))
+        log_event(
+            EventType.CONFIG,
+            f"Sensör güncellendi: {self.object} (bağlantı={self.object.connection})",
+            severity="warning", request=self.request,
+        )
+        return response
+
+
+class SensorConfigDeleteView(OperatorRequiredMixin, DeleteView):
+    model = Sensor
+    template_name = "dashboard/sensor_config/sensor_confirm_delete.html"
+    success_url = reverse_lazy("dashboard:sensorcfg_sensors")
+    context_object_name = "sensor"
+
+    def form_valid(self, form):
+        label = str(self.object)
+        response = super().form_valid(form)
+        messages.success(self.request, _("Sensör silindi."))
+        log_event(
+            EventType.CONFIG,
+            f"Sensör silindi: {label}",
+            severity="warning", request=self.request,
+        )
+        return response
+
+
+class SensorTestView(OperatorRequiredMixin, TemplateView):
+    """Canlı sensör/scan grubu test konsolu.
+
+    Sahadaki personel kayıtlı bir sensörü veya scan grubunu anlık cihazdan
+    okuyup decode edilmiş değeri + ham register'ları + kalite/hata bilgisini
+    görür; girdiği ayarın doğru olup olmadığını anında doğrular. Asıl okuma
+    `api_views.sensor_test_run` / `scangroup_test_run` AJAX endpoint'lerinde.
+    """
+    template_name = "dashboard/sensor_config/sensor_test.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["connections"] = (
+            Connection.objects.select_related("station").order_by("station", "name")
+        )
+        return ctx
 
 
 # --------------------------------------------------------------------------- #

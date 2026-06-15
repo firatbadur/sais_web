@@ -80,6 +80,20 @@ MENU = [
         ],
     },
     {
+        "label": _("Sensör Ayarları"),
+        "menu_key": "sensorcfg",
+        "icon": "ki-abstract-26",
+        "roles": (ROLE_ADMIN, ROLE_OPERATOR),
+        "children": [
+            {"label": _("Scan Grupları"), "url_name": "dashboard:sensorcfg_scangroups",
+             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
+            {"label": _("Sensörler"), "url_name": "dashboard:sensorcfg_sensors",
+             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
+            {"label": _("Sensör Testi"), "url_name": "dashboard:sensorcfg_test",
+             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
+        ],
+    },
+    {
         "label": _("Takvim Hatırlatıcı"),
         "url_name": "dashboard:reminders",
         "icon": "ki-calendar-tick",

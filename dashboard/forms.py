@@ -266,6 +266,82 @@ class CertUploadForm(forms.Form):
         return cleaned
 
 
+def _apply_metronic_classes(form):
+    """Form alanlarına Metronik solid input class'larını uygular.
+
+    Select → form-select form-select-solid, checkbox → form-check-input,
+    diğerleri → form-control form-control-solid.
+    """
+    for field in form.fields.values():
+        widget = field.widget
+        if isinstance(widget, forms.CheckboxInput):
+            widget.attrs.setdefault("class", "form-check-input")
+        elif isinstance(widget, forms.Select):
+            widget.attrs.setdefault("class", "form-select form-select-solid")
+        else:
+            widget.attrs.setdefault("class", "form-control form-control-solid")
+
+
+class ScanGroupForm(forms.ModelForm):
+    """Sensör Ayarları → Scan Grubu ekle/düzenle.
+
+    Modbus batch okuma bloğu. Quantity/function limitleri model `clean()`'inde
+    zorlanır (function 3/4 → max 125, 1/2 → max 2000)."""
+
+    class Meta:
+        from api.models import ScanGroup  # lazy — app yükleme sırası
+
+        model = ScanGroup
+        fields = ("connection", "name", "slave_id", "function",
+                  "start_address", "quantity", "is_active")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _apply_metronic_classes(self)
+        # FK alanı aranabilir olsun (test/CRUD sayfalarındaki diğer select'lerle tutarlı)
+        self.fields["connection"].widget.attrs["data-control"] = "select2"
+
+
+class SensorConfigForm(forms.ModelForm):
+    """Sensör Ayarları → Sensör ekle/düzenle.
+
+    Admin `_SensorAdminForm` ile aynı kapsam: tüm alanlar + `sensor_type`
+    zorunlu (model `default=0, blank=True` olduğu için Django default form'da
+    required=False çıkıyor). Scan group inheritance + address range model
+    `full_clean()`/`clean()` tarafından doğrulanır.
+    """
+
+    def __init__(self, *args, **kwargs):
+        from api.models import Sensor  # lazy
+
+        super().__init__(*args, **kwargs)
+        # sensor_type'ı zorunlu choice yap (admin formuyla aynı davranış)
+        self.fields["sensor_type"] = forms.TypedChoiceField(
+            choices=[("", _("— Sensör tipi seçin —"))] + list(Sensor.SENSOR_TYPE),
+            coerce=int, required=True, label=_("Sensör Tipi"),
+        )
+        _apply_metronic_classes(self)
+        for fk in ("parameter", "connection", "scan_group"):
+            self.fields[fk].widget.attrs["data-control"] = "select2"
+
+    class Meta:
+        from api.models import Sensor  # lazy
+
+        model = Sensor
+        fields = (
+            "parameter", "connection", "scan_group",
+            "brand", "model", "serial_number", "sensor_type", "signal_type",
+            "is_active", "dashboard_hidden", "is_simulated", "report_status",
+            "slave_id", "function", "address", "quantity",
+            "byte_order", "word_order", "bit_position",
+            "data_type", "scale", "offset", "decimals", "digital_inverse",
+            "ascii_code", "ascii_request", "ascii_response_regex",
+            "ascii_line_terminator",
+            "poll_interval_sec", "timeout_ms", "retry_count",
+            "save_on_change", "deadband", "cov_heartbeat_sec",
+        )
+
+
 class DocumentUploadForm(forms.ModelForm):
     """Doküman yükleme — yalnızca belge dosyalarına izin verir (resim/video yasak)."""
 

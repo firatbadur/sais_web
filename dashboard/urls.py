@@ -43,6 +43,25 @@ urlpatterns = [
     path("management/connections/", views.ConnectionsOverviewView.as_view(), name="management_connections"),
     path("management/sensors/", views.SensorsOverviewView.as_view(), name="management_sensors"),
 
+    # --- Sensör Ayarları (operatör + yönetici): Scan Grubu + Sensör CRUD + Test ---
+    path("sensor-config/scan-groups/", views.ScanGroupListView.as_view(),
+         name="sensorcfg_scangroups"),
+    path("sensor-config/scan-groups/create/", views.ScanGroupCreateView.as_view(),
+         name="sensorcfg_scangroup_create"),
+    path("sensor-config/scan-groups/<int:pk>/edit/", views.ScanGroupUpdateView.as_view(),
+         name="sensorcfg_scangroup_edit"),
+    path("sensor-config/scan-groups/<int:pk>/delete/", views.ScanGroupDeleteView.as_view(),
+         name="sensorcfg_scangroup_delete"),
+    path("sensor-config/sensors/", views.SensorConfigListView.as_view(),
+         name="sensorcfg_sensors"),
+    path("sensor-config/sensors/create/", views.SensorConfigCreateView.as_view(),
+         name="sensorcfg_sensor_create"),
+    path("sensor-config/sensors/<int:pk>/edit/", views.SensorConfigUpdateView.as_view(),
+         name="sensorcfg_sensor_edit"),
+    path("sensor-config/sensors/<int:pk>/delete/", views.SensorConfigDeleteView.as_view(),
+         name="sensorcfg_sensor_delete"),
+    path("sensor-config/test/", views.SensorTestView.as_view(), name="sensorcfg_test"),
+
     # --- Takvim Hatırlatıcı ---
     path("reminders/", views.RemindersView.as_view(), name="reminders"),
 
@@ -89,6 +108,16 @@ urlpatterns = [
 
     # --- AJAX API (raporlar) ---
     path("api/parameters/", api_views.station_parameters, name="api_station_parameters"),
+
+    # --- AJAX API (Sensör Ayarları / test) ---
+    path("api/sensor-config/scangroups/", api_views.connection_scangroups,
+         name="api_sensorcfg_scangroups"),
+    path("api/sensor-config/sensors/", api_views.connection_sensors,
+         name="api_sensorcfg_sensors"),
+    path("api/sensor-config/test-sensor/", api_views.sensor_test_run,
+         name="api_sensorcfg_test_sensor"),
+    path("api/sensor-config/test-scangroup/", api_views.scangroup_test_run,
+         name="api_sensorcfg_test_scangroup"),
 
     # --- AJAX API (Takvim Hatırlatıcı) ---
     path("api/reminders/list/", api_views.reminders_list, name="api_reminders_list"),
