@@ -39,17 +39,34 @@
 .PARAMETER Resume
     Passed by the EnvisoftWebX-Install logon task after the Phase 1 reboot; the
     install continues in the service account's session (Phase 2).
+
+.PARAMETER NoPrompt
+    Run headless: skip the final Read-Host. Set when launched (hidden) by
+    progress-window.ps1, whose console is hidden - a Read-Host would hang forever.
+
+.PARAMETER StatusFile
+    Optional path; this worker stamps its lifecycle here (running / rebooting /
+    deferred-reboot / done / failed) so the progress window can react.
 #>
 param(
     [Parameter(Mandatory)] [string]$AnswersFile,
-    [switch]$Resume
+    [switch]$Resume,
+    [switch]$NoPrompt,
+    [string]$StatusFile = ""
 )
 
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
 $psExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$progressUi = Join-Path $here "progress-window.ps1"
 $SvcUser = "EnvisoftWebX"          # dedicated service / auto-login account
 $ResumeTask = "EnvisoftWebX-Install"
+
+# Stamp the lifecycle state for the progress window (no-op if no StatusFile).
+function Set-Status([string]$state) {
+    if (-not $StatusFile) { return }
+    try { Set-Content -Path $StatusFile -Value $state -Encoding ASCII } catch {}
+}
 
 # --- Start logging FIRST: before parsing answers, into the install dir ---
 $baseDir = Split-Path -Parent $AnswersFile          # = install dir (e.g. C:\EnvisoftWebX)
@@ -91,7 +108,9 @@ function Build-Args([System.Collections.Specialized.OrderedDictionary]$params) {
 # (00-ensure-docker requires admin; a RunOnce entry under UAC may not elevate).
 # Window is VISIBLE so the operator can watch Phase 2 progress.
 function Register-ResumeTask {
-    $resumeArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $here 'install.ps1')`" -AnswersFile `"$AnswersFile`" -Resume"
+    # Resume via the progress window (visible) which re-launches this worker
+    # hidden with -Resume -NoPrompt. So Phase 2 shows the same branded UI.
+    $resumeArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$progressUi`" -AnswersFile `"$AnswersFile`" -Resume"
     $action  = New-ScheduledTaskAction -Execute $psExe -Argument $resumeArgs
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User $SvcUser
     $principal = New-ScheduledTaskPrincipal -UserId $SvcUser -RunLevel Highest -LogonType Interactive
@@ -114,10 +133,13 @@ function Request-Reboot([string]$msg) {
     } catch { $reboot = $false }
     if ($reboot) {
         $script:rebooting = $true
+        Set-Status "rebooting"
         Write-Host "   Restarting..." -ForegroundColor Yellow
         Start-Sleep -Seconds 2
         Restart-Computer -Force
     } else {
+        $script:rebooting = $true   # not a failure; the resume task continues it
+        Set-Status "deferred-reboot"
         Write-Host "   Restart deferred. The install resumes automatically after you restart." -ForegroundColor Yellow
     }
 }
@@ -125,6 +147,7 @@ function Request-Reboot([string]$msg) {
 try {
     Write-Host "==== Envisoft WebX Setup $([DateTime]::Now) (Resume=$Resume) ====" -ForegroundColor Magenta
     Write-Host "Answers: $AnswersFile" -ForegroundColor DarkGray
+    Set-Status "running"
 
     if (-not (Test-Path $AnswersFile)) {
         throw "Answers file not found: $AnswersFile"
@@ -218,12 +241,14 @@ try {
     Unregister-ScheduledTask -TaskName $ResumeTask -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
 
     $success = $true
+    Set-Status "done"
     Write-Host ""
     Write-Host "==== INSTALL COMPLETE ====" -ForegroundColor Green
     Write-Host "Dashboard (local): http://localhost/dashboard/" -ForegroundColor Green
     if ($a.Domain) { Write-Host "Dashboard (domain): https://$($a.Domain)/dashboard/" -ForegroundColor Green }
 }
 catch {
+    Set-Status "failed"
     Write-Host ""
     Write-Host "================  INSTALL ERROR  ================" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
@@ -237,8 +262,10 @@ finally {
         Remove-Item -Force $AnswersFile -ErrorAction SilentlyContinue
     }
     try { Stop-Transcript | Out-Null } catch {}
-    # Visible console; if not rebooting, keep the window open so the result is read.
-    if (-not $rebooting) {
+    # Keep the window open only when running with a visible console (legacy/manual
+    # debug). Under the progress window the console is hidden + -NoPrompt is set,
+    # so a Read-Host would hang forever.
+    if (-not $rebooting -and -not $NoPrompt) {
         Write-Host ""
         Read-Host "Press Enter to close this window"
     }

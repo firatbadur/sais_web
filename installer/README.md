@@ -18,7 +18,10 @@ EnvisoftWebX-Setup-vX.Y.Z.exe (Inno Setup)
    |  wizard: license - DB password - domain/TLS - dashboard admin
    |  (no Windows account is asked - it is created automatically)
    v
-install.ps1  (orchestrator)
+progress-window.ps1  (VISIBLE branded WinForms window; raw console hidden)
+   |  step summary + progress bar + expandable full log; tails install.log
+   v
+install.ps1  (HIDDEN worker; orchestrator)
    |
    |== Phase 1 (installing admin) =====================================
    |- 05-service-account.ps1  create 'EnvisoftWebX' local admin + generated
@@ -33,6 +36,15 @@ install.ps1  (orchestrator)
    |- 40-register-service.ps1  logon task "EnvisoftWebX" -> sais-stack.ps1
    `- remove the one-shot install task + answers file
 ```
+
+### Progress window
+
+There is no raw console: the install runs hidden and reports into a branded
+WinForms window (`progress-window.ps1`) with a step summary, a progress bar and a
+**Show details** toggle that reveals the full live log. It launches `install.ps1`
+hidden (worker) and tails `logs/install.log` + `logs/install-status.txt`. Both
+phases show their own window, so it survives the mid-install reboot. The worker
+runs with `-NoPrompt` so its hidden console never blocks on a prompt.
 
 ### Auto-login password protection (two layers)
 
@@ -100,8 +112,10 @@ powershell -ExecutionPolicy Bypass -File "C:\EnvisoftWebX\scripts\uninstall.ps1"
 This package cannot be verified in the dev environment; test it manually on a clean
 Windows VM/PC (with virtualization enabled):
 1. Run `EnvisoftWebX-Setup.exe` -> fill in the wizard (no Windows account is asked).
+   No raw console appears: a branded progress window opens (try **Show details**).
 2. Phase 1 reboots -> the box auto-logs-into `EnvisoftWebX` and Phase 2 resumes on its
-   own (a WSL kernel reboot may resume once more).
+   own; the progress window re-opens automatically (a WSL kernel reboot may resume once
+   more).
 3. `http://localhost/dashboard/` (or `https://<domain>/dashboard/`) -> sign in with the
    dashboard admin account.
 4. Reboot the machine -> the `EnvisoftWebX` logon task brings the stack up automatically

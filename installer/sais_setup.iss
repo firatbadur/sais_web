@@ -76,12 +76,14 @@ Name: "{group}\Uninstall Envisoft WebX"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\Envisoft WebX"; Filename: "http://localhost/dashboard/"; IconFilename: "{app}\EnvisoftWebX.ico"
 
 [Run]
-; No runhidden -> the install runs in a VISIBLE console; install.ps1 keeps the
-; window open until Enter. waituntilterminated -> Inno waits for completion.
+; runhidden -> the PowerShell console is hidden; progress-window.ps1 shows a
+; branded WinForms progress window (step summary + bar + expandable log) and
+; launches install.ps1 hidden as the worker. waituntilterminated -> Inno waits
+; until the progress window closes (or the machine reboots mid-install).
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
-  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\install.ps1"" -AnswersFile ""{app}\install-answers.json"""; \
-  StatusMsg: "Installing Docker, pulling images and starting the stack (watch the console window)..."; \
-  Check: WriteAnswers; Flags: waituntilterminated
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\progress-window.ps1"" -AnswersFile ""{app}\install-answers.json"""; \
+  StatusMsg: "Setting up Envisoft WebX (a progress window will open)..."; \
+  Check: WriteAnswers; Flags: runhidden waituntilterminated
 
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
