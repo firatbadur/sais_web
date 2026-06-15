@@ -202,7 +202,11 @@
             </div>
 
             <div class="card card-bordered mb-6">
-                <div class="card-header"><h3 class="card-title fs-6" id="group-form-title">{% trans "Yeni Scan Grubu" %}</h3></div>
+                <div class="card-header collapsible cursor-pointer rotate collapsed" data-bs-toggle="collapse" data-bs-target="#g-form-body" role="button">
+                    <h3 class="card-title fs-6" id="group-form-title">{% trans "Yeni Scan Grubu" %}</h3>
+                    <div class="card-toolbar rotate-180"><i class="ki-outline ki-down fs-2"></i></div>
+                </div>
+                <div id="g-form-body" class="collapse">
                 <div class="card-body">
                     <input type="hidden" id="g-id" value="">
                     <div class="alert alert-light-info d-flex align-items-center mb-5 py-3">
@@ -249,6 +253,13 @@
                         <button id="g-save" class="btn btn-primary btn-sm"><i class="ki-outline ki-check fs-4 me-1"></i>{% trans "Grubu Kaydet" %}</button>
                     </div>
                 </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end mb-4">
+                <button id="g-new" class="btn btn-sm btn-light-primary">
+                    <i class="ki-outline ki-plus fs-5 me-1"></i>{% trans "Yeni Scan Grubu" %}
+                </button>
             </div>
 
             <div class="table-responsive">
@@ -499,6 +510,15 @@
     // ============ STEP 2: Scan Grupları ============
     g('wz-back-2').addEventListener('click', ()=>gotoStep(1));
     function clearGErrors(){ document.querySelectorAll('[data-gerr]').forEach(e=>e.textContent=''); }
+    // Grup formu açılır/kapanır (default kapalı). Düzenleme/hata durumunda açılır.
+    function setGroupForm(open){
+        const el=g('g-form-body'); if(!el) return;
+        if(window.bootstrap && bootstrap.Collapse){
+            bootstrap.Collapse.getOrCreateInstance(el, {toggle:false})[open?'show':'hide']();
+        } else { el.classList.toggle('show', open); }
+        const hdr=document.querySelector('.card-header[data-bs-target="#g-form-body"]');
+        if(hdr) hdr.classList.toggle('collapsed', !open);
+    }
     function resetGroupForm(){
         g('g-id').value=''; g('g-name').value=''; g('g-slave').value='1'; g('g-function').value='3';
         g('g-start').value='0'; g('g-quantity').value=''; g('g-active').checked=true;
@@ -508,8 +528,10 @@
         g('g-id').value=gr.id; g('g-name').value=gr.name||''; g('g-slave').value=gr.slave_id;
         g('g-function').value=gr.function; g('g-start').value=gr.start_address; g('g-quantity').value=gr.quantity;
         g('g-active').checked=!!gr.is_active; g('group-form-title').textContent=I18N.editGroup; clearGErrors();
+        setGroupForm(true);
         window.scrollTo({top:0,behavior:'smooth'});
     }
+    g('g-new').addEventListener('click', e=>{ e.preventDefault(); resetGroupForm(); setGroupForm(true); window.scrollTo({top:0,behavior:'smooth'}); });
     function loadGroups(){
         if(!connId) return;
         getJSON("{% url 'dashboard:api_sensorcfg_scangroup_rows' %}?connection="+connId).then(j=>renderGroups(j.groups||[]));
@@ -553,8 +575,8 @@
         const btn=this; btn.disabled=true;
         postJSON("{% url 'dashboard:api_sensorcfg_scangroup_save' %}", payload).then(j=>{
             btn.disabled=false;
-            if(!j.ok){ if(j.errors){ Object.keys(j.errors).forEach(k=>{const el=document.querySelector('[data-gerr="'+k+'"]'); if(el) el.textContent=(j.errors[k]||[]).join(' ');}); } else alert(j.error||I18N.failed); return; }
-            resetGroupForm(); loadGroups();
+            if(!j.ok){ if(j.errors){ Object.keys(j.errors).forEach(k=>{const el=document.querySelector('[data-gerr="'+k+'"]'); if(el) el.textContent=(j.errors[k]||[]).join(' ');}); setGroupForm(true); } else alert(j.error||I18N.failed); return; }
+            resetGroupForm(); setGroupForm(false); loadGroups();
         }).catch(()=>{ btn.disabled=false; alert(I18N.failed); });
     });
     function deleteGroup(gr){
