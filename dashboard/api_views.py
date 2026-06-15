@@ -25,6 +25,22 @@ from api.models import (
 )
 
 
+# --------------------------------------------------------------------------- #
+# Mimik (Kabin İzleme) — eleman → parametre kodu eşlemesi
+# --------------------------------------------------------------------------- #
+# Eşleme Sensor.parameter.parameter_name üzerinden yapılır. (Parameter.station
+# güvenilmez — parametreler her zaman sensörlerden çekilir.) Kodlar
+# `seed_initial_data.py` ile senkron tutulmalıdır.
+MIMIC_ANALYZERS = ["pH", "CozunmusOksijen", "Iletkenlik", "KOi", "AKM", "Sicaklik", "KabinSicaklik"]
+MIMIC_FLOW = ["AkisHizi", "Debi"]
+MIMIC_DIGITALS = [
+    "Pompa1", "Pompa2", "Yikama", "HaftalikYikama", "Bakim", "NumuneAlma",
+    "Desarj", "Ups", "Enerji", "AcilStop", "Kapi", "ManuelYikama", "SuYok", "SuBasti",
+]
+MIMIC_STALE_SECONDS = 300    # SensorLatest bayatlık eşiği (okuma "veri yok" sayılır)
+MIMIC_OFFLINE_SECONDS = 900  # Connection bayatlık → iletişim arızası (PLC arıza ışığı)
+
+
 def _humanize_ago_tr(dt, now=None):
     """Geçmiş bir an için kısa Türkçe görece zaman: 'az önce', '1 dk önce',
     '2 sa önce', '3 gün önce', '4 ay önce', '1 yıl önce'. dt None ise None."""
@@ -206,6 +222,178 @@ def home_snapshot(request):
             "readtime": latest.readtime.isoformat() if latest.readtime else None,
         })
     return JsonResponse({"count": len(rows), "rows": rows, "wash": wash_info})
+
+
+@login_required
+def mimic_state(request):
+    """SCADA mimik (Kabin İzleme) — bir istasyonun tüm canlı durumu tek JSON'da.
+
+    ``?station=<id>``. Mimik sayfası ~4 sn'de bir poll'lar. Eşleme parametre kodu
+    (``Sensor.parameter.parameter_name``, bkz. ``MIMIC_*`` listeleri) üzerinden
+    yapılır; analizör/akış/dijital değerler + yıkama + numune senaryosu +
+    iletişim arıza durumu döner. Dijital çıkışlar için ``sensor_id`` döner →
+    sayfadaki tıkla-komut akışı mevcut ``digital_output_command``'a POST'lar.
+
+    Salt-okuma; ``login_required`` yeterli (sayfa zaten rol=1 ile kısıtlı).
+    """
+    now = timezone.now()
+    try:
+        station_id = int(request.GET.get("station"))
+    except (TypeError, ValueError):
+        return JsonResponse({"ok": False, "error": "Geçersiz station."}, status=400)
+
+    # İstasyonun aktif sensörleri → parametre koduna indeksli son snapshot.
+    latest_qs = (
+        SensorLatest.objects
+        .select_related("sensor", "sensor__parameter", "sensor__connection", "status")
+        .filter(sensor__connection__station_id=station_id, sensor__is_active=True)
+        .order_by("sensor__display_order", "sensor__id")
+    )
+    by_code = {}
+    for latest in latest_qs:
+        param = getattr(latest.sensor, "parameter", None)
+        code = param.parameter_name if param else None
+        if code and code not in by_code:
+            by_code[code] = latest
+
+    def _stale(latest):
+        if not latest or not latest.readtime:
+            return True
+        return (now - latest.readtime).total_seconds() > MIMIC_STALE_SECONDS
+
+    def _meta(code, latest):
+        # Önce sensörün parametresi; sensör yoksa kod adıyla Parameter meta'sı.
+        if latest:
+            param = getattr(latest.sensor, "parameter", None)
+            if param:
+                return param
+        return Parameter.objects.filter(parameter_name=code).first()
+
+    # Analizörler
+    analyzers = []
+    for code in MIMIC_ANALYZERS:
+        latest = by_code.get(code)
+        meta = _meta(code, latest)
+        analyzers.append({
+            "code": code,
+            "name": meta.display_name if meta else code,
+            "value": latest.value if latest else None,
+            "unit": ((meta.unit_txt or meta.unit) if meta else "") or "",
+            "min": meta.min_range if meta else None,
+            "max": meta.max_range if meta else None,
+            "gec_min": meta.gec_min if meta else None,
+            "gec_max": meta.gec_max if meta else None,
+            "status_code": latest.status.code if latest and latest.status else None,
+            "quality": latest.quality if latest else None,
+            "stale": _stale(latest),
+            "present": latest is not None,
+        })
+
+    # Akış / debimetre — ilk eşleşen kod
+    flow = {"code": None, "value": None, "unit": "", "stale": True, "present": False}
+    for code in MIMIC_FLOW:
+        latest = by_code.get(code)
+        if latest:
+            meta = _meta(code, latest)
+            flow = {
+                "code": code,
+                "value": latest.value,
+                "unit": ((meta.unit_txt or meta.unit) if meta else "") or "",
+                "stale": _stale(latest),
+                "present": True,
+            }
+            break
+
+    # Dijitaller (durum + sensor_id → tıkla-komut)
+    digitals = []
+    for code in MIMIC_DIGITALS:
+        latest = by_code.get(code)
+        if not latest:
+            digitals.append({
+                "code": code, "name": code, "present": False, "is_active": None,
+                "sensor_id": None, "sensor_type": None, "controllable": False,
+                "status_code": None, "stale": True,
+            })
+            continue
+        sensor = latest.sensor
+        meta = getattr(sensor, "parameter", None)
+        raw = bool(latest.value) if latest.value is not None else False
+        if sensor.digital_inverse:
+            raw = not raw
+        digitals.append({
+            "code": code,
+            "name": meta.display_name if meta else code,
+            "present": True,
+            "is_active": raw,
+            "sensor_id": sensor.pk,
+            "sensor_type": sensor.sensor_type,
+            # Yalnız dijital output (sensor_type=3) komutlanabilir.
+            "controllable": sensor.sensor_type == 3 and sensor.is_active,
+            "status_code": latest.status.code if latest.status else None,
+            "stale": _stale(latest),
+        })
+
+    # Yıkama durumu (SystemSwitch singleton — fleet geneli)
+    from sais_domain.models import SystemSwitch
+    switch = SystemSwitch.load()
+    wash_code = switch.active_wash_status_code()
+    wash = {
+        "active": wash_code is not None,
+        "kind": switch.wash_active_kind if wash_code else None,
+        "status_code": wash_code,
+        "remaining_seconds": switch.wash_remaining_seconds() if wash_code else None,
+    }
+
+    # Numune senaryosu — bu istasyonda devam eden run var mı
+    sampling = {"active": False, "is_ministry": False, "step": None, "sample_code": None}
+    try:
+        from sais_domain.models import ScenarioRun
+        run = (
+            ScenarioRun.objects
+            .filter(scenario__station_id=station_id, status=ScenarioRun.STATUS_IN_PROGRESS)
+            .order_by("-trigger_at").first()
+        )
+        if run:
+            sampling = {
+                "active": True,
+                "is_ministry": run.is_ministry,
+                "step": run.last_step_order,
+                "sample_code": run.sample_code or None,
+            }
+    except Exception:  # noqa: BLE001 — numune verisi olmadan da mimik çalışsın
+        pass
+
+    # İletişim arızası → PLC arıza ışığı: istasyonun açık bağlantılarından biri
+    # hiç poll'lanmamış ya da bayatsa (eşik aşıldı). Ek sinyal: status kodu 8.
+    comm_error = False
+    has_enabled = False
+    for conn in Connection.objects.filter(station_id=station_id, is_enabled=True):
+        has_enabled = True
+        if (not conn.last_polled_at
+                or (now - conn.last_polled_at).total_seconds() > MIMIC_OFFLINE_SECONDS):
+            comm_error = True
+            break
+    any_status_8 = (
+        any(a["status_code"] == 8 for a in analyzers if a["status_code"] is not None)
+        or any(d["status_code"] == 8 for d in digitals if d["status_code"] is not None)
+    )
+
+    return JsonResponse({
+        "ok": True,
+        "station_id": station_id,
+        "online": has_enabled and not comm_error,
+        "analyzers": analyzers,
+        "flow": flow,
+        "digitals": digitals,
+        "wash": wash,
+        "sampling": sampling,
+        "fault": {
+            "comm_error": comm_error,
+            "any_status_8": any_status_8,
+            "no_connection": not has_enabled,
+        },
+        "server_time": now.isoformat(),
+    })
 
 
 @login_required

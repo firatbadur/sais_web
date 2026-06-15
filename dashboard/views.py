@@ -809,6 +809,31 @@ class CalibrationWizardView(OperatorRequiredMixin, TemplateView):
         return ctx
 
 
+class MimicDashboardView(AdminRequiredMixin, TemplateView):
+    """Yönetici → Kabin İzleme (interaktif SCADA mimik — test/geliştirme).
+
+    Örnek "Kabin İzleme" panosunun animasyonlu replikası: analizör paneli,
+    peristaltik pompalar, akış hücresi kolonu, yıkama tankı, UPS, debimetre,
+    vanalar. Canlı durum `dashboard:api_mimic_state`'ten ~4 sn'de bir çekilir
+    (parametre koduyla eşlenir); "Demo/Simülasyon" anahtarı açıkken sayfa
+    sentetik değerlerle animasyonları canlandırır. Pompa/vanaya tıklayınca
+    mevcut `digital_output_command` ile Başlat/Durdur komutu kuyruğa atılır.
+
+    İlk sürüm rol=1 (yönetici) altında test amaçlı; beğenilirse ikinci dashboard
+    olarak sunulacak.
+    """
+    template_name = "dashboard/admin_pages/mimic.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        ctx["default_station_id"] = default_station_id()
+        # Dijital çıkış Start/Stop yetkisi (HomeView ile aynı bayrak); sunucu
+        # tarafında digital_output_command _require_operator ile ayrıca doğrular.
+        ctx["can_control"] = user_has_role(self.request.user, 1, 2)
+        return ctx
+
+
 # --------------------------------------------------------------------------- #
 # Management overview (readonly)
 # --------------------------------------------------------------------------- #

@@ -2783,3 +2783,120 @@ msgstr "Operation failed"
 
 msgid "bağlantı kapatıldı"
 msgstr "connection(s) closed"
+
+msgid "Kabin İzleme"
+msgstr "Cabinet Monitoring"
+
+msgid "Veri Kaynağı"
+msgstr "Data Source"
+
+msgid "Demo / Simülasyon"
+msgstr "Demo / Simulation"
+
+msgid "Sentetik verilerle animasyon (geliştirme)."
+msgstr "Animation with synthetic data (development)."
+
+msgid "İstasyondan canlı veri (parametre koduyla eşlenir)."
+msgstr "Live data from the station (matched by parameter code)."
+
+msgid "İletişim Yok"
+msgstr "No Communication"
+
+msgid "Numune Alınıyor"
+msgstr "Sampling"
+
+msgid "Bakım"
+msgstr "Maintenance"
+
+msgid "Kabin izleme şeması"
+msgstr "Cabinet monitoring diagram"
+
+msgid "ANALİZÖR"
+msgstr "ANALYZER"
+
+msgid "Atıksu Girişi"
+msgstr "Wastewater Inlet"
+
+msgid "Pompa-1"
+msgstr "Pump-1"
+
+msgid "Pompa-2"
+msgstr "Pump-2"
+
+msgid "Durdu"
+msgstr "Stopped"
+
+msgid "Debimetre"
+msgstr "Flow Meter"
+
+msgid "Akış Hücresi"
+msgstr "Flow Cell"
+
+msgid "Otomatik"
+msgstr "Automatic"
+
+msgid "Yıkama Vanası"
+msgstr "Wash Valve"
+
+msgid "Manuel Numune"
+msgstr "Manual Sample"
+
+msgid "Tahliye"
+msgstr "Discharge"
+
+msgid "Ters Yıkama"
+msgstr "Backwash"
+
+msgid "Yıkama Tankı"
+msgstr "Wash Tank"
+
+msgid "DOLU"
+msgstr "FULL"
+
+msgid "Yük"
+msgstr "Load"
+
+msgid "Kapasite"
+msgstr "Capacity"
+
+msgid "Sıcaklık"
+msgstr "Temperature"
+
+msgid "ARIZA"
+msgstr "FAULT"
+
+msgid "Pompa/vana veya çıkış rozetine tıklayarak Başlat/Durdur komutu gönderebilirsiniz."
+msgstr "Click a pump/valve or output chip to send a Start/Stop command."
+
+msgid "Bu rolde komut gönderilemez (salt-izleme)."
+msgstr "Commands cannot be sent in this role (read-only)."
+
+msgid "Çalışıyor"
+msgstr "Running"
+
+msgid "veri yok"
+msgstr "no data"
+
+msgid "BOŞ"
+msgstr "EMPTY"
+
+msgid "Bakanlık Numunesi"
+msgstr "Ministry Sample"
+
+msgid "Başlatılsın mı?"
+msgstr "Start?"
+
+msgid "Durdurulsun mu?"
+msgstr "Stop?"
+
+msgid "Demo modunda komut gönderilmez."
+msgstr "Commands are not sent in demo mode."
+
+msgid "Komut gönderilemedi."
+msgstr "Command could not be sent."
+
+msgid "Ağ hatası."
+msgstr "Network error."
+
+msgid "sn"
+msgstr "s"

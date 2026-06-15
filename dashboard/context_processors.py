@@ -111,6 +111,8 @@ MENU = [
         "icon": "ki-shield-tick",
         "roles": (ROLE_ADMIN,),
         "children": [
+            {"label": _("Kabin İzleme"), "url_name": "dashboard:admin_mimic",
+             "roles": (ROLE_ADMIN,)},
             {"label": _("Lisans"), "url_name": "dashboard:admin_license",
              "roles": (ROLE_ADMIN,)},
             {"label": _("Web Erişim Ayarları"), "url_name": "dashboard:admin_web_settings",

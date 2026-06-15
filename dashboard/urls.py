@@ -86,6 +86,7 @@ urlpatterns = [
     path("admin-pages/license/", views.LicenseStatusView.as_view(), name="admin_license"),
     path("admin-pages/web-settings/", views.WebSettingsView.as_view(),
          name="admin_web_settings"),
+    path("admin-pages/mimic/", views.MimicDashboardView.as_view(), name="admin_mimic"),
     path("admin-pages/notifications/", views.NotificationCenterView.as_view(),
          name="admin_notifications"),
 
@@ -105,6 +106,9 @@ urlpatterns = [
     path("api/home/digital-command/", api_views.digital_output_command,
          name="api_digital_command"),
     path("api/sensors/reorder/", api_views.sensors_reorder, name="api_sensors_reorder"),
+
+    # --- AJAX API (Kabin İzleme / SCADA mimik) ---
+    path("api/mimic/state/", api_views.mimic_state, name="api_mimic_state"),
 
     # --- AJAX API (raporlar) ---
     path("api/parameters/", api_views.station_parameters, name="api_station_parameters"),
