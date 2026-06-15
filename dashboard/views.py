@@ -1157,16 +1157,19 @@ class ApiLogsView(AdminRequiredMixin, ListView):
 class SystemControlView(OperatorRequiredMixin, TemplateView):
     """Yönetici → Sistem Kontrol.
 
-    Üç global aç/kapa (SIM, Envisoft, Polling) + manuel/haftalık yıkama
-    tetikleme + Celery durum widget'ı. POST handler `action` parametresine
-    göre 4 farklı işlem yapar: save_switches, start_manual_wash,
-    start_weekly_wash, stop_wash.
+    Üç global aç/kapa (SIM, Envisoft, Polling) + manuel/haftalık yıkama +
+    manuel bakım modu (istasyon/tesis bakımda) tetikleme + Celery durum
+    widget'ı. POST handler `action` parametresine göre işlem yapar:
+    save_switches, start_manual_wash, start_weekly_wash, start_station_maint,
+    start_facility_maint, stop_wash.
     """
     template_name = "dashboard/admin_pages/system_control.html"
 
-    # Yıkama süre clamp'i — UI input max'iyle senkron.
+    # Override süre clamp'i — UI input max'iyle senkron.
     MANUAL_WASH_MAX_MIN = 60
     WEEKLY_WASH_MAX_MIN = 180
+    STATION_MAINT_MAX_MIN = 1440   # 24 saat
+    FACILITY_MAINT_MAX_MIN = 1440  # 24 saat
 
     def get_context_data(self, **kwargs):
         from django.conf import settings
@@ -1245,6 +1248,30 @@ class SystemControlView(OperatorRequiredMixin, TemplateView):
             messages.success(request,
                 _("Haftalık yıkama başlatıldı: %(m)d dk.") % {"m": minutes})
 
+        elif action == "start_station_maint":
+            minutes = self._parse_minutes(
+                request.POST.get("station_maint_minutes"),
+                default=switch.station_maint_duration_minutes,
+                lo=1, hi=self.STATION_MAINT_MAX_MIN,
+            )
+            self._start_wash(switch, request.user, kind="station_maint", minutes=minutes)
+            switch.station_maint_duration_minutes = minutes
+            switch.save()
+            messages.success(request,
+                _("İstasyon bakım modu başlatıldı: %(m)d dk.") % {"m": minutes})
+
+        elif action == "start_facility_maint":
+            minutes = self._parse_minutes(
+                request.POST.get("facility_maint_minutes"),
+                default=switch.facility_maint_duration_minutes,
+                lo=1, hi=self.FACILITY_MAINT_MAX_MIN,
+            )
+            self._start_wash(switch, request.user, kind="facility_maint", minutes=minutes)
+            switch.facility_maint_duration_minutes = minutes
+            switch.save()
+            messages.success(request,
+                _("Tesis bakım modu başlatıldı: %(m)d dk.") % {"m": minutes})
+
         elif action == "stop_wash":
             switch.wash_active_kind = None
             switch.wash_started_at = None
@@ -1252,7 +1279,7 @@ class SystemControlView(OperatorRequiredMixin, TemplateView):
             switch.wash_started_by = None
             switch.updated_by = request.user
             switch.save()
-            messages.success(request, _("Yıkama durduruldu."))
+            messages.success(request, _("Aktif manuel mod durduruldu."))
 
         elif action == "close_connections":
             self._close_scada_connections(request)

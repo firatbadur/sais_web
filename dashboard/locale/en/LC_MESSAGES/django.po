@@ -874,6 +874,46 @@ msgstr "Weekly wash started: %(m)d min."
 msgid "Yıkama durduruldu."
 msgstr "Wash stopped."
 
+# ---- Yönetici: Manuel İşlemler / Bakım Modu ----
+msgid "Yıkama ve bakım modu"
+msgstr "Wash and maintenance mode"
+
+msgid "Manuel bir mod başlatıldığında, seçilen süre boyunca Bakanlık SIM + Envisoft'a iletilen tüm status kodları ilgili kodla override edilir. Aynı anda yalnızca bir mod aktif olabilir."
+msgstr "When a manual mode is started, all status codes sent to the Ministry SIM + Envisoft are overridden with the relevant code for the selected duration. Only one mode can be active at a time."
+
+msgid "Bakım Modu"
+msgstr "Maintenance Mode"
+
+msgid "İstasyon Bakımda"
+msgstr "Station Under Maintenance"
+
+msgid "Tesis Bakımda"
+msgstr "Facility Under Maintenance"
+
+msgid "Status kodu 25 — istasyon bakım/onarım moduna alınır."
+msgstr "Status code 25 — station is put into maintenance/repair mode."
+
+msgid "Status kodu 26 — tüm tesis bakım moduna alınır."
+msgstr "Status code 26 — the entire facility is put into maintenance mode."
+
+msgid "İstasyon Bakımı Başlat"
+msgstr "Start Station Maintenance"
+
+msgid "Tesis Bakımı Başlat"
+msgstr "Start Facility Maintenance"
+
+msgid "Aktif modu durdurmak istediğinizden emin misiniz?"
+msgstr "Are you sure you want to stop the active mode?"
+
+msgid "İstasyon bakım modu başlatıldı: %(m)d dk."
+msgstr "Station maintenance mode started: %(m)d min."
+
+msgid "Tesis bakım modu başlatıldı: %(m)d dk."
+msgstr "Facility maintenance mode started: %(m)d min."
+
+msgid "Aktif manuel mod durduruldu."
+msgstr "Active manual mode stopped."
+
 # ---- Home: Analog Status sütunu ----
 msgid "Status"
 msgstr "Status"

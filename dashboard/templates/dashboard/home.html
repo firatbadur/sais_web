@@ -417,10 +417,16 @@
             el.classList.add('d-none');
             return;
         }
-        const isWeekly = wash.kind === 'weekly';
-        el.classList.remove('badge-primary', 'badge-warning');
-        el.classList.add(isWeekly ? 'badge-warning' : 'badge-primary');
-        let txt = isWeekly ? "{% trans 'Haftalık Yıkama' %}" : "{% trans 'Manuel Yıkama' %}";
+        const KIND_BADGE = {
+            manual:         ['badge-primary', "{% trans 'Manuel Yıkama' %}"],
+            weekly:         ['badge-warning', "{% trans 'Haftalık Yıkama' %}"],
+            station_maint:  ['badge-info',    "{% trans 'İstasyon Bakımda' %}"],
+            facility_maint: ['badge-danger',  "{% trans 'Tesis Bakımda' %}"],
+        };
+        const [cls, label] = KIND_BADGE[wash.kind] || KIND_BADGE.manual;
+        el.classList.remove('badge-primary', 'badge-warning', 'badge-info', 'badge-danger');
+        el.classList.add(cls);
+        let txt = label;
         if (wash.remaining_seconds != null) {
             const rs = wash.remaining_seconds;
             const m = Math.floor(rs / 60);

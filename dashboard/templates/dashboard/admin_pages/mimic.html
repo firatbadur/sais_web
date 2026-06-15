@@ -371,6 +371,8 @@
         low: "{% trans 'BOŞ' %}",
         wash: "{% trans 'Yıkama' %}",
         weeklyWash: "{% trans 'Haftalık Yıkama' %}",
+        stationMaint: "{% trans 'İstasyon Bakımda' %}",
+        facilityMaint: "{% trans 'Tesis Bakımda' %}",
         sampling: "{% trans 'Numune Alınıyor' %}",
         ministrySampling: "{% trans 'Bakanlık Numunesi' %}",
         confirmStart: "{% trans 'Başlatılsın mı?' %}",
@@ -607,7 +609,12 @@
         toggle("mm-badge-wash", !!w);
         if (w) {
             const rem = s.wash.remaining_seconds;
-            const kindTxt = s.wash.status_code === 24 ? I18N.weeklyWash : I18N.wash;
+            const KIND_TXT = {
+                weekly: I18N.weeklyWash,
+                station_maint: I18N.stationMaint,
+                facility_maint: I18N.facilityMaint,
+            };
+            const kindTxt = KIND_TXT[s.wash.kind] || I18N.wash;
             setText("mm-wash-text", kindTxt + (rem ? " · " + rem + " " + I18N.sec : ""));
         }
         const sm = s.sampling && s.sampling.active;

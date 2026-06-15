@@ -100,10 +100,12 @@ class SystemSwitch(models.Model):
     okur ve kapalıysa no-op yapar. Worker/beat process'i çalışmaya devam
     eder — yalnız iş akışı sessizce askıya alınır.
 
-    Manuel/haftalık yıkama state'i de burada tutulur (singleton — aynı anda
-    yalnız bir yıkama aktif olabilir): yıkama tetiklendiğinde belirli süre
-    boyunca SIM + Envisoft payload'larındaki tüm status kodları 23 (manuel)
-    veya 24 (haftalık) ile override edilir.
+    Manuel durum override state'i de burada tutulur (singleton — aynı anda
+    yalnız bir override aktif olabilir): manuel yıkama / haftalık yıkama veya
+    manuel bakım modu (istasyon/tesis bakımda) tetiklendiğinde belirli süre
+    boyunca SIM + Envisoft payload'larındaki tüm status kodları ilgili kod ile
+    override edilir: 23 (manuel yıkama), 24 (haftalık yıkama), 25 (istasyon
+    bakımda), 26 (tesis bakımda).
     """
 
     # --- Veri akışı bayrakları ---
@@ -134,18 +136,35 @@ class SystemSwitch(models.Model):
         verbose_name="Haftalık Yıkama Süresi (dk)",
         help_text="Haftalık yıkama başlatıldığında varsayılan süre.",
     )
+    station_maint_duration_minutes = models.IntegerField(
+        default=60,
+        verbose_name="İstasyon Bakım Süresi (dk)",
+        help_text="İstasyon bakım modu başlatıldığında varsayılan süre.",
+    )
+    facility_maint_duration_minutes = models.IntegerField(
+        default=120,
+        verbose_name="Tesis Bakım Süresi (dk)",
+        help_text="Tesis bakım modu başlatıldığında varsayılan süre.",
+    )
 
-    # --- Aktif yıkama state'i ---
+    # --- Aktif manuel durum override state'i (yıkama / bakım) ---
     WASH_KIND_CHOICES = (
         ("manual", "Manuel Yıkama"),
         ("weekly", "Haftalık Yıkama"),
+        ("station_maint", "İstasyon Bakımda"),
+        ("facility_maint", "Tesis Bakımda"),
     )
     # StatusCode.code eşlemesi — seed_initial_data.py ile birebir.
-    WASH_STATUS_CODE = {"manual": 23, "weekly": 24}
+    WASH_STATUS_CODE = {
+        "manual": 23,
+        "weekly": 24,
+        "station_maint": 25,
+        "facility_maint": 26,
+    }
 
     wash_active_kind = models.CharField(
-        max_length=10, choices=WASH_KIND_CHOICES, null=True, blank=True,
-        verbose_name="Aktif Yıkama Tipi",
+        max_length=20, choices=WASH_KIND_CHOICES, null=True, blank=True,
+        verbose_name="Aktif Override Tipi",
     )
     wash_started_at = models.DateTimeField(
         null=True, blank=True,
