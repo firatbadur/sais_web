@@ -94,7 +94,6 @@ var
   DbPage: TInputQueryWizardPage;
   SitePage: TInputQueryWizardPage;
   AdminPage: TInputQueryWizardPage;
-  WinPage: TInputQueryWizardPage;
   TlsCombo: TNewComboBox;
 
 { Enable the Next button only when the current page's REQUIRED fields are filled.
@@ -168,22 +167,11 @@ begin
   AdminPage.Add('Email:', False);
   AdminPage.Add('Password:', True);
 
-  { Windows account for unattended auto-login. The stack runs in WSL, which only
-    works in a logged-in interactive session; a Windows service (session 0)
-    cannot reach the per-user WSL distro. So the machine auto-logs-in this
-    account at boot and a logon task starts the stack - the dashboard comes up
-    after a power cut WITHOUT anyone signing in. The password is stored in the
-    registry (acceptable on a physically secured SCADA cabinet). }
-  WinPage := CreateInputQueryPage(AdminPage.ID,
-    'Automatic Startup', 'Windows auto-login (no operator needed)',
-    'Windows account to auto-login at boot so the stack starts unattended (e.g. after a power outage). Enter this account''s Windows password - leave it blank if the account has no password.');
-  WinPage.Add('Windows username (auto, locked):', False);
-  WinPage.Add('Windows password:', True);
-  { Auto-fill the username with the account running the installer and LOCK it:
-    the auto-login account MUST be this user (the one whose WSL distro is
-    registered), so it cannot be changed. }
-  WinPage.Values[0] := GetEnv('USERNAME');
-  WinPage.Edits[0].Enabled := False;
+  { Unattended auto-start needs no input: the installer creates a dedicated
+    'EnvisoftWebX' local service account with a generated password and auto-logs
+    the machine into it at boot (the WSL distro + Docker stack are set up under
+    that account). Nobody signs into it, so its password never drifts and the
+    stack always comes up after a power cut. See 05-service-account.ps1. }
 
   { Live-validate required fields so Next is disabled until they are filled. }
   SitePage.Edits[0].OnChange := @FieldChanged;
@@ -254,9 +242,7 @@ begin
     '  "ImageTag": "{#IMAGE_TAG}",' + #13#10 +
     '  "AdminUser": "' + JsonEscape(AdminPage.Values[0]) + '",' + #13#10 +
     '  "AdminEmail": "' + JsonEscape(AdminPage.Values[1]) + '",' + #13#10 +
-    '  "AdminPassword": "' + JsonEscape(AdminPage.Values[2]) + '",' + #13#10 +
-    '  "WinUser": "' + JsonEscape(WinPage.Values[0]) + '",' + #13#10 +
-    '  "WinPass": "' + JsonEscape(WinPage.Values[1]) + '"' + #13#10 +
+    '  "AdminPassword": "' + JsonEscape(AdminPage.Values[2]) + '"' + #13#10 +
     '}';
   path := ExpandConstant('{app}\install-answers.json');
   Result := SaveStringToFile(path, json, False);

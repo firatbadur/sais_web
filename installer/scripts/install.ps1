@@ -1,10 +1,28 @@
 <#
 .SYNOPSIS
-    Envisoft WebX install orchestrator - runs steps 00..40 in order.
+    Envisoft WebX install orchestrator - two-phase flow built around a dedicated
+    service account that the box auto-logs-into at every boot.
 
 .DESCRIPTION
     The Inno Setup wizard writes the answers to a JSON file and calls this script
     with -AnswersFile.
+
+    WHY TWO PHASES: the stack runs in WSL2 and the WSL distro is registered
+    PER-USER, so it must be set up under the dedicated EnvisoftWebX service
+    account - not under the (human) user running the installer. So:
+
+      Phase 1 (this user, admin): 05-service-account creates the EnvisoftWebX
+        account, enables WSL features, and arms Windows auto-login for it. We then
+        register a one-shot logon task (EnvisoftWebX-Install, RunLevel Highest)
+        and reboot. The box comes back up auto-logged-in as EnvisoftWebX.
+
+      Phase 2 (EnvisoftWebX session, via -Resume): 00-ensure-docker registers the
+        WSL distro under EnvisoftWebX, then 10/20/30/40 configure + start the
+        stack and install the permanent keepalive task. On success the one-shot
+        install task + answers file are removed.
+
+    A WSL-kernel reboot inside 00-ensure-docker (exit 10) just reboots; the
+    persistent EnvisoftWebX-Install logon task re-fires Phase 2 after auto-login.
 
     RELIABILITY: logging starts FIRST (before parsing answers) so even early
     errors are logged. The whole body is wrapped in try/catch; on error it is
@@ -19,7 +37,8 @@
     JSON file with all install parameters.
 
 .PARAMETER Resume
-    Passed by RunOnce after a reboot; the install continues where it left off.
+    Passed by the EnvisoftWebX-Install logon task after the Phase 1 reboot; the
+    install continues in the service account's session (Phase 2).
 #>
 param(
     [Parameter(Mandatory)] [string]$AnswersFile,
@@ -29,6 +48,8 @@ param(
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
 $psExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$SvcUser = "EnvisoftWebX"          # dedicated service / auto-login account
+$ResumeTask = "EnvisoftWebX-Install"
 
 # --- Start logging FIRST: before parsing answers, into the install dir ---
 $baseDir = Split-Path -Parent $AnswersFile          # = install dir (e.g. C:\EnvisoftWebX)
@@ -65,6 +86,42 @@ function Build-Args([System.Collections.Specialized.OrderedDictionary]$params) {
     return ,$a
 }
 
+# Register (or refresh) the one-shot logon task that resumes the install in the
+# EnvisoftWebX session. AtLogOn + RunLevel Highest guarantees an ELEVATED run
+# (00-ensure-docker requires admin; a RunOnce entry under UAC may not elevate).
+# Window is VISIBLE so the operator can watch Phase 2 progress.
+function Register-ResumeTask {
+    $resumeArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $here 'install.ps1')`" -AnswersFile `"$AnswersFile`" -Resume"
+    $action  = New-ScheduledTaskAction -Execute $psExe -Argument $resumeArgs
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $SvcUser
+    $principal = New-ScheduledTaskPrincipal -UserId $SvcUser -RunLevel Highest -LogonType Interactive
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+        -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable
+    Unregister-ScheduledTask -TaskName $ResumeTask -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+    Register-ScheduledTask -TaskName $ResumeTask -Action $action -Trigger $trigger `
+        -Principal $principal -Settings $settings `
+        -Description "Envisoft WebX - resume install in the service account session." -Force | Out-Null
+}
+
+# Ask to reboot now (Yes) or later (No); either way auto-login + the resume task
+# continue the install. Returns when the user defers; never returns on reboot.
+function Request-Reboot([string]$msg) {
+    $reboot = $true
+    try {
+        $wsh = New-Object -ComObject WScript.Shell
+        $ans = $wsh.Popup($msg, 0, "Envisoft WebX - Restart", 4 + 32 + 256)
+        $reboot = ($ans -eq 6)
+    } catch { $reboot = $false }
+    if ($reboot) {
+        $script:rebooting = $true
+        Write-Host "   Restarting..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+        Restart-Computer -Force
+    } else {
+        Write-Host "   Restart deferred. The install resumes automatically after you restart." -ForegroundColor Yellow
+    }
+}
+
 try {
     Write-Host "==== Envisoft WebX Setup $([DateTime]::Now) (Resume=$Resume) ====" -ForegroundColor Magenta
     Write-Host "Answers: $AnswersFile" -ForegroundColor DarkGray
@@ -77,14 +134,38 @@ try {
     $Distro = if ($a.Distro) { $a.Distro } else { "Ubuntu" }
     Write-Host "InstallDir=$InstallDir  Distro=$Distro  Domain=$($a.Domain)" -ForegroundColor DarkGray
 
-    # 1) Docker prerequisite (WSL2 + Docker CE)
+    if (-not $Resume) {
+        # ============================ PHASE 1 (this admin) ====================
+        # Create the service account + auto-login + WSL features, then reboot so
+        # the rest runs in the EnvisoftWebX session.
+        Write-Host ">> [Phase 1] Creating service account + enabling WSL..." -ForegroundColor Cyan
+        $code = Invoke-Step "05-service-account.ps1" @("-SvcUser", $SvcUser)
+        if ($code -ne 0) { throw "Service account setup failed (exit $code)." }
+
+        Write-Host ">> Arming resume task '$ResumeTask' and rebooting..." -ForegroundColor Cyan
+        Register-ResumeTask
+
+        $msg = "Envisoft WebX has created its service account and enabled WSL2; " +
+               "Windows must restart to continue.`n`n" +
+               "After the restart the machine signs in automatically as the " +
+               "Envisoft WebX service account and the install CONTINUES on its own.`n`n" +
+               "Restart now?`n`n" +
+               "- Yes: restart and continue automatically.`n" +
+               "- No: restart later yourself; the install still resumes automatically."
+        Request-Reboot $msg
+        return
+    }
+
+    # ============================== PHASE 2 (EnvisoftWebX) ====================
+    # 1) Docker prerequisite (WSL2 + Docker CE) - registers the distro under this
+    #    (service) account.
     Write-Host ">> [1/5] Ensuring Docker (WSL2 + CE)..." -ForegroundColor Cyan
     $code = Invoke-Step "00-ensure-docker.ps1" @("-Distro", $Distro)
     Write-Host "   00-ensure-docker exit=$code" -ForegroundColor DarkGray
 
     if ($code -eq 10) {
-        # WSL2 needs a reboot -> resume automatically after login via RunOnce.
-        # Loop guard: at most 3 reboots.
+        # WSL2 needs a reboot -> just reboot. The persistent EnvisoftWebX-Install
+        # logon task re-fires Phase 2 after auto-login. Loop guard: at most 3.
         $counterFile = Join-Path $InstallDir ".reboot-count"
         $count = 0
         if (Test-Path $counterFile) { $count = [int](Get-Content $counterFile -Raw) }
@@ -93,29 +174,10 @@ try {
         }
         ($count + 1) | Set-Content $counterFile
 
-        $resumeCmd = "`"$psExe`" -NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $here 'install.ps1')`" -AnswersFile `"$AnswersFile`" -Resume"
-        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" `
-            -Name "EnvisoftWebXInstallResume" -Value $resumeCmd
-
-        $msg = "WSL2 has been enabled for the Envisoft WebX install; Windows must be " +
-               "restarted to continue.`n`nRestart now?`n`n" +
-               "- Yes: the machine restarts, and the install continues AUTOMATICALLY after you log back in.`n" +
-               "- No: restart the machine later yourself; the install will still resume where it left off."
-        $reboot = $true
-        try {
-            $wsh = New-Object -ComObject WScript.Shell
-            $ans = $wsh.Popup($msg, 0, "Envisoft WebX - Restart", 4 + 32 + 256)
-            $reboot = ($ans -eq 6)
-        } catch { $reboot = $false }
-
-        if ($reboot) {
-            $rebooting = $true
-            Write-Host "   Restarting..." -ForegroundColor Yellow
-            Start-Sleep -Seconds 2
-            Restart-Computer -Force
-        } else {
-            Write-Host "   Restart deferred. The install will resume after you restart the machine." -ForegroundColor Yellow
-        }
+        $msg = "WSL2 needs one more restart to activate its kernel.`n`nRestart now?`n`n" +
+               "- Yes: restart; the install continues automatically after sign-in.`n" +
+               "- No: restart later; the install still resumes automatically."
+        Request-Reboot $msg
         return
     }
     elseif ($code -ne 0) {
@@ -146,17 +208,20 @@ try {
         AdminPassword = $a.AdminPassword; AdminEmail = $a.AdminEmail }))
     if ($code -ne 0) { throw "First run failed (exit $code)." }
 
-    # 5) Auto-start (Windows auto-login + logon task; keeps the WSL2 VM alive)
+    # 5) Auto-start (logon keepalive task; auto-login was set in Phase 1)
     Write-Host ">> [5/5] Configuring unattended auto-start..." -ForegroundColor Cyan
     $code = Invoke-Step "40-register-service.ps1" (Build-Args ([ordered]@{
-        InstallDir = $InstallDir; Distro = $Distro;
-        WinUser = $a.WinUser; WinPass = $a.WinPass }))
+        InstallDir = $InstallDir; Distro = $Distro; SvcUser = $SvcUser }))
     if ($code -ne 0) { throw "Auto-start configuration failed (exit $code)." }
+
+    # Phase 2 done -> remove the one-shot resume task so it does not fire again.
+    Unregister-ScheduledTask -TaskName $ResumeTask -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
 
     $success = $true
     Write-Host ""
     Write-Host "==== INSTALL COMPLETE ====" -ForegroundColor Green
-    Write-Host "Dashboard: https://$($a.Domain)/dashboard/" -ForegroundColor Green
+    Write-Host "Dashboard (local): http://localhost/dashboard/" -ForegroundColor Green
+    if ($a.Domain) { Write-Host "Dashboard (domain): https://$($a.Domain)/dashboard/" -ForegroundColor Green }
 }
 catch {
     Write-Host ""
@@ -166,7 +231,8 @@ catch {
     Write-Host "Full log: $(Join-Path $logDir 'install.log')" -ForegroundColor Yellow
 }
 finally {
-    # Answers are needed across reboot (resume); delete on success only.
+    # Answers are needed across reboots (Phase 1 -> Phase 2, and WSL reboots);
+    # delete on success only.
     if ($success -and -not $rebooting) {
         Remove-Item -Force $AnswersFile -ErrorAction SilentlyContinue
     }

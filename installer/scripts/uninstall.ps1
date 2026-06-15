@@ -10,6 +10,7 @@
 param(
     [Parameter(Mandatory)] [string]$InstallDir,
     [string]$ServiceName = "EnvisoftWebX",
+    [string]$SvcUser = "EnvisoftWebX",
     [string]$Distro = "Ubuntu",
     [switch]$PurgeData
 )
@@ -18,16 +19,19 @@ $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "_common.ps1")
 $script:WslDistro = $Distro
 
-# Remove the logon scheduled task (current auto-start mechanism).
-Write-Step "Removing auto-start task: $ServiceName"
-Stop-ScheduledTask -TaskName $ServiceName -ErrorAction SilentlyContinue
-Unregister-ScheduledTask -TaskName $ServiceName -Confirm:$false -ErrorAction SilentlyContinue
+# Remove the logon scheduled tasks (keepalive + any leftover install resume task).
+Write-Step "Removing auto-start tasks: $ServiceName / $ServiceName-Install"
+foreach ($task in @($ServiceName, "$ServiceName-Install")) {
+    Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
+}
 
-# Disable Windows auto-login (clear the stored password).
+# Disable Windows auto-login (clear the stored user + password).
 Write-Step "Disabling Windows auto-login..."
 $winlogon = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
 Set-ItemProperty -Path $winlogon -Name "AutoAdminLogon" -Value "0" -ErrorAction SilentlyContinue
 Remove-ItemProperty -Path $winlogon -Name "DefaultPassword" -ErrorAction SilentlyContinue
+Remove-ItemProperty -Path $winlogon -Name "DefaultUserName" -ErrorAction SilentlyContinue
 
 # Remove any old NSSM service from previous installer versions.
 $nssm = Join-Path $InstallDir "nssm.exe"
@@ -48,6 +52,19 @@ try {
     }
 } catch {
     Write-WarnLine "compose down failed (stack may already be down)."
+}
+
+# Remove the dedicated service account (it holds no data). Done last so the
+# compose-down above still ran in a working session. The profile folder is left
+# behind (Windows keeps it while in use); the SAM account is removed.
+Write-Step "Removing service account: $SvcUser"
+try {
+    if (Get-LocalUser -Name $SvcUser -ErrorAction SilentlyContinue) {
+        Remove-LocalUser -Name $SvcUser -ErrorAction SilentlyContinue
+        Write-Ok "Service account '$SvcUser' removed."
+    }
+} catch {
+    Write-WarnLine "Could not remove service account '$SvcUser' (it may be the current session)."
 }
 
 Write-Ok "Uninstall finished."

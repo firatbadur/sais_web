@@ -18,12 +18,34 @@
 #>
 param(
     [Parameter(Mandatory)] [string]$InstallDir,
-    [string]$Distro = "Ubuntu"
+    [string]$Distro = "Ubuntu",
+    [string]$SvcUser = "EnvisoftWebX"
 )
 
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "_common.ps1")
 $script:WslDistro = $Distro
+
+# --- Auto-login password self-heal (Layer 2) ---------------------------------
+# The box auto-logs-into the EnvisoftWebX service account at boot, using the
+# password stored in the registry (Winlogon\DefaultPassword). That registry value
+# is the SINGLE SOURCE OF TRUTH. If anyone with admin rights forcibly changes the
+# real account password (net user / lusrmgr), auto-login would break on the next
+# reboot. To prevent that, each loop we re-assert the real account password to
+# match the stored DefaultPassword - reverting any drift. Non-fatal on failure
+# (e.g. a tightened password policy); the loop keeps running.
+function Sync-ServicePassword([string]$user) {
+    try {
+        $winlogon = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+        $stored = (Get-ItemProperty -Path $winlogon -Name "DefaultPassword" -ErrorAction SilentlyContinue).DefaultPassword
+        if (-not $stored) { return }
+        # Pass the password as a separate argv element so special characters are
+        # not re-parsed by a shell. /passwordchg:no re-asserts Layer 1 too.
+        & net.exe user $user $stored /passwordchg:no /active:yes /expires:never *> $null
+    } catch {
+        # Non-fatal; retried next loop.
+    }
+}
 
 # --- WSL2 port forwarding (external access fix) ------------------------------
 # Docker runs inside WSL2; in NAT mode WSL only mirrors published ports to the
@@ -58,6 +80,9 @@ function Set-PortProxy([string]$Distro) {
 
 while ($true) {
     try {
+        # 0) Keep the auto-login password in sync (Layer 2 self-heal).
+        Sync-ServicePassword $SvcUser
+
         # 1) Make sure the Docker daemon is up inside the distro.
         wsl.exe -d $Distro -u root -- bash -lc "service docker start 2>/dev/null || systemctl start docker 2>/dev/null || (pgrep dockerd >/dev/null || (dockerd >/var/log/dockerd.log 2>&1 &)); sleep 2" *> $null
 
