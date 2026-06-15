@@ -331,7 +331,8 @@ class SensorConfigForm(forms.ModelForm):
         fields = (
             "parameter", "connection", "scan_group",
             "brand", "model", "serial_number", "sensor_type", "signal_type",
-            "is_active", "dashboard_hidden", "is_simulated", "report_status",
+            "is_active", "dashboard_hidden", "is_simulated", "sim_min", "sim_max",
+            "report_status",
             "slave_id", "function", "address", "quantity",
             "byte_order", "word_order", "bit_position",
             "data_type", "scale", "offset", "decimals", "digital_inverse",
@@ -394,7 +395,7 @@ class GroupSensorForm(forms.ModelForm):
             "scan_group", "parameter", "sensor_type", "address", "data_type",
             "quantity", "byte_order", "word_order", "bit_position",
             "scale", "offset", "decimals",
-            "is_active", "is_simulated",
+            "is_active", "is_simulated", "sim_min", "sim_max",
         )
 
 

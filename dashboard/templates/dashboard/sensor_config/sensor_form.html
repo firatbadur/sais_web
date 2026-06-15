@@ -27,6 +27,11 @@
                 {% include "dashboard/sensor_config/_field.html" with field=form.is_simulated %}
                 {% include "dashboard/sensor_config/_field.html" with field=form.report_status %}
             </div>
+            {# Simülasyon aralığı — yalnız "Simülasyon Modu" işaretliyse görünür #}
+            <div class="row" id="sim-range-row">
+                {% include "dashboard/sensor_config/_field.html" with field=form.sim_min %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.sim_max %}
+            </div>
         </div>
     </div>
 
@@ -143,6 +148,14 @@ document.addEventListener("DOMContentLoaded", function () {
     if (window.jQuery && jQuery.fn.select2) {
         jQuery('[data-control="select2"]').select2({ width: '100%' });
     }
+    // Simülasyon aralığı satırını "Simülasyon Modu" işaretine göre göster/gizle.
+    var simChk = document.getElementById("{{ form.is_simulated.id_for_label }}");
+    var simRow = document.getElementById("sim-range-row");
+    function toggleSimRange() {
+        if (simRow) simRow.style.display = (simChk && simChk.checked) ? "" : "none";
+    }
+    if (simChk) simChk.addEventListener("change", toggleSimRange);
+    toggleSimRange();
 });
 </script>
 {% endblock %}

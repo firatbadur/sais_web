@@ -272,10 +272,24 @@ def _read_sensor_with_groups(reader, sensor, group_data):
 
 
 def _record_simulated(sensor):
-    """is_simulated=True sensörler için rastgele değer üret + persist et."""
+    """is_simulated=True sensörler için rastgele değer üret + persist et.
+
+    Aralık önceliği: sensörün kendi sim_min/sim_max alanları → parametrenin
+    min_range/max_range → (0, 100) varsayılanı.
+    """
     param = sensor.parameter
-    lo = param.min_range if (param and param.min_range is not None) else 0.0
-    hi = param.max_range if (param and param.max_range is not None) else 100.0
+    if sensor.sim_min is not None:
+        lo = sensor.sim_min
+    elif param and param.min_range is not None:
+        lo = param.min_range
+    else:
+        lo = 0.0
+    if sensor.sim_max is not None:
+        hi = sensor.sim_max
+    elif param and param.max_range is not None:
+        hi = param.max_range
+    else:
+        hi = 100.0
     if hi <= lo:
         hi = lo + 1.0
     value = random.uniform(lo, hi)

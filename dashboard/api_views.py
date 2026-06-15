@@ -2554,6 +2554,8 @@ def _serialize_group_sensor(s):
         "digital_inverse": s.digital_inverse,
         "is_active": s.is_active,
         "is_simulated": s.is_simulated,
+        "sim_min": s.sim_min,
+        "sim_max": s.sim_max,
     }
 
 

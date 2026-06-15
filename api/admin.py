@@ -210,7 +210,7 @@ class SensorAdmin(admin.ModelAdmin):
         ("Kimlik", {
             "fields": ("parameter", "brand", "model", "serial_number", "sensor_type",
                        "signal_type", "is_active", "dashboard_hidden", "is_simulated",
-                       "report_status"),
+                       "sim_min", "sim_max", "report_status"),
         }),
         ("Bağlantı", {
             "fields": ("connection", "scan_group"),

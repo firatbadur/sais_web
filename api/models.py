@@ -614,6 +614,16 @@ class Sensor(models.Model):
         default=False, verbose_name="Simülasyon Modu",
         help_text="True ise reader cihazdan değer okumak yerine rastgele üretir (test/demo için)",
     )
+    sim_min = models.FloatField(
+        blank=True, null=True, verbose_name="Simülasyon Min",
+        help_text="Simülasyon modunda üretilecek rastgele değerin alt sınırı. "
+                  "Boşsa parametrenin min_range değeri (o da yoksa 0) kullanılır.",
+    )
+    sim_max = models.FloatField(
+        blank=True, null=True, verbose_name="Simülasyon Max",
+        help_text="Simülasyon modunda üretilecek rastgele değerin üst sınırı. "
+                  "Boşsa parametrenin max_range değeri (o da yoksa 100) kullanılır.",
+    )
     report_status = models.BooleanField(
         default=False, verbose_name="Status Raporla",
         help_text="True ise bu sensörün status'ü dış sisteme (Bakanlık) gönderilir",

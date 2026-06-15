@@ -360,6 +360,14 @@
                             <label class="form-check form-switch form-check-custom form-check-solid"><input id="s-active" class="form-check-input" type="checkbox" checked><span class="form-check-label fs-8">{% trans "Aktif" %}</span></label>
                             <label class="form-check form-switch form-check-custom form-check-solid"><input id="s-sim" class="form-check-input" type="checkbox"><span class="form-check-label fs-8">{% trans "Simülasyon" %}</span></label>
                         </div>
+                        <div class="col-md-2 mb-4 sim-range" style="display:none">
+                            <label class="form-label">{% trans "Sim. Min" %}</label>
+                            <input id="s-simmin" type="number" step="any" class="form-control form-control-solid form-control-sm" placeholder="{% trans 'parametre min' %}">
+                        </div>
+                        <div class="col-md-2 mb-4 sim-range" style="display:none">
+                            <label class="form-label">{% trans "Sim. Max" %}</label>
+                            <input id="s-simmax" type="number" step="any" class="form-control form-control-solid form-control-sm" placeholder="{% trans 'parametre max' %}">
+                        </div>
                     </div>
                     <div class="d-flex justify-content-end gap-2">
                         <button id="s-clear" class="btn btn-light btn-sm">{% trans "Temizle" %}</button>
@@ -616,8 +624,14 @@
         g('s-datatype').value='float32'; g('s-byte').value='big'; g('s-word').value='little';
         g('s-bit').value=''; g('s-scale').value='1.0'; g('s-offset').value='0.0';
         g('s-decimals').value='2'; g('s-quantity').value=''; g('s-active').checked=true; g('s-sim').checked=false;
+        g('s-simmin').value=''; g('s-simmax').value=''; toggleSimRange();
         g('sensor-form-title').textContent=I18N.newSensor; clearSErrors();
     }
+    function toggleSimRange(){
+        const show=g('s-sim').checked;
+        document.querySelectorAll('.sim-range').forEach(e=>{ e.style.display=show?'':'none'; });
+    }
+    g('s-sim').addEventListener('change', toggleSimRange);
     function editSensor(s){
         g('s-id').value=s.id; $('#s-parameter').val(s.parameter_id?String(s.parameter_id):'').trigger('change');
         g('s-type').value=(s.sensor_type==null?'':s.sensor_type); g('s-address').value=(s.address==null?'':s.address);
@@ -625,6 +639,7 @@
         g('s-bit').value=(s.bit_position==null?'':s.bit_position); g('s-scale').value=(s.scale==null?'':s.scale);
         g('s-offset').value=(s.offset==null?'':s.offset); g('s-decimals').value=(s.decimals==null?'':s.decimals);
         g('s-quantity').value=(s.quantity==null?'':s.quantity); g('s-active').checked=!!s.is_active; g('s-sim').checked=!!s.is_simulated;
+        g('s-simmin').value=(s.sim_min==null?'':s.sim_min); g('s-simmax').value=(s.sim_max==null?'':s.sim_max); toggleSimRange();
         g('sensor-form-title').textContent=I18N.editSensor; clearSErrors(); window.scrollTo({top:0,behavior:'smooth'});
     }
     g('s-clear').addEventListener('click', e=>{ e.preventDefault(); resetSensorForm(); });
@@ -636,7 +651,8 @@
             parameter: $('#s-parameter').val() || '', sensor_type: g('s-type').value, address: g('s-address').value,
             data_type: g('s-datatype').value, byte_order: g('s-byte').value, word_order: g('s-word').value,
             bit_position: g('s-bit').value, scale: g('s-scale').value, offset: g('s-offset').value,
-            decimals: g('s-decimals').value, quantity: g('s-quantity').value, is_active: g('s-active').checked, is_simulated: g('s-sim').checked };
+            decimals: g('s-decimals').value, quantity: g('s-quantity').value, is_active: g('s-active').checked, is_simulated: g('s-sim').checked,
+            sim_min: g('s-simmin').value || '', sim_max: g('s-simmax').value || '' };
         const btn=this; btn.disabled=true;
         postJSON("{% url 'dashboard:api_sensorcfg_group_sensor_save' %}", payload).then(j=>{
             btn.disabled=false;

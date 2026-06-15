@@ -1,0 +1,10 @@
+{
+  "payload": {
+    "key": "elazig-aat",
+    "customer": "Elazığ AAT",
+    "issued_at": "2026-06-14T11:33:29+00:00",
+    "expires_at": "2028-06-14T00:00:00+00:00",
+    "version": 1
+  },
+  "signature": "b4335c871316df85f5eb74c2a542063fdc0d30540280b548208924d39b2e225d7a830a1d5812819f7914da46473360e270b03409fe1ca2eda74643540c860804"
+}
