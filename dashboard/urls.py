@@ -145,6 +145,8 @@ urlpatterns = [
     # --- AJAX API (yönetici) ---
     path("api/system-control/status/", api_views.system_control_status,
          name="api_system_control_status"),
+    path("api/connection-toggle/", api_views.connection_toggle,
+         name="api_connection_toggle"),
     path("api/backups/status/", api_views.backup_status, name="api_backup_status"),
     path("api/backups/<int:pk>/download/", api_views.backup_download, name="api_backup_download"),
     path("api/version/", api_views.version_info, name="api_version_info"),

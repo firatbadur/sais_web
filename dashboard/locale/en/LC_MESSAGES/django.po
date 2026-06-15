@@ -2756,3 +2756,30 @@ msgstr "No worker responded — the worker may not be running. Restart the worke
 
 msgid "Açık bağlantılar kapatıldı: %(w)d worker, %(c)d bağlantı kapatıldı; worker process'leri tazelendi."
 msgstr "Open connections closed: %(w)d worker(s), %(c)d connection(s) closed; worker processes refreshed."
+
+msgid "SCADA Bağlantıları"
+msgstr "SCADA Connections"
+
+msgid "TCP/IP Aç-Kapa"
+msgstr "TCP/IP On-Off"
+
+msgid "Bir bağlantıyı kapatmak hem polling'i durdurur hem de açık TCP/serial socket'i kapatır — cihazın bağlantı slotu boşalır (örn. Modbus Poll ile bağlanmak için)."
+msgstr "Turning a connection off both stops polling and closes the open TCP/serial socket — the device's connection slot is freed (e.g. to connect with Modbus Poll)."
+
+msgid "Açık"
+msgstr "On"
+
+msgid "Kapalı"
+msgstr "Off"
+
+msgid "Tanımlı bağlantı yok."
+msgstr "No connections defined."
+
+msgid "Bu bağlantının TCP/IP socket bağlantısı kapatılacak ve polling duracak. Devam edilsin mi?"
+msgstr "This connection's TCP/IP socket will be closed and polling stopped. Continue?"
+
+msgid "İşlem başarısız"
+msgstr "Operation failed"
+
+msgid "bağlantı kapatıldı"
+msgstr "connection(s) closed"

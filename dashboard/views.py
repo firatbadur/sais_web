@@ -1184,6 +1184,13 @@ class SystemControlView(OperatorRequiredMixin, TemplateView):
         ctx["wash_active_status_code"] = switch.active_wash_status_code()
         ctx["app_version"] = getattr(settings, "APP_VERSION", "dev")
 
+        # SCADA bağlantıları — TCP/IP aç-kapa toggle'ı için (sol kart).
+        from api.models import Connection
+        ctx["connections"] = (
+            Connection.objects.select_related("station")
+            .order_by("station__name", "name")
+        )
+
         # --- SIM status filtresi ---
         policy = SimStatusPolicy.load()
         blocked = (
@@ -1281,36 +1288,19 @@ class SystemControlView(OperatorRequiredMixin, TemplateView):
         İki yöntem de broker üzerinden tüm worker node'larına broadcast edilir;
         biri ilgisiz pool tipinde no-op olur, zararsızdır.
         """
-        from sais_web.celery import app
+        from scada_io.pool_control import broadcast_close_pools
 
-        closed = 0
-        workers = 0
-        try:
-            replies = app.control.broadcast(
-                "close_scada_pool",
-                arguments={"reason": request.user.username or "manual"},
-                reply=True, timeout=3,
-            ) or []
-            for reply in replies:
-                for _node, payload in reply.items():
-                    workers += 1
-                    if isinstance(payload, dict):
-                        closed += int(payload.get("closed") or 0)
-        except Exception as exc:  # noqa: BLE001 — broker erişilemez vb.
+        summary = broadcast_close_pools(reason=request.user.username or "manual")
+        if summary["error"]:
             messages.error(
                 request,
-                _("Bağlantı kapatma isteği gönderilemedi: %(e)s") % {"e": exc},
+                _("Bağlantı kapatma isteği gönderilemedi: %(e)s")
+                % {"e": summary["error"]},
             )
             return
 
-        # prefork child'larını geri dönüştür (idle child socket'leri için).
-        try:
-            app.control.broadcast(
-                "pool_restart", arguments={"reload": False}, reply=False,
-            )
-        except Exception:  # noqa: BLE001 — solo pool desteklemez, zararsız
-            pass
-
+        workers = summary["workers"]
+        closed = summary["closed"]
         if workers == 0:
             messages.warning(
                 request,

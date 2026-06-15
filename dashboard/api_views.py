@@ -532,6 +532,70 @@ def system_control_status(request):
 
 
 @login_required
+def connection_toggle(request):
+    """SCADA bağlantısını TCP/IP düzeyinde aç/kapa (Sistem Kontrol kartı).
+
+    POST JSON: ``{"connection_id": int, "enabled": bool}``
+    Yanıt: ``{"ok": bool, "enabled": bool, "workers": int, "closed": int,
+             "message": str|None}``
+
+    Kapatma (``enabled=False``):
+      1. ``Connection.is_enabled=False`` → ``dispatch_polls`` bu bağlantıyı bir
+         daha enqueue etmez (worker tekrar bağlanmaz).
+      2. Worker pool'larındaki açık socket'ler broadcast ile kapatılır →
+         PLC'nin tek-bağlantı slotu boşalır (Modbus Poll vb. ile bağlanılabilir).
+
+    Açma (``enabled=True``): yalnız ``is_enabled=True`` yapılır; bir sonraki
+    polling cycle'ında (≤ poll_interval) worker bağlantıyı yeniden açar.
+    """
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    try:
+        data = json.loads(request.body or "{}")
+        conn_id = int(data.get("connection_id"))
+        enabled = bool(data.get("enabled"))
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz istek."}, status=400)
+
+    conn = Connection.objects.filter(pk=conn_id).first()
+    if conn is None:
+        return JsonResponse({"ok": False, "error": "Bağlantı bulunamadı."}, status=404)
+
+    conn.is_enabled = enabled
+    conn.save(update_fields=["is_enabled"])
+
+    from api.events import EventType, log_event
+    log_event(
+        EventType.CONFIG,
+        f"Bağlantı {'açıldı' if enabled else 'kapatıldı'}: {conn}",
+        severity="info" if enabled else "warning", request=request,
+    )
+
+    workers = closed = 0
+    if not enabled:
+        # Açık socket'leri kapat ki PLC slotu hemen boşalsın. Tüm worker'lara
+        # broadcast; bu bağlantı artık is_enabled=False olduğu için yeniden
+        # açılmaz, diğer aktif bağlantılar ≤ poll_interval içinde geri bağlanır.
+        from scada_io.pool_control import broadcast_close_pools
+        summary = broadcast_close_pools(reason=f"toggle-off:{conn_id}")
+        workers = summary["workers"]
+        closed = summary["closed"]
+
+    return JsonResponse({
+        "ok": True,
+        "enabled": enabled,
+        "workers": workers,
+        "closed": closed,
+    })
+
+
+@login_required
 def station_parameters(request):
     """İstasyona ait parametre listesi — rapor formu select2'sini doldurur.
 

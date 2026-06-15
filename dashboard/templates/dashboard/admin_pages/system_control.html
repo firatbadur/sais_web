@@ -36,10 +36,69 @@
 <div class="row g-5">
 
     {# ------------------------------------------------------------------ #}
-    {# Sistem Anahtarları kartı                                           #}
+    {# Sol kolon: SCADA Bağlantıları (TCP aç/kapa) + Sistem Anahtarları    #}
     {# ------------------------------------------------------------------ #}
     <div class="col-xl-7">
-        <div class="card card-flush h-100">
+      <div class="d-flex flex-column gap-5 h-100">
+
+        {# --- SCADA Bağlantıları: TCP/IP aç-kapa --- #}
+        <div class="card card-flush">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-router fs-2 me-2 text-primary"></i>
+                    {% trans "SCADA Bağlantıları" %}
+                </h3>
+                <div class="card-toolbar">
+                    <span class="text-muted fs-8">{% trans "TCP/IP Aç-Kapa" %}</span>
+                </div>
+            </div>
+            <div class="card-body pt-2">
+                <div class="text-muted fs-8 mb-4">
+                    {% trans "Bir bağlantıyı kapatmak hem polling'i durdurur hem de açık TCP/serial socket'i kapatır — cihazın bağlantı slotu boşalır (örn. Modbus Poll ile bağlanmak için)." %}
+                </div>
+                {% for conn in connections %}
+                <div class="d-flex align-items-center border border-dashed border-gray-300 rounded p-4 mb-3"
+                     data-conn-row="{{ conn.pk }}">
+                    <div class="symbol symbol-40px me-3">
+                        <span class="symbol-label bg-light-primary">
+                            <i class="ki-outline ki-electricity fs-2 text-primary"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-column flex-grow-1">
+                        <span class="fw-bold fs-6 text-gray-900">
+                            {{ conn.name }}
+                            <span class="text-muted fw-normal fs-8">— {{ conn.station.name }}</span>
+                        </span>
+                        <span class="text-muted fs-8 mt-1">
+                            {% if conn.transport == "tcp" %}
+                                {{ conn.host|default:"—" }}{% if conn.port %}:{{ conn.port }}{% endif %}
+                            {% else %}
+                                {{ conn.serial_port|default:"—" }}
+                            {% endif %}
+                            · {{ conn.get_protocol_display }}
+                        </span>
+                    </div>
+                    <span class="badge fs-8 fw-bold me-3 conn-badge
+                                 {% if conn.is_enabled %}badge-light-success{% else %}badge-light-danger{% endif %}"
+                          data-conn-badge="{{ conn.pk }}">
+                        {% if conn.is_enabled %}{% trans "Açık" %}{% else %}{% trans "Kapalı" %}{% endif %}
+                    </span>
+                    <div class="form-check form-switch form-check-custom form-check-solid">
+                        <input class="form-check-input conn-toggle" type="checkbox"
+                               data-conn-toggle="{{ conn.pk }}"
+                               {% if conn.is_enabled %}checked{% endif %}>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-muted fs-7 text-center py-4">
+                    {% trans "Tanımlı bağlantı yok." %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# --- Sistem Anahtarları --- #}
+        <div class="card card-flush flex-grow-1">
             <div class="card-header">
                 <h3 class="card-title">
                     <i class="ki-outline ki-setting-3 fs-2 me-2 text-primary"></i>
@@ -111,6 +170,8 @@
                 </form>
             </div>
         </div>
+
+      </div>
     </div>
 
     {# ------------------------------------------------------------------ #}
@@ -177,27 +238,6 @@
                           id="beat-badge">
                         {% if celery_status.beat_ok %}{% trans "Aktif" %}{% else %}{% trans "Durmuş" %}{% endif %}
                     </span>
-                </div>
-
-                {# Açık bağlantıları kapat #}
-                <div class="notice d-flex flex-stack bg-light-warning rounded border-warning border border-dashed p-5 mt-6">
-                    <div class="d-flex align-items-center">
-                        <i class="ki-outline ki-plug fs-2x text-warning me-4"></i>
-                        <div class="d-flex flex-column">
-                            <h5 class="text-gray-900 fw-bold mb-1">{% trans "Açık Bağlantıları Kapat" %}</h5>
-                            <span class="text-gray-700 fs-7">
-                                {% trans "Sensör Okuması anahtarını kapatmak bağlantıyı kapatmaz; worker gateway bağlantısını açık tutar. Bu düğme açık TCP/serial socket bağlantılarını kapatır ve worker süreçlerini tazeler." %}
-                            </span>
-                        </div>
-                    </div>
-                    <form method="post" class="ms-4"
-                          onsubmit="return confirm('{% trans "Açık tüm SCADA bağlantıları kapatılacak ve worker süreçleri tazelenecek. Devam edilsin mi?" %}');">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="close_connections">
-                        <button type="submit" class="btn btn-sm btn-warning text-nowrap">
-                            <i class="ki-outline ki-cross-circle fs-5 me-1"></i>{% trans "Bağlantıları Kapat" %}
-                        </button>
-                    </form>
                 </div>
 
                 {# Restart bilgi notu #}
@@ -917,6 +957,64 @@
                     .catch(e => { btnPort.disabled = false; portRes.innerHTML = '<div class="alert alert-danger">' + e + '</div>'; });
             });
         }
+    })();
+
+    // --- SCADA Bağlantıları: TCP/IP aç-kapa toggle ---
+    (function () {
+        const TOGGLE_URL = "{% url 'dashboard:api_connection_toggle' %}";
+        const I18N = {
+            on: "{% trans 'Açık' %}",
+            off: "{% trans 'Kapalı' %}",
+            confirmOff: "{% trans 'Bu bağlantının TCP/IP socket bağlantısı kapatılacak ve polling duracak. Devam edilsin mi?' %}",
+            failed: "{% trans 'İşlem başarısız' %}",
+            closedInfo: "{% trans 'bağlantı kapatıldı' %}",
+        };
+
+        function csrf() {
+            const el = document.querySelector('[name=csrfmiddlewaretoken]');
+            return el ? el.value : '';
+        }
+
+        function setBadge(id, enabled) {
+            const badge = document.querySelector('[data-conn-badge="' + id + '"]');
+            if (!badge) return;
+            badge.textContent = enabled ? I18N.on : I18N.off;
+            badge.classList.toggle('badge-light-success', enabled);
+            badge.classList.toggle('badge-light-danger', !enabled);
+        }
+
+        document.querySelectorAll('.conn-toggle').forEach(function (input) {
+            input.addEventListener('change', function () {
+                const id = this.getAttribute('data-conn-toggle');
+                const enabled = this.checked;
+
+                // Kapatma onayı — yanlışlıkla kesmeyi engelle.
+                if (!enabled && !confirm(I18N.confirmOff)) {
+                    this.checked = true;
+                    return;
+                }
+
+                this.disabled = true;
+                fetch(TOGGLE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+                    body: JSON.stringify({ connection_id: parseInt(id, 10), enabled: enabled }),
+                })
+                    .then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status))
+                    .then(res => {
+                        this.disabled = false;
+                        if (!res.ok) { throw new Error(res.error || I18N.failed); }
+                        setBadge(id, res.enabled);
+                    })
+                    .catch(err => {
+                        // Geri al — UI gerçek durumla tutarlı kalsın.
+                        this.disabled = false;
+                        this.checked = !enabled;
+                        setBadge(id, !enabled);
+                        alert(I18N.failed + ': ' + err);
+                    });
+            });
+        });
     })();
 </script>
 {% endblock %}
