@@ -87,9 +87,11 @@ if ($existing) {
     Enable-LocalUser -Name $SvcUser -ErrorAction SilentlyContinue
     Write-Ok "Existing account '$SvcUser' updated (password reset)."
 } else {
+    # NOT: New-LocalUser -Description en fazla 48 karakter kabul eder; daha uzunu
+    # "character length ... too long" ile patlar. Bu metni 48 altinda tut.
     New-LocalUser -Name $SvcUser -Password $securePass `
         -FullName "Envisoft WebX Service" `
-        -Description "Envisoft WebX unattended service account (auto-login)." `
+        -Description "Envisoft WebX service account (auto-login)" `
         -PasswordNeverExpires -AccountNeverExpires | Out-Null
     Write-Ok "Account '$SvcUser' created."
 }
