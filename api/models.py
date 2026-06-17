@@ -1370,6 +1370,16 @@ BACKUP_DEFAULT_RETENTION = {
     "manual": 10,
 }
 
+# Tier başına varsayılan aktiflik. Varsayılan ayarda yalnızca aylık yedek alınır
+# (ayda 1 defa); kullanıcı dashboard'dan diğer periyotları açabilir.
+BACKUP_DEFAULT_ENABLED = {
+    "daily": False,
+    "weekly": False,
+    "monthly": True,
+    "yearly": False,
+    "manual": False,
+}
+
 
 class BackupPolicy(models.Model):
     """Tier başına yedekleme politikası — dashboard'dan yönetilir.
@@ -1408,7 +1418,7 @@ class BackupPolicy(models.Model):
             cls.objects.get_or_create(
                 tier=tier,
                 defaults={
-                    "enabled": True,
+                    "enabled": BACKUP_DEFAULT_ENABLED.get(tier, False),
                     "retention": BACKUP_DEFAULT_RETENTION.get(tier, 7),
                 },
             )
