@@ -265,6 +265,8 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 100,
+    # Tüm hataları proje sözleşmesine ({"result", "message", "objects"}) çevir
+    "EXCEPTION_HANDLER": "api.exception_handlers.api_exception_handler",
 }
 
 
