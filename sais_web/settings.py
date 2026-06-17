@@ -302,6 +302,10 @@ POWEROFF_DETECT_THRESHOLD_MIN = int(os.getenv("POWEROFF_DETECT_THRESHOLD_MIN", "
 # Broker (Redis DB 2) ve result backend (django-db) cache'den ayrı tutuluyor.
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/2")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "django-db")
+# result_extended: TaskResult'a task_name / task_args / task_kwargs / worker /
+# periodic_task_name alanlarını da yaz. Kapalıyken (default) bu alanlar boş
+# kalır → admin'de "Task results" satırlarında task adı/worker "-" görünür.
+CELERY_RESULT_EXTENDED = True
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 300       # 5 dk hard limit (long bus polls için marj)

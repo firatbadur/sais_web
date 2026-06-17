@@ -1,5 +1,8 @@
+import json
+
 from django import forms
 from django.contrib import admin
+from django.utils.html import format_html
 
 from .models import (
     AlarmRule,
@@ -546,3 +549,202 @@ class ReminderAdmin(admin.ModelAdmin):
     date_hierarchy = "remind_at"
     autocomplete_fields = ("station",)
     readonly_fields = ("created_at", "updated_at", "done_at")
+
+
+# ---------------------------------------------------------------------------
+# Celery task sonuçları (django-celery-results.TaskResult)
+#
+# Varsayılan TaskResultAdmin ham bir tablo gösterir: hangi task'ın çalıştığı,
+# ne kadar sürdüğü, başarısızsa neyle patladığı tek bakışta görünmez. Default
+# admin'i kaldırıp aşağıdaki zengin sürümü kaydediyoruz. (Task adı/worker/args
+# alanlarının dolması için ayrıca settings.CELERY_RESULT_EXTENDED=True gerekir.)
+# ---------------------------------------------------------------------------
+from django_celery_results.models import GroupResult, TaskResult  # noqa: E402
+
+# Default kayıtları kaldır (zaten import'ta register edilmişler).
+for _model in (TaskResult, GroupResult):
+    try:
+        admin.site.unregister(_model)
+    except admin.sites.NotRegistered:
+        pass
+
+
+_STATUS_COLORS = {
+    "SUCCESS": "#50cd89",   # yeşil
+    "FAILURE": "#f1416c",   # kırmızı
+    "STARTED": "#7239ea",   # mor
+    "RETRY": "#ffc700",     # sarı
+    "REVOKED": "#a1a5b7",   # gri
+    "PENDING": "#009ef7",   # mavi
+    "RECEIVED": "#009ef7",
+}
+
+
+def _short_task_name(name):
+    """`sais_domain.tasks.publish_minute_data` → `publish_minute_data`."""
+    if not name:
+        return ""
+    return name.rsplit(".", 1)[-1]
+
+
+@admin.register(TaskResult)
+class TaskResultAdmin(admin.ModelAdmin):
+    """Celery task sonuçları — hangi task çalıştı, sonucu ne, hata varsa ne."""
+
+    date_hierarchy = "date_done"
+    list_display = (
+        "task_id_short", "task_label", "status_badge", "worker",
+        "date_done", "duration_display", "result_summary",
+    )
+    list_filter = ("status", "task_name", "periodic_task_name", "worker", "date_done")
+    search_fields = ("task_id", "task_name", "periodic_task_name", "worker",
+                     "result", "traceback", "task_args", "task_kwargs")
+    ordering = ("-date_done",)
+    list_per_page = 50
+
+    readonly_fields = (
+        "task_id", "task_name", "periodic_task_name", "status_badge", "worker",
+        "date_created", "date_started", "date_done", "duration_display",
+        "task_args", "task_kwargs", "result_pretty", "traceback_pretty",
+        "content_type", "content_encoding", "meta",
+    )
+    fieldsets = (
+        ("Özet", {
+            "fields": ("task_id", "task_name", "periodic_task_name",
+                       "status_badge", "worker"),
+        }),
+        ("Zamanlama", {
+            "fields": ("date_created", "date_started", "date_done", "duration_display"),
+        }),
+        ("Parametreler", {
+            "classes": ("collapse",),
+            "fields": ("task_args", "task_kwargs"),
+        }),
+        ("Sonuç", {
+            "fields": ("result_pretty",),
+        }),
+        ("Hata (Traceback)", {
+            "fields": ("traceback_pretty",),
+        }),
+        ("Meta", {
+            "classes": ("collapse",),
+            "fields": ("content_type", "content_encoding", "meta"),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return False  # sonuçlar worker tarafından yazılır
+
+    def has_change_permission(self, request, obj=None):
+        return False  # salt görüntüleme
+
+    @admin.display(description="Task ID", ordering="task_id")
+    def task_id_short(self, obj):
+        return (obj.task_id or "")[:8]
+
+    @admin.display(description="Task", ordering="task_name")
+    def task_label(self, obj):
+        name = _short_task_name(obj.task_name)
+        if obj.periodic_task_name:
+            return format_html(
+                "{}<br><span style='color:#a1a5b7;font-size:11px'>{}</span>",
+                name or "—", obj.periodic_task_name,
+            )
+        return name or "—"
+
+    @admin.display(description="Durum", ordering="status")
+    def status_badge(self, obj):
+        color = _STATUS_COLORS.get(obj.status, "#a1a5b7")
+        return format_html(
+            "<span style='display:inline-block;padding:2px 9px;border-radius:6px;"
+            "background:{};color:#fff;font-weight:600;font-size:11px'>{}</span>",
+            color, obj.status,
+        )
+
+    @admin.display(description="Süre")
+    def duration_display(self, obj):
+        if obj.date_started and obj.date_done:
+            secs = (obj.date_done - obj.date_started).total_seconds()
+            if secs < 0:
+                return "—"
+            if secs < 1:
+                return f"{secs * 1000:.0f} ms"
+            return f"{secs:.2f} sn"
+        return "—"
+
+    @admin.display(description="Sonuç / Hata")
+    def result_summary(self, obj):
+        if obj.status == "FAILURE":
+            exc = self._decode(obj.result)
+            if isinstance(exc, dict):
+                msg = exc.get("exc_message") or exc.get("exc_type") or ""
+                if isinstance(msg, (list, tuple)):
+                    msg = ", ".join(str(m) for m in msg)
+                text = f"{exc.get('exc_type', 'Error')}: {msg}"
+            else:
+                text = str(exc)
+            text = text.replace("\n", " ")
+            short = text if len(text) <= 80 else text[:77] + "…"
+            return format_html("<span style='color:#f1416c'>{}</span>", short)
+        raw = (obj.result or "").strip()
+        if not raw or raw == "null":
+            return "—"
+        short = raw if len(raw) <= 80 else raw[:77] + "…"
+        return short
+
+    @admin.display(description="Sonuç verisi")
+    def result_pretty(self, obj):
+        return self._pretty_block(obj.result, empty="(boş)")
+
+    @admin.display(description="Traceback")
+    def traceback_pretty(self, obj):
+        if not obj.traceback:
+            return "—"
+        return format_html(
+            "<pre style='white-space:pre-wrap;max-height:480px;overflow:auto;"
+            "background:#1e1e2d;color:#f1416c;padding:12px;border-radius:6px;"
+            "font-size:12px;line-height:1.5'>{}</pre>",
+            obj.traceback,
+        )
+
+    # -- yardımcılar -------------------------------------------------------
+    @staticmethod
+    def _decode(raw):
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            return raw
+
+    def _pretty_block(self, raw, empty="—"):
+        if not raw or (isinstance(raw, str) and raw.strip() in ("", "null")):
+            return empty
+        decoded = self._decode(raw)
+        try:
+            text = json.dumps(decoded, indent=2, ensure_ascii=False, default=str)
+        except (TypeError, ValueError):
+            text = str(decoded)
+        return format_html(
+            "<pre style='white-space:pre-wrap;max-height:480px;overflow:auto;"
+            "background:#f5f8fa;padding:12px;border-radius:6px;font-size:12px'>{}</pre>",
+            text,
+        )
+
+
+@admin.register(GroupResult)
+class GroupResultAdmin(admin.ModelAdmin):
+    """Celery group sonuçları — salt görüntüleme."""
+
+    date_hierarchy = "date_done"
+    list_display = ("group_id", "date_created", "date_done")
+    search_fields = ("group_id",)
+    ordering = ("-date_done",)
+    readonly_fields = ("group_id", "date_created", "date_done",
+                       "content_type", "content_encoding", "result")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
