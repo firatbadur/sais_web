@@ -74,6 +74,8 @@ urlpatterns = [
     path("admin-pages/users/<int:pk>/edit/", views.UserUpdateView.as_view(), name="admin_user_edit"),
     path("admin-pages/users/<int:pk>/reset-password/", views.UserResetPasswordView.as_view(),
          name="admin_user_reset_pw"),
+    path("admin-pages/users/<int:pk>/token-refresh/", views.UserTokenRefreshView.as_view(),
+         name="admin_user_token_refresh"),
     path("admin-pages/api-logs/", views.ApiLogsView.as_view(), name="admin_api_logs"),
     path("admin-pages/system-control/", views.SystemControlView.as_view(),
          name="admin_system_control"),

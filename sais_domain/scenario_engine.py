@@ -137,12 +137,24 @@ def _evaluate(scenario, params):
 # Aksiyon yürütme
 # --------------------------------------------------------------------------- #
 
-def _recipients(want_sms, want_email):
-    """Tüm aktif kullanıcılar; kanal tercihine + telefon/e-posta varlığına göre."""
+ROLE_MINISTRY = 4  # Bakanlık (yalnız-API) kullanıcısı — bkz. users.models.CustomUser.rol
+
+
+def _recipients(want_sms, want_email, want_ministry=False):
+    """Aktif kullanıcılar; kanal tercihine + telefon/e-posta varlığına göre.
+
+    Bakanlık (rol=4) kullanıcısı yalnızca `want_ministry=True` (numune alımı /
+    bakanlık senaryosu bildirimleri) olduğunda dahil edilir; 1./2. alarm gibi
+    numune-dışı genel bildirimlerden hariç tutulur.
+    """
     from users.models import CustomUser
 
+    qs = CustomUser.objects.filter(is_active=True)
+    if not want_ministry:
+        qs = qs.exclude(rol=ROLE_MINISTRY)
+
     out = []
-    for u in CustomUser.objects.filter(is_active=True):
+    for u in qs:
         phone = (u.phone_number or "").strip() if (want_sms and u.sms_enabled) else ""
         email = (u.email or "").strip() if (want_email and u.email_enabled) else ""
         if phone or email:
@@ -154,7 +166,7 @@ def _recipients(want_sms, want_email):
     return out
 
 
-def _notify(scenario, message, want_sms=True, want_email=True):
+def _notify(scenario, message, want_sms=True, want_email=True, want_ministry=False):
     from api.notifications import send_bulk
 
     channels = []
@@ -162,7 +174,7 @@ def _notify(scenario, message, want_sms=True, want_email=True):
         channels.append("sms")
     if want_email:
         channels.append("email")
-    recipients = _recipients(want_sms, want_email)
+    recipients = _recipients(want_sms, want_email, want_ministry=want_ministry)
     station_name = scenario.station.name if scenario.station else ""
     full_msg = f"{station_name} {message}".strip()
     if recipients and channels:
@@ -233,6 +245,7 @@ def _run_action(scenario, run, step, action, client):
                 scenario, msg,
                 want_sms=action.get("sms", True),
                 want_email=action.get("email", True),
+                want_ministry=action.get("ministry", False),
             )
 
         elif atype == "sampler_on":

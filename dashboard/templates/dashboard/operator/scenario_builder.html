@@ -268,6 +268,7 @@
         active: "{% trans 'Aktif' %}", passive: "{% trans 'Pasif' %}",
         msgLabel: "{% trans 'Mesaj' %}", diagLabel: "{% trans 'Diagnostik Tip No (701/702)' %}",
         detailLabel: "{% trans 'Detay' %}", sms: "SMS", email: "{% trans 'E-posta' %}",
+        ministry: "{% trans 'Bakanlığa da bildir' %}",
         step: "{% trans 'Adım' %}", remove: "{% trans 'Kaldır' %}",
         ministryOk: "{% trans 'Bakanlık talebi başlatıldı.' %}",
         paramPlaceholder: "{% trans 'Parametre seçiniz' %}",
@@ -346,9 +347,10 @@
         action = action || {};
         if (type === 'notify') {
             f.innerHTML =
-                `<div class="col-md-6"><input type="text" class="form-control a-message" placeholder="${I18N.msgLabel}" value="${esc(action.message || '')}"></div>
-                 <div class="col-md-3 d-flex align-items-center"><label class="form-check form-check-custom form-check-solid me-3"><input class="form-check-input a-sms" type="checkbox" ${action.sms === false ? '' : 'checked'}><span class="form-check-label">${I18N.sms}</span></label>
-                 <label class="form-check form-check-custom form-check-solid"><input class="form-check-input a-email" type="checkbox" ${action.email === false ? '' : 'checked'}><span class="form-check-label">${I18N.email}</span></label></div>`;
+                `<div class="col-md-5"><input type="text" class="form-control a-message" placeholder="${I18N.msgLabel}" value="${esc(action.message || '')}"></div>
+                 <div class="col-md-7 d-flex align-items-center flex-wrap gap-3"><label class="form-check form-check-custom form-check-solid"><input class="form-check-input a-sms" type="checkbox" ${action.sms === false ? '' : 'checked'}><span class="form-check-label">${I18N.sms}</span></label>
+                 <label class="form-check form-check-custom form-check-solid"><input class="form-check-input a-email" type="checkbox" ${action.email === false ? '' : 'checked'}><span class="form-check-label">${I18N.email}</span></label>
+                 <label class="form-check form-check-custom form-check-solid"><input class="form-check-input a-ministry" type="checkbox" ${action.ministry === true ? 'checked' : ''}><span class="form-check-label">${I18N.ministry}</span></label></div>`;
         } else if (type === 'send_diagnostic') {
             f.innerHTML =
                 `<div class="col-md-3"><input type="number" class="form-control a-typeno" placeholder="${I18N.diagLabel}" value="${action.type_no != null ? action.type_no : 701}"></div>
@@ -513,6 +515,7 @@
                     a.message = (w.querySelector('.a-message').value || '').trim();
                     a.sms = w.querySelector('.a-sms').checked;
                     a.email = w.querySelector('.a-email').checked;
+                    a.ministry = w.querySelector('.a-ministry').checked;
                 } else if (type === 'send_diagnostic') {
                     a.type_no = Number(w.querySelector('.a-typeno').value) || 0;
                     a.details = (w.querySelector('.a-details').value || '').trim();

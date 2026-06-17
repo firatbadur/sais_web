@@ -205,7 +205,7 @@
     </div>
     {% endif %}
 
-    {% if ministry_token is not None or object.rol == 4 %}
+    {% if ministry_token %}
     {# ---- API Token (Bakanlık) ---- #}
     <div class="card mb-6">
         <div class="card-body">
@@ -231,7 +231,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-{% if ministry_token is not None or object.rol == 4 %}
+{% if ministry_token %}
 <script>
 (function () {
     var input = document.getElementById('ministry-token');

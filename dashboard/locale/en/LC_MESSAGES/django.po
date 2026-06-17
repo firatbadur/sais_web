@@ -2961,3 +2961,27 @@ msgstr "Resent"
 
 msgid "Son hata:"
 msgstr "Last error:"
+
+msgid "Bu hesap yalnızca API erişimi içindir, panele giriş yapamaz."
+msgstr "This account is for API access only and cannot sign in to the panel."
+
+msgid "Bakanlığa da bildir"
+msgstr "Also notify Ministry"
+
+msgid "API Token (Bakanlık)"
+msgstr "API Token (Ministry)"
+
+msgid "Bu kullanıcı panele giremez; API'lere yalnızca bu token ile (salt-okunur) erişir. Yenilenen token eskisini geçersiz kılar."
+msgstr "This user cannot sign in to the panel; it accesses the APIs (read-only) with this token only. Refreshing the token invalidates the old one."
+
+msgid "Token Yenile"
+msgstr "Refresh Token"
+
+msgid "Yeni token üretilecek, eski token geçersiz olacak — devam?"
+msgstr "A new token will be generated and the old one invalidated — continue?"
+
+msgid "Kullanıcı bulunamadı."
+msgstr "User not found."
+
+msgid "Token yalnızca Bakanlık kullanıcısı için üretilir."
+msgstr "Tokens are issued only for Ministry users."

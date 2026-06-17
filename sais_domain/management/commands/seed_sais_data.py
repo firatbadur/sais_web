@@ -53,7 +53,7 @@ BUILTIN_AUTO_STEPS = [
             {"type": "ministry_get_code"},
             {"type": "sampler_on"},
             {"type": "send_diagnostic", "type_no": 701, "details": "Numune alınıyor"},
-            {"type": "notify", "message": "Numune alınıyor — tetik gönderildi."},
+            {"type": "notify", "message": "Numune alınıyor — tetik gönderildi.", "ministry": True},
         ],
     },
     {
@@ -75,7 +75,7 @@ BUILTIN_MINISTRY_STEPS = [
             {"type": "sampler_on"},
             {"type": "sim_sample_start"},
             {"type": "send_diagnostic", "type_no": 701, "details": "Bakanlık talebi — numune alınıyor"},
-            {"type": "notify", "message": "Bakanlık numune talebi — numune alınıyor."},
+            {"type": "notify", "message": "Bakanlık numune talebi — numune alınıyor.", "ministry": True},
         ],
     },
     {
@@ -204,7 +204,9 @@ class Command(BaseCommand):
         created += int(was_created)
         if was_created:
             self._seed_auto_params(auto)
-            self._seed_steps(auto, BUILTIN_AUTO_STEPS)
+        # Adımları her seed'de garanti et: yoksa yarat, varsa eksik `ministry`
+        # bayrağını backfill et (mevcut sahalar için idempotent).
+        self._seed_steps(auto, BUILTIN_AUTO_STEPS)
 
         # --- Bakanlık talepli senaryo ---
         ministry, m_created = Scenario.objects.get_or_create(
@@ -243,7 +245,7 @@ class Command(BaseCommand):
 
     def _seed_steps(self, scenario, steps):
         for s in steps:
-            ScenarioStep.objects.get_or_create(
+            step, created = ScenarioStep.objects.get_or_create(
                 scenario=scenario, order=s["order"],
                 defaults=dict(
                     label=s["label"],
@@ -252,3 +254,29 @@ class Command(BaseCommand):
                     actions=s["actions"],
                 ),
             )
+            if not created:
+                self._backfill_ministry_flag(step, s)
+
+    @staticmethod
+    def _backfill_ministry_flag(step, template):
+        """Mevcut sahalarda yerleşik şablonun notify adımlarına eksik `ministry`
+        bayrağını ekler (operatör özelleştirmesini bozmadan, yalnız ekleme).
+
+        Şablonda `ministry=True` işaretli bir notify aksiyonu varsa ve kayıtlı
+        adımda `ministry` anahtarı hiç yoksa True'ya çeker; başka alanı ellemez.
+        """
+        wants_ministry = any(
+            a.get("type") == "notify" and a.get("ministry") is True
+            for a in (template.get("actions") or [])
+        )
+        if not wants_ministry:
+            return
+        actions = step.actions or []
+        changed = False
+        for a in actions:
+            if a.get("type") == "notify" and "ministry" not in a:
+                a["ministry"] = True
+                changed = True
+        if changed:
+            step.actions = actions
+            step.save(update_fields=["actions"])

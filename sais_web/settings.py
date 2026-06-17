@@ -261,7 +261,8 @@ REST_FRAMEWORK = {
         "rest_framework.parsers.JSONParser",
     ),
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated",
+        # Authenticated + Bakanlık (rol=4) global salt-okunur.
+        "api.permissions.MinistryReadOnly",
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 100,

@@ -4,6 +4,7 @@ CustomUser.rol değerleri:
   1 → Sistem Yöneticisi (admin)
   2 → Operatör
   3 → Normal Kullanıcı
+  4 → Bakanlık Kullanıcısı (yalnız-API; panele giriş yapamaz)
 """
 from __future__ import annotations
 
@@ -14,11 +15,13 @@ from django.core.exceptions import PermissionDenied
 ROLE_ADMIN = 1
 ROLE_OPERATOR = 2
 ROLE_USER = 3
+ROLE_MINISTRY = 4
 
 ROLE_NAMES = {
     ROLE_ADMIN: "admin",
     ROLE_OPERATOR: "operator",
     ROLE_USER: "user",
+    ROLE_MINISTRY: "ministry",
 }
 
 

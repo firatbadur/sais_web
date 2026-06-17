@@ -9,6 +9,7 @@ class CustomUser(AbstractUser):
         (1, 'Sistem Yöneticisi'),
         (2, 'Operatör'),
         (3, 'Normal Kullanıcı'),
+        (4, 'Bakanlık Kullanıcısı'),
     )
 
     rol = models.IntegerField(verbose_name="Rol", help_text="Rol", blank=False,

@@ -996,6 +996,21 @@ class SensorTestView(OperatorRequiredMixin, TemplateView):
 # Admin pages (rol=1 only)
 # --------------------------------------------------------------------------- #
 
+def _sync_ministry_token(user):
+    """Bakanlık (rol=4) kullanıcısına DRF API token'ı garanti eder.
+
+    Rol 4 panele giremediği için API erişimini Token ile yapar. Rol 4'ten
+    başka bir role değiştirilirse token silinir (artık gerekmez).
+    """
+    from rest_framework.authtoken.models import Token
+    from dashboard.permissions import ROLE_MINISTRY
+
+    if getattr(user, "rol", None) == ROLE_MINISTRY:
+        Token.objects.get_or_create(user=user)
+    else:
+        Token.objects.filter(user=user).delete()
+
+
 class UserListView(OperatorRequiredMixin, ListView):
     model = User
     template_name = "dashboard/admin_pages/user_list.html"
@@ -1016,6 +1031,7 @@ class UserCreateView(OperatorRequiredMixin, CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
+        _sync_ministry_token(self.object)
         messages.success(self.request, _("Kullanıcı oluşturuldu."))
         log_event(
             EventType.USER_MGMT,
@@ -1038,6 +1054,7 @@ class UserUpdateView(OperatorRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
+        _sync_ministry_token(self.object)
         messages.success(self.request, _("Kullanıcı güncellendi."))
         log_event(
             EventType.USER_MGMT,
@@ -1045,6 +1062,19 @@ class UserUpdateView(OperatorRequiredMixin, UpdateView):
             severity="warning", request=self.request,
         )
         return response
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # Bakanlık (rol=4) kullanıcısının API token'ı — yalnız rol=1 admin görür.
+        from dashboard.permissions import ROLE_MINISTRY
+        if (
+            getattr(self.object, "rol", None) == ROLE_MINISTRY
+            and user_has_role(self.request.user, ROLE_ADMIN)
+        ):
+            from rest_framework.authtoken.models import Token
+            token = Token.objects.filter(user=self.object).first()
+            ctx["ministry_token"] = token.key if token else None
+        return ctx
 
 
 class UserResetPasswordView(OperatorRequiredMixin, TemplateView):
@@ -1070,6 +1100,35 @@ class UserResetPasswordView(OperatorRequiredMixin, TemplateView):
             ) % {"pw": new_password},
         )
         return redirect("dashboard:admin_user_edit", pk=target.pk)
+
+
+class UserTokenRefreshView(AdminRequiredMixin, View):
+    """Bakanlık (rol=4) kullanıcısının API token'ını yeniler (eski geçersiz olur).
+
+    Yalnız rol=1 admin; POST + JSON döner.
+    """
+
+    def post(self, request, pk):
+        from django.http import JsonResponse
+        from rest_framework.authtoken.models import Token
+        from dashboard.permissions import ROLE_MINISTRY
+
+        target = User.objects.filter(pk=pk).first()
+        if target is None:
+            return JsonResponse({"ok": False, "error": _("Kullanıcı bulunamadı.")}, status=404)
+        if getattr(target, "rol", None) != ROLE_MINISTRY:
+            return JsonResponse(
+                {"ok": False, "error": _("Token yalnızca Bakanlık kullanıcısı için üretilir.")},
+                status=400,
+            )
+        Token.objects.filter(user=target).delete()
+        token = Token.objects.create(user=target)
+        log_event(
+            EventType.USER_MGMT,
+            f"API token yenilendi: {target.get_username()}",
+            severity="warning", request=request,
+        )
+        return JsonResponse({"ok": True, "token": token.key})
 
 
 class ApiLogsView(AdminRequiredMixin, ListView):
