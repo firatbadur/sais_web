@@ -320,6 +320,17 @@ class SensorConfigForm(forms.ModelForm):
             choices=[("", _("— Sensör tipi seçin —"))] + list(Sensor.SENSOR_TYPE),
             coerce=int, required=True, label=_("Sensör Tipi"),
         )
+        # save_on_change üç-durumlu: boş = varsayılan (oluşturmada dijital için
+        # açık, analog için kapalı), aksi halde açıkça Açık/Kapalı korunur.
+        self.fields["save_on_change"] = forms.NullBooleanField(
+            required=False, label=_("Sadece Değişimde Kaydet"),
+            widget=forms.Select(choices=[
+                ("", _("Varsayılan (dijital için açık)")),
+                ("true", _("Açık")),
+                ("false", _("Kapalı")),
+            ]),
+            help_text=Sensor._meta.get_field("save_on_change").help_text,
+        )
         _apply_metronic_classes(self)
         for fk in ("parameter", "connection", "scan_group"):
             self.fields[fk].widget.attrs["data-control"] = "select2"

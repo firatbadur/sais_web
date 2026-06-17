@@ -631,13 +631,16 @@ class Sensor(models.Model):
 
     # ---- Değişimde kaydet (Change-of-Value / deadband) ----
     save_on_change = models.BooleanField(
-        default=False, verbose_name="Sadece Değişimde Kaydet",
+        null=True, blank=True, default=None,
+        verbose_name="Sadece Değişimde Kaydet",
         help_text=(
             "True ise Reading sadece değer değiştiğinde (analogda deadband'i "
             "aşan değişim, dijitalde herhangi bir değişim) ya da status "
             "değiştiğinde yazılır. SensorLatest snapshot'ı yine her okumada "
             "güncellenir (HMI taze kalır). Connection.save_interval_sec minimum "
-            "aralık olarak yine uygulanır."
+            "aralık olarak yine uygulanır. Boş (None) bırakılırsa oluşturmada "
+            "tipe göre varsayılan uygulanır: dijital (DI/DO) için açık, analog "
+            "için kapalı. Açıkça True/False seçilirse o değer korunur."
         ),
     )
     deadband = models.FloatField(
@@ -730,14 +733,14 @@ class Sensor(models.Model):
         full_clean()'i bypass eden code path'ler için (örn. management komutları,
         ORM doğrudan create) güvenlik ağı — inheritance'ı burada da uygular.
 
-        Yeni bir dijital sensör (Dijital Giriş=2 / Çıkış=3) eklenirken
-        "Sadece Değişimde Kaydet" (save_on_change) varsayılan olarak açılır:
-        dijital sensörler doğası gereği değişimde-kaydet/COV mantığına uyar.
-        Yalnız oluşturmada uygulanır; mevcut kayıt güncellenirken dokunulmaz.
+        save_on_change belirtilmemişse (None) oluşturmada tipe göre varsayılan
+        uygulanır: yeni dijital sensör (DI=2 / DO=3) için açık (dijital sensörler
+        doğası gereği COV/değişimde-kaydet mantığına uyar), analog için kapalı.
+        Açıkça True/False verilmişse korunur — yalnız None çözülür.
         """
         self._inherit_from_scan_group()
-        if self._state.adding and self.sensor_type in (2, 3) and not self.save_on_change:
-            self.save_on_change = True
+        if self._state.adding and self.save_on_change is None:
+            self.save_on_change = self.sensor_type in (2, 3)
         super().save(*args, **kwargs)
 
     def clean(self):
