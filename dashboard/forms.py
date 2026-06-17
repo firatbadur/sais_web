@@ -1,15 +1,52 @@
 """Dashboard form'ları: login, user CRUD, profil, şifre."""
 from __future__ import annotations
 
+import re
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.utils.translation import gettext_lazy as _
 
-from .permissions import ROLE_ADMIN, user_has_role
+from .permissions import ROLE_ADMIN, ROLE_MINISTRY, user_has_role
 
 
 User = get_user_model()
+
+# Kullanıcı adı: yalnız ASCII harf/rakam + . _ - (Türkçe karakter ve boşluk yasak).
+USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+class _UserFieldRulesMixin:
+    """Admin kullanıcı oluşturma/düzenleme formlarının ortak alan kuralları.
+
+    - Kullanıcı adı Türkçe karakter (ç, ğ, ı, ö, ş, ü...) ve boşluk içeremez.
+    - E-posta ve telefon zorunludur (bildirim alıcısı çözümü için).
+    """
+
+    def _apply_user_field_rules(self):
+        self.fields["email"].required = True
+        self.fields["phone_number"].required = True
+        # Tarayıcı tarafı ipuçları
+        self.fields["username"].widget.attrs.setdefault(
+            "placeholder", _("ör. ahmet.yilmaz"))
+        self.fields["username"].widget.attrs.setdefault(
+            "pattern", "[A-Za-z0-9._-]+")
+        self.fields["email"].widget.attrs.setdefault(
+            "placeholder", "kullanici@ornek.com")
+        self.fields["phone_number"].widget.attrs.setdefault(
+            "placeholder", "5XXXXXXXXX")
+
+    def clean_username(self):
+        username = (self.cleaned_data.get("username") or "").strip()
+        if username and not USERNAME_RE.match(username):
+            raise forms.ValidationError(
+                _("Kullanıcı adı yalnızca İngilizce harf, rakam ve . _ - "
+                  "karakterlerini içerebilir; Türkçe karakter veya boşluk "
+                  "kullanılamaz."),
+                code="invalid_username",
+            )
+        return username
 
 
 def _restrict_rol_for_operator(form, acting_user):
@@ -48,8 +85,18 @@ class DashboardLoginForm(AuthenticationForm):
         self.fields["username"].widget.attrs["placeholder"] = _("Kullanıcı adı")
         self.fields["password"].widget.attrs["placeholder"] = _("Şifre")
 
+    def confirm_login_allowed(self, user):
+        # Bakanlık (rol=4) kullanıcısı yalnızca API erişimi içindir; panele
+        # giriş yapamaz — oturum hiç açılmaz (savunma derinliği).
+        if getattr(user, "rol", None) == ROLE_MINISTRY:
+            raise forms.ValidationError(
+                _("Bu hesap yalnızca API erişimi içindir, panele giriş yapamaz."),
+                code="ministry_no_login",
+            )
+        super().confirm_login_allowed(user)
 
-class AdminUserCreateForm(UserCreationForm):
+
+class AdminUserCreateForm(_UserFieldRulesMixin, UserCreationForm):
     """Admin panelinden user yaratma (rol + is_active)."""
 
     class Meta:
@@ -59,19 +106,22 @@ class AdminUserCreateForm(UserCreationForm):
 
     def __init__(self, *args, acting_user=None, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
+        for name, field in self.fields.items():
             if isinstance(field.widget, (forms.CheckboxInput,)):
                 field.widget.attrs.setdefault("class", "form-check-input")
+            elif isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select form-select-solid")
             else:
                 field.widget.attrs.setdefault("class", "form-control form-control-solid")
         # Yeni kullanıcıda SMS + e-posta bildirimi varsayılan açık gelsin.
         if not self.is_bound:
             self.fields["sms_enabled"].initial = True
             self.fields["email_enabled"].initial = True
+        self._apply_user_field_rules()
         _restrict_rol_for_operator(self, acting_user)
 
 
-class AdminUserUpdateForm(forms.ModelForm):
+class AdminUserUpdateForm(_UserFieldRulesMixin, forms.ModelForm):
     """Admin user düzenleme — şifre hariç tüm alanlar."""
 
     class Meta:
@@ -81,11 +131,14 @@ class AdminUserUpdateForm(forms.ModelForm):
 
     def __init__(self, *args, acting_user=None, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
+        for name, field in self.fields.items():
             if isinstance(field.widget, (forms.CheckboxInput,)):
                 field.widget.attrs.setdefault("class", "form-check-input")
+            elif isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select form-select-solid")
             else:
                 field.widget.attrs.setdefault("class", "form-control form-control-solid")
+        self._apply_user_field_rules()
         _restrict_rol_for_operator(self, acting_user)
 
 

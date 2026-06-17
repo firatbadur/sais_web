@@ -5,39 +5,258 @@
 {% block page_title %}{% if object %}{% trans "Kullanıcı Düzenle" %}{% else %}{% trans "Yeni Kullanıcı" %}{% endif %}{% endblock %}
 
 {% block content %}
-<div class="row">
-<div class="col-md-8">
-<div class="card">
-    <div class="card-header"><h3 class="card-title">{% if object %}{{ object.username }}{% else %}{% trans "Yeni Kullanıcı" %}{% endif %}</h3></div>
-    <div class="card-body">
-        <form method="post">
-            {% csrf_token %}
-            {% for field in form %}
-                <div class="mb-5">
-                    <label class="form-label">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                    {% if field.errors %}<div class="text-danger small">{{ field.errors.0 }}</div>{% endif %}
-                </div>
-            {% endfor %}
-            <div class="d-flex justify-content-end gap-2">
-                <a href="{% url 'dashboard:admin_users' %}" class="btn btn-light">{% trans "İptal" %}</a>
-                <button type="submit" class="btn btn-primary">{% trans "Kaydet" %}</button>
-            </div>
-        </form>
+<div class="row justify-content-center">
+<div class="col-xl-9 col-xxl-8">
 
-        {% if object %}
-        <hr class="my-7">
-        <form method="post" action="{% url 'dashboard:admin_user_reset_pw' object.pk %}" onsubmit="return confirm('{% trans "Geçici şifre atanacak — devam?" %}');">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-warning">
-                <i class="ki-outline ki-key fs-5 me-1"></i>{% trans "Şifre Sıfırla" %}
-            </button>
-            <span class="text-muted ms-3 fs-7">{% trans "Rastgele geçici şifre üretilir; ekranda gösterilir, kullanıcıya elden iletin." %}</span>
-        </form>
-        {% endif %}
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger d-flex align-items-center mb-6">
+        <i class="ki-outline ki-information-5 fs-2 text-danger me-3"></i>
+        <div>{% for err in form.non_field_errors %}{{ err }}<br>{% endfor %}</div>
     </div>
+    {% endif %}
+
+    <form method="post" id="user-form" novalidate>
+        {% csrf_token %}
+        <div class="card mb-6">
+            <div class="card-header border-0 pt-6 d-flex align-items-center">
+                <div class="card-title">
+                    <span class="symbol symbol-50px me-4">
+                        <span class="symbol-label bg-light-primary">
+                            <i class="ki-outline {% if object %}ki-profile-user{% else %}ki-user-tick{% endif %} fs-2x text-primary"></i>
+                        </span>
+                    </span>
+                    <div class="d-flex flex-column">
+                        <h3 class="fw-bold mb-1">{% if object %}{{ object.username }}{% else %}{% trans "Yeni Kullanıcı" %}{% endif %}</h3>
+                        <span class="text-muted fs-7">{% trans "Hesap bilgilerini doldurun" %}</span>
+                    </div>
+                </div>
+                <div class="card-toolbar">
+                    <a href="{% url 'dashboard:admin_users' %}" class="btn btn-sm btn-light">
+                        <i class="ki-outline ki-arrow-left fs-5"></i>{% trans "Listeye Dön" %}
+                    </a>
+                </div>
+            </div>
+
+            <div class="card-body">
+                {# ---- Hesap Bilgileri ---- #}
+                <div class="d-flex align-items-center mb-5">
+                    <i class="ki-outline ki-key-square fs-3 text-primary me-2"></i>
+                    <h4 class="fw-bold m-0">{% trans "Hesap Bilgileri" %}</h4>
+                </div>
+                <div class="row g-5 mb-3">
+                    <div class="col-md-6">
+                        {% with f=form.username %}
+                        <label class="form-label required">{{ f.label }}</label>
+                        {{ f }}
+                        <div class="form-text">{% trans "Türkçe karakter ve boşluk kullanılamaz (ör. ahmet.yilmaz)." %}</div>
+                        {% for e in f.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        {% endwith %}
+                    </div>
+                    {% if form.password1 %}
+                    <div class="col-md-6"></div>
+                    <div class="col-md-6">
+                        {% with f=form.password1 %}
+                        <label class="form-label required">{{ f.label }}</label>
+                        {{ f }}
+                        {% if f.help_text %}<div class="form-text">{{ f.help_text|safe }}</div>{% endif %}
+                        {% for e in f.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        {% endwith %}
+                    </div>
+                    <div class="col-md-6">
+                        {% with f=form.password2 %}
+                        <label class="form-label required">{{ f.label }}</label>
+                        {{ f }}
+                        {% if f.help_text %}<div class="form-text">{{ f.help_text|safe }}</div>{% endif %}
+                        {% for e in f.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        {% endwith %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="separator separator-dashed my-7"></div>
+
+                {# ---- Kişisel Bilgiler ---- #}
+                <div class="d-flex align-items-center mb-5">
+                    <i class="ki-outline ki-profile-circle fs-3 text-primary me-2"></i>
+                    <h4 class="fw-bold m-0">{% trans "Kişisel Bilgiler" %}</h4>
+                </div>
+                <div class="row g-5 mb-3">
+                    <div class="col-md-6">
+                        {% with f=form.first_name %}
+                        <label class="form-label">{{ f.label }}</label>
+                        {{ f }}
+                        {% for e in f.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        {% endwith %}
+                    </div>
+                    <div class="col-md-6">
+                        {% with f=form.last_name %}
+                        <label class="form-label">{{ f.label }}</label>
+                        {{ f }}
+                        {% for e in f.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        {% endwith %}
+                    </div>
+                </div>
+
+                <div class="separator separator-dashed my-7"></div>
+
+                {# ---- İletişim ---- #}
+                <div class="d-flex align-items-center mb-5">
+                    <i class="ki-outline ki-sms fs-3 text-primary me-2"></i>
+                    <h4 class="fw-bold m-0">{% trans "İletişim" %}</h4>
+                </div>
+                <div class="row g-5 mb-3">
+                    <div class="col-md-6">
+                        {% with f=form.email %}
+                        <label class="form-label required">{{ f.label }}</label>
+                        {{ f }}
+                        {% for e in f.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        {% endwith %}
+                    </div>
+                    <div class="col-md-6">
+                        {% with f=form.phone_number %}
+                        <label class="form-label required">{{ f.label }}</label>
+                        {{ f }}
+                        <div class="form-text">{% trans "NetGSM formatı: 5XXXXXXXXX" %}</div>
+                        {% for e in f.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        {% endwith %}
+                    </div>
+                </div>
+
+                <div class="separator separator-dashed my-7"></div>
+
+                {# ---- Yetki & Durum ---- #}
+                <div class="d-flex align-items-center mb-5">
+                    <i class="ki-outline ki-shield-tick fs-3 text-primary me-2"></i>
+                    <h4 class="fw-bold m-0">{% trans "Yetki & Durum" %}</h4>
+                </div>
+                <div class="row g-5 mb-3">
+                    <div class="col-md-6">
+                        {% with f=form.rol %}
+                        <label class="form-label required">{{ f.label }}</label>
+                        {{ f }}
+                        {% for e in f.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        {% endwith %}
+                    </div>
+                    <div class="col-md-6 d-flex align-items-center">
+                        {% with f=form.is_active %}
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            {{ f }}
+                            <span class="form-check-label fw-semibold text-gray-700 ms-3">{{ f.label }}</span>
+                        </label>
+                        {% for e in f.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        {% endwith %}
+                    </div>
+                </div>
+
+                <div class="separator separator-dashed my-7"></div>
+
+                {# ---- Bildirim Tercihleri ---- #}
+                <div class="d-flex align-items-center mb-5">
+                    <i class="ki-outline ki-notification-status fs-3 text-primary me-2"></i>
+                    <h4 class="fw-bold m-0">{% trans "Bildirim Tercihleri" %}</h4>
+                </div>
+                <div class="row g-5">
+                    <div class="col-md-6">
+                        {% with f=form.sms_enabled %}
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            {{ f }}
+                            <span class="form-check-label fw-semibold text-gray-700 ms-3">{{ f.label }}</span>
+                        </label>
+                        {% for e in f.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        {% endwith %}
+                    </div>
+                    <div class="col-md-6">
+                        {% with f=form.email_enabled %}
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            {{ f }}
+                            <span class="form-check-label fw-semibold text-gray-700 ms-3">{{ f.label }}</span>
+                        </label>
+                        {% for e in f.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+                        {% endwith %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-footer d-flex justify-content-end gap-2">
+                <a href="{% url 'dashboard:admin_users' %}" class="btn btn-light">{% trans "İptal" %}</a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="ki-outline ki-check fs-4"></i>{% trans "Kaydet" %}
+                </button>
+            </div>
+        </div>
+    </form>
+
+    {% if object %}
+    {# ---- Şifre Sıfırla ---- #}
+    <div class="card mb-6">
+        <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+                <h4 class="fw-bold mb-1">{% trans "Şifre Sıfırla" %}</h4>
+                <span class="text-muted fs-7">{% trans "Rastgele geçici şifre üretilir; ekranda gösterilir, kullanıcıya elden iletin." %}</span>
+            </div>
+            <form method="post" action="{% url 'dashboard:admin_user_reset_pw' object.pk %}"
+                  onsubmit="return confirm('{% trans "Geçici şifre atanacak — devam?" %}');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-light-warning">
+                    <i class="ki-outline ki-key fs-5"></i>{% trans "Şifre Sıfırla" %}
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if ministry_token is not None or object.rol == 4 %}
+    {# ---- API Token (Bakanlık) ---- #}
+    <div class="card mb-6">
+        <div class="card-body">
+            <h4 class="fw-bold mb-1">{% trans "API Token (Bakanlık)" %}</h4>
+            <span class="text-muted fs-7 d-block mb-4">{% trans "Bu kullanıcı panele giremez; API'lere yalnızca bu token ile (salt-okunur) erişir. Yenilenen token eskisini geçersiz kılar." %}</span>
+            <div class="input-group">
+                <input type="text" class="form-control form-control-solid" id="ministry-token"
+                       value="{{ ministry_token|default:'' }}" readonly>
+                <button type="button" class="btn btn-light-primary" id="btn-copy-token">
+                    <i class="ki-outline ki-copy fs-5"></i>
+                </button>
+                <button type="button" class="btn btn-light-danger" id="btn-refresh-token"
+                        data-url="{% url 'dashboard:admin_user_token_refresh' object.pk %}">
+                    <i class="ki-outline ki-arrows-circle fs-5 me-1"></i>{% trans "Token Yenile" %}
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
 </div>
 </div>
-</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if ministry_token is not None or object.rol == 4 %}
+<script>
+(function () {
+    var input = document.getElementById('ministry-token');
+    var copyBtn = document.getElementById('btn-copy-token');
+    var refreshBtn = document.getElementById('btn-refresh-token');
+    function csrf() {
+        var m = document.cookie.match(/csrftoken=([^;]+)/);
+        return m ? m[1] : '';
+    }
+    if (copyBtn) copyBtn.addEventListener('click', function () {
+        if (!input.value) return;
+        input.select();
+        navigator.clipboard.writeText(input.value);
+    });
+    if (refreshBtn) refreshBtn.addEventListener('click', function () {
+        if (!confirm("{% trans 'Yeni token üretilecek, eski token geçersiz olacak — devam?' %}")) return;
+        fetch(refreshBtn.dataset.url, {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest'},
+        }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.ok && d.token) { input.value = d.token; }
+            else { alert(d.error || 'Hata'); }
+        }).catch(function () { alert('Hata'); });
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}
