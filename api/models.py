@@ -729,8 +729,15 @@ class Sensor(models.Model):
 
         full_clean()'i bypass eden code path'ler için (örn. management komutları,
         ORM doğrudan create) güvenlik ağı — inheritance'ı burada da uygular.
+
+        Yeni bir dijital sensör (Dijital Giriş=2 / Çıkış=3) eklenirken
+        "Sadece Değişimde Kaydet" (save_on_change) varsayılan olarak açılır:
+        dijital sensörler doğası gereği değişimde-kaydet/COV mantığına uyar.
+        Yalnız oluşturmada uygulanır; mevcut kayıt güncellenirken dokunulmaz.
         """
         self._inherit_from_scan_group()
+        if self._state.adding and self.sensor_type in (2, 3) and not self.save_on_change:
+            self.save_on_change = True
         super().save(*args, **kwargs)
 
     def clean(self):
