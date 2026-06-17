@@ -1,0 +1,9 @@
+{% extends "rest_framework/base.html" %}
+{% load static %}
+
+{# Browsable API başlığındaki "Django REST framework" markasını Envisoft logosu ile değiştir #}
+{% block branding %}
+<a class="navbar-brand" rel="nofollow" href="/">
+    <img src="{% static 'images/logo/v1.png' %}" alt="Envisoft WebX" height="30" style="display:inline-block; vertical-align:middle;">
+</a>
+{% endblock %}
