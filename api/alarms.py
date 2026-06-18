@@ -23,9 +23,15 @@ logger = logging.getLogger("api.alarms")
 # Analog değer bu statuslarda değerlendirilmez (yıkama/bakım/iletişim hatası).
 SKIP_STATUS_CODES = {8, 23, 24, 25, 26}
 
+ROLE_MINISTRY = 4  # Bakanlık (yalnız-API) kullanıcısı — bkz. users.models.CustomUser.rol
+
 
 def _recipients(rule) -> list[dict]:
-    """Kurala göre alıcıları (isim/telefon/e-posta) çözer."""
+    """Kurala göre alıcıları (isim/telefon/e-posta) çözer.
+
+    Bakanlık (rol=4) yalnız-API kullanıcısı operasyonel SCADA alarm SMS/mail'i
+    almaz — `notify_all` olsa bile hariç tutulur.
+    """
     from users.models import CustomUser
 
     if rule.notify_all:
@@ -34,6 +40,8 @@ def _recipients(rule) -> list[dict]:
         users = CustomUser.objects.filter(pk=rule.created_by_id, is_active=True)
     else:
         users = CustomUser.objects.none()
+
+    users = users.exclude(rol=ROLE_MINISTRY)
 
     out = []
     for u in users:

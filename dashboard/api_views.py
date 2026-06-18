@@ -1147,8 +1147,16 @@ def notification_recipients(request):
 
     from users.models import CustomUser
 
+    from .permissions import ROLE_MINISTRY
+
     results = []
-    for u in CustomUser.objects.filter(is_active=True).order_by("first_name", "username"):
+    # Bakanlık (rol=4) yalnız-API kullanıcısı operasyonel bildirim almaz — listede yok.
+    recipients_qs = (
+        CustomUser.objects.filter(is_active=True)
+        .exclude(rol=ROLE_MINISTRY)
+        .order_by("first_name", "username")
+    )
+    for u in recipients_qs:
         name = (u.get_full_name() or u.username).strip()
         phone = (u.phone_number or "").strip()
         email = (u.email or "").strip()
