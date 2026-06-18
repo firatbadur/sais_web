@@ -1453,6 +1453,8 @@ def _serialize_scenario(sc, *, full=False):
         "trigger_mode": sc.trigger_mode,
         "trigger_n": sc.trigger_n,
         "sampler_sensor_id": sc.sampler_sensor_id,
+        "sampler_required": sc.requires_sampler(),
+        "sampler_missing": sc.sampler_missing(),
     }
     if full:
         data["parameters"] = [{
@@ -1483,7 +1485,7 @@ def scenario_list(request):
 
     items = [
         _serialize_scenario(sc)
-        for sc in Scenario.objects.select_related("station").all()
+        for sc in Scenario.objects.select_related("station").prefetch_related("steps").all()
     ]
     return JsonResponse({"results": items})
 
@@ -1789,6 +1791,11 @@ def scenario_request_ministry(request):
     if result == "no_scenario":
         return JsonResponse(
             {"ok": False, "error": "Bu istasyon için aktif Bakanlık senaryosu yok."},
+            status=400,
+        )
+    if result == "no_sampler":
+        return JsonResponse(
+            {"ok": False, "error": "Bakanlık senaryosunda numune alıcı sensör tanımlı değil."},
             status=400,
         )
     if result == "exists":

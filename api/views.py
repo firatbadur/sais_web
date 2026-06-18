@@ -520,6 +520,13 @@ class StartSampleView(APIView):
                     "objects": None,
                 })
 
+            if result == "no_sampler":
+                return Response({
+                    "result": False,
+                    "message": "Bakanlık senaryosunda numune alıcı sensör tanımlı değil.",
+                    "objects": None,
+                })
+
             # "created" → yeni talep açıldı; "exists" → zaten devam eden talep var (idempotent).
             return Response({
                 "result": True,

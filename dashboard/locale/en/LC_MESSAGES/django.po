@@ -1819,11 +1819,17 @@ msgstr "Trigger Combination"
 msgid "N (en az kaç parametre)"
 msgstr "N (minimum parameters)"
 
-msgid "Numune Alıcı Sensör (override)"
-msgstr "Sampler Sensor (override)"
+msgid "Numune Alıcı Sensör"
+msgstr "Sampler Sensor"
 
-msgid "Varsayılan: istasyon numune sensörü"
-msgstr "Default: station sampler sensor"
+msgid "Numune alıcı (dijital-out) sensör seçin"
+msgstr "Select a sampler (digital-out) sensor"
+
+msgid "Numune alıcı sensör tanımlı değil — bu senaryo çalışmaz."
+msgstr "No sampler sensor defined — this scenario will not run."
+
+msgid "Sensör yok"
+msgstr "No sensor"
 
 msgid "Aktif (varsayılan senaryo yap)"
 msgstr "Active (make default scenario)"

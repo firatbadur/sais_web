@@ -107,9 +107,9 @@
                         <input type="number" min="1" class="form-control" id="sc-n" value="1">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">{% trans "Numune Alıcı Sensör (override)" %}</label>
+                        <label class="form-label">{% trans "Numune Alıcı Sensör" %}</label>
                         <select class="form-select" id="sc-sampler" data-control="select2"
-                                data-placeholder='{% trans "Varsayılan: istasyon numune sensörü" %}' data-allow-clear="true">
+                                data-placeholder='{% trans "Numune alıcı (dijital-out) sensör seçin" %}' data-allow-clear="true">
                             <option></option>
                         </select>
                     </div>
@@ -276,6 +276,8 @@
         noActive: "{% trans 'Aktif senaryo yok.' %}",
         confirmCancel: "{% trans 'Bu çalışma iptal edilsin mi? (Numune alıcı kapatılır)' %}",
         cancelRun: "{% trans 'İptal Et' %}",
+        samplerMissing: "{% trans 'Numune alıcı sensör tanımlı değil — bu senaryo çalışmaz.' %}",
+        samplerMissingShort: "{% trans 'Sensör yok' %}",
     };
 
     function csrf() { const el = document.querySelector('[name=csrfmiddlewaretoken]'); return el ? el.value : ''; }
@@ -587,8 +589,11 @@
             tb.innerHTML = '';
             (d.results || []).forEach(sc => {
                 const tr = document.createElement('tr');
+                const warn = sc.sampler_missing
+                    ? ` <span class="badge badge-light-danger" title="${I18N.samplerMissing}"><i class="ki-outline ki-information-5 fs-7 me-1"></i>${I18N.samplerMissingShort}</span>`
+                    : '';
                 tr.innerHTML =
-                    `<td>${esc(sc.name)}</td>
+                    `<td>${esc(sc.name)}${warn}</td>
                      <td>${esc(sc.kind_label)}</td>
                      <td>${esc(sc.station_name) || '—'}</td>
                      <td>${sc.is_active ? '<span class="badge badge-light-success">'+I18N.active+'</span>' : '<span class="badge badge-light-secondary">'+I18N.passive+'</span>'}</td>

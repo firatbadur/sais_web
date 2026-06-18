@@ -53,7 +53,7 @@ class StationAdmin(admin.ModelAdmin):
     search_fields = ("name", "address", "company", "domain")
     list_editable = ("active",)
     readonly_fields = ("created_at",)
-    autocomplete_fields = ("station_type", "sample_request_sensor", "user")
+    autocomplete_fields = ("station_type", "user")
     inlines = (StationAuthorityInline,)
     ordering = ("-created_at",)
 

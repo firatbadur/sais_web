@@ -385,6 +385,11 @@ def evaluate_auto(scenario, now):
     """Eşik-tetikli (auto) senaryoyu değerlendirir."""
     from .models import ScenarioRun
 
+    # Numune alıcı sensörü gereken ama tanımlı olmayan senaryo hiç çalışmaz.
+    # (Kütüphanede uyarı gösterilir; her dakika log üretmemek için sessiz geçilir.)
+    if scenario.sampler_missing():
+        return
+
     params = list(scenario.parameters.filter(enabled=True).select_related("parameter"))
 
     skip = _skip_reason(scenario, params)
@@ -426,6 +431,7 @@ def request_ministry(station, code, now=None):
 
     Döner: ``(result, run)`` —
       - ``("no_scenario", None)``  : istasyonun aktif Bakanlık senaryosu yok.
+      - ``("no_sampler", None)``   : senaryonun numune alıcı sensörü tanımlı değil.
       - ``("exists", run)``        : zaten devam eden bir Bakanlık talebi var
                                      (yeni talep açılmaz; mevcut run döner).
       - ``("created", run)``       : yeni talep açıldı ve ilk adım yürütüldü.
@@ -440,6 +446,8 @@ def request_ministry(station, code, now=None):
     )
     if scenario is None:
         return ("no_scenario", None)
+    if scenario.sampler_missing():
+        return ("no_sampler", None)
 
     run = _open_run(scenario, station.id)
     if run is not None:
@@ -543,6 +551,9 @@ def run(now=None):
     for run_obj in open_runs:
         scenario = run_obj.scenario
         if not scenario.enabled:
+            continue
+        # Numune alıcı sensörü kaldırılmış/tanımsız senaryonun açık run'ı ilerlemez.
+        if scenario.sampler_missing():
             continue
         try:
             # Ministry run'ları koşulsuz ilerler; auto'lar için güncel tetik durumu.

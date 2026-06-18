@@ -445,8 +445,10 @@ class Scenario(models.Model):
     )
     sampler_sensor = models.ForeignKey(
         "api.Sensor", on_delete=models.SET_NULL, blank=True, null=True,
-        related_name="+", verbose_name="Numune Alıcı Sensör (override)",
-        help_text="Boşsa istasyonun sample_request_sensor'ı kullanılır.",
+        related_name="+", verbose_name="Numune Alıcı Sensör",
+        help_text="StartSample/sampler_on/off aksiyonlarının yazacağı dijital-out "
+                  "sensörü. sampler_on/off aksiyonu kullanan senaryolarda zorunlu; "
+                  "tanımlı değilse senaryo çalışmaz.",
     )
     created_by = models.ForeignKey(
         CustomUser, on_delete=models.SET_NULL, blank=True, null=True, related_name="+",
@@ -465,10 +467,22 @@ class Scenario(models.Model):
         return self.name
 
     def effective_sampler_sensor(self):
-        """Override sensör veya istasyonun sample_request_sensor'ı."""
-        if self.sampler_sensor_id:
-            return self.sampler_sensor
-        return self.station.sample_request_sensor if self.station_id else None
+        """Senaryonun numune alıcı sensörü (tanımlı değilse None)."""
+        return self.sampler_sensor if self.sampler_sensor_id else None
+
+    def requires_sampler(self):
+        """Adımlarında sampler_on/sampler_off aksiyonu olan senaryo numune
+        çıkışına (sampler_sensor) ihtiyaç duyar."""
+        for step in self.steps.all():
+            for action in (step.actions or []):
+                if action.get("type") in ("sampler_on", "sampler_off"):
+                    return True
+        return False
+
+    def sampler_missing(self):
+        """Numune çıkışı gereken ama tanımlı olmayan senaryo. True ise motorda
+        çalışmaz ve kütüphanede uyarı gösterilir."""
+        return self.requires_sampler() and self.effective_sampler_sensor() is None
 
     def cabinet(self):
         """SIM bildirimleri için bağlı Bakanlık kabini (tek-kabin varsayımı)."""

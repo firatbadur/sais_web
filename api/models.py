@@ -78,13 +78,6 @@ class Station(models.Model):
     active = models.BooleanField(
         default=True, verbose_name="Aktif mi?", help_text="Aktif mi?",
     )
-    sample_request_sensor = models.ForeignKey(
-        "Sensor", on_delete=models.SET_NULL,
-        blank=True, null=True,
-        related_name="+",
-        verbose_name="Numune Alma Sensörü",
-        help_text="StartSample servisinin tetikleyeceği dijital-out sensörü",
-    )
     user = models.ForeignKey(
         CustomUser, on_delete=models.SET_NULL,
         blank=True, null=True,
