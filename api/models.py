@@ -55,8 +55,9 @@ class Station(models.Model):
     )
     station_type = models.ForeignKey(
         StationType, on_delete=models.SET_NULL,
-        blank=True, null=True,
+        blank=False, null=True,
         verbose_name="İstasyon Tipi",
+        help_text="İstasyonun ölçüm sistemi tipi (zorunlu)",
     )
     address = models.CharField(
         max_length=250, blank=True, default="",

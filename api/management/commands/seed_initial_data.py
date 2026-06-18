@@ -10,7 +10,27 @@ Alan-özel (SAIS / Envisoft / Bakanlık) veriler için ayrı komut:
 """
 from django.core.management.base import BaseCommand
 
-from api.models import LogType, MessageTemplate, Parameter, RequestType, Station, StatusCode
+from api.models import (
+    LogType, MessageTemplate, Parameter, RequestType, Station, StationType, StatusCode,
+)
+
+
+# Jenerik istasyon (ölçüm sistemi) tipleri. Atıksu deşarj alt-tipleri
+# (evsel/endüstriyel/kentsel) SAIS-özel olduğu için sais_domain seed'inde kalır.
+# (code, name, description)
+DEFAULT_STATION_TYPES = [
+    ("wastewater_monitoring", "Sürekli Atıksu İzleme Sistemi", "Atıksu deşarjı sürekli izleme (SAIS)"),
+    ("emission_monitoring", "Sürekli Emisyon Ölçüm Sistemi", "Baca gazı sürekli emisyon ölçümü (SEÖS)"),
+    ("flow_measurement", "Debi Ölçüm Sistemi", "Atıksu/proses debisi ölçümü"),
+    ("air_quality", "Hava Kalitesi İzleme İstasyonu", "Ortam hava kalitesi sürekli izleme"),
+    ("meteorology", "Meteorolojik Ölçüm İstasyonu", "Rüzgar, sıcaklık, nem, basınç vb. meteoroloji"),
+    ("water_quality", "Su Kalitesi İzleme İstasyonu", "Yüzey/yeraltı/alıcı ortam su kalitesi izleme"),
+    ("noise_monitoring", "Gürültü İzleme İstasyonu", "Çevresel gürültü ölçümü"),
+    ("solar_plant", "GES (Güneş Enerji Santrali)", "Güneş enerji santrali izleme"),
+    ("energy_monitoring", "Enerji İzleme Sistemi", "Elektrik/enerji tüketim izleme"),
+    ("scada_general", "Genel SCADA İzleme", "Genel amaçlı endüstriyel izleme sistemi"),
+    ("other", "Diğer Sistemler", "Yukarıdaki kategorilerin dışındaki sistemler"),
+]
 
 
 # (parameter_name, parameter_txt, unit, unit_txt, device_channel_id,
@@ -133,15 +153,31 @@ class Command(BaseCommand):
     help = "Çekirdek SCADA seed kayıtlarını oluşturur (idempotent)."
 
     def handle(self, *args, **options):
+        created_station_types = 0
+        station_type_by_code = {}
+        for code, name, description in DEFAULT_STATION_TYPES:
+            obj, created = StationType.objects.get_or_create(
+                code=code,
+                defaults={"name": name, "description": description},
+            )
+            station_type_by_code[code] = obj
+            created_station_types += int(created)
+
         default_station, station_created = Station.objects.get_or_create(
             id=1,
             defaults={
                 "name": "Varsayılan İstasyon",
                 "active": True,
+                "station_type": station_type_by_code.get("wastewater_monitoring"),
             },
         )
         if station_created:
             self.stdout.write(self.style.SUCCESS("Varsayılan istasyon (id=1) oluşturuldu."))
+
+        # Tip artık zorunlu; eski kurulumda tipsiz kalmış varsayılan istasyonu doldur.
+        if default_station.station_type_id is None:
+            default_station.station_type = station_type_by_code.get("wastewater_monitoring")
+            default_station.save(update_fields=["station_type"])
 
         created_params = 0
         for row in DEFAULT_PARAMETERS:
@@ -219,6 +255,7 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
+                f"İstasyon tipleri: {created_station_types} yeni, "
                 f"Parametreler: {created_params} yeni, "
                 f"Status kodları: {created_status} yeni, "
                 f"Talep tipleri: {created_request} yeni, "
