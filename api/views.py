@@ -41,7 +41,9 @@ def get_query_param(request, name, default=None):
     target = normalize(name)
     for key, value in request.GET.items():
         if normalize(key) == target:
-            return value
+            # İstemciler değere baş/son boşluk ekleyebiliyor (örn. "?StationId= <uuid>");
+            # eşleşmeleri (device_id/code) bozmaması için kırp.
+            return value.strip() if isinstance(value, str) else value
     return default
 
 
