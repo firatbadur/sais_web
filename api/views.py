@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 import pandas as pd
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -13,10 +11,8 @@ from sais_domain.models import SaisCabinet
 from .helpers import df_to_json_records
 from .models import (
     Calibration,
-    Command,
     PowerOff,
     Reading,
-    RequestType,
     Sensor,
     SystemLog,
 )
@@ -509,39 +505,25 @@ class StartSampleView(APIView):
                     "objects": None,
                 })
 
-            sensor = device.station.sample_request_sensor
-            if not sensor:
+            # Tek doğruluk kaynağı: senaryo kütüphanesindeki "Bakanlık Talepli Senaryo".
+            # Operatör dashboard butonu da (dashboard.api_views.scenario_request_ministry)
+            # aynı request_ministry akışını kullanır — Bakanlık HTTP girişi de buraya delege
+            # edilir ki sampler_on + SIM bildirimi + tamamlanma adımları çalışsın.
+            from sais_domain.scenario_engine import request_ministry
+
+            result, _run = request_ministry(device.station, code)
+
+            if result == "no_scenario":
                 return Response({
                     "result": False,
-                    "message": "İstasyonun numune alma sensörü tanımlı değil (Station.sample_request_sensor).",
+                    "message": "İstasyonun aktif Bakanlık senaryosu yok.",
                     "objects": None,
                 })
 
-            # Bakanlık Numune Talebi tipi SAIS seed'iyle birlikte yaratılır.
-            request_type = RequestType.objects.filter(code="ministry_sample").first()
-
-            # Aynı Bakanlık talep kodu iki kez gelirse duplicate komut oluşmasın.
-            idempotency_key = f"ministry_sample:{station_id}:{code}"
-
-            _, created = Command.objects.get_or_create(
-                idempotency_key=idempotency_key,
-                defaults=dict(
-                    sensor=sensor,
-                    value_type="bool",
-                    value=1,
-                    status="pending",
-                    priority=10,  # numune alma yüksek öncelikli
-                    source="api",
-                    request_type=request_type,
-                    correlation_id=code,
-                    expires_at=timezone.now() + timedelta(minutes=5),
-                    max_attempts=3,
-                ),
-            )
-
+            # "created" → yeni talep açıldı; "exists" → zaten devam eden talep var (idempotent).
             return Response({
                 "result": True,
-                "message": None if created else "Aynı talep zaten kuyrukta.",
+                "message": None if result == "created" else "Bakanlık talebi zaten devam ediyor.",
                 "objects": True,
             })
 
