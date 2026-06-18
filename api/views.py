@@ -31,6 +31,24 @@ from .serializers import (
 )
 
 
+def get_query_param(request, name, default=None):
+    """QueryString parametresini büyük/küçük harf duyarsız okur.
+
+    Bakanlık/istemci tarafları aynı parametreyi farklı kasayla
+    gönderebiliyor (stationId / StationId / Stationıd / STATIONID ...).
+    Hepsini tek bir ad gibi kabul ederiz; ilk eşleşen değeri döndürür.
+    """
+    def normalize(s):
+        # Türkçe dotless-i (ı) ve büyük İ varyantlarını sade 'i'ye indir.
+        return s.replace("ı", "i").replace("İ", "i").lower()
+
+    target = normalize(name)
+    for key, value in request.GET.items():
+        if normalize(key) == target:
+            return value
+    return default
+
+
 # Sunucu saatini getiren servis
 class GetServerDatetimeView(APIView):
 
@@ -38,7 +56,7 @@ class GetServerDatetimeView(APIView):
     authentication_classes = [BasicAuthentication]
 
     def get(self, request, format=None):
-        station_id = request.GET.get("stationId")
+        station_id = get_query_param(request, "stationId")
         if not station_id:
             return Response({
                 "result": False,
@@ -63,7 +81,7 @@ class GetReadsDataView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         try:
-            station_id = request.GET.get("stationId")
+            station_id = get_query_param(request, "stationId")
             if not station_id:
                 return Response({
                     "result": False,
@@ -71,9 +89,9 @@ class GetReadsDataView(generics.ListAPIView):
                     "objects": None,
                 })
 
-            startDate = parse_datetime(request.GET.get("startDate"))
-            endDate = parse_datetime(request.GET.get("endDate"))
-            Period = int(request.GET.get("Period", 1))
+            startDate = parse_datetime(get_query_param(request, "startDate"))
+            endDate = parse_datetime(get_query_param(request, "endDate"))
+            Period = int(get_query_param(request, "Period", 1))
 
             if not startDate or not endDate:
                 return Response({
@@ -152,7 +170,7 @@ class GetLatestReadsView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         try:
-            station_id = request.GET.get("stationId")
+            station_id = get_query_param(request, "stationId")
             if not station_id:
                 return Response({
                     "result": False,
@@ -222,7 +240,7 @@ class GetLastReadTimeView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         try:
-            station_id = request.GET.get("stationId")
+            station_id = get_query_param(request, "stationId")
             if not station_id:
                 return Response({
                     "result": False,
@@ -263,7 +281,7 @@ class GetChannelInfoView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         try:
-            station_id = request.GET.get("stationId")
+            station_id = get_query_param(request, "stationId")
             if not station_id:
                 return Response({
                     "result": False,
@@ -301,7 +319,7 @@ class GetStationInformationView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         try:
-            station_id = request.GET.get("stationId")
+            station_id = get_query_param(request, "stationId")
             if not station_id:
                 return Response({"result": False, "message": "stationId parametresi zorunlu.", "objects": None})
 
@@ -325,9 +343,9 @@ class GetCalibrationView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         try:
-            station_id = request.GET.get("stationId")
-            startDate = request.GET.get("startDate")
-            endDate = request.GET.get("endDate")
+            station_id = get_query_param(request, "stationId")
+            startDate = get_query_param(request, "startDate")
+            endDate = get_query_param(request, "endDate")
 
             if not station_id:
                 return Response({
@@ -381,7 +399,7 @@ class GetPoweroffView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         try:
-            station_id = request.GET.get("stationId")
+            station_id = get_query_param(request, "stationId")
             if not station_id:
                 return Response({
                     "result": False,
@@ -397,8 +415,8 @@ class GetPoweroffView(generics.ListAPIView):
                     "objects": None,
                 })
 
-            startDate = request.GET.get("startDate")
-            endDate = request.GET.get("endDate")
+            startDate = get_query_param(request, "startDate")
+            endDate = get_query_param(request, "endDate")
 
             qs = PowerOff.objects.filter(station=device.station)
 
@@ -428,9 +446,9 @@ class GetLogView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         try:
-            station_id = request.GET.get("stationId")
-            startDate = request.GET.get("startDate")
-            endDate = request.GET.get("endDate")
+            station_id = get_query_param(request, "stationId")
+            startDate = get_query_param(request, "startDate")
+            endDate = get_query_param(request, "endDate")
 
             if not station_id:
                 return Response({
@@ -473,8 +491,8 @@ class GetLogView(generics.ListAPIView):
 class StartSampleView(APIView):
     def get(self, request, *args, **kwargs):
         try:
-            station_id = request.GET.get("stationId")
-            code = request.GET.get("code")
+            station_id = get_query_param(request, "stationId")
+            code = get_query_param(request, "code")
 
             if not station_id or not code:
                 return Response({
