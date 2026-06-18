@@ -464,7 +464,11 @@ def request_ministry(station, code, now=None):
         sample_code=str(code or ""),
     )
     _log(scenario, run, kind="eval", message=f"Bakanlık numune talebi: {code}")
-    _advance(scenario, run, triggered=True, now=now)
+    # Step 0 yürütmesi SIM'e bloklayan HTTP çağrıları (login + SendData) içerir;
+    # çağıran HTTP isteğini (StartSample / dashboard) bekletmemek için worker'a
+    # devret. Worker yoksa beat `run_scenarios` bir dakika içinde ilerletir.
+    from .tasks import advance_scenario_run
+    advance_scenario_run.delay(run.id)
     return ("created", run)
 
 
@@ -568,3 +572,32 @@ def run(now=None):
             logger.exception("Açık run ilerletme hatası (run=%s)", run_obj.pk)
 
     return summary
+
+
+def advance_open_run(run_id, now=None):
+    """Tek bir açık run'ı ilerletir — `run()` içindeki açık-run mantığının
+    tek-run karşılığı.
+
+    `request_ministry` SIM I/O'sunu HTTP isteğinden ayırmak için bu işi
+    `sais_domain.tasks.advance_scenario_run` ile worker'a devreder.
+    """
+    from .models import ScenarioRun
+
+    now = now or timezone.now()
+    run = (
+        ScenarioRun.objects
+        .select_related("scenario", "scenario__station")
+        .filter(pk=run_id, status=ScenarioRun.STATUS_IN_PROGRESS)
+        .first()
+    )
+    if run is None:
+        return
+    scenario = run.scenario
+    if not scenario.enabled or scenario.sampler_missing():
+        return
+    if run.is_ministry:
+        triggered = True
+    else:
+        params = list(scenario.parameters.filter(enabled=True).select_related("parameter"))
+        triggered, _, _, _ = _evaluate(scenario, params)
+    _advance(scenario, run, triggered, now)

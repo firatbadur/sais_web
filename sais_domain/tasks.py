@@ -48,6 +48,22 @@ def run_scenarios() -> dict:
     return run()
 
 
+@shared_task(name="sais_domain.tasks.advance_scenario_run")
+def advance_scenario_run(run_id: int) -> dict:
+    """Tek bir açık senaryo run'ını ilerletir (SIM I/O içerir).
+
+    `request_ministry` (StartSample servisi + dashboard operatör talebi) HTTP
+    isteğini bekletmemek için step yürütmesini bu task'a devreder. Lisans
+    bitmişse senaryo motoru gibi durur.
+    """
+    from api.licensing import license_active
+    if not license_active():
+        return {"run_id": run_id, "skipped": "license_inactive"}
+    from .scenario_engine import advance_open_run
+    advance_open_run(run_id)
+    return {"run_id": run_id}
+
+
 @shared_task(name="sais_domain.tasks.publish_minute_data")
 def publish_minute_data() -> dict:
     """Aktif kabinler için per-cabinet publish task'ları enqueue eder.

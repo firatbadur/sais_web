@@ -137,11 +137,20 @@ class SaisSimClient(BaseHttpClient):
 
         try:
             data = response.json()
-            ticket = data["objects"]["TicketId"]
-        except (ValueError, KeyError, TypeError) as exc:
+        except ValueError as exc:
+            raise SaisAuthError(f"SAIS login yanıtı JSON değil: {exc}") from exc
+
+        objects = data.get("objects") if isinstance(data, dict) else None
+        if not isinstance(objects, dict) or not objects.get("TicketId"):
+            # objects=null tipik olarak Bakanlık'ın girişi reddetmesi demek
+            # (kullanıcı/şifre veya SIM kayıt bilgisi hatalı / test verisi).
+            server_msg = data.get("message") if isinstance(data, dict) else None
             raise SaisAuthError(
-                f"SAIS login yanıtı çözümlenemedi: {exc}"
-            ) from exc
+                "SAIS login reddedildi — yanıtta TicketId yok "
+                "(kullanıcı/şifre veya SIM kayıt bilgileri hatalı olabilir). "
+                f"Sunucu mesajı: {server_msg!r}"
+            )
+        ticket = objects["TicketId"]
 
         store_session(
             self.cabinet.id,
