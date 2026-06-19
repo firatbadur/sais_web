@@ -29,8 +29,9 @@
             </div>
             <div class="card-body">
                 {% if not lic.enforce %}
-                <div class="alert alert-secondary fs-7">
-                    {% trans "Lisans zorlaması kapalı (DEBUG / LICENSE_ENFORCE=0). Sistem lisanstan bağımsız çalışır." %}
+                <div class="notice d-flex align-items-center bg-light-info border border-info border-dashed rounded p-4 mb-5">
+                    <i class="ki-outline ki-information-5 fs-2 text-info me-3"></i>
+                    <span class="fs-7 text-gray-800 fw-semibold">{% trans "Lisans zorlaması kapalı (DEBUG / LICENSE_ENFORCE=0). Sistem lisanstan bağımsız çalışır." %}</span>
                 </div>
                 {% endif %}
                 <table class="table table-row-dashed align-middle gy-3 mb-0">
