@@ -1558,6 +1558,11 @@ class License(models.Model):
         max_length=10, choices=STATUS_CHOICES, default="missing", verbose_name="Durum",
     )
     signature_valid = models.BooleanField(default=False, verbose_name="İmza Geçerli")
+    machine_fingerprint = models.CharField(
+        max_length=128, blank=True, default="", verbose_name="Bağlı Makine Parmak İzi",
+        help_text="Token bu donanıma kilitliyse (node-lock) buraya yazılır; boşsa "
+                  "lisans makineye bağlı değil. Runtime fingerprint ile karşılaştırılır.",
+    )
     raw_token = models.JSONField(
         blank=True, null=True, verbose_name="İmzalı Token",
         help_text="Doğrulanmış son token (restart/offline'da yeniden doğrulanır).",

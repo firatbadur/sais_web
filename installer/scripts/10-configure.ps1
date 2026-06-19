@@ -38,6 +38,17 @@ $secret = New-RandomSecret 50
 # PostgreSQL has no special complexity policy; a 28-char random secret is plenty.
 if (-not $PgPassword) { $PgPassword = New-RandomSecret 28 }
 
+# Machine fingerprint (license node-lock) — derived from real host hardware so a
+# copy of the install on another PC produces a different value -> won't match the
+# signed token. sais-stack.ps1 also refreshes this every boot.
+function Get-MachineFingerprint() {
+    try { $guid = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Cryptography" -Name "MachineGuid" -ErrorAction Stop).MachineGuid } catch { $guid = "" }
+    try { $board = (Get-CimInstance -ClassName Win32_BaseBoard -ErrorAction Stop).SerialNumber } catch { $board = "" }
+    $bytes = [System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes("$guid|$board"))
+    return (($bytes | ForEach-Object { $_.ToString("x2") }) -join "")
+}
+$machineFp = Get-MachineFingerprint
+
 # Derive a fleet-wide wildcard from the domain:
 # sais-tesis1.envisoft.com.tr -> .envisoft.com.tr
 $baseDomain = $Domain
@@ -69,6 +80,7 @@ $map = @{
     "__ALLOWED_HOSTS__"       = $allowedHosts
     "__CSRF_TRUSTED_ORIGINS__"= $csrf
     "__POSTGRES_PASSWORD__"   = $PgPassword
+    "__MACHINE_FINGERPRINT__" = $machineFp
     "__LICENSE_KEY__"         = $LicenseKey
     "__LICENSE_URL__"         = $LicenseUrl
 }

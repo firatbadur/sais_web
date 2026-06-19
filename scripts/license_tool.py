@@ -76,13 +76,18 @@ def cmd_issue(args):
         "expires_at": d.isoformat(),
         "version": 1,
     }
+    # Makine-bağlama (node-lock): verilmişse token bu donanım parmak izine kilitlenir.
+    # Sahanın parmak izi dashboard → Yönetici → Lisans sayfasında gösterilir.
+    if args.machine_fingerprint:
+        payload["machine"] = args.machine_fingerprint.strip()
     signature = priv.sign(canonical(payload)).hex()
     token = {"payload": payload, "signature": signature}
 
     out = Path(args.out or f"{args.key}.json")
     out.write_text(json.dumps(token, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Token yazıldı: {out}")
-    print(f"  key={args.key}  customer={args.customer}  expires={payload['expires_at']}")
+    print(f"  key={args.key}  customer={args.customer}  expires={payload['expires_at']}"
+          + (f"  machine={payload['machine']}" if payload.get("machine") else "  (makineye bağlı DEĞİL)"))
 
 
 def cmd_manifest(args):
@@ -121,6 +126,9 @@ def main(argv):
     i.add_argument("--key", required=True, help="Saha kimliği (LICENSE_KEY)")
     i.add_argument("--customer", required=True, help="Müşteri adı")
     i.add_argument("--expires", required=True, help="YYYY-MM-DD veya tam ISO tarih")
+    i.add_argument("--machine-fingerprint", default=None,
+                   help="Makine parmak izi (hex) — verilirse lisans o makineye kilitlenir "
+                        "(node-lock). Sahanın parmak izi Lisans sayfasında gösterilir.")
     i.add_argument("--private", default="license_private_key.hex")
     i.add_argument("--out", default=None)
     i.set_defaults(func=cmd_issue)

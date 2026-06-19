@@ -47,6 +47,12 @@
                         <td class="text-end">
                             {% if lic.signature_valid %}<span class="badge badge-light-success">{% trans "Geçerli" %}</span>
                             {% else %}<span class="badge badge-light-danger">{% trans "Doğrulanmadı" %}</span>{% endif %}</td></tr>
+                    <tr><td class="text-muted">{% trans "Makineye Bağlı" %}</td>
+                        <td class="text-end">
+                            {% if lic.machine_locked %}
+                                {% if lic.fingerprint_ok %}<span class="badge badge-light-success">{% trans "Evet — bu makine" %}</span>
+                                {% else %}<span class="badge badge-light-danger">{% trans "Evet — BAŞKA makine!" %}</span>{% endif %}
+                            {% else %}<span class="badge badge-light">{% trans "Hayır" %}</span>{% endif %}</td></tr>
                     <tr><td class="text-muted">{% trans "Son Kontrol" %}</td>
                         <td class="text-end text-gray-700">
                             {{ lic.last_checked_at|date:"d.m.Y H:i:s"|default:"—" }}
@@ -70,7 +76,28 @@
                 </h3>
             </div>
             <div class="card-body d-flex flex-column">
-                <p class="text-muted fs-7 mb-4">
+                {# Aktivasyon: bu makinenin parmak izi — lisans üretiminde kullanılır #}
+                <div class="mb-5">
+                    <label class="form-label fs-8 text-muted mb-1">
+                        <i class="ki-outline ki-cpu fs-6 me-1"></i>{% trans "Bu Makinenin Parmak İzi (aktivasyon)" %}
+                    </label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" id="machine-fp" readonly
+                               class="form-control form-control-sm font-monospace fs-8"
+                               value="{{ lic.runtime_fingerprint|default:'' }}"
+                               placeholder="{% trans 'host tarafından ayarlanmadı' %}">
+                        <button type="button" class="btn btn-light-primary btn-sm" id="copy-fp"
+                                onclick="navigator.clipboard.writeText(document.getElementById('machine-fp').value);this.innerHTML='✓';">
+                            <i class="ki-outline ki-copy fs-5"></i>
+                        </button>
+                    </div>
+                    <div class="form-text fs-9">
+                        {% trans "Lisansı bu makineye kilitlemek için bu kodu tedarikçinize iletin." %}
+                    </div>
+                </div>
+
+                <div class="separator separator-content my-2 text-muted fs-8">{% trans "Lisans İşlemleri" %}</div>
+                <p class="text-muted fs-7 my-4">
                     {% trans "Lisansı sunucudan (manifest) yeniden kontrol eder. Süre uzatıldıysa sistem otomatik açılır." %}
                 </p>
                 <form method="post" class="mb-5">

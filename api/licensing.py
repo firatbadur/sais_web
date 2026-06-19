@@ -69,6 +69,16 @@ def _parse_dt(value: str):
     return dt
 
 
+def runtime_fingerprint() -> str:
+    """Bu kurulumun çalıştığı makinenin parmak izi (host'tan env ile geçer).
+
+    Installer/sais-stack.ps1 Windows MachineGuid + baseboard serial'dan üretip
+    .env'e yazar; container'a env_file ile gelir. Boşsa (dev / eski kurulum)
+    makineye-bağlama uygulanmaz.
+    """
+    return (getattr(settings, "MACHINE_FINGERPRINT", "") or "").strip()
+
+
 def apply_token(token: dict, *, source: str = "") -> "object":
     """Token'ı doğrula, kendi anahtarımıza ait mi kontrol et, License'a yaz.
 
@@ -107,10 +117,20 @@ def apply_token(token: dict, *, source: str = "") -> "object":
     lic.valid_until = valid_until
     lic.issued_at = _parse_dt(payload.get("issued_at"))
     lic.signature_valid = True
+    lic.machine_fingerprint = (payload.get("machine") or "").strip()
     lic.raw_token = token
     lic.last_check_ok = True
     lic.last_error = ""
-    lic.status = "active" if (valid_until and timezone.now() <= valid_until) else "expired"
+    # Süre + (varsa) makine-bağlama birlikte değerlendirilir.
+    bound = lic.machine_fingerprint
+    machine_ok = (not bound) or (runtime_fingerprint() == bound)
+    if not (valid_until and timezone.now() <= valid_until):
+        lic.status = "expired"
+    elif not machine_ok:
+        lic.status = "invalid"
+        lic.last_error = "Lisans bu makineye kilitli; donanım parmak izi eşleşmiyor."
+    else:
+        lic.status = "active"
     lic.save()
     logger.info("Lisans uygulandı (%s): key=%s expires=%s", source, token_key, valid_until)
     return lic
@@ -149,7 +169,21 @@ def fetch_and_refresh() -> "object":
         manifest = resp.json()
         token = (manifest.get("licenses") or {}).get(key)
         if not token:
-            raise LicenseError(f"Manifest'te '{key}' anahtarı yok.")
+            # Manifest'e ULAŞILDI (HTTP 200 + geçerli JSON) ama anahtarımız YOK →
+            # bilinçli iptal/kaldırma. Cache'i temizle → license_active anında False
+            # (ilişki bitince hızlı kesme). Ağ/HTTP hatası bu noktaya gelmez; o durumda
+            # aşağıdaki except cache'i korur (SCADA outage toleransı bozulmaz).
+            lic = License.load()
+            lic.last_checked_at = timezone.now()
+            lic.last_check_ok = True
+            lic.signature_valid = False
+            lic.raw_token = None
+            lic.valid_until = None
+            lic.status = "invalid"
+            lic.last_error = f"Lisans iptal edilmiş: manifest'te '{key}' anahtarı yok."
+            lic.save()
+            logger.warning("Lisans iptal (manifest'te anahtar yok): %s", key)
+            return lic
         return apply_token(token, source="remote")
     except LicenseError:
         raise
@@ -198,9 +232,16 @@ def license_active() -> bool:
 
     if lic.valid_until and lic.raw_token:
         # raw_token imzası hâlâ geçerli mi (DB elle kurcalanmış olabilir)?
-        if _revalidate_cached(lic) and now <= lic.valid_until:
-            return True
-        return False
+        if not (_revalidate_cached(lic) and now <= lic.valid_until):
+            return False
+        # Makine-bağlama (node-lock): token bir makineye kilitliyse, çalıştığımız
+        # makinenin parmak izi eşleşmeli. FAIL-CLOSED — token kilitli ama runtime
+        # parmak izi boş/farklıysa reddet (kopyalanan kuruluma karşı koruma).
+        bound = ((lic.raw_token.get("payload") or {}).get("machine") or "").strip()
+        if bound and runtime_fingerprint() != bound:
+            logger.warning("Lisans makine parmak izi eşleşmiyor (kilitli makine ≠ bu makine).")
+            return False
+        return True
 
     # Henüz hiç geçerli token uygulanmadı → yeni kurulum bootstrap grace'i.
     grace_h = int(getattr(settings, "LICENSE_BOOTSTRAP_GRACE_HOURS", 24))
@@ -227,6 +268,8 @@ def license_status_dict() -> dict:
     else:
         state = "expired"
 
+    runtime_fp = runtime_fingerprint()
+    bound_fp = (lic.machine_fingerprint or "").strip()
     return {
         "enforce": enforce,
         "active": active,
@@ -241,4 +284,10 @@ def license_status_dict() -> dict:
         "last_check_ok": lic.last_check_ok,
         "last_error": lic.last_error,
         "warn_days": warn_days,
+        # Makine-bağlama (node-lock) durumu — lisans üretirken runtime_fingerprint
+        # operatöre gösterilir; bound_fp token'a gömülü kilit.
+        "runtime_fingerprint": runtime_fp,
+        "machine_fingerprint": bound_fp,
+        "machine_locked": bool(bound_fp),
+        "fingerprint_ok": (not bound_fp) or (runtime_fp == bound_fp),
     }

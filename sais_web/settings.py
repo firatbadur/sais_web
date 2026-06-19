@@ -74,8 +74,14 @@ LICENSE_PUBLIC_KEY = os.getenv(
 )
 # Bitişe bu kadar gün kala dashboard'da sarı uyarı banner'ı.
 LICENSE_WARN_DAYS = int(os.getenv("LICENSE_WARN_DAYS", "15"))
-# Yeni kurulum ilk lisans fetch'ine kadar bu kadar saat çalışabilir (brick olmasın).
-LICENSE_BOOTSTRAP_GRACE_HOURS = int(os.getenv("LICENSE_BOOTSTRAP_GRACE_HOURS", "24"))
+# Yeni kurulum, geçerli lisans uygulanana dek EN FAZLA bu kadar saat çalışır (brick
+# olmasın + makineye-bağlı token üretip uygulamaya zaman tanı). Varsayılan 168 = 1 hafta.
+LICENSE_BOOTSTRAP_GRACE_HOURS = int(os.getenv("LICENSE_BOOTSTRAP_GRACE_HOURS", "168"))
+# Makine parmak izi (node-lock) — host tarafında (installer/sais-stack.ps1) Windows
+# MachineGuid + baseboard serial'dan üretilip .env'e yazılır, container'a env_file ile
+# geçer. Lisans token'ı `machine` alanı içeriyorsa, license_active() bu değerle
+# karşılaştırır (eşleşmezse kilit). Boş = makineye bağlama uygulanmaz (dev/eski kurulum).
+MACHINE_FINGERPRINT = os.getenv("MACHINE_FINGERPRINT", "")
 
 
 # Application definition

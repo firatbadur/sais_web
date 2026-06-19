@@ -78,10 +78,53 @@ function Set-PortProxy([string]$Distro) {
     }
 }
 
+# --- Machine fingerprint (license node-lock) ---------------------------------
+# The app license can be locked to THIS machine. The fingerprint must be derived
+# from the REAL host hardware at runtime (not just read from a copied .env), so
+# we re-compute it every boot and write it into .env. If the whole install is
+# copied to another PC, this overwrites the copied value with the NEW machine's
+# fingerprint -> it no longer matches the signed token -> the app locks. The
+# fingerprint reaches the container via docker-compose env_file: .env.
+function Get-MachineFingerprint() {
+    try { $guid = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Cryptography" -Name "MachineGuid" -ErrorAction Stop).MachineGuid } catch { $guid = "" }
+    try { $board = (Get-CimInstance -ClassName Win32_BaseBoard -ErrorAction Stop).SerialNumber } catch { $board = "" }
+    $bytes = [System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes("$guid|$board"))
+    return (($bytes | ForEach-Object { $_.ToString("x2") }) -join "")
+}
+
+function Update-EnvFingerprint([string]$InstallDir) {
+    try {
+        $fp = Get-MachineFingerprint
+        if (-not $fp) { return }
+        $envPath = Join-Path $InstallDir ".env"
+        if (-not (Test-Path $envPath)) { return }
+        $content = Get-Content -Raw -Encoding UTF8 $envPath
+        $line = "MACHINE_FINGERPRINT=$fp"
+        if ($content -match '(?m)^MACHINE_FINGERPRINT=.*$') {
+            $new = [regex]::Replace($content, '(?m)^MACHINE_FINGERPRINT=.*$', $line)
+        } else {
+            $sep = if ($content.EndsWith("`n")) { "" } else { "`n" }
+            $new = $content + $sep + $line + "`n"
+        }
+        # Only rewrite if changed (avoids needless container recreate on `up -d`).
+        if ($new -ne $content) {
+            $new = $new -replace "`r`n", "`n"
+            $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText($envPath, $new, $utf8NoBom)
+        }
+    } catch {
+        # non-fatal; retried next loop.
+    }
+}
+
 while ($true) {
     try {
         # 0) Keep the auto-login password in sync (Layer 2 self-heal).
         Sync-ServicePassword $SvcUser
+
+        # 0b) Refresh the live machine fingerprint into .env (license node-lock).
+        #     Must run BEFORE `up -d` so a changed value recreates the containers.
+        Update-EnvFingerprint $InstallDir
 
         # 1) Make sure the Docker daemon is up inside the distro.
         wsl.exe -d $Distro -u root -- bash -lc "service docker start 2>/dev/null || systemctl start docker 2>/dev/null || (pgrep dockerd >/dev/null || (dockerd >/var/log/dockerd.log 2>&1 &)); sleep 2" *> $null
