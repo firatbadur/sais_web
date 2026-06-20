@@ -4,6 +4,13 @@
 {% block title %}{% if object %}{% trans "Kullanıcı Düzenle" %}{% else %}{% trans "Yeni Kullanıcı" %}{% endif %}{% endblock %}
 {% block page_title %}{% if object %}{% trans "Kullanıcı Düzenle" %}{% else %}{% trans "Yeni Kullanıcı" %}{% endif %}{% endblock %}
 
+{% block extra_head %}
+<style>
+/* Parola alanı içindeki üretici + göster/gizle butonlarının altına metin girmesin. */
+#id_password1 { padding-right: 5.5rem; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row">
 <div class="col-12">
@@ -53,16 +60,18 @@
                         {% endwith %}
                     </div>
                     {% if form.password1 %}
-                    <div class="col-md-6 d-flex align-items-end">
-                        <button type="button" id="btn-generate-pw" class="btn btn-light-primary w-100">
-                            <i class="ki-outline ki-abstract-26 fs-4"></i>{% trans "Güçlü Parola Oluştur" %}
-                        </button>
-                    </div>
+                    <div class="col-md-6"></div>
                     <div class="col-md-6">
                         {% with f=form.password1 %}
                         <label class="form-label required">{{ f.label }}</label>
                         <div class="position-relative">
                             {{ f }}
+                            <button type="button" id="btn-generate-pw"
+                                    class="btn btn-icon btn-sm btn-active-light-primary position-absolute translate-middle-y top-50 end-0 me-10"
+                                    title="{% trans 'Güçlü Parola Oluştur' %}">
+                                <i class="ki-outline ki-abstract-26 fs-3"></i>
+                                <i class="ki-outline ki-check fs-3 text-success d-none"></i>
+                            </button>
                             <button type="button" id="btn-toggle-pw"
                                     class="btn btn-icon btn-sm btn-active-light-primary position-absolute translate-middle-y top-50 end-0 me-2"
                                     title="{% trans 'Göster / Gizle' %}">
@@ -298,21 +307,23 @@
         if (pw1) pw1.value = pw;
         if (pw2) pw2.value = pw;
         reveal(true);
-        // Panoya kopyala (kullanıcıya iletmek için).
+        // Panoya kopyala (kullanıcıya iletmek için) + kısa onay ikonu.
+        function flashOk() {
+            var icons = genBtn.querySelectorAll('i');
+            if (icons.length !== 2) return;
+            icons[0].classList.add('d-none');
+            icons[1].classList.remove('d-none');
+            genBtn.setAttribute('title', '{% trans "Oluşturuldu — Panoya kopyalandı" %}');
+            setTimeout(function () {
+                icons[0].classList.remove('d-none');
+                icons[1].classList.add('d-none');
+                genBtn.setAttribute('title', '{% trans "Güçlü Parola Oluştur" %}');
+            }, 2000);
+        }
         if (navigator.clipboard) {
-            navigator.clipboard.writeText(pw).then(function () {
-                genBtn.classList.remove('btn-light-primary');
-                genBtn.classList.add('btn-light-success');
-                genBtn.setAttribute('data-orig', genBtn.innerHTML);
-                genBtn.innerHTML = '<i class="ki-outline ki-check fs-4"></i>{% trans "Oluşturuldu — Panoya kopyalandı" %}';
-                setTimeout(function () {
-                    if (genBtn.getAttribute('data-orig')) {
-                        genBtn.innerHTML = genBtn.getAttribute('data-orig');
-                        genBtn.classList.remove('btn-light-success');
-                        genBtn.classList.add('btn-light-primary');
-                    }
-                }, 2500);
-            }).catch(function () {});
+            navigator.clipboard.writeText(pw).then(flashOk).catch(flashOk);
+        } else {
+            flashOk();
         }
     });
 
