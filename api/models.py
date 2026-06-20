@@ -1631,6 +1631,51 @@ class SystemHeartbeat(models.Model):
         return obj
 
 
+class SetupState(models.Model):
+    """İlk kurulum sihirbazı durumu — singleton (pk=1), SystemSwitch deseni.
+
+    Yeni bir kurulumda dashboard kullanıcıyı bir kurulum sihirbazıyla karşılar
+    (tesis bilgileri + SAIS kabin kaydı + web/sensör ayarlarına yönlendirme).
+    Sihirbaz tamamlanınca `completed=True` damgalanır ve bir daha otomatik
+    açılmaz. Yönetici header'daki "Kurulum Sihirbazı" butonuyla istediği zaman
+    yeniden açabilir (önizleme/yeniden yapılandırma).
+    """
+
+    completed = models.BooleanField(
+        default=False, verbose_name="Kurulum Tamamlandı",
+        help_text="Kurulum sihirbazı en az bir kez tamamlandı mı?",
+    )
+    completed_at = models.DateTimeField(
+        blank=True, null=True, verbose_name="Tamamlanma Zamanı",
+    )
+    completed_by = models.ForeignKey(
+        "users.CustomUser", on_delete=models.SET_NULL,
+        blank=True, null=True, related_name="+",
+        verbose_name="Tamamlayan",
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Güncelleme")
+
+    class Meta:
+        db_table = "setup_state"
+        verbose_name = "Kurulum Durumu"
+        verbose_name_plural = "Kurulum Durumu"
+
+    def __str__(self):
+        return "Tamamlandı" if self.completed else "Bekliyor"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # singleton
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass  # singleton — silinmez
+
+    @classmethod
+    def load(cls):
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj
+
+
 # ---------------------------------------------------------------------------
 # Web erişim ayarları (domain + SSL) — Caddy reverse proxy ile yönetilir
 # ---------------------------------------------------------------------------
