@@ -87,6 +87,12 @@ urlpatterns = [
     path("admin-pages/web-settings/", views.WebSettingsView.as_view(),
          name="admin_web_settings"),
     path("admin-pages/mimic/", views.MimicDashboardView.as_view(), name="admin_mimic"),
+    # Standalone (iskeletsiz, yeni sekme) mimik editör + görüntüleyici
+    path("admin-pages/mimic/editor/", views.MimicEditorView.as_view(), name="mimic_editor_new"),
+    path("admin-pages/mimic/editor/<int:pk>/", views.MimicEditorView.as_view(),
+         name="mimic_editor_edit"),
+    path("admin-pages/mimic/viewer/<int:pk>/", views.MimicViewerView.as_view(),
+         name="mimic_viewer"),
     path("admin-pages/notifications/", views.NotificationCenterView.as_view(),
          name="admin_notifications"),
 
@@ -112,6 +118,12 @@ urlpatterns = [
 
     # --- AJAX API (Kabin İzleme / SCADA mimik) ---
     path("api/mimic/state/", api_views.mimic_state, name="api_mimic_state"),
+
+    # --- AJAX API (Mimik Tasarım Editörü) ---
+    path("api/mimic/list/", api_views.mimic_screen_list, name="api_mimic_list"),
+    path("api/mimic/get/", api_views.mimic_screen_get, name="api_mimic_get"),
+    path("api/mimic/save/", api_views.mimic_screen_save, name="api_mimic_save"),
+    path("api/mimic/delete/", api_views.mimic_screen_delete, name="api_mimic_delete"),
 
     # --- AJAX API (raporlar) ---
     path("api/parameters/", api_views.station_parameters, name="api_station_parameters"),

@@ -1,757 +1,177 @@
 {% extends "dashboard/base.html" %}
 {% load i18n static dashboard_extras %}
 
-{% block title %}{% trans "Kabin İzleme" %}{% endblock %}
-{% block page_title %}{% trans "Kabin İzleme" %}{% endblock %}
+{% block title %}{% trans "Mimik Tasarımları" %}{% endblock %}
+{% block page_title %}{% trans "Mimik Tasarımları" %}{% endblock %}
 
 {% block extra_head %}
 <style>
-    /* ----------------------------- FOUC ----------------------------- */
-    #kt_app_content_container { opacity: 0; }
-    body.page-ready #kt_app_content_container { opacity: 1; transition: opacity 0.18s ease-in-out; }
-
-    /* --------------------------- Scene shell ------------------------ */
-    .mimic-stage {
-        position: relative;
+    .mimic-card { transition: box-shadow .15s ease, transform .15s ease; }
+    .mimic-card:hover { box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.12); transform: translateY(-2px); }
+    .mimic-thumb {
+        height: 170px; border-radius: .65rem .65rem 0 0; overflow: hidden;
         background:
-            radial-gradient(1200px 500px at 50% -10%, rgba(0,184,217,.06), transparent 60%),
-            var(--bs-body-bg);
-        border-radius: .75rem;
-        overflow: hidden;
+            linear-gradient(45deg, rgba(0,0,0,.03) 25%, transparent 25%, transparent 75%, rgba(0,0,0,.03) 75%) 0 0/22px 22px,
+            linear-gradient(45deg, rgba(0,0,0,.03) 25%, transparent 25%, transparent 75%, rgba(0,0,0,.03) 75%) 11px 11px/22px 22px,
+            var(--bs-gray-100);
+        display: flex; align-items: center; justify-content: center;
     }
-    .mimic-svg { width: 100%; height: auto; display: block; user-select: none; }
-    .mimic-stage.is-maint .mimic-svg { filter: grayscale(.7) brightness(.9); }
-    .mimic-stage.is-offline .mimic-svg { filter: grayscale(.4) opacity(.85); }
-
-    /* --------------------------- Pipes / flow ----------------------- */
-    .pipe { fill: none; stroke: var(--bs-gray-400); stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; }
-    .pipe-edge { fill: none; stroke: var(--bs-gray-500); stroke-width: 13; stroke-linecap: round; stroke-linejoin: round; opacity: .35; }
-    .flow-line {
-        fill: none; stroke: #00b8d9; stroke-width: 6; stroke-linecap: round;
-        stroke-dasharray: 2 16; opacity: 0; transition: opacity .4s ease;
+    .mimic-thumb img { width: 100%; height: 100%; object-fit: contain; }
+    .mimic-thumb .empty-ico { opacity: .35; }
+    .new-card {
+        border: 2px dashed var(--bs-gray-300); border-radius: .85rem; min-height: 280px;
+        display: flex; align-items: center; justify-content: center; cursor: pointer;
+        transition: border-color .15s, background .15s;
     }
-    .flow-line.flowing { opacity: .95; animation: dash 0.7s linear infinite; }
-    .flow-line.wash.flowing { stroke: #7239ea; }
-    @keyframes dash { to { stroke-dashoffset: -36; } }
-
-    /* ------------------------------ Pumps --------------------------- */
-    .pump-body { fill: var(--bs-body-bg); stroke: var(--bs-gray-500); stroke-width: 3; }
-    .pump .pump-ring { fill: none; stroke: var(--bs-gray-400); stroke-width: 4; }
-    .pump .rotor { transform-box: fill-box; transform-origin: center; }
-    .pump.running .rotor { animation: spin 1.1s linear infinite; }
-    .pump.running .pump-ring { stroke: #50cd89; }
-    .pump.running .pump-hub { fill: #50cd89; }
-    .pump .pump-hub { fill: var(--bs-gray-400); transition: fill .3s; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ------------------------------ Valves -------------------------- */
-    .valve .vbody { fill: var(--bs-gray-300); stroke: var(--bs-gray-600); stroke-width: 2; transition: fill .3s; }
-    .valve.open .vbody { fill: #50cd89; }
-    .valve.closed .vbody { fill: var(--bs-gray-300); }
-    .valve .vstem { stroke: var(--bs-gray-600); stroke-width: 3; }
-
-    /* ------------------------ Flow-cell column ---------------------- */
-    .col-glass { fill: rgba(120,180,210,.10); stroke: var(--bs-gray-500); stroke-width: 3; }
-    .col-liquid { fill: #00b8d9; opacity: .35; transition: y .6s ease, height .6s ease, fill .4s; }
-    .col-liquid.washing { fill: #7239ea; }
-    .col-wave { stroke: #00b8d9; stroke-width: 2.5; fill: none; opacity: .6; }
-    .col-wave.washing { stroke: #7239ea; }
-    .mimic-stage .col-wave-grp { animation: bob 3.5s ease-in-out infinite; }
-    @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-    .probe-line { stroke: var(--bs-gray-500); stroke-width: 3; stroke-dasharray: 4 4; }
-
-    /* ------------------------------ Tank ---------------------------- */
-    .tank-glass { fill: rgba(120,180,210,.08); stroke: var(--bs-gray-500); stroke-width: 3; }
-    .tank-liquid { fill: #00b8d9; opacity: .45; transition: y .8s ease, height .8s ease; }
-
-    /* --------------------------- LCD panels ------------------------- */
-    .lcd-panel { fill: #14202b; stroke: #2b3b49; stroke-width: 2; }
-    .lcd-frame { fill: #0c151c; }
-    .lcd-label { fill: #7fa6b8; font-size: 14px; font-weight: 600; font-family: 'Segoe UI', sans-serif; }
-    .lcd-value { fill: #00e0b8; font-size: 19px; font-weight: 800;
-        font-family: 'Consolas','Courier New',monospace; }
-    .lcd-value.warn { fill: #ffb020; }
-    .lcd-value.bad { fill: #ff5b6e; }
-    .lcd-unit { fill: #5f8294; font-size: 12px; font-weight: 600; }
-    .lcd-title { fill: #cfe3ec; font-size: 14px; font-weight: 700; letter-spacing: .5px; }
-    .lcd-stale { fill: #6b7d89; }
-
-    /* ----------------------------- Labels --------------------------- */
-    .mm-label { fill: var(--bs-gray-700); font-size: 13px; font-weight: 600; font-family: 'Segoe UI', sans-serif; }
-    .mm-sub { fill: var(--bs-gray-500); font-size: 11px; font-family: 'Segoe UI', sans-serif; }
-    .mm-auto { fill: var(--bs-gray-500); font-size: 10.5px; font-style: italic; }
-
-    /* --------------------- PLC / fault lamp ------------------------- */
-    .plc-box { fill: var(--bs-gray-200); stroke: var(--bs-gray-500); stroke-width: 2; }
-    .lamp { stroke: var(--bs-gray-600); stroke-width: 1.5; }
-    .lamp.off  { fill: #3a4750; }
-    .lamp.ok   { fill: #50cd89; }
-    .lamp.warn { fill: #ffb020; }
-    .lamp.fault { fill: #ff5b6e; animation: blink 0.7s steps(1,end) infinite; }
-    @keyframes blink { 50% { fill: #5a1620; } }
-
-    /* --------------------- Clickable controls ----------------------- */
-    .ctl { cursor: pointer; }
-    .ctl:hover .pump-ring, .ctl:hover .vbody { stroke: var(--bs-primary); }
-    .ctl.busy { cursor: progress; opacity: .6; }
-    .no-ctl { cursor: default; }
-
-    /* --------------------- Digital chip strip ----------------------- */
-    .dig-chip {
-        display: inline-flex; align-items: center; gap: .4rem;
-        padding: .35rem .7rem; border-radius: 2rem; font-size: .8rem; font-weight: 600;
-        border: 1px solid var(--bs-gray-300); background: var(--bs-gray-100);
-        color: var(--bs-gray-700);
-    }
-    .dig-chip .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bs-gray-400); }
-    .dig-chip.on { background: rgba(80,205,137,.12); border-color: #50cd89; color: #2a8a5a; }
-    .dig-chip.on .dot { background: #50cd89; box-shadow: 0 0 0 3px rgba(80,205,137,.25); }
-    .dig-chip.absent { opacity: .45; }
-    .dig-chip.ctl { cursor: pointer; }
-    .dig-chip.ctl:hover { border-color: var(--bs-primary); }
-    [data-bs-theme="dark"] .dig-chip.on { color: #6ee0a3; }
-
-    .badge-float { position: absolute; top: 12px; left: 12px; z-index: 5; }
-    .mimic-legend i { font-size: 1.1rem; vertical-align: -2px; }
+    .new-card:hover { border-color: var(--bs-primary); background: var(--bs-primary-bg-subtle, rgba(0,158,247,.06)); }
 </style>
 {% endblock %}
 
 {% block content %}
-{% csrf_token %}
-
-<div class="card mb-5">
-    <div class="card-body py-4">
-        <div class="row g-4 align-items-end">
-            <div class="col-md-5">
-                <label class="form-label fw-semibold">{% trans "Tesis" %}</label>
-                <select id="mm-station" class="form-select" data-control="select2"
-                        data-placeholder='{% trans "Tesis seçiniz" %}'>
-                    {% for s in stations %}
-                        <option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label fw-semibold d-block">{% trans "Veri Kaynağı" %}</label>
-                <div class="form-check form-switch form-check-custom form-check-solid">
-                    <input class="form-check-input" type="checkbox" id="mm-demo" checked>
-                    <label class="form-check-label fw-semibold" for="mm-demo">
-                        {% trans "Demo / Simülasyon" %}
-                    </label>
+<div class="card mb-6">
+    <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-4">
+        <div class="d-flex align-items-center">
+            <span class="symbol symbol-50px me-4">
+                <span class="symbol-label bg-light-primary">
+                    <i class="ki-duotone ki-abstract-26 fs-1 text-primary"><span class="path1"></span><span class="path2"></span></i>
+                </span>
+            </span>
+            <div>
+                <h2 class="fw-bold mb-1">{% trans "SCADA Mimik Tasarım Stüdyosu" %}</h2>
+                <div class="text-muted fs-7">
+                    {% trans "Profesyonel HMI/SCADA mimik ekranları tasarlayın — vana, pompa, tank, enstrüman kütüphanesi, animasyon ve simülasyon. Tasarımlar yeni sekmede tam ekran editörde açılır." %}
                 </div>
-                <div class="text-muted fs-8 mt-1" id="mm-source-hint">
-                    {% trans "Sentetik verilerle animasyon (geliştirme)." %}
-                </div>
-            </div>
-            <div class="col-md-3 text-md-end">
-                <span class="text-muted fs-8 d-block">{% trans "Son güncelleme" %}</span>
-                <span class="fw-bold" id="mm-updated">—</span>
             </div>
         </div>
+        <a href="{% url 'dashboard:mimic_editor_new' %}" target="_blank" rel="noopener"
+           class="btn btn-primary">
+            <i class="ki-duotone ki-plus fs-2"></i>{% trans "Yeni Mimik Oluştur" %}
+        </a>
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body p-0">
-        <div class="mimic-stage" id="mm-stage">
-            <!-- Durum rozetleri -->
-            <div class="badge-float d-flex flex-column gap-2">
-                <span class="badge badge-light-danger d-none" id="mm-badge-offline">
-                    <i class="ki-outline ki-wifi-square fs-7 me-1"></i>{% trans "İletişim Yok" %}
-                </span>
-                <span class="badge badge-light-primary d-none" id="mm-badge-wash">
-                    <i class="ki-outline ki-droplet fs-7 me-1"></i><span id="mm-wash-text">{% trans "Yıkama" %}</span>
-                </span>
-                <span class="badge badge-light-warning d-none" id="mm-badge-sampling">
-                    <i class="ki-outline ki-flask fs-7 me-1"></i><span id="mm-sampling-text">{% trans "Numune Alınıyor" %}</span>
-                </span>
-                <span class="badge badge-light-warning d-none" id="mm-badge-maint">
-                    <i class="ki-outline ki-wrench fs-7 me-1"></i>{% trans "Bakım" %}
-                </span>
+<div class="row g-6" id="mimic-grid">
+    <!-- Yeni kart -->
+    <div class="col-md-6 col-lg-4 col-xl-3">
+        <a href="{% url 'dashboard:mimic_editor_new' %}" target="_blank" rel="noopener"
+           class="new-card text-decoration-none">
+            <div class="text-center">
+                <i class="ki-duotone ki-plus-square fs-3x text-primary mb-3"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                <div class="fw-semibold text-gray-700">{% trans "Boş tuvalde başla" %}</div>
             </div>
+        </a>
+    </div>
 
-            <!-- ====================== SCADA MİMİK SVG ====================== -->
-            <svg class="mimic-svg" viewBox="0 0 1200 720" preserveAspectRatio="xMidYMid meet"
-                 role="img" aria-label="{% trans 'Kabin izleme şeması' %}">
-
-                <!-- ---------- Analizör LCD paneli (HACH sc1000 benzeri) ---------- -->
-                <g id="analyzer-panel">
-                    <rect x="30" y="50" width="300" height="340" rx="14" class="lcd-panel"/>
-                    <rect x="46" y="66" width="268" height="250" rx="8" class="lcd-frame"/>
-                    <text x="60" y="92" class="lcd-title">{% trans "ANALİZÖR" %}</text>
-                    <!-- satırlar JS ile doldurulur; her satır: label / value / unit -->
-                    <g id="an-rows"></g>
-                    <text x="60" y="356" class="mm-sub" style="fill:#5f8294">sc-1000</text>
-                </g>
-
-                <!-- probları analizöre bağlayan hatlar -->
-                <line class="probe-line" x1="330" y1="210" x2="520" y2="250"/>
-                <line class="probe-line" x1="330" y1="245" x2="520" y2="300"/>
-                <line class="probe-line" x1="330" y1="280" x2="520" y2="350"/>
-
-                <!-- ---------- Boru ağı (alt hat + riser + çıkış + yıkama) ---------- -->
-                <!-- Atıksu giriş → pompalar → debimetre → kolon -->
-                <path class="pipe-edge" d="M70 630 H540 V440"/>
-                <path class="pipe" id="pipe-main" d="M70 630 H540 V440"/>
-                <path class="flow-line" data-grp="main" d="M70 630 H540 V440"/>
-
-                <!-- Kolondan atık su çıkışı (üst sağ) -->
-                <path class="pipe-edge" d="M630 200 H760 V120"/>
-                <path class="pipe" d="M630 200 H760 V120"/>
-                <path class="flow-line" data-grp="out" d="M630 200 H760 V120"/>
-
-                <!-- Kolon → yıkama tankı (yıkama hattı) -->
-                <path class="pipe-edge" d="M630 300 H905"/>
-                <path class="pipe" d="M630 300 H905"/>
-                <path class="flow-line wash" data-grp="wash" d="M630 300 H905"/>
-                <!-- Tank → kolon temiz su girişi (ters yıkama) -->
-                <path class="pipe-edge" d="M905 540 H560 V470"/>
-                <path class="pipe" d="M905 540 H560 V470"/>
-                <path class="flow-line wash" data-grp="wash" d="M905 540 H560 V470"/>
-
-                <!-- Tahliye (drain) -->
-                <path class="pipe-edge" d="M590 470 V690 H720"/>
-                <path class="pipe" d="M590 470 V690 H720"/>
-
-                <!-- Atıksu giriş oku -->
-                <g>
-                    <path d="M28 630 h28 m-12 -10 l12 10 l-12 10" fill="none"
-                          stroke="#00b8d9" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <text x="40" y="666" class="mm-sub">{% trans "Atıksu Girişi" %}</text>
-                </g>
-
-                <!-- ---------- Peristaltik pompalar ---------- -->
-                <g id="pump-Pompa1" class="pump ctl" data-code="Pompa1" transform="translate(190,630)">
-                    <circle class="pump-body" r="30"/>
-                    <circle class="pump-ring" r="30"/>
-                    <g class="rotor">
-                        <circle class="pump-hub" r="7"/>
-                        <line x1="0" y1="-7" x2="0" y2="-24" stroke="var(--bs-gray-500)" stroke-width="4" stroke-linecap="round"/>
-                        <line x1="0" y1="7" x2="0" y2="24" stroke="var(--bs-gray-500)" stroke-width="4" stroke-linecap="round"/>
-                        <line x1="-7" y1="0" x2="-24" y2="0" stroke="var(--bs-gray-500)" stroke-width="4" stroke-linecap="round"/>
-                        <line x1="7" y1="0" x2="24" y2="0" stroke="var(--bs-gray-500)" stroke-width="4" stroke-linecap="round"/>
-                    </g>
-                    <text x="0" y="52" text-anchor="middle" class="mm-label">{% trans "Pompa-1" %}</text>
-                    <text x="0" y="68" text-anchor="middle" class="mm-sub" id="pumpspd-Pompa1">{% trans "Durdu" %}</text>
-                </g>
-                <g id="pump-Pompa2" class="pump ctl" data-code="Pompa2" transform="translate(330,630)">
-                    <circle class="pump-body" r="30"/>
-                    <circle class="pump-ring" r="30"/>
-                    <g class="rotor">
-                        <circle class="pump-hub" r="7"/>
-                        <line x1="0" y1="-7" x2="0" y2="-24" stroke="var(--bs-gray-500)" stroke-width="4" stroke-linecap="round"/>
-                        <line x1="0" y1="7" x2="0" y2="24" stroke="var(--bs-gray-500)" stroke-width="4" stroke-linecap="round"/>
-                        <line x1="-7" y1="0" x2="-24" y2="0" stroke="var(--bs-gray-500)" stroke-width="4" stroke-linecap="round"/>
-                        <line x1="7" y1="0" x2="24" y2="0" stroke="var(--bs-gray-500)" stroke-width="4" stroke-linecap="round"/>
-                    </g>
-                    <text x="0" y="52" text-anchor="middle" class="mm-label">{% trans "Pompa-2" %}</text>
-                    <text x="0" y="68" text-anchor="middle" class="mm-sub" id="pumpspd-Pompa2">{% trans "Durdu" %}</text>
-                </g>
-
-                <!-- ---------- Debimetre ---------- -->
-                <g transform="translate(450,630)">
-                    <rect x="-34" y="-22" width="68" height="44" rx="6" class="lcd-panel"/>
-                    <text x="0" y="-2" text-anchor="middle" class="lcd-value" id="flow-value" style="font-size:16px">—</text>
-                    <text x="0" y="14" text-anchor="middle" class="lcd-unit" id="flow-unit">m/sn</text>
-                    <text x="0" y="44" text-anchor="middle" class="mm-label">{% trans "Debimetre" %}</text>
-                </g>
-
-                <!-- ---------- Akış Hücresi kolonu ---------- -->
-                <g id="flowcell">
-                    <text x="590" y="138" text-anchor="middle" class="mm-label">{% trans "Akış Hücresi" %}</text>
-                    <!-- hava tankı -->
-                    <ellipse cx="590" cy="160" rx="42" ry="16" class="col-glass"/>
-                    <!-- gövde -->
-                    <rect x="548" y="160" width="84" height="290" rx="10" class="col-glass"/>
-                    <ellipse cx="590" cy="450" rx="42" ry="16" class="col-glass"/>
-                    <!-- sıvı (yükseklik JS ile) -->
-                    <rect id="col-liquid" class="col-liquid" x="551" y="250" width="78" height="197"/>
-                    <g class="col-wave-grp">
-                        <path id="col-wave" class="col-wave" d="M551 250 q 19 -8 39 0 t 39 0"/>
-                    </g>
-                </g>
-
-                <!-- ---------- Otomatik vanalar ---------- -->
-                <!-- Akış Hücresi Yıkama Vanası -->
-                <g id="valve-Yikama" class="valve" data-code="Yikama" transform="translate(720,300)">
-                    <line class="vstem" x1="0" y1="-18" x2="0" y2="-2"/>
-                    <path class="vbody" d="M-16 -2 L0 8 L16 -2 L16 14 L0 4 L-16 14 Z"/>
-                    <text x="0" y="-26" text-anchor="middle" class="mm-auto">{% trans "Otomatik" %}</text>
-                    <text x="0" y="34" text-anchor="middle" class="mm-sub">{% trans "Yıkama Vanası" %}</text>
-                </g>
-                <!-- Numune alma (manuel) -->
-                <g id="valve-NumuneAlma" class="valve" data-code="NumuneAlma" transform="translate(590,470)">
-                    <path class="vbody" d="M-14 0 L0 9 L14 0 L14 13 L0 4 L-14 13 Z"/>
-                    <text x="26" y="6" class="mm-sub">{% trans "Manuel Numune" %}</text>
-                </g>
-                <!-- Tahliye / Desarj -->
-                <g id="valve-Desarj" class="valve" data-code="Desarj" transform="translate(720,690)">
-                    <path class="vbody" d="M-14 -7 L0 2 L14 -7 L14 6 L0 -3 L-14 6 Z"/>
-                    <text x="0" y="26" text-anchor="middle" class="mm-sub">{% trans "Tahliye" %}</text>
-                    <text x="0" y="-14" text-anchor="middle" class="mm-auto">{% trans "Otomatik" %}</text>
-                </g>
-                <!-- Manuel/Haftalık yıkama göstergesi vanası -->
-                <g id="valve-HaftalikYikama" class="valve" data-code="HaftalikYikama" transform="translate(820,540)">
-                    <path class="vbody" d="M-13 -7 L0 1 L13 -7 L13 5 L0 -3 L-13 5 Z"/>
-                    <text x="0" y="22" text-anchor="middle" class="mm-sub">{% trans "Ters Yıkama" %}</text>
-                </g>
-
-                <!-- ---------- Yıkama Tankı ---------- -->
-                <g id="washtank">
-                    <text x="965" y="412" text-anchor="middle" class="mm-label">{% trans "Yıkama Tankı" %}</text>
-                    <rect x="905" y="430" width="120" height="150" rx="8" class="tank-glass"/>
-                    <rect id="tank-liquid" class="tank-liquid" x="908" y="470" width="114" height="107"/>
-                    <text x="965" y="512" text-anchor="middle" class="lcd-title" id="tank-label"
-                          style="fill:#0b3a44; font-size:18px">{% trans "DOLU" %}</text>
-                </g>
-
-                <!-- ---------- UPS paneli ---------- -->
-                <g id="ups-panel" transform="translate(1055,430)">
-                    <rect x="0" y="0" width="120" height="180" rx="10" class="lcd-panel"/>
-                    <text x="60" y="24" text-anchor="middle" class="lcd-title">UPS</text>
-                    <circle id="ups-lamp" class="lamp off" cx="104" cy="18" r="6"/>
-                    <g class="lcd-label">
-                        <text x="12" y="56">{% trans "Giriş" %}</text>
-                        <text x="12" y="84">{% trans "Çıkış" %}</text>
-                        <text x="12" y="112">{% trans "Yük" %}</text>
-                        <text x="12" y="140">{% trans "Kapasite" %}</text>
-                        <text x="12" y="168">{% trans "Sıcaklık" %}</text>
-                    </g>
-                    <g class="lcd-value" text-anchor="end" style="font-size:15px">
-                        <text x="108" y="56" id="ups-giris">—</text>
-                        <text x="108" y="84" id="ups-cikis">—</text>
-                        <text x="108" y="112" id="ups-yuk">—</text>
-                        <text x="108" y="140" id="ups-kapasite">—</text>
-                        <text x="108" y="168" id="ups-sicaklik">—</text>
-                    </g>
-                </g>
-
-                <!-- ---------- PLC panosu + arıza ışığı ---------- -->
-                <g id="plc-panel" transform="translate(1055,70)">
-                    <rect x="0" y="0" width="120" height="120" rx="10" class="plc-box"/>
-                    <text x="60" y="26" text-anchor="middle" class="mm-label">PLC</text>
-                    <circle class="lamp ok"   cx="30" cy="62" r="10" id="plc-run"/>
-                    <text x="50" y="66" class="mm-sub">RUN</text>
-                    <circle class="lamp off"  cx="30" cy="94" r="10" id="plc-fault"/>
-                    <text x="50" y="98" class="mm-sub">{% trans "ARIZA" %}</text>
-                </g>
-            </svg>
-
-            <!-- ---------- Dijital durum şeridi ---------- -->
-            <div class="px-5 pb-5 pt-2">
-                <div class="d-flex flex-wrap gap-2 mimic-legend" id="mm-digitals"></div>
-                <div class="text-muted fs-8 mt-3" id="mm-ctl-hint">
-                    <i class="ki-outline ki-information-5"></i>
-                    {% if can_control %}
-                        {% trans "Pompa/vana veya çıkış rozetine tıklayarak Başlat/Durdur komutu gönderebilirsiniz." %}
-                    {% else %}
-                        {% trans "Bu rolde komut gönderilemez (salt-izleme)." %}
-                    {% endif %}
+    {% for s in screens %}
+    <div class="col-md-6 col-lg-4 col-xl-3" data-screen-card="{{ s.id }}">
+        <div class="card mimic-card h-100">
+            <a href="{% url 'dashboard:mimic_editor_edit' s.id %}" target="_blank" rel="noopener" class="mimic-thumb">
+                {% if s.thumbnail %}
+                    <img src="{{ s.thumbnail }}" alt="{{ s.name }}">
+                {% else %}
+                    <i class="ki-duotone ki-picture fs-3x empty-ico"><span class="path1"></span><span class="path2"></span></i>
+                {% endif %}
+            </a>
+            <div class="card-body p-4">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div class="me-2 overflow-hidden">
+                        <a href="{% url 'dashboard:mimic_editor_edit' s.id %}" target="_blank" rel="noopener"
+                           class="fw-bold text-gray-900 text-hover-primary d-block text-truncate">{{ s.name }}</a>
+                        <div class="text-muted fs-8 mt-1">
+                            {{ s.width }}×{{ s.height }}px · {{ s.updated_at|date:"d.m.Y H:i" }}
+                            {% if s.is_template %}<span class="badge badge-light-info ms-1">{% trans "Şablon" %}</span>{% endif %}
+                        </div>
+                        {% if s.description %}<div class="text-muted fs-8 text-truncate mt-1">{{ s.description }}</div>{% endif %}
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn btn-icon btn-sm btn-light-secondary" data-bs-toggle="dropdown">
+                            <i class="ki-duotone ki-dots-vertical fs-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end fs-7">
+                            <a class="dropdown-item" target="_blank" rel="noopener"
+                               href="{% url 'dashboard:mimic_editor_edit' s.id %}">
+                                <i class="ki-duotone ki-pencil fs-5 me-2"><span class="path1"></span><span class="path2"></span></i>{% trans "Düzenle" %}</a>
+                            <a class="dropdown-item" target="_blank" rel="noopener"
+                               href="{% url 'dashboard:mimic_viewer' s.id %}">
+                                <i class="ki-duotone ki-eye fs-5 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>{% trans "Görüntüle / Simüle Et" %}</a>
+                            <a class="dropdown-item js-mimic-download" href="#" data-id="{{ s.id }}" data-name="{{ s.name }}">
+                                <i class="ki-duotone ki-file-down fs-5 me-2"><span class="path1"></span><span class="path2"></span></i>{% trans "JSON İndir" %}</a>
+                            <div class="separator my-2"></div>
+                            <a class="dropdown-item text-danger js-mimic-delete" href="#"
+                               data-id="{{ s.id }}" data-name="{{ s.name }}" {% if s.is_template %}data-template="1"{% endif %}>
+                                <i class="ki-duotone ki-trash fs-5 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>{% trans "Sil" %}</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mt-4">
+                    <a href="{% url 'dashboard:mimic_editor_edit' s.id %}" target="_blank" rel="noopener"
+                       class="btn btn-sm btn-light-primary flex-grow-1">
+                        <i class="ki-duotone ki-pencil fs-4"><span class="path1"></span><span class="path2"></span></i>{% trans "Düzenle" %}</a>
+                    <a href="{% url 'dashboard:mimic_viewer' s.id %}" target="_blank" rel="noopener"
+                       class="btn btn-sm btn-light-success">
+                        <i class="ki-duotone ki-eye fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i></a>
                 </div>
             </div>
         </div>
     </div>
+    {% endfor %}
 </div>
+
+{% if not screens %}
+<div class="text-center text-muted py-10" id="empty-hint">
+    <i class="ki-duotone ki-abstract-26 fs-4x opacity-25 mb-3"><span class="path1"></span><span class="path2"></span></i>
+    <div>{% trans "Henüz mimik tasarımı yok. Yukarıdaki “Yeni Mimik Oluştur” ile ilk ekranınızı tasarlayın." %}</div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
 (function () {
-    "use strict";
-
-    const URL_STATE = "{% url 'dashboard:api_mimic_state' %}";
-    const URL_CMD   = "{% url 'dashboard:api_digital_command' %}";
-    const CAN_CONTROL = {{ can_control|yesno:"true,false" }};
-
-    const I18N = {
-        running: "{% trans 'Çalışıyor' %}",
-        stopped: "{% trans 'Durdu' %}",
-        noData: "{% trans 'veri yok' %}",
-        empty: "{% trans 'DOLU' %}",
-        low: "{% trans 'BOŞ' %}",
-        wash: "{% trans 'Yıkama' %}",
-        weeklyWash: "{% trans 'Haftalık Yıkama' %}",
-        stationMaint: "{% trans 'İstasyon Bakımda' %}",
-        facilityMaint: "{% trans 'Tesis Bakımda' %}",
-        sampling: "{% trans 'Numune Alınıyor' %}",
-        ministrySampling: "{% trans 'Bakanlık Numunesi' %}",
-        confirmStart: "{% trans 'Başlatılsın mı?' %}",
-        confirmStop: "{% trans 'Durdurulsun mu?' %}",
-        demoNoCmd: "{% trans 'Demo modunda komut gönderilmez.' %}",
-        cmdFail: "{% trans 'Komut gönderilemedi.' %}",
-        netError: "{% trans 'Ağ hatası.' %}",
-        selectStation: "{% trans 'Önce bir tesis seçin.' %}",
-        sec: "{% trans 'sn' %}",
-    };
-
-    const ANALYZERS = ["pH", "CozunmusOksijen", "Iletkenlik", "KOi", "AKM", "Sicaklik", "KabinSicaklik"];
-    // Demo için statik meta (canlı modda endpoint'ten gelir)
-    const DEMO_META = {
-        pH:             {name: "pH", unit: "pH", base: 6.84, amp: 0.25, gmin: 6, gmax: 9, dec: 2},
-        CozunmusOksijen:{name: "Oksijen", unit: "mg/L", base: 5.03, amp: 0.6, gmin: 0, gmax: 100, dec: 2},
-        Iletkenlik:     {name: "İletkenlik", unit: "µS/cm", base: 952, amp: 38, gmin: 0, gmax: 100000, dec: 0},
-        KOi:            {name: "KOİ", unit: "mg/L", base: 40.5, amp: 8, gmin: 0, gmax: 125, dec: 1},
-        AKM:            {name: "AKM", unit: "mg/L", base: 18.6, amp: 4, gmin: 0, gmax: 35, dec: 2},
-        Sicaklik:       {name: "Sıcaklık", unit: "°C", base: 26.5, amp: 1.4, gmin: 0, gmax: 100, dec: 2},
-        KabinSicaklik:  {name: "Dolap Sıc.", unit: "°C", base: 3.0, amp: 0.6, gmin: -40, gmax: 100, dec: 1},
-    };
-
-    const $ = (id) => document.getElementById(id);
-    const stage = $("mm-stage");
-    const demoChk = $("mm-demo");
-    const stationSel = $("mm-station");
-    const sourceHint = $("mm-source-hint");
-
-    let timer = null;
-    const pendingDO = {};      // sensor_id -> {expected, ts}
-    const demoOverride = {};   // demo modunda tıkla-toggle (code -> bool)
-
-    function csrf() {
-        const el = document.querySelector('[name=csrfmiddlewaretoken]');
-        return el ? el.value : "";
+    function getCookie(name) {
+        const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+        return v ? v.pop() : '';
     }
-    function stationId() {
-        const v = stationSel && stationSel.value;
-        return v ? parseInt(v, 10) : null;
-    }
-    function fmt(v, dec) {
-        if (v === null || v === undefined || isNaN(v)) return "—";
-        return Number(v).toLocaleString("tr-TR", {minimumFractionDigits: dec, maximumFractionDigits: dec});
-    }
+    const CSRF = getCookie('csrftoken');
 
-    // ----------------------- Analizör satırları (bir kez) ----------------------
-    function buildAnalyzerRows() {
-        const g = $("an-rows");
-        const NS = "http://www.w3.org/2000/svg";
-        const startY = 118, step = 31;
-        ANALYZERS.forEach((code, i) => {
-            const y = startY + i * step;
-            const meta = DEMO_META[code] || {name: code, unit: ""};
-            const lbl = document.createElementNS(NS, "text");
-            lbl.setAttribute("x", 62); lbl.setAttribute("y", y);
-            lbl.setAttribute("class", "lcd-label"); lbl.textContent = meta.name;
-            const val = document.createElementNS(NS, "text");
-            val.setAttribute("x", 244); val.setAttribute("y", y);
-            val.setAttribute("text-anchor", "end");
-            val.setAttribute("class", "lcd-value"); val.setAttribute("id", "an-" + code);
-            val.textContent = "—";
-            const unit = document.createElementNS(NS, "text");
-            unit.setAttribute("x", 250); unit.setAttribute("y", y);
-            unit.setAttribute("class", "lcd-unit"); unit.setAttribute("id", "anu-" + code);
-            unit.textContent = meta.unit || "";
-            g.appendChild(lbl); g.appendChild(val); g.appendChild(unit);
+    // JSON indir
+    document.querySelectorAll('.js-mimic-download').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+            e.preventDefault();
+            const id = a.dataset.id, name = a.dataset.name || 'mimik';
+            fetch('{% url "dashboard:api_mimic_get" %}?id=' + id, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(r => r.json())
+                .then(d => {
+                    if (!d.ok) { alert(d.error || 'Hata'); return; }
+                    const blob = new Blob([JSON.stringify(d.screen, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = name.replace(/[^\w\-]+/g, '_') + '.mimic.json';
+                    link.click();
+                    URL.revokeObjectURL(url);
+                });
         });
-    }
+    });
 
-    // ============================ DEMO STATE ============================
-    function demoState() {
-        const t = Date.now() / 1000;
-        const sin = (p) => Math.sin(t * 0.5 + p);
-        const washOn = (Date.now() % 60000) < 14000;     // her dakika ~14 sn yıkama
-        const p2 = ("Pompa2" in demoOverride) ? demoOverride.Pompa2 : true;
-        const p1 = ("Pompa1" in demoOverride) ? demoOverride.Pompa1 : false;
-
-        const analyzers = ANALYZERS.map((code, i) => {
-            const m = DEMO_META[code];
-            const value = m.base + m.amp * sin(i);
-            return {code, name: m.name, value, unit: m.unit, gec_min: m.gmin, gec_max: m.gmax,
-                    dec: m.dec, status_code: 1, stale: false, present: true};
-        });
-
-        const dig = (code, on, ctl) => ({code, name: code, present: true, is_active: on,
-            sensor_id: null, sensor_type: ctl ? 3 : 2, controllable: !!ctl, status_code: 1, stale: false});
-
-        return {
-            ok: true, online: true, demo: true,
-            analyzers,
-            flow: {code: "AkisHizi", value: 0.49 + 0.05 * sin(2), unit: "m/sn", stale: false, present: true},
-            digitals: [
-                dig("Pompa1", p1, true), dig("Pompa2", p2, true),
-                dig("Yikama", washOn, true), dig("HaftalikYikama", false, true),
-                dig("NumuneAlma", false, true), dig("Desarj", false, true),
-                dig("Bakim", false, false), dig("Ups", true, false),
-                dig("Enerji", true, false), dig("Kapi", false, false),
-            ],
-            wash: {active: washOn, kind: "manual", status_code: 23,
-                   remaining_seconds: washOn ? 14 - Math.floor((Date.now() % 60000) / 1000) : null},
-            sampling: {active: false, is_ministry: false, step: null},
-            fault: {comm_error: false, any_status_8: false, no_connection: false},
-            ups: {giris: 219, cikis: 219, yuk: 6, kapasite: 100, sicaklik: 29, active: true},
-        };
-    }
-
-    // ============================ RENDER ============================
-    function setText(id, txt) { const el = $(id); if (el) el.textContent = txt; }
-
-    function render(s) {
-        const offline = !s.online || (s.fault && s.fault.comm_error);
-        const maint = (s.digitals || []).some(d => (d.code === "Bakim" || d.code === "TesisBakimda"
-            || d.code === "İstasyonBakimda") && d.is_active);
-
-        stage.classList.toggle("is-offline", !!offline);
-        stage.classList.toggle("is-maint", !!maint && !offline);
-
-        // ---- Analizörler ----
-        (s.analyzers || []).forEach(a => {
-            const valEl = $("an-" + a.code);
-            if (!valEl) return;
-            const dec = (a.dec !== undefined) ? a.dec : 2;
-            if (a.value === null || a.value === undefined || a.stale) {
-                valEl.textContent = a.stale && a.present ? "···" : "—";
-                valEl.setAttribute("class", "lcd-value lcd-stale");
-            } else {
-                valEl.textContent = fmt(a.value, dec);
-                let cls = "lcd-value";
-                if (a.gec_min !== null && a.gec_max !== null && a.gec_min !== undefined && a.gec_max !== undefined) {
-                    if (a.value < a.gec_min || a.value > a.gec_max) cls = "lcd-value bad";
-                }
-                if (a.status_code === 8) cls = "lcd-value bad";
-                valEl.setAttribute("class", cls);
-            }
-            if (a.unit) setText("anu-" + a.code, a.unit);
-        });
-
-        // ---- Debimetre ----
-        if (s.flow) {
-            setText("flow-value", (s.flow.value === null || s.flow.stale) ? "—" : fmt(s.flow.value, 2));
-            if (s.flow.unit) setText("flow-unit", s.flow.unit);
-        }
-
-        // ---- Dijitaller index ----
-        const byCode = {};
-        (s.digitals || []).forEach(d => { byCode[d.code] = d; });
-        const isOn = (code) => byCode[code] && byCode[code].is_active === true;
-
-        // ---- Pompalar ----
-        ["Pompa1", "Pompa2"].forEach(code => {
-            const g = $("pump-" + code);
-            const d = byCode[code];
-            const on = isOn(code) && !offline;
-            if (g) g.classList.toggle("running", !!on);
-            setText("pumpspd-" + code, on ? I18N.running : I18N.stopped);
-            // komut/kontrol bağla
-            if (g) wireControl(g, d);
-        });
-
-        // ---- Vanalar ----
-        [["valve-Yikama", "Yikama"], ["valve-NumuneAlma", "NumuneAlma"],
-         ["valve-Desarj", "Desarj"], ["valve-HaftalikYikama", "HaftalikYikama"]].forEach(([eid, code]) => {
-            const g = $(eid);
-            if (!g) return;
-            const open = isOn(code) && !offline;
-            g.classList.toggle("open", !!open);
-            g.classList.toggle("closed", !open);
-            wireControl(g, byCode[code]);
-        });
-
-        // ---- Akış animasyonu ----
-        const pumpRunning = (isOn("Pompa1") || isOn("Pompa2")) && !offline && !maint;
-        const washing = s.wash && s.wash.active && !offline;
-        document.querySelectorAll(".flow-line").forEach(fl => {
-            const grp = fl.getAttribute("data-grp");
-            let active = false;
-            if (grp === "main" || grp === "out") active = pumpRunning;
-            else if (grp === "wash") active = washing;
-            fl.classList.toggle("flowing", active);
-        });
-
-        // ---- Kolon sıvısı / yıkama ----
-        const liquid = $("col-liquid"), wave = $("col-wave");
-        const COL_TOP = 165, COL_BOT = 447;
-        let fillFrac = pumpRunning ? 0.7 : 0.45;
-        if (washing) fillFrac = 0.9;
-        const topY = COL_BOT - (COL_BOT - COL_TOP) * fillFrac;
-        if (liquid) {
-            liquid.setAttribute("y", topY);
-            liquid.setAttribute("height", COL_BOT - topY);
-            liquid.classList.toggle("washing", !!washing);
-        }
-        if (wave) {
-            wave.setAttribute("d", `M551 ${topY} q 19 -8 39 0 t 39 0`);
-            wave.classList.toggle("washing", !!washing);
-        }
-
-        // ---- Yıkama tankı seviyesi ----
-        const tank = $("tank-liquid"), tlabel = $("tank-label");
-        const TANK_TOP = 433, TANK_BOT = 577;
-        // yıkama sırasında tank boşalır
-        const tankFrac = washing ? 0.25 : 0.92;
-        const tTopY = TANK_BOT - (TANK_BOT - TANK_TOP) * tankFrac;
-        if (tank) { tank.setAttribute("y", tTopY); tank.setAttribute("height", TANK_BOT - tTopY); }
-        if (tlabel) tlabel.textContent = tankFrac > 0.5 ? I18N.empty : I18N.low;
-
-        // ---- UPS ----
-        const ups = s.ups;
-        if (ups) {
-            setText("ups-giris", ups.giris != null ? ups.giris + " V" : "—");
-            setText("ups-cikis", ups.cikis != null ? ups.cikis + " V" : "—");
-            setText("ups-yuk", ups.yuk != null ? ups.yuk + " %" : "—");
-            setText("ups-kapasite", ups.kapasite != null ? ups.kapasite + " %" : "—");
-            setText("ups-sicaklik", ups.sicaklik != null ? ups.sicaklik + " °C" : "—");
-            const lamp = $("ups-lamp");
-            if (lamp) lamp.setAttribute("class", "lamp " + (isOn("Ups") || ups.active ? "ok" : "off"));
-        } else {
-            ["ups-giris","ups-cikis","ups-yuk","ups-kapasite","ups-sicaklik"].forEach(id => setText(id, "—"));
-            const lamp = $("ups-lamp");
-            if (lamp) lamp.setAttribute("class", "lamp " + (isOn("Ups") ? "ok" : "off"));
-        }
-
-        // ---- PLC arıza ışığı ----
-        const fault = $("plc-fault"), run = $("plc-run");
-        const commErr = s.fault && (s.fault.comm_error || s.fault.no_connection);
-        if (fault) fault.setAttribute("class", "lamp " + (commErr ? "fault" : (s.fault && s.fault.any_status_8 ? "warn" : "off")));
-        if (run) run.setAttribute("class", "lamp " + (offline ? "off" : "ok"));
-
-        // ---- Rozetler ----
-        toggle("mm-badge-offline", !!commErr);
-        toggle("mm-badge-maint", !!maint && !commErr);
-        const w = s.wash && s.wash.active;
-        toggle("mm-badge-wash", !!w);
-        if (w) {
-            const rem = s.wash.remaining_seconds;
-            const KIND_TXT = {
-                weekly: I18N.weeklyWash,
-                station_maint: I18N.stationMaint,
-                facility_maint: I18N.facilityMaint,
-            };
-            const kindTxt = KIND_TXT[s.wash.kind] || I18N.wash;
-            setText("mm-wash-text", kindTxt + (rem ? " · " + rem + " " + I18N.sec : ""));
-        }
-        const sm = s.sampling && s.sampling.active;
-        toggle("mm-badge-sampling", !!sm);
-        if (sm) setText("mm-sampling-text", s.sampling.is_ministry ? I18N.ministrySampling : I18N.sampling);
-
-        // ---- Dijital şerit ----
-        renderDigitalStrip(s.digitals || [], offline);
-
-        setText("mm-updated", new Date().toLocaleTimeString("tr-TR"));
-    }
-
-    function toggle(id, on) { const el = $(id); if (el) el.classList.toggle("d-none", !on); }
-
-    function renderDigitalStrip(digitals, offline) {
-        const wrap = $("mm-digitals");
-        wrap.innerHTML = "";
-        digitals.forEach(d => {
-            const chip = document.createElement("span");
-            const on = d.is_active === true && !offline;
-            const ctl = CAN_CONTROL && d.controllable && d.sensor_id;
-            chip.className = "dig-chip" + (on ? " on" : "") + (d.present ? "" : " absent") + (ctl ? " ctl" : "");
-            chip.innerHTML = `<span class="dot"></span>${escapeHtml(d.name || d.code)}`;
-            if (ctl) {
-                chip.dataset.sid = d.sensor_id;
-                chip.dataset.code = d.code;
-                chip.dataset.on = on ? "1" : "0";
-                chip.addEventListener("click", () => onControlClick({sensor_id: d.sensor_id, code: d.code, is_active: on}));
-            } else if (demoChk.checked && d.controllable) {
-                chip.classList.add("ctl");
-                chip.addEventListener("click", () => demoToggle(d.code));
-            }
-            wrap.appendChild(chip);
-        });
-    }
-
-    function escapeHtml(s) {
-        return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
-            ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-    }
-
-    // ---- SVG eleman (pompa/vana) kontrol bağlama ----
-    function wireControl(el, d) {
-        el.onclick = null;
-        el.classList.remove("ctl"); el.classList.add("no-ctl");
-        if (demoChk.checked && d && d.controllable) {
-            el.classList.add("ctl"); el.classList.remove("no-ctl");
-            el.onclick = () => demoToggle(d.code);
-            return;
-        }
-        if (CAN_CONTROL && d && d.controllable && d.sensor_id) {
-            el.classList.add("ctl"); el.classList.remove("no-ctl");
-            el.onclick = () => onControlClick(d);
-        }
-    }
-
-    function demoToggle(code) {
-        const cur = (code in demoOverride) ? demoOverride[code]
-                    : (code === "Pompa2");   // demo varsayılanı
-        demoOverride[code] = !cur;
-        refresh();
-    }
-
-    async function onControlClick(d) {
-        if (!CAN_CONTROL || !d.sensor_id) return;
-        const action = d.is_active ? "stop" : "start";
-        const msg = action === "start" ? I18N.confirmStart : I18N.confirmStop;
-        if (!window.confirm((d.name || d.code) + " — " + msg)) return;
-        pendingDO[d.sensor_id] = {expected: action === "start", ts: Date.now()};
-        try {
-            const r = await fetch(URL_CMD, {
-                method: "POST", credentials: "same-origin",
-                headers: {"Content-Type": "application/json", "X-CSRFToken": csrf()},
-                body: JSON.stringify({sensor_id: d.sensor_id, action}),
+    // Sil
+    document.querySelectorAll('.js-mimic-delete').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (a.dataset.template) { alert('{% trans "Yerleşik şablon silinemez." %}'); return; }
+            const id = a.dataset.id, name = a.dataset.name || '';
+            if (!confirm('{% trans "Bu mimik tasarımını silmek istediğinize emin misiniz?" %}\n\n' + name)) return;
+            fetch('{% url "dashboard:api_mimic_delete" %}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+                body: JSON.stringify({ id: id })
+            }).then(r => r.json()).then(d => {
+                if (!d.ok) { alert(d.error || 'Hata'); return; }
+                const card = document.querySelector('[data-screen-card="' + id + '"]');
+                if (card) card.remove();
             });
-            const j = await r.json().catch(() => ({}));
-            if (!r.ok || !j.ok) {
-                delete pendingDO[d.sensor_id];
-                alert(j.error || j.message || I18N.cmdFail);
-            }
-        } catch (e) {
-            delete pendingDO[d.sensor_id];
-            alert(I18N.netError);
-        }
-        refresh();
-    }
-
-    // ============================ POLLING ============================
-    async function refresh() {
-        if (demoChk.checked) { render(demoState()); return; }
-        const sid = stationId();
-        if (!sid) { return; }
-        try {
-            const r = await fetch(URL_STATE + "?station=" + sid, {credentials: "same-origin"});
-            const s = await r.json();
-            if (s && s.ok) render(s);
-        } catch (e) { /* sessiz geç — bir sonraki tick dener */ }
-    }
-
-    function restart() {
-        if (timer) clearInterval(timer);
-        refresh();
-        timer = setInterval(refresh, 4000);
-    }
-
-    function updateSourceHint() {
-        sourceHint.textContent = demoChk.checked
-            ? "{% trans 'Sentetik verilerle animasyon (geliştirme).' %}"
-            : "{% trans 'Tesisten canlı veri (parametre koduyla eşlenir).' %}";
-    }
-
-    // ============================ INIT ============================
-    function init() {
-        buildAnalyzerRows();
-        updateSourceHint();
-        demoChk.addEventListener("change", () => { updateSourceHint(); restart(); });
-        // select2 (Metronic auto-init) + change
-        if (window.jQuery && window.jQuery.fn.select2) {
-            window.jQuery(stationSel).on("change", restart);
-        } else {
-            stationSel.addEventListener("change", restart);
-        }
-        restart();
-        revealContent();
-    }
-
-    function revealContent() {
-        if (document.body.classList.contains("page-ready")) return;
-        requestAnimationFrame(() => document.body.classList.add("page-ready"));
-    }
-
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", init);
-    } else {
-        init();
-    }
-    setTimeout(revealContent, 1200);  // failsafe
+        });
+    });
 })();
 </script>
 {% endblock %}

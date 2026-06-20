@@ -873,28 +873,62 @@ class CalibrationWizardView(OperatorRequiredMixin, TemplateView):
         return ctx
 
 
-class MimicDashboardView(AdminRequiredMixin, TemplateView):
-    """Yönetici → Kabin İzleme (interaktif SCADA mimik — test/geliştirme).
+class MimicDashboardView(AdminRequiredMixin, ListView):
+    """Yönetici → Mimik Tasarımları (galeri).
 
-    Örnek "Kabin İzleme" panosunun animasyonlu replikası: analizör paneli,
-    peristaltik pompalar, akış hücresi kolonu, yıkama tankı, UPS, debimetre,
-    vanalar. Canlı durum `dashboard:api_mimic_state`'ten ~4 sn'de bir çekilir
-    (parametre koduyla eşlenir); "Demo/Simülasyon" anahtarı açıkken sayfa
-    sentetik değerlerle animasyonları canlandırır. Pompa/vanaya tıklayınca
-    mevcut `digital_output_command` ile Başlat/Durdur komutu kuyruğa atılır.
+    Kullanıcının oluşturduğu SCADA/HMI mimik ekranlarının galeri görünümü.
+    Her kart bir tasarımın önizlemesini (`thumbnail`) + ad/tarih bilgisini ve
+    aksiyonları (Düzenle / Görüntüle / İndir / Sil) gösterir. "Yeni Mimik" ve
+    tasarım kartları **yeni sekmede** standalone editör/görüntüleyiciyi açar
+    (`MimicEditorView` / `MimicViewerView` — dashboard iskeleti olmadan, tam
+    ekran HMI tasarım ortamı).
 
-    İlk sürüm rol=1 (yönetici) altında test amaçlı; beğenilirse ikinci dashboard
-    olarak sunulacak.
+    Editör SCADA'ya bağlı değildir (bu faz); tasarımlar `MimicScreen` olarak
+    saklanır, simüle edilebilir, JSON/PNG/SVG olarak dışa aktarılabilir.
     """
     template_name = "dashboard/admin_pages/mimic.html"
+    context_object_name = "screens"
+
+    def get_queryset(self):
+        from .models import MimicScreen
+        return MimicScreen.objects.select_related("created_by").order_by("-updated_at")
+
+
+class MimicEditorView(AdminRequiredMixin, TemplateView):
+    """Standalone tam-ekran mimik tasarım editörü (Fabric.js).
+
+    Dashboard iskeleti (header/sidebar) **olmadan** kendi tasarım ortamı
+    chrome'uyla render eder; galeriden yeni sekmede açılır. `pk` verilirse o
+    mimik düzenleme modunda yüklenir, yoksa boş tuval.
+    """
+    template_name = "dashboard/mimic/editor.html"
 
     def get_context_data(self, **kwargs):
+        from .models import MimicScreen
         ctx = super().get_context_data(**kwargs)
-        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
-        ctx["default_station_id"] = default_station_id()
-        # Dijital çıkış Start/Stop yetkisi (HomeView ile aynı bayrak); sunucu
-        # tarafında digital_output_command _require_operator ile ayrıca doğrular.
-        ctx["can_control"] = user_has_role(self.request.user, 1, 2)
+        pk = self.kwargs.get("pk")
+        screen = MimicScreen.objects.filter(pk=pk).first() if pk else None
+        ctx["screen"] = screen
+        return ctx
+
+
+class MimicViewerView(RoleRequiredMixin, TemplateView):
+    """Standalone tam-ekran mimik görüntüleyici / simülatör (salt-okunur).
+
+    Kaydedilmiş bir mimiği render edip simülasyon modunda animasyonları
+    canlandırır; düzenleme araçları yoktur. Yeni sekmede açılır; her rol
+    görüntüleyebilir.
+    """
+    template_name = "dashboard/mimic/viewer.html"
+
+    def get_context_data(self, **kwargs):
+        from django.http import Http404
+        from .models import MimicScreen
+        ctx = super().get_context_data(**kwargs)
+        screen = MimicScreen.objects.filter(pk=self.kwargs.get("pk")).first()
+        if screen is None:
+            raise Http404("Mimik bulunamadı.")
+        ctx["screen"] = screen
         return ctx
 
 

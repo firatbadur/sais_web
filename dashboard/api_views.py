@@ -3109,3 +3109,124 @@ def setup_save(request):
     })
 
 
+# --------------------------------------------------------------------------- #
+# Mimik Tasarım Editörü (MimicScreen) — CRUD AJAX endpoint'leri
+# --------------------------------------------------------------------------- #
+
+@login_required
+def mimic_screen_list(request):
+    """Kayıtlı mimik tasarımlarının listesi (galeri + editör 'Aç' diyaloğu)."""
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    from dashboard.models import MimicScreen
+
+    items = [{
+        "id": m.id,
+        "name": m.name,
+        "description": m.description,
+        "width": m.width,
+        "height": m.height,
+        "is_template": m.is_template,
+        "thumbnail": m.thumbnail,
+        "updated_at": timezone.localtime(m.updated_at).strftime("%d.%m.%Y %H:%M"),
+        "created_by": (m.created_by.get_username() if m.created_by else None),
+    } for m in MimicScreen.objects.select_related("created_by").order_by("-updated_at")]
+    return JsonResponse({"ok": True, "results": items})
+
+
+@login_required
+def mimic_screen_get(request):
+    """Tek mimik tasarımının tam tanımı (tuval verisi dahil)."""
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    from dashboard.models import MimicScreen
+
+    m = MimicScreen.objects.filter(pk=request.GET.get("id")).first()
+    if m is None:
+        return JsonResponse({"ok": False, "error": "Tasarım bulunamadı."}, status=404)
+    return JsonResponse({"ok": True, "screen": {
+        "id": m.id, "name": m.name, "description": m.description,
+        "width": m.width, "height": m.height, "background": m.background,
+        "is_template": m.is_template, "data": m.data,
+    }})
+
+
+@login_required
+def mimic_screen_save(request):
+    """Mimik tasarımı oluştur/güncelle (Fabric.js canvas JSON + thumbnail)."""
+    import json
+
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from dashboard.models import MimicScreen
+
+    try:
+        payload = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    name = (payload.get("name") or "").strip()
+    if not name:
+        return JsonResponse({"ok": False, "error": "Ekran adı zorunlu."}, status=400)
+
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return JsonResponse({"ok": False, "error": "Geçersiz tuval verisi."}, status=400)
+
+    m_id = payload.get("id")
+    if m_id:
+        m = MimicScreen.objects.filter(pk=m_id).first()
+        if m is None:
+            return JsonResponse({"ok": False, "error": "Tasarım bulunamadı."}, status=404)
+    else:
+        m = MimicScreen(created_by=request.user)
+
+    m.name = name
+    m.description = (payload.get("description") or "").strip()
+    m.data = data
+    if payload.get("thumbnail"):
+        m.thumbnail = payload["thumbnail"]
+    try:
+        m.width = int(payload.get("width") or m.width or 1280)
+        m.height = int(payload.get("height") or m.height or 720)
+    except (TypeError, ValueError):
+        pass
+    if payload.get("background"):
+        m.background = str(payload["background"])[:32]
+    m.save()
+    return JsonResponse({"ok": True, "id": m.pk})
+
+
+@login_required
+def mimic_screen_delete(request):
+    """Mimik tasarımı sil — yerleşik şablonlar silinemez."""
+    import json
+
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from dashboard.models import MimicScreen
+
+    try:
+        m_id = json.loads(request.body or "{}").get("id")
+    except (ValueError, TypeError):
+        m_id = None
+
+    m = MimicScreen.objects.filter(pk=m_id).first()
+    if m is None:
+        return JsonResponse({"ok": False, "error": "Tasarım bulunamadı."}, status=404)
+    if m.is_template:
+        return JsonResponse({"ok": False, "error": "Yerleşik şablon silinemez."}, status=400)
+    m.delete()
+    return JsonResponse({"ok": True})
+
+

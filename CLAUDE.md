@@ -577,6 +577,40 @@ Sayfalama yapan tablolarda `{% querystring_without "page" %}` template tag'i ile
 
 > **Yeni rapor sayfası eklerken**: `sensor_readings.html` + `ReadingsReportView` referans alınmalı; üst başlık, filtre alanları, validasyon, DataTables, grafik, FOUC blocklarının tamamı kopyalanıp adapte edilmeli — kullanıcı bu sayfayla "rapor altyapısını öğrendik" diye onayladı, bu standart artık her rapor sayfasında beklenmeli.
 
+## Mimik Tasarım Stüdyosu (SCADA/HMI editör)
+
+Yönetici → **Mimik Tasarımları** (`/dashboard/admin-pages/mimic/`) artık bir **mimik
+galerisi**dir (eski "Kabin İzleme" demo SVG'sinin yerini aldı). Kullanıcılar Fabric.js tabanlı,
+**dashboard iskeletinden bağımsız tam-ekran** bir editörde (yeni sekme) SCADA/HMI mimik ekranları
+tasarlar. Bu faz **SCADA'ya bağlı değildir** — tasarımlar saklanır, simüle edilir, dışa aktarılır;
+animasyon etiketleri (tag) serbest metindir, ileride gerçek `Sensor`/`SensorLatest`'e bağlanabilir.
+Tamamen dashboard arayüzüne özgü → `dashboard/`.
+
+- **Model** [dashboard/models.py](dashboard/models.py) `MimicScreen`: `data` (Fabric `canvas.toJSON`),
+  `thumbnail` (base64 PNG galeri önizleme), `width/height/background`, `is_template` (silinemez),
+  `created_by`. Migration `dashboard/0002_mimicscreen`.
+- **View'lar** [dashboard/views.py](dashboard/views.py): `MimicDashboardView` (galeri, ListView),
+  `MimicEditorView` (standalone editör — `mimic/editor.html`), `MimicViewerView` (standalone
+  salt-okunur görüntüleyici/simülatör — `mimic/viewer.html`). Galeri kartları/butonları editör ve
+  viewer'ı `target="_blank"` ile açar.
+- **API** [dashboard/api_views.py](dashboard/api_views.py) (hepsi `_require_admin`, CSRF'li POST):
+  `mimic_screen_list/get/save/delete` → `/dashboard/api/mimic/{list,get,save,delete}/`.
+- **Frontend** ([dashboard/static/dashboard/js/](dashboard/static/dashboard/js/)):
+  - `mimic_symbols.js` — kategorize SCADA sembol kütüphanesi (vana/pompa/motor/tank/enstrüman/
+    boru/proses/elektrik SVG'leri); `window.MIMIC_SYMBOLS`.
+  - `mimic_runtime.js` — animasyon/simülasyon motoru (`window.MimicRuntime`); editör önizleme +
+    viewer paylaşır. Bağlama şeması obje üzerinde `obj.scada = {tag, anim, min, max, onColor,
+    offColor, threshold, speed, unit, decimals, moveRange}`. Animasyonlar: colorState, blink,
+    rotate, level, fillThreshold, visibility, opacity, moveX/Y, text.
+  - `mimic_editor.js` — editör (tuval, zoom/pan, ızgara+snap, semboller/şekiller/resim ekleme,
+    özellik+animasyon+katman panelleri, undo/redo, grup, hizalama, kaydet/yükle, PNG/SVG/JSON
+    dışa+içe aktar, simülasyon). Vendored **Fabric.js 5.3** →
+    `plugins/custom/fabric/fabric.min.js`.
+- **Serileştirme**: `canvas.toJSON(['scada','name','isHelper','selectable','evented'])`. Tuval
+  sınırı (`boundary`) `excludeFromExport+isHelper` ile kaydedilmez, yüklemede JS yeniden kurar.
+  PNG/thumbnail dışa aktarımı `withIdentityVpt` ile viewport transform sıfırlanarak yapılır (zoom/pan
+  hizasızlığını önler).
+
 ## Testler
 
 `api/tests.py`, `users/tests.py`, `modbus/tests.py` şu an boş. Yeni özellik eklerken ilgili uygulamaya test yazılması beklenir.

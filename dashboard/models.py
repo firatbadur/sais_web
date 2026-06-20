@@ -84,3 +84,56 @@ class Document(models.Model):
         super().delete(*args, **kwargs)
         if file:
             file.storage.delete(file.name)
+
+
+class MimicScreen(models.Model):
+    """Kullanıcı tasarımı SCADA/HMI mimik ekranı.
+
+    Tamamen dashboard arayüzüne özgü bir tasarım editörü özelliğidir. Editör
+    (Fabric.js tabanlı) tuvali bir JSON belge olarak `data` alanında saklar;
+    `thumbnail` küçük bir base64 PNG önizlemesidir (galeri kartlarında gösterilir).
+
+    Bu fazda mimikler SCADA çekirdeğine **bağlı değildir** — yalnız tasarlanıp
+    saklanır, görüntülenir, simüle edilir. Animasyon/etiket bağlama meta verisi
+    her objenin kendi `scada` özelliğinde `data` JSON içinde tutulur; ileride
+    gerçek `Sensor`/`SensorLatest` değerlerine bağlanabilir.
+    """
+
+    name = models.CharField(_("Ekran Adı"), max_length=150)
+    description = models.TextField(_("Açıklama"), blank=True, default="")
+
+    data = models.JSONField(
+        _("Tuval Verisi"), default=dict, blank=True,
+        help_text=_("Fabric.js canvas.toJSON() çıktısı (objeler + bağlama meta verisi)."),
+    )
+    thumbnail = models.TextField(
+        _("Önizleme (base64 PNG)"), blank=True, default="",
+        help_text=_("Galeri kartı için küçük base64 data-URL önizleme."),
+    )
+
+    width = models.PositiveIntegerField(_("Genişlik (px)"), default=1280)
+    height = models.PositiveIntegerField(_("Yükseklik (px)"), default=720)
+    background = models.CharField(_("Arka Plan Rengi"), max_length=32, default="#f5f8fa")
+    is_template = models.BooleanField(
+        _("Yerleşik Şablon"), default=False,
+        help_text=_("Yerleşik şablonlar silinemez (kopyalanıp düzenlenebilir)."),
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="mimic_screens",
+        verbose_name=_("Oluşturan"),
+    )
+    created_at = models.DateTimeField(_("Oluşturma"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("Son Güncelleme"), auto_now=True, db_index=True)
+
+    class Meta:
+        verbose_name = _("Mimik Ekranı")
+        verbose_name_plural = _("Mimik Ekranları")
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return self.name
