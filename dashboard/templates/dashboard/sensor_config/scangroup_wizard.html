@@ -64,8 +64,8 @@
                 <div class="card-body">
             <div class="row">
                 <div class="col-md-6 mb-5">
-                    <label class="form-label">{% trans "İstasyon" %}</label>
-                    <select id="c-station" class="form-select form-select-solid" data-control="select2" data-placeholder="{% trans 'İstasyon seçin' %}" data-allow-clear="true">
+                    <label class="form-label">{% trans "Tesis" %}</label>
+                    <select id="c-station" class="form-select form-select-solid" data-control="select2" data-placeholder="{% trans 'Tesis seçin' %}" data-allow-clear="true">
                         <option></option>
                         {% for s in stations %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
                     </select>

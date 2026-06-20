@@ -21,8 +21,8 @@
     <div class="card-body pt-2">
         <form method="get" id="report-filter-form" class="row g-5">
             <div class="col-md-4">
-                <label class="form-label fw-semibold">{% trans "İstasyon Seçimi" %}</label>
-                <select name="station" id="filter-station" class="form-select" data-control="select2" data-placeholder='{% trans "İstasyon seçiniz" %}' data-allow-clear="true">
+                <label class="form-label fw-semibold">{% trans "Tesis Seçimi" %}</label>
+                <select name="station" id="filter-station" class="form-select" data-control="select2" data-placeholder='{% trans "Tesis seçiniz" %}' data-allow-clear="true">
                     <option></option>
                     {% for s in stations %}<option value="{{ s.id }}" {% if filters.station_id == s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
                 </select>
@@ -34,7 +34,7 @@
                     {% if parameters_digital %}<optgroup label="{% trans 'Dijital' %}">{% for p in parameters_digital %}<option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>{{ p.display_name }}</option>{% endfor %}</optgroup>{% endif %}
                     {% if parameters_other %}<optgroup label="{% trans 'Diğer' %}">{% for p in parameters_other %}<option value="{{ p.id }}" {% if p.id in filters.parameter_ids %}selected{% endif %}>{{ p.display_name }}</option>{% endfor %}</optgroup>{% endif %}
                 </select>
-                <div class="form-text">{% trans "Sensör seçilmezse o istasyonun tüm sensörleri gösterilir." %}</div>
+                <div class="form-text">{% trans "Sensör seçilmezse o tesisin tüm sensörleri gösterilir." %}</div>
             </div>
             <div class="col-md-4">
                 <label class="form-label fw-semibold">{% trans "Seviye" %}</label>

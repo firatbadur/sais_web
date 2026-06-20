@@ -45,9 +45,9 @@
             <div class="card-body pt-2">
                 <div class="row g-5" id="form-olcum">
                     <div class="col-md-4">
-                        <label class="form-label">{% trans "İstasyon Seçimi" %}</label>
+                        <label class="form-label">{% trans "Tesis Seçimi" %}</label>
                         <select class="form-select st-sel o-field" data-control="select2"
-                                data-placeholder='{% trans "İstasyon seçiniz" %}' data-allow-clear="true">
+                                data-placeholder='{% trans "Tesis seçiniz" %}' data-allow-clear="true">
                             <option></option>
                             {% for s in stations %}<option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
                         </select>
@@ -111,7 +111,7 @@
                 <div class="table-responsive">
                     <table id="tbl-olcum" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
                         <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
-                            <th>{% trans "İstasyon" %}</th><th>{% trans "Sensör" %}</th><th>{% trans "Periyod" %}</th>
+                            <th>{% trans "Tesis" %}</th><th>{% trans "Sensör" %}</th><th>{% trans "Periyod" %}</th>
                             <th>{% trans "Alarm Tipi" %}</th><th class="text-end">Min</th><th class="text-end">Max</th>
                             <th>{% trans "Mesaj" %}</th><th>{% trans "Aktif" %}</th><th class="text-end">{% trans "İşlem" %}</th>
                         </tr></thead>
@@ -151,9 +151,9 @@
             <div class="card-body pt-2">
                 <div class="row g-5" id="form-diag">
                     <div class="col-md-3">
-                        <label class="form-label">{% trans "İstasyon Seçimi" %}</label>
+                        <label class="form-label">{% trans "Tesis Seçimi" %}</label>
                         <select class="form-select st-sel d-field" data-control="select2"
-                                data-placeholder='{% trans "İstasyon seçiniz" %}' data-allow-clear="true">
+                                data-placeholder='{% trans "Tesis seçiniz" %}' data-allow-clear="true">
                             <option></option>
                             {% for s in stations %}<option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
                         </select>
@@ -213,7 +213,7 @@
                 <div class="table-responsive">
                     <table id="tbl-diag" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
                         <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
-                            <th>{% trans "İstasyon" %}</th><th>{% trans "Sensör" %}</th><th>{% trans "Durum" %}</th><th>{% trans "Periyod" %}</th>
+                            <th>{% trans "Tesis" %}</th><th>{% trans "Sensör" %}</th><th>{% trans "Durum" %}</th><th>{% trans "Periyod" %}</th>
                             <th>{% trans "Mesaj" %}</th><th>{% trans "Aktif" %}</th><th class="text-end">{% trans "İşlem" %}</th>
                         </tr></thead>
                         <tbody>
@@ -250,9 +250,9 @@
     const URL_RULES = "{% url 'dashboard:api_alarm_rules' %}";
     const URL_TPL = "{% url 'dashboard:api_notification_templates' %}";
     const I18N = {
-        needStation: "{% trans 'İstasyon seçin.' %}", needMsg: "{% trans 'Mesaj zorunlu.' %}",
+        needStation: "{% trans 'Tesis seçin.' %}", needMsg: "{% trans 'Mesaj zorunlu.' %}",
         needChannel: "{% trans 'Sensör seçin.' %}", confirmDel: "{% trans 'Bu alarm silinsin mi?' %}",
-        netErr: "{% trans 'Ağ hatası' %}", offline: "{% trans 'İstasyon Offline' %}",
+        netErr: "{% trans 'Ağ hatası' %}", offline: "{% trans 'Tesis Offline' %}",
         titlePrompt: "{% trans 'Hazır mesaj başlığı:' %}",
         needMinMax: "{% trans 'Min veya Max değerinden en az birini girin.' %}",
         needSensor: "{% trans 'Dijital sensör seçin.' %}",
@@ -301,8 +301,8 @@
         const $param = $(scope.querySelector('.o-param') || []);
         const $sensor = $(scope.querySelector('.d-sensor') || []);
         if (!stationId) {
-            if ($param.length) { $param.empty().prop('disabled', true); reinit($param, '{% trans "Önce istasyon seçin" %}'); }
-            if ($sensor.length) { $sensor.empty().prop('disabled', true); reinit($sensor, '{% trans "Önce istasyon seçin" %}'); }
+            if ($param.length) { $param.empty().prop('disabled', true); reinit($param, '{% trans "Önce tesis seçin" %}'); }
+            if ($sensor.length) { $sensor.empty().prop('disabled', true); reinit($sensor, '{% trans "Önce tesis seçin" %}'); }
             return;
         }
         fetch(URL_IO + '?station=' + stationId, { credentials: 'same-origin' }).then(r => r.json()).then(d => {

@@ -52,7 +52,7 @@
                 <div class="table-responsive">
                     <table id="tbl-scenarios" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
                         <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
-                            <th>{% trans "Ad" %}</th><th>{% trans "Tür" %}</th><th>{% trans "İstasyon" %}</th>
+                            <th>{% trans "Ad" %}</th><th>{% trans "Tür" %}</th><th>{% trans "Tesis" %}</th>
                             <th>{% trans "Aktif" %}</th><th>{% trans "Etkin" %}</th><th>{% trans "Yerleşik" %}</th>
                             <th class="text-end">{% trans "İşlem" %}</th>
                         </tr></thead>
@@ -77,9 +77,9 @@
                         <input type="text" class="form-control" id="sc-name" placeholder="{% trans 'Örn. Atıksu Limit Senaryosu' %}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">{% trans "İstasyon" %}</label>
+                        <label class="form-label">{% trans "Tesis" %}</label>
                         <select class="form-select" id="sc-station" data-control="select2"
-                                data-placeholder='{% trans "İstasyon seçiniz" %}' data-allow-clear="true">
+                                data-placeholder='{% trans "Tesis seçiniz" %}' data-allow-clear="true">
                             <option></option>
                             {% for s in stations %}<option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
                         </select>
@@ -142,7 +142,7 @@
             </div>
             <div class="card-body pt-2">
                 <div id="param-list"></div>
-                <div class="form-text">{% trans "Önce istasyon seçin; en az bir parametreye Min ve/veya Max eşik girin." %}</div>
+                <div class="form-text">{% trans "Önce tesis seçin; en az bir parametreye Min ve/veya Max eşik girin." %}</div>
             </div>
         </div>
 
@@ -181,7 +181,7 @@
             <div class="card-body pt-2">
                 <div class="row g-5 align-items-end">
                     <div class="col-md-5">
-                        <label class="form-label">{% trans "İstasyon" %}</label>
+                        <label class="form-label">{% trans "Tesis" %}</label>
                         <select class="form-select" id="min-station" data-control="select2" data-hide-search="true">
                             {% for s in stations %}<option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
                         </select>
@@ -671,7 +671,7 @@
                         </div>
                     </div>
                     <div class="mt-2 row g-3 sc-status-grid">
-                        <div class="col-md-3"><div class="kpi"><div class="lbl">{% trans "İstasyon" %}</div><div class="val">${esc(r.station)}</div></div></div>
+                        <div class="col-md-3"><div class="kpi"><div class="lbl">{% trans "Tesis" %}</div><div class="val">${esc(r.station)}</div></div></div>
                         <div class="col-md-3"><div class="kpi"><div class="lbl">{% trans "Adım" %}</div><div class="val">${r.last_step_order + 1} / ${r.total_steps}</div></div></div>
                         <div class="col-md-3"><div class="kpi"><div class="lbl">{% trans "Sıradaki" %}</div><div class="val fs-6">${esc(r.current_step) || '—'}</div></div></div>
                         <div class="col-md-3"><div class="kpi"><div class="lbl">{% trans "Numune Kodu" %}</div><div class="val fs-6">${esc(r.sample_code) || '—'}</div></div></div>

@@ -21,6 +21,9 @@ urlpatterns = [
     # --- Home ---
     path("", views.HomeView.as_view(), name="home"),
 
+    # --- İlk kurulum sihirbazı (rol=1) ---
+    path("setup/", views.SetupWizardView.as_view(), name="setup_wizard"),
+
     # --- Reports ---
     path("reports/readings/", views.ReadingsReportView.as_view(), name="reports_readings"),
     path("reports/aggregates/", views.AggregatesReportView.as_view(), name="reports_aggregates"),
@@ -94,6 +97,9 @@ urlpatterns = [
     path("settings/profile/", views.ProfileView.as_view(), name="profile"),
     path("settings/change-password/", views.ChangePasswordView.as_view(), name="change_password"),
     path("settings/preferences/", views.PreferencesView.as_view(), name="preferences"),
+
+    # --- AJAX API (kurulum sihirbazı) ---
+    path("api/setup/save/", api_views.setup_save, name="api_setup_save"),
 
     # --- AJAX API (home widgets) ---
     path("api/home/kpis/", api_views.home_kpis, name="api_home_kpis"),

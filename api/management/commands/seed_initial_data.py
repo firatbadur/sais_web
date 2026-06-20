@@ -22,10 +22,10 @@ DEFAULT_STATION_TYPES = [
     ("wastewater_monitoring", "Sürekli Atıksu İzleme Sistemi", "Atıksu deşarjı sürekli izleme (SAIS)"),
     ("emission_monitoring", "Sürekli Emisyon Ölçüm Sistemi", "Baca gazı sürekli emisyon ölçümü (SEÖS)"),
     ("flow_measurement", "Debi Ölçüm Sistemi", "Atıksu/proses debisi ölçümü"),
-    ("air_quality", "Hava Kalitesi İzleme İstasyonu", "Ortam hava kalitesi sürekli izleme"),
-    ("meteorology", "Meteorolojik Ölçüm İstasyonu", "Rüzgar, sıcaklık, nem, basınç vb. meteoroloji"),
-    ("water_quality", "Su Kalitesi İzleme İstasyonu", "Yüzey/yeraltı/alıcı ortam su kalitesi izleme"),
-    ("noise_monitoring", "Gürültü İzleme İstasyonu", "Çevresel gürültü ölçümü"),
+    ("air_quality", "Hava Kalitesi İzleme Tesisi", "Ortam hava kalitesi sürekli izleme"),
+    ("meteorology", "Meteorolojik Ölçüm Tesisi", "Rüzgar, sıcaklık, nem, basınç vb. meteoroloji"),
+    ("water_quality", "Su Kalitesi İzleme Tesisi", "Yüzey/yeraltı/alıcı ortam su kalitesi izleme"),
+    ("noise_monitoring", "Gürültü İzleme Tesisi", "Çevresel gürültü ölçümü"),
     ("solar_plant", "GES (Güneş Enerji Santrali)", "Güneş enerji santrali izleme"),
     ("energy_monitoring", "Enerji İzleme Sistemi", "Elektrik/enerji tüketim izleme"),
     ("scada_general", "Genel SCADA İzleme", "Genel amaçlı endüstriyel izleme sistemi"),
@@ -135,17 +135,17 @@ DEFAULT_MESSAGE_TEMPLATES = [
     ("KOİ Limit Aşımı", "KOİ değeri belirlenen limit değerlerinin dışına çıkmıştır. Lütfen kontrol ediniz."),
     ("AKM Limit Aşımı", "AKM değeri belirlenen limit değerlerinin dışına çıkmıştır. Lütfen kontrol ediniz."),
     # --- Dijital / olay ---
-    ("Enerji Kesintisi", "İstasyonda enerji kesintisi tespit edilmiştir. UPS devrede; lütfen kontrol ediniz."),
+    ("Enerji Kesintisi", "Tesiste enerji kesintisi tespit edilmiştir. UPS devrede; lütfen kontrol ediniz."),
     ("Su Baskını", "Su baskını sensörü aktif olmuştur. Lütfen acil müdahale ediniz."),
     ("Duman Algılandı", "Duman sensörü aktif olmuştur. Lütfen acil kontrol ediniz."),
     ("Acil Stop", "Acil stop devreye girmiştir. Lütfen kontrol ediniz."),
     ("Sürücü Hatası", "Sürücü hatası tespit edilmiştir. Lütfen kontrol ediniz."),
     ("Pompa Arızası", "Pompa arızası tespit edilmiştir. Lütfen kontrol ediniz."),
-    ("Kapı Açık", "İstasyon kapısı açık konuma geçmiştir. Lütfen kontrol ediniz."),
-    ("İstasyon Offline", "İstasyon ile iletişim kesilmiştir (offline). Lütfen kontrol ediniz."),
+    ("Kapı Açık", "Tesis kapısı açık konuma geçmiştir. Lütfen kontrol ediniz."),
+    ("Tesis Offline", "Tesis ile iletişim kesilmiştir (offline). Lütfen kontrol ediniz."),
     ("Cihaz İletişim Hatası", "Cihaz iletişim hatası tespit edilmiştir. Lütfen kontrol ediniz."),
     ("Numune Alma", "Numune alma işlemi algılanmıştır. Lütfen kontrol ediniz."),
-    ("Bakım Modu Aktif", "İstasyon bakım moduna alınmıştır. Lütfen kontrol ediniz."),
+    ("Bakım Modu Aktif", "Tesis bakım moduna alınmıştır. Lütfen kontrol ediniz."),
 ]
 
 
@@ -166,7 +166,7 @@ class Command(BaseCommand):
         default_station, station_created = Station.objects.get_or_create(
             id=1,
             defaults={
-                "name": "Varsayılan İstasyon",
+                "name": "Varsayılan Tesis",
                 "active": True,
                 "station_type": station_type_by_code.get("wastewater_monitoring"),
             },

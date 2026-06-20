@@ -31,7 +31,7 @@ class StationType(models.Model):
     )
     name = models.CharField(
         max_length=100,
-        verbose_name="Ad", help_text="İstasyon tipi adı",
+        verbose_name="Ad", help_text="Tesis tipi adı",
     )
     description = models.CharField(
         max_length=250, blank=True, default="",
@@ -40,7 +40,7 @@ class StationType(models.Model):
 
     class Meta:
         db_table = "station_type"
-        verbose_name_plural = "İstasyon Tipleri"
+        verbose_name_plural = "Tesis Tipleri"
         ordering = ["code"]
 
     def __str__(self):
@@ -51,17 +51,17 @@ class Station(models.Model):
     """İzleme istasyonu (saha)."""
 
     name = models.CharField(
-        max_length=100, verbose_name="İstasyon Adı", help_text="İstasyon Adı",
+        max_length=100, verbose_name="Tesis Adı", help_text="Tesis Adı",
     )
     station_type = models.ForeignKey(
         StationType, on_delete=models.SET_NULL,
         blank=False, null=True,
-        verbose_name="İstasyon Tipi",
-        help_text="İstasyonun ölçüm sistemi tipi (zorunlu)",
+        verbose_name="Tesis Tipi",
+        help_text="Tesisin ölçüm sistemi tipi (zorunlu)",
     )
     address = models.CharField(
         max_length=250, blank=True, default="",
-        verbose_name="İstasyon Adresi", help_text="İstasyon Adresi",
+        verbose_name="Tesis Adresi", help_text="Tesis Adresi",
     )
     company = models.CharField(
         max_length=100, blank=True, default="",
@@ -78,7 +78,7 @@ class Station(models.Model):
 
     class Meta:
         db_table = "station"
-        verbose_name_plural = "İstasyon Bilgileri"
+        verbose_name_plural = "Tesis Bilgileri"
         ordering = ["created_at"]
 
     def __str__(self):
@@ -95,7 +95,7 @@ class StationAuthority(models.Model):
 
     station = models.ForeignKey(
         Station, on_delete=models.CASCADE, related_name="authorities",
-        verbose_name="İstasyon",
+        verbose_name="Tesis",
     )
     user = models.ForeignKey(
         CustomUser, on_delete=models.CASCADE, related_name="station_authorities",
@@ -108,8 +108,8 @@ class StationAuthority(models.Model):
         db_table = "station_authority"
         unique_together = (("station", "user"),)
         ordering = ["station_id", "user_id"]
-        verbose_name = "İstasyon Yetkilisi"
-        verbose_name_plural = "İstasyon Yetkilileri"
+        verbose_name = "Tesis Yetkilisi"
+        verbose_name_plural = "Tesis Yetkilileri"
 
     def __str__(self):
         return f"{self.station} ← {self.user}"
@@ -156,12 +156,12 @@ class Connection(models.Model):
     station = models.ForeignKey(
         Station, on_delete=models.CASCADE,
         blank=True, null=True, related_name="connections",
-        verbose_name="İstasyon",
+        verbose_name="Tesis",
     )
     name = models.CharField(
         max_length=100, default="",
         verbose_name="Bağlantı Adı",
-        help_text="Bu istasyondaki bağlantının özgün adı",
+        help_text="Bu tesisteki bağlantının özgün adı",
     )
     description = models.CharField(
         max_length=500, blank=True, default="",
@@ -1914,7 +1914,7 @@ class AlarmRule(models.Model):
     RULE_CHOICES = (
         (RULE_ANALOG, "Ölçüm (Analog Limit)"),
         (RULE_DIGITAL, "Diagnostik (Dijital Kanal)"),
-        (RULE_OFFLINE, "İstasyon Offline"),
+        (RULE_OFFLINE, "Tesis Offline"),
     )
 
     COND_MIN = "min"
@@ -1938,7 +1938,7 @@ class AlarmRule(models.Model):
 
     station = models.ForeignKey(
         Station, on_delete=models.CASCADE, related_name="alarm_rules",
-        verbose_name="İstasyon",
+        verbose_name="Tesis",
     )
     rule_type = models.CharField(
         max_length=10, choices=RULE_CHOICES, default=RULE_ANALOG, verbose_name="Alarm Türü",
@@ -1969,7 +1969,7 @@ class AlarmRule(models.Model):
     # --- İstasyon offline ---
     offline_seconds = models.IntegerField(
         default=900, verbose_name="Offline Eşiği (sn)",
-        help_text="Son veriden bu kadar saniye geçtiyse istasyon offline sayılır.",
+        help_text="Son veriden bu kadar saniye geçtiyse tesis offline sayılır.",
     )
 
     # --- Ortak ---
@@ -2021,7 +2021,7 @@ class AlarmRule(models.Model):
             return dict(self.COND_CHOICES).get(self.condition, "Ölçüm")
         if self.rule_type == self.RULE_DIGITAL:
             return f"{self.sensor_label}: {self.state_label}"
-        return "İstasyon Offline"
+        return "Tesis Offline"
 
 
 class Reminder(models.Model):
@@ -2056,8 +2056,8 @@ class Reminder(models.Model):
     )
     station = models.ForeignKey(
         Station, on_delete=models.SET_NULL, blank=True, null=True,
-        related_name="reminders", verbose_name="İstasyon",
-        help_text="İsteğe bağlı — hatırlatıcıyı bir istasyona bağla.",
+        related_name="reminders", verbose_name="Tesis",
+        help_text="İsteğe bağlı — hatırlatıcıyı bir tesise bağla.",
     )
 
     is_done = models.BooleanField(default=False, verbose_name="Tamamlandı")

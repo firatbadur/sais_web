@@ -1376,7 +1376,7 @@ def alarm_rules(request):
     try:
         station = St.objects.get(pk=data.get("station_id"))
     except (St.DoesNotExist, ValueError, TypeError):
-        return JsonResponse({"ok": False, "error": "İstasyon seçin."}, status=400)
+        return JsonResponse({"ok": False, "error": "Tesis seçin."}, status=400)
 
     rule_type = data.get("rule_type")
     message = (data.get("message") or "").strip()
@@ -1553,11 +1553,11 @@ def scenario_save(request):
     if data.get("station_id"):
         station = St.objects.filter(pk=data.get("station_id")).first()
         if station is None:
-            return JsonResponse({"ok": False, "error": "İstasyon bulunamadı."}, status=400)
+            return JsonResponse({"ok": False, "error": "Tesis bulunamadı."}, status=400)
 
     want_active = bool(data.get("is_active"))
     if want_active and station is None:
-        return JsonResponse({"ok": False, "error": "Aktif etmek için istasyon seçin."}, status=400)
+        return JsonResponse({"ok": False, "error": "Aktif etmek için tesis seçin."}, status=400)
 
     sampler_sensor = None
     if data.get("sampler_sensor_id"):
@@ -1683,7 +1683,7 @@ def scenario_activate(request):
     if sc is None:
         return JsonResponse({"ok": False, "error": "Senaryo bulunamadı."}, status=404)
     if sc.station_id is None:
-        return JsonResponse({"ok": False, "error": "Aktif etmeden önce istasyon atayın."}, status=400)
+        return JsonResponse({"ok": False, "error": "Aktif etmeden önce tesis atayın."}, status=400)
     sc.activate()
     return JsonResponse({"ok": True})
 
@@ -1793,12 +1793,12 @@ def scenario_request_ministry(request):
 
     station = St.objects.filter(pk=data.get("station_id")).first()
     if station is None:
-        return JsonResponse({"ok": False, "error": "İstasyon seçin."}, status=400)
+        return JsonResponse({"ok": False, "error": "Tesis seçin."}, status=400)
 
     result, run = request_ministry(station, code)
     if result == "no_scenario":
         return JsonResponse(
-            {"ok": False, "error": "Bu istasyon için aktif Bakanlık senaryosu yok."},
+            {"ok": False, "error": "Bu tesis için aktif Bakanlık senaryosu yok."},
             status=400,
         )
     if result == "no_sampler":
@@ -2171,7 +2171,7 @@ def calibration_send_sim(request):
     cabinet = SaisCabinet.objects.filter(station_id=station_id).first() if station_id else None
     if cabinet is None:
         return JsonResponse(
-            {"ok": False, "error": "Bu istasyona bağlı Bakanlık kabini (SIM) tanımlı değil."},
+            {"ok": False, "error": "Bu tesise bağlı Bakanlık kabini (SIM) tanımlı değil."},
             status=400,
         )
 
@@ -2981,5 +2981,131 @@ def group_sensor_delete(request):
         severity="warning", request=request,
     )
     return JsonResponse({"ok": True})
+
+
+# --------------------------------------------------------------------------- #
+# İlk kurulum sihirbazı (rol=1)
+# --------------------------------------------------------------------------- #
+
+@login_required
+def setup_save(request):
+    """Kurulum sihirbazı kaydı (rol=1). POST JSON.
+
+    Beklenen gövde::
+
+        {
+          "station": {"name", "station_type", "address", "company"},
+          "cabinet": {"device_id", "code", "name", "data_period",
+                      "auth_username", "auth_secret"}   # opsiyonel
+        }
+
+    Varsayılan tesisi (id=1 / ilk aktif) günceller; tesis yoksa oluşturur.
+    Tesis tipi SAIS (sürekli atıksu izleme / emisyon ölçüm) ise `cabinet`
+    bilgisiyle tek bir `SaisCabinet` oluşturur/günceller. Son olarak
+    `SetupState`'i tamamlandı olarak damgalar.
+
+    Döner: {ok, station_id, requires_cabinet} veya {ok:false, errors:{...}}.
+    """
+    import json
+
+    from django.db import transaction
+
+    from api.models import SetupState, Station, StationType
+    from dashboard.views import SAIS_CABINET_STATION_TYPES, default_station_id
+
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    st = data.get("station") or {}
+    errors: dict[str, str] = {}
+
+    name = (st.get("name") or "").strip()
+    if not name:
+        errors["name"] = "Tesis adı zorunludur."
+
+    type_code = (st.get("station_type") or "").strip()
+    station_type = StationType.objects.filter(code=type_code).first()
+    if station_type is None:
+        errors["station_type"] = "Geçerli bir tesis tipi seçin."
+
+    requires_cabinet = type_code in SAIS_CABINET_STATION_TYPES
+
+    cab = data.get("cabinet") or {}
+    if requires_cabinet:
+        for field, label in (
+            ("device_id", "Bakanlık SIM ID"),
+            ("code", "Tesis kodu"),
+            ("auth_username", "Bakanlık kullanıcı adı"),
+            ("auth_secret", "Bakanlık şifresi"),
+        ):
+            if not (cab.get(field) or "").strip():
+                errors[f"cabinet_{field}"] = f"{label} zorunludur."
+
+    if errors:
+        return JsonResponse({"ok": False, "errors": errors}, status=400)
+
+    try:
+        data_period = int(cab.get("data_period") or 1)
+    except (TypeError, ValueError):
+        data_period = 1
+    data_period = max(1, min(data_period, 1440))
+
+    with transaction.atomic():
+        sid = default_station_id()
+        station = Station.objects.filter(pk=sid).first() if sid else None
+        if station is None:
+            station = Station(id=1)
+        station.name = name
+        station.station_type = station_type
+        station.address = (st.get("address") or "").strip()
+        station.company = (st.get("company") or "").strip()
+        station.active = True
+        if station.user_id is None:
+            station.user = request.user
+        station.save()
+
+        if requires_cabinet:
+            from sais_domain.models import SaisCabinet
+            cabinet = (
+                SaisCabinet.objects.filter(station=station).order_by("created_at").first()
+                or SaisCabinet(station=station)
+            )
+            cabinet.station = station
+            cabinet.device_id = (cab.get("device_id") or "").strip()
+            cabinet.code = (cab.get("code") or "").strip()
+            cabinet.name = (cab.get("name") or "").strip() or f"{name} Kabini"
+            cabinet.data_period = data_period
+            cabinet.auth_username = (cab.get("auth_username") or "").strip()
+            cabinet.auth_secret = (cab.get("auth_secret") or "").strip()
+            if cabinet.user_id is None:
+                cabinet.user = request.user
+            cabinet.save()
+
+        state = SetupState.load()
+        was_completed = state.completed
+        state.completed = True
+        state.completed_at = timezone.now()
+        state.completed_by = request.user
+        state.save()
+
+    log_event(
+        EventType.CONFIG,
+        f"Kurulum sihirbazı {'güncellendi' if was_completed else 'tamamlandı'}: "
+        f"tesis={station.name} (tip={type_code}), kabin={'evet' if requires_cabinet else 'hayır'}",
+        severity="warning", request=request,
+    )
+    return JsonResponse({
+        "ok": True,
+        "station_id": station.id,
+        "requires_cabinet": requires_cabinet,
+    })
 
 

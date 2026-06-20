@@ -123,9 +123,9 @@
     <div class="card-body py-4">
         <div class="row g-4 align-items-end">
             <div class="col-md-5">
-                <label class="form-label fw-semibold">{% trans "İstasyon" %}</label>
+                <label class="form-label fw-semibold">{% trans "Tesis" %}</label>
                 <select id="mm-station" class="form-select" data-control="select2"
-                        data-placeholder='{% trans "İstasyon seçiniz" %}'>
+                        data-placeholder='{% trans "Tesis seçiniz" %}'>
                     {% for s in stations %}
                         <option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>
                     {% endfor %}
@@ -380,7 +380,7 @@
         demoNoCmd: "{% trans 'Demo modunda komut gönderilmez.' %}",
         cmdFail: "{% trans 'Komut gönderilemedi.' %}",
         netError: "{% trans 'Ağ hatası.' %}",
-        selectStation: "{% trans 'Önce bir istasyon seçin.' %}",
+        selectStation: "{% trans 'Önce bir tesis seçin.' %}",
         sec: "{% trans 'sn' %}",
     };
 
@@ -723,7 +723,7 @@
     function updateSourceHint() {
         sourceHint.textContent = demoChk.checked
             ? "{% trans 'Sentetik verilerle animasyon (geliştirme).' %}"
-            : "{% trans 'İstasyondan canlı veri (parametre koduyla eşlenir).' %}";
+            : "{% trans 'Tesisten canlı veri (parametre koduyla eşlenir).' %}";
     }
 
     // ============================ INIT ============================

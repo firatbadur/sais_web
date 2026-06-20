@@ -215,9 +215,9 @@
         <div class="card-body pt-2">
             <div class="row g-6">
                 <div class="col-md-6">
-                    <label class="form-label required">{% trans "İstasyon Seçimi" %}</label>
+                    <label class="form-label required">{% trans "Tesis Seçimi" %}</label>
                     <select class="form-select" id="c-station" data-control="select2"
-                            data-placeholder='{% trans "İstasyon seçiniz" %}' data-allow-clear="true">
+                            data-placeholder='{% trans "Tesis seçiniz" %}' data-allow-clear="true">
                         <option></option>
                         {% for s in stations %}<option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
                     </select>
@@ -225,10 +225,10 @@
                 <div class="col-md-6">
                     <label class="form-label required">{% trans "Parametre Seçimi" %}</label>
                     <select class="form-select" id="c-param" data-control="select2"
-                            data-placeholder='{% trans "Önce istasyon seçin" %}' data-allow-clear="true" disabled>
+                            data-placeholder='{% trans "Önce tesis seçin" %}' data-allow-clear="true" disabled>
                         <option></option>
                     </select>
-                    <div class="form-text" id="c-param-hint">{% trans "Önce bir istasyon seçin." %}</div>
+                    <div class="form-text" id="c-param-hint">{% trans "Önce bir tesis seçin." %}</div>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label required">{% trans "Kalibrasyon Tipi" %}</label>
@@ -527,7 +527,7 @@
         $param.innerHTML = '<option></option>';
         if (!stationId) {
             $param.disabled = true;
-            $('c-param-hint').textContent = "{% trans 'Önce bir istasyon seçin.' %}";
+            $('c-param-hint').textContent = "{% trans 'Önce bir tesis seçin.' %}";
             reinitParam(); validate1(); return;
         }
         fetch(`{% url 'dashboard:api_calibration_params' %}?station=${stationId}`)
@@ -545,7 +545,7 @@
                 $param.disabled = (d.results || []).length === 0;
                 $('c-param-hint').textContent = (d.results || []).length
                     ? "{% trans 'Kalibre edilecek parametreyi seçin.' %}"
-                    : "{% trans 'Bu istasyonda kalibre edilebilir analog parametre yok.' %}";
+                    : "{% trans 'Bu tesiste kalibre edilebilir analog parametre yok.' %}";
                 reinitParam(); validate1();
             });
     }
@@ -571,7 +571,7 @@
         }
         $('c-ref-unit').textContent = S.unit || "—";
 
-        if (!S.stationId) errs.push("{% trans 'İstasyon seçin.' %}");
+        if (!S.stationId) errs.push("{% trans 'Tesis seçin.' %}");
         if (!S.sensorId) errs.push("{% trans 'Parametre seçin.' %}");
         if (S.calType === null) errs.push("{% trans 'Kalibrasyon tipi seçin.' %}");
         if (S.ref === null || isNaN(S.ref)) errs.push("{% trans 'Referans değeri girin.' %}");

@@ -1,0 +1,380 @@
+{% extends "dashboard/base.html" %}
+{% load i18n static %}
+
+{% block title %}{% trans "Kurulum Sihirbazı" %}{% endblock %}
+{% block page_title %}{% trans "Kurulum Sihirbazı" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .wz-stepper { display: flex; align-items: flex-start; gap: 0; position: relative;
+        padding: 1.25rem 2rem 0.5rem; margin-bottom: 1.5rem; }
+    .wz-step { flex: 1; display: flex; flex-direction: column; align-items: center;
+        position: relative; z-index: 2; }
+    .wz-step.is-hidden { display: none; }
+    .wz-node { width: 46px; height: 46px; border-radius: 50%; display: flex;
+        align-items: center; justify-content: center; font-weight: 700; font-size: 1.05rem;
+        background: var(--bs-gray-200); color: var(--bs-gray-600);
+        border: 3px solid var(--bs-body-bg); box-shadow: 0 0 0 1px var(--bs-gray-300);
+        transition: all .35s cubic-bezier(.4,0,.2,1); }
+    .wz-node i { font-size: 1.25rem; }
+    .wz-label { margin-top: .55rem; font-weight: 600; font-size: .9rem;
+        color: var(--bs-gray-500); text-align: center; transition: color .3s; }
+    .wz-step:not(:last-child)::after { content: ""; position: absolute; top: 23px; left: 50%;
+        width: 100%; height: 4px; background: var(--bs-gray-200); z-index: -1; border-radius: 4px; }
+    .wz-step.is-done:not(:last-child)::after { background: linear-gradient(90deg,#00c9a7,#00b8d9); }
+    .wz-step.is-active .wz-node { background: linear-gradient(135deg,#7239ea,#5014d0); color:#fff;
+        box-shadow: 0 8px 22px rgba(114,57,234,.45),0 0 0 1px #7239ea; transform: scale(1.08); }
+    .wz-step.is-active .wz-label { color: var(--bs-gray-900); }
+    .wz-step.is-done .wz-node { background: linear-gradient(135deg,#00c9a7,#00a88f); color:#fff;
+        box-shadow: 0 6px 18px rgba(0,201,167,.4); }
+    .wz-pane { display: none; animation: wzFade .3s ease; }
+    .wz-pane.active { display: block; }
+    @keyframes wzFade { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform:none; } }
+    .wz-action-card { transition: transform .2s, box-shadow .2s; }
+    .wz-action-card:hover { transform: translateY(-4px); box-shadow: 0 12px 28px rgba(0,0,0,.12); }
+</style>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+
+<div class="d-flex flex-column flex-lg-row-fluid justify-content-center">
+  <div class="w-100 w-lg-900px">
+
+    {% if is_preview %}
+    <div class="alert alert-light-warning d-flex align-items-center mb-5">
+        <i class="ki-outline ki-information-5 fs-2 text-warning me-3"></i>
+        <div class="text-gray-700 fs-7">
+            {% trans "Önizleme modu — bu sihirbaz gerçek kayıt yapar. Tamamladığınızda tesis ve (gerekiyorsa) SAIS kabin bilgileri kaydedilir." %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="card-body p-lg-10">
+
+            <!-- Stepper -->
+            <div class="wz-stepper">
+                <div class="wz-step is-active" data-node="1">
+                    <div class="wz-node"><i class="ki-outline ki-home-2"></i></div>
+                    <div class="wz-label">{% trans "Tesis Bilgileri" %}</div>
+                </div>
+                <div class="wz-step" data-node="2">
+                    <div class="wz-node"><i class="ki-outline ki-shield-tick"></i></div>
+                    <div class="wz-label">{% trans "SAIS Kabin Kaydı" %}</div>
+                </div>
+                <div class="wz-step" data-node="3">
+                    <div class="wz-node"><i class="ki-outline ki-check"></i></div>
+                    <div class="wz-label">{% trans "Tamamlandı" %}</div>
+                </div>
+            </div>
+
+            <!-- Hata kutusu -->
+            <div id="wz-alert" class="alert alert-danger d-none mb-6"></div>
+
+            <!-- ================= STEP 1: Tesis Bilgileri ================= -->
+            <div class="wz-pane active" data-pane="1">
+                <div class="mb-7">
+                    <h2 class="fw-bold text-gray-900 mb-2">{% trans "Tesis Bilgileri" %}</h2>
+                    <div class="text-muted fs-7">{% trans "İzleme yapılan tesisin temel bilgilerini girin." %}</div>
+                </div>
+
+                <div class="row g-5">
+                    <div class="col-md-6">
+                        <label class="required form-label fw-semibold">{% trans "Tesis Adı" %}</label>
+                        <input type="text" id="f-name" class="form-control form-control-solid"
+                               value="{{ station.name|default:'' }}"
+                               placeholder="{% trans 'Örn. Atıksu Arıtma Tesisi 1' %}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="required form-label fw-semibold">{% trans "Tesis Tipi" %}</label>
+                        <select id="f-station-type" class="form-select form-select-solid" data-control="select2"
+                                data-hide-search="false" data-placeholder="{% trans 'Tesis tipi seçin' %}">
+                            <option></option>
+                            {% for t in station_types %}
+                            <option value="{{ t.code }}"
+                                {% if station.station_type and station.station_type.code == t.code %}selected{% endif %}>
+                                {{ t.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div id="f-type-hint" class="form-text d-none">
+                            <i class="ki-outline ki-shield-tick fs-7 text-primary"></i>
+                            {% trans "Bu tesis tipi için bir sonraki adımda Bakanlık SAIS kabin kaydı gerekir." %}
+                        </div>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label fw-semibold">{% trans "Tesis Adresi" %}</label>
+                        <input type="text" id="f-address" class="form-control form-control-solid"
+                               value="{{ station.address|default:'' }}"
+                               placeholder="{% trans 'Tesisin açık adresi (opsiyonel)' %}">
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label fw-semibold">{% trans "Kurum Adı" %}</label>
+                        <input type="text" id="f-company" class="form-control form-control-solid"
+                               value="{{ station.company|default:'' }}"
+                               placeholder="{% trans 'İşletmeci kurum (opsiyonel)' %}">
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end mt-10">
+                    <button type="button" class="btn btn-primary" id="wz-next-1">
+                        {% trans "İleri" %} <i class="ki-outline ki-arrow-right fs-4 ms-1"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ================= STEP 2: SAIS Kabin Kaydı ================= -->
+            <div class="wz-pane" data-pane="2">
+                <div class="mb-7">
+                    <h2 class="fw-bold text-gray-900 mb-2">{% trans "SAIS Kabin Kaydı" %}</h2>
+                    <div class="text-muted fs-7">
+                        {% trans "Bakanlık'ın bu kabin için tanımladığı kimlik ve veri gönderim bilgilerini girin." %}
+                    </div>
+                </div>
+
+                <div class="row g-5">
+                    <div class="col-md-6">
+                        <label class="required form-label fw-semibold">{% trans "Bakanlık SIM ID" %}</label>
+                        <input type="text" id="f-device-id" class="form-control form-control-solid"
+                               value="{{ cabinet.device_id|default:'' }}"
+                               placeholder="{% trans 'Bakanlık SAIS kimlik no' %}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="required form-label fw-semibold">{% trans "Tesis Kodu" %}</label>
+                        <input type="text" id="f-code" class="form-control form-control-solid"
+                               value="{{ cabinet.code|default:'' }}"
+                               placeholder="{% trans 'Örn. 30060001' %}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">{% trans "Kabin Adı" %}</label>
+                        <input type="text" id="f-cab-name" class="form-control form-control-solid"
+                               value="{{ cabinet.name|default:'' }}"
+                               placeholder="{% trans 'Boş bırakılırsa tesis adından üretilir' %}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">{% trans "Veri Periyodu (dk)" %}</label>
+                        <input type="number" min="1" max="1440" id="f-data-period"
+                               class="form-control form-control-solid"
+                               value="{{ cabinet.data_period|default:1 }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="required form-label fw-semibold">{% trans "Bakanlık Kullanıcı Adı" %}</label>
+                        <input type="text" id="f-auth-username" class="form-control form-control-solid"
+                               autocomplete="off" value="{{ cabinet.auth_username|default:'' }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="required form-label fw-semibold">{% trans "Bakanlık Şifresi" %}</label>
+                        <input type="text" id="f-auth-secret" class="form-control form-control-solid"
+                               autocomplete="off" value="{{ cabinet.auth_secret|default:'' }}">
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between mt-10">
+                    <button type="button" class="btn btn-light" id="wz-back-2">
+                        <i class="ki-outline ki-arrow-left fs-4 me-1"></i> {% trans "Geri" %}
+                    </button>
+                    <button type="button" class="btn btn-primary" id="wz-next-2">
+                        {% trans "Kaydet ve Bitir" %} <i class="ki-outline ki-arrow-right fs-4 ms-1"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ================= STEP 3: Tamamlandı ================= -->
+            <div class="wz-pane" data-pane="3">
+                <div class="text-center mb-10">
+                    <div class="mb-5">
+                        <i class="ki-outline ki-check-circle fs-5x text-success"></i>
+                    </div>
+                    <h2 class="fw-bold text-gray-900 mb-2">{% trans "Kurulum Tamamlandı" %}</h2>
+                    <div class="text-muted fs-6">
+                        {% trans "Tesis bilgileri kaydedildi. Şimdi web erişimini ve sensörleri yapılandırabilirsiniz." %}
+                    </div>
+                </div>
+
+                <div class="row g-5">
+                    <div class="col-md-6">
+                        <a href="{% url 'dashboard:admin_web_settings' %}"
+                           class="card card-bordered wz-action-card h-100 text-center p-8 d-block">
+                            <i class="ki-outline ki-cloud fs-3x text-primary mb-4"></i>
+                            <div class="fs-4 fw-bold text-gray-900 mb-2">{% trans "Web Erişim Ayarları" %}</div>
+                            <div class="text-muted fs-7">{% trans "Alan adı (domain) ve SSL sertifikası ile dışarıdan güvenli erişim." %}</div>
+                            <span class="btn btn-light-primary btn-sm mt-4">{% trans "Aç" %} <i class="ki-outline ki-arrow-right fs-6 ms-1"></i></span>
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <a href="{% url 'dashboard:sensorcfg_connections' %}"
+                           class="card card-bordered wz-action-card h-100 text-center p-8 d-block">
+                            <i class="ki-outline ki-technology-4 fs-3x text-success mb-4"></i>
+                            <div class="fs-4 fw-bold text-gray-900 mb-2">{% trans "Sensör Ayarları" %}</div>
+                            <div class="text-muted fs-7">{% trans "Bağlantı, scan grupları ve sensörleri tanımlayın; canlı test edin." %}</div>
+                            <span class="btn btn-light-success btn-sm mt-4">{% trans "Aç" %} <i class="ki-outline ki-arrow-right fs-6 ms-1"></i></span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="text-center mt-10">
+                    <a href="{% url 'dashboard:home' %}" class="btn btn-light">
+                        <i class="ki-outline ki-home fs-5 me-1"></i> {% trans "Anasayfaya Git" %}
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    "use strict";
+
+    const SAIS_CODES = {{ sais_type_codes|safe }};
+    const SAVE_URL = "{% url 'dashboard:api_setup_save' %}";
+
+    const I18N = {
+        nameReq:    "{% trans 'Tesis adı zorunludur.' %}",
+        typeReq:    "{% trans 'Lütfen bir tesis tipi seçin.' %}",
+        cabReq:     "{% trans 'Lütfen zorunlu (yıldızlı) SAIS kabin alanlarını doldurun.' %}",
+        saveErr:    "{% trans 'Kaydedilemedi. Lütfen tekrar deneyin.' %}",
+        saving:     "{% trans 'Kaydediliyor...' %}",
+        saveBtn:    "{% trans 'Kaydet ve Bitir' %}"
+    };
+
+    function csrf() {
+        const m = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
+        return m ? m.pop() : '';
+    }
+
+    const steps = document.querySelectorAll('.wz-step');
+    const panes = document.querySelectorAll('.wz-pane');
+    const alertBox = document.getElementById('wz-alert');
+    const typeHint = document.getElementById('f-type-hint');
+
+    const $type = document.getElementById('f-station-type');
+
+    function requiresCabinet() {
+        return SAIS_CODES.indexOf($type.value) !== -1;
+    }
+
+    function showAlert(msg) {
+        alertBox.textContent = msg;
+        alertBox.classList.remove('d-none');
+        alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    function clearAlert() { alertBox.classList.add('d-none'); }
+
+    // Stepper'da SAIS adımını (node 2) tesis tipine göre göster/gizle.
+    function syncStepperVisibility() {
+        const node2 = document.querySelector('.wz-step[data-node="2"]');
+        if (requiresCabinet()) {
+            node2.classList.remove('is-hidden');
+            typeHint.classList.remove('d-none');
+        } else {
+            node2.classList.add('is-hidden');
+            typeHint.classList.add('d-none');
+        }
+    }
+
+    function setStep(pane) {
+        panes.forEach(p => p.classList.toggle('active', p.dataset.pane === String(pane)));
+        // Stepper node durumları (gizli node 2 atlandığında bile tutarlı).
+        steps.forEach(s => {
+            const n = parseInt(s.dataset.node, 10);
+            s.classList.toggle('is-active', n === pane);
+            s.classList.toggle('is-done', n < pane);
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // --- Tesis tipi değişimi ---
+    function onTypeChange() {
+        clearAlert();
+        syncStepperVisibility();
+    }
+    // select2 (jQuery) + native fallback
+    if (window.jQuery && window.jQuery($type).data('select2')) {
+        window.jQuery($type).on('change', onTypeChange);
+    }
+    $type.addEventListener('change', onTypeChange);
+    syncStepperVisibility();
+
+    // --- Step 1 → ileri ---
+    document.getElementById('wz-next-1').addEventListener('click', function () {
+        clearAlert();
+        const name = document.getElementById('f-name').value.trim();
+        if (!name) { showAlert(I18N.nameReq); return; }
+        if (!$type.value) { showAlert(I18N.typeReq); return; }
+        if (requiresCabinet()) {
+            setStep(2);
+        } else {
+            save();   // kabin gerekmiyor → doğrudan kaydet + bitir
+        }
+    });
+
+    // --- Step 2 geri / ileri ---
+    document.getElementById('wz-back-2').addEventListener('click', () => setStep(1));
+    document.getElementById('wz-next-2').addEventListener('click', function () {
+        clearAlert();
+        const req = ['f-device-id', 'f-code', 'f-auth-username', 'f-auth-secret'];
+        for (const id of req) {
+            if (!document.getElementById(id).value.trim()) { showAlert(I18N.cabReq); return; }
+        }
+        save();
+    });
+
+    function collect() {
+        const body = {
+            station: {
+                name: document.getElementById('f-name').value.trim(),
+                station_type: $type.value,
+                address: document.getElementById('f-address').value.trim(),
+                company: document.getElementById('f-company').value.trim()
+            }
+        };
+        if (requiresCabinet()) {
+            body.cabinet = {
+                device_id: document.getElementById('f-device-id').value.trim(),
+                code: document.getElementById('f-code').value.trim(),
+                name: document.getElementById('f-cab-name').value.trim(),
+                data_period: document.getElementById('f-data-period').value.trim(),
+                auth_username: document.getElementById('f-auth-username').value.trim(),
+                auth_secret: document.getElementById('f-auth-secret').value.trim()
+            };
+        }
+        return body;
+    }
+
+    function save() {
+        const btn2 = document.getElementById('wz-next-2');
+        const btn1 = document.getElementById('wz-next-1');
+        [btn1, btn2].forEach(b => { if (b) b.disabled = true; });
+        btn2.innerHTML = I18N.saving;
+
+        fetch(SAVE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+            body: JSON.stringify(collect())
+        })
+        .then(r => r.json().then(j => ({ ok: r.ok, j })))
+        .then(({ ok, j }) => {
+            if (ok && j.ok) {
+                setStep(3);
+            } else {
+                let msg = I18N.saveErr;
+                if (j && j.errors) { msg = Object.values(j.errors).join(' '); }
+                else if (j && j.error) { msg = j.error; }
+                showAlert(msg);
+            }
+        })
+        .catch(() => showAlert(I18N.saveErr))
+        .finally(() => {
+            [btn1, btn2].forEach(b => { if (b) b.disabled = false; });
+            btn2.innerHTML = I18N.saveBtn + ' <i class="ki-outline ki-arrow-right fs-4 ms-1"></i>';
+        });
+    }
+})();
+</script>
+{% endblock %}

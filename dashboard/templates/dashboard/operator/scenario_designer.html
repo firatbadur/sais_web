@@ -78,9 +78,9 @@
                 <input type="text" class="form-control" id="dz-name" placeholder="{% trans 'Örn. Atıksu Otomasyon Senaryosu' %}">
             </div>
             <div class="col-md-3">
-                <label class="form-label fw-semibold text-muted">{% trans "İstasyon (bağlam)" %}</label>
+                <label class="form-label fw-semibold text-muted">{% trans "Tesis (bağlam)" %}</label>
                 <select class="form-select" id="dz-station" data-control="select2" data-allow-clear="true"
-                        data-placeholder='{% trans "İstasyon seçiniz" %}'>
+                        data-placeholder='{% trans "Tesis seçiniz" %}'>
                     <option></option>
                     {% for s in stations %}<option value="{{ s.id }}" {% if s.id == default_station_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
                 </select>

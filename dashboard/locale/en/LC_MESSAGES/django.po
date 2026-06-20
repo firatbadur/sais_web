@@ -111,8 +111,8 @@ msgstr "Alarms"
 msgid "Yönetim"
 msgstr "Management"
 
-msgid "İstasyonlar"
-msgstr "Stations"
+msgid "Tesisler"
+msgstr "Facilities"
 
 msgid "Bağlantılar"
 msgstr "Connections"
@@ -151,8 +151,8 @@ msgstr "Envisoft WebX"
 msgid "Dashboard"
 msgstr "Dashboard"
 
-msgid "Aktif İstasyon"
-msgstr "Active Stations"
+msgid "Aktif Tesis"
+msgstr "Active Facilities"
 
 msgid "Aktif Sensör"
 msgstr "Active Sensors"
@@ -278,14 +278,14 @@ msgstr "User"
 msgid "Kalibrasyon kaydı yok."
 msgstr "No calibration records."
 
-msgid "İstasyon Kapanma Kayıtları"
-msgstr "Station Power Off Records"
+msgid "Tesis Kapanma Kayıtları"
+msgstr "Facility Power Off Records"
 
 msgid "Kayıt Tarihi"
 msgstr "Record Date"
 
-msgid "İstasyon"
-msgstr "Station"
+msgid "Tesis"
+msgstr "Facility"
 
 msgid "Başlangıç"
 msgstr "Start"
@@ -336,8 +336,8 @@ msgid "Log kaydı yok."
 msgstr "No log records."
 
 # ---- Management ----
-msgid "Tüm İstasyonlar"
-msgstr "All Stations"
+msgid "Tüm Tesisler"
+msgstr "All Facilities"
 
 msgid "ID"
 msgstr "ID"
@@ -354,8 +354,8 @@ msgstr "Active"
 msgid "Pasif"
 msgstr "Inactive"
 
-msgid "İstasyon yok."
-msgstr "No stations."
+msgid "Tesis yok."
+msgstr "No facilities."
 
 msgid "Tüm Bağlantılar"
 msgstr "All Connections"
@@ -406,8 +406,8 @@ msgstr "No sensors."
 msgid "Manuel Numune Tetikleme"
 msgstr "Manual Sample Trigger"
 
-msgid "Seçilen istasyon için numune alma komutu kuyruğa atılır. Komut Bakanlık Numune Talebi olarak sınıflandırılır, 5 dakika içinde yürütülmezse iptal olur. Bu sayfa yapım aşamasında — backend endpoint'i /StartSample üzerinden tetiklenebilir."
-msgstr "A sample trigger command is enqueued for the selected station. The command is classified as Ministry Sample Request; it expires if not executed within 5 minutes. This page is under construction — backend endpoint /StartSample can be triggered."
+msgid "Seçilen tesis için numune alma komutu kuyruğa atılır. Komut Bakanlık Numune Talebi olarak sınıflandırılır, 5 dakika içinde yürütülmezse iptal olur. Bu sayfa yapım aşamasında — backend endpoint'i /StartSample üzerinden tetiklenebilir."
+msgstr "A sample trigger command is enqueued for the selected facility. The command is classified as Ministry Sample Request; it expires if not executed within 5 minutes. This page is under construction — backend endpoint /StartSample can be triggered."
 
 msgid "Talep Kodu"
 msgstr "Request Code"
@@ -563,11 +563,11 @@ msgstr "English"
 msgid "SAIS Parametre Raporu"
 msgstr "SAIS Parameter Report"
 
-msgid "İstasyon Seçimi"
-msgstr "Station Selection"
+msgid "Tesis Seçimi"
+msgstr "Facility Selection"
 
-msgid "İstasyon seçiniz"
-msgstr "Select a station"
+msgid "Tesis seçiniz"
+msgstr "Select a facility"
 
 msgid "Parametre Listesi"
 msgstr "Parameter List"
@@ -599,8 +599,8 @@ msgstr "Report Output"
 msgid "Grafik Oluştur"
 msgstr "Generate Chart"
 
-msgid "Rapor oluşturmak için istasyon seçip 'Rapor Getir' butonuna basın."
-msgstr "Select a station and press 'Generate Report' to build the report."
+msgid "Rapor oluşturmak için tesis seçip 'Rapor Getir' butonuna basın."
+msgstr "Select a facility and press 'Generate Report' to build the report."
 
 msgid "Seçilen kriterlerle eşleşen kayıt bulunamadı."
 msgstr "No records match the selected filters."
@@ -630,8 +630,8 @@ msgid "Belirsiz"
 msgstr "Uncertain"
 
 # ---- Form validasyon mesajları ----
-msgid "Önce bir istasyon seçin."
-msgstr "Please select a station first."
+msgid "Önce bir tesis seçin."
+msgstr "Please select a facility first."
 
 msgid "Başlangıç tarihi bitiş tarihinden büyük olamaz."
 msgstr "Start date cannot be later than end date."
@@ -645,8 +645,8 @@ msgstr "Please enter a valid date (dd.mm.yyyy HH:MM:SS)."
 msgid "Tarih boş olamaz."
 msgstr "Date cannot be empty."
 
-msgid "Parametre seçilmezse o istasyonun tüm parametreleri gösterilir."
-msgstr "If no parameter is selected, all parameters of the station are shown."
+msgid "Parametre seçilmezse o tesisin tüm parametreleri gösterilir."
+msgstr "If no parameter is selected, all parameters of the facility are shown."
 
 msgid "Sadece 1 dk. (raw) için uygulanır."
 msgstr "Applied only for the 1-minute (raw) interval."
@@ -1514,8 +1514,8 @@ msgstr "Measurement Alarms"
 msgid "Diagnostik Alarm"
 msgstr "Diagnostic Alarm"
 
-msgid "İstasyon Seçimi"
-msgstr "Station Selection"
+msgid "Tesis Seçimi"
+msgstr "Facility Selection"
 
 msgid "Kanal Seçimi"
 msgstr "Channel Selection"
@@ -1559,8 +1559,8 @@ msgstr "Enter the message to be sent for the alarm..."
 msgid "Alarm Kaydet"
 msgstr "Save Alarm"
 
-msgid "İstasyon Offline"
-msgstr "Station Offline"
+msgid "Tesis Offline"
+msgstr "Facility Offline"
 
 msgid "Periyod"
 msgstr "Period"
@@ -1577,8 +1577,8 @@ msgstr "Select a channel."
 msgid "Mesaj zorunlu."
 msgstr "Message is required."
 
-msgid "İstasyon seçin."
-msgstr "Select a station."
+msgid "Tesis seçin."
+msgstr "Select a facility."
 
 # ---- Alarm Yonetimi v2 (raporlar stili) ----
 msgid "Yeni Ölçüm Alarmı"
@@ -1611,14 +1611,14 @@ msgstr "Action"
 msgid "Kanal seçiniz"
 msgstr "Select channel"
 
-msgid "Önce istasyon seçin"
-msgstr "Select a station first"
+msgid "Önce tesis seçin"
+msgstr "Select a facility first"
 
 msgid "Hazır mesaj seçebilir veya kendi mesajınızı yazıp kaydedebilirsiniz."
 msgstr "You can select a ready message or write and save your own."
 
-msgid "İstasyon seçiniz"
-msgstr "Select station"
+msgid "Tesis seçiniz"
+msgstr "Select facility"
 
 msgid "Aktif/Pasif"
 msgstr "Active/Inactive"
@@ -1713,8 +1713,8 @@ msgstr "Critical"
 msgid "IP"
 msgstr "IP"
 
-msgid "Sensör seçilmezse o istasyonun tüm sensörleri gösterilir."
-msgstr "If no sensor is selected, all sensors of that station are shown."
+msgid "Sensör seçilmezse o tesisin tüm sensörleri gösterilir."
+msgstr "If no sensor is selected, all sensors of that facility are shown."
 
 msgid "Sensör seçiniz"
 msgstr "Select sensor"
@@ -1840,8 +1840,8 @@ msgstr "Monitored Parameters and Thresholds"
 msgid "Parametre Ekle"
 msgstr "Add Parameter"
 
-msgid "Önce istasyon seçin; en az bir parametreye Min ve/veya Max eşik girin."
-msgstr "Select a station first; enter Min and/or Max threshold for at least one parameter."
+msgid "Önce tesis seçin; en az bir parametreye Min ve/veya Max eşik girin."
+msgstr "Select a facility first; enter Min and/or Max threshold for at least one parameter."
 
 msgid "Bakanlık kodu"
 msgstr "Ministry code"
@@ -2013,8 +2013,8 @@ msgstr "Design Name"
 msgid "Örn. Atıksu Otomasyon Senaryosu"
 msgstr "e.g. Wastewater Automation Scenario"
 
-msgid "İstasyon (bağlam)"
-msgstr "Station (context)"
+msgid "Tesis (bağlam)"
+msgstr "Facility (context)"
 
 msgid "Yeni"
 msgstr "New"
@@ -2663,8 +2663,8 @@ msgstr "Existing Connection (edit)"
 msgid "Yeni bağlantı için boş bırakın"
 msgstr "Leave empty for a new connection"
 
-msgid "İstasyon seçin"
-msgstr "Select a station"
+msgid "Tesis seçin"
+msgstr "Select a facility"
 
 msgid "Bağlantı Adı"
 msgstr "Connection Name"
@@ -2842,8 +2842,8 @@ msgstr "Demo / Simulation"
 msgid "Sentetik verilerle animasyon (geliştirme)."
 msgstr "Animation with synthetic data (development)."
 
-msgid "İstasyondan canlı veri (parametre koduyla eşlenir)."
-msgstr "Live data from the station (matched by parameter code)."
+msgid "Tesisten canlı veri (parametre koduyla eşlenir)."
+msgstr "Live data from the facility (matched by parameter code)."
 
 msgid "İletişim Yok"
 msgstr "No Communication"

@@ -44,7 +44,9 @@ from api.models import (
     ReadingHourly,
     ScanGroup,
     Sensor,
+    SetupState,
     Station,
+    StationType,
     StatusCode,
     SystemLog,
 )
@@ -139,12 +141,67 @@ class ForgotPasswordView(TemplateView):
 class HomeView(RoleRequiredMixin, TemplateView):
     template_name = "dashboard/home.html"
 
+    def dispatch(self, request, *args, **kwargs):
+        # İlk kurulumda (sihirbaz hiç tamamlanmadıysa) yöneticiyi otomatik
+        # olarak kurulum sihirbazına yönlendir. Operatör/kullanıcı yönlendirilmez
+        # (yapılandırma yetkileri yok) — onlar normal anasayfayı görür.
+        if request.user.is_authenticated and user_has_role(request.user, ROLE_ADMIN):
+            from api.models import SetupState
+            if not SetupState.load().completed:
+                return redirect("dashboard:setup_wizard")
+        return super().dispatch(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         # Dijital output Start/Stop + sıralama düzenleme yetkisi: rol 1 (admin)
         # + rol 2 (operatör). Client-side bayrak; sunucu endpoint'lerde
         # _require_operator ile ayrıca doğruluyor.
         ctx["can_control"] = user_has_role(self.request.user, 1, 2)
+        return ctx
+
+
+# Bakanlık SAIS kabin kaydı gerektiren tesis tipleri (StationType.code). Tesis
+# tipi bunlardan biriyse kurulum sihirbazı SAIS kabin adımını gösterir.
+SAIS_CABINET_STATION_TYPES = {"wastewater_monitoring", "emission_monitoring"}
+
+
+class SetupWizardView(AdminRequiredMixin, TemplateView):
+    """İlk kurulum sihirbazı (yalnız yönetici).
+
+    Adımlar:
+      1) Tesis bilgileri (ad/tip/adres/kurum).
+      2) Tesis tipi SAIS (sürekli atıksu izleme veya sürekli emisyon ölçüm)
+         ise Bakanlık SAIS kabin kaydı (SIM ID, kod, kullanıcı/şifre, periyot).
+      3) Tamamlandı — Web Erişim Ayarları + Sensör Ayarları sayfalarına geçiş.
+
+    Kayıt `api_views.setup_save` ile yapılır; varsayılan tesisi (id=1) günceller
+    ve (gerekiyorsa) tek bir `SaisCabinet` oluşturur/günceller, ardından
+    `SetupState`'i tamamlandı olarak damgalar.
+
+    `?preview=1` ile yönetici sihirbazı kurulum tamamlandıktan sonra da yeniden
+    açabilir (header butonu bu modu kullanır).
+    """
+    template_name = "dashboard/setup/wizard.html"
+
+    def get_context_data(self, **kwargs):
+        from sais_domain.models import SaisCabinet
+        ctx = super().get_context_data(**kwargs)
+
+        station = None
+        sid = default_station_id()
+        if sid:
+            station = Station.objects.filter(pk=sid).select_related("station_type").first()
+        ctx["station"] = station
+
+        cabinet = None
+        if station:
+            cabinet = SaisCabinet.objects.filter(station=station).order_by("created_at").first()
+        ctx["cabinet"] = cabinet
+
+        ctx["station_types"] = StationType.objects.order_by("name")
+        ctx["sais_type_codes"] = sorted(SAIS_CABINET_STATION_TYPES)
+        ctx["setup_state"] = SetupState.load()
+        ctx["is_preview"] = self.request.GET.get("preview") == "1"
         return ctx
 
 

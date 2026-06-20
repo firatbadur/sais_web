@@ -21,7 +21,7 @@
     <div class="card-body pt-2">
         <form method="get" id="report-filter-form" class="row g-5">
             <div class="col-md-3">
-                <label class="form-label fw-semibold">{% trans "İstasyon" %}</label>
+                <label class="form-label fw-semibold">{% trans "Tesis" %}</label>
                 <select name="station" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
                     <option value="">{% trans "Hepsi" %}</option>
                     {% for s in stations %}<option value="{{ s.id }}" {% if filters.station_id == s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
@@ -53,14 +53,14 @@
 
 <div class="card" id="report-results-card">
     <div class="card-header border-0 pt-6">
-        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "İstasyon Kapanma Kayıtları" %}</h3>
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Tesis Kapanma Kayıtları" %}</h3>
         {% if not filters.submitted %}<div class="card-toolbar"><span class="badge badge-light-primary">{% blocktrans %}Son {{ default_limit }} kayıt{% endblocktrans %}</span></div>{% endif %}
     </div>
     <div class="card-body pt-2">
         <div class="table-responsive">
             <table id="report-table" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
                 <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
-                    <th>{% trans "İstasyon" %}</th>
+                    <th>{% trans "Tesis" %}</th>
                     <th>{% trans "Başlangıç" %}</th>
                     <th>{% trans "Bitiş" %}</th>
                     <th class="text-end">{% trans "Süre" %}</th>

@@ -76,6 +76,17 @@
                     </div>
                 </div>
 
+                <!-- Kurulum Sihirbazı (önizleme) kısayolu (yalnız rol=1) -->
+                {% if user|has_role:"1" %}
+                <div class="app-navbar-item ms-1 ms-md-3">
+                    <a href="{% url 'dashboard:setup_wizard' %}?preview=1"
+                       class="btn btn-icon btn-custom btn-color-gray-500 btn-active-color-primary w-35px h-35px w-md-40px h-md-40px"
+                       title="{% trans 'Kurulum Sihirbazı' %}">
+                        <i class="ki-outline ki-rocket fs-1"></i>
+                    </a>
+                </div>
+                {% endif %}
+
                 <!-- Sistem Kontrol kısayolu (yalnız rol=1) -->
                 {% if user|has_role:"1" %}
                 <div class="app-navbar-item ms-1 ms-md-3">

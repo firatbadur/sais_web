@@ -23,7 +23,7 @@ class SaisCabinet(models.Model):
 
     station = models.ForeignKey(
         "api.Station", on_delete=models.CASCADE, related_name="sais_cabinets",
-        verbose_name="İstasyon",
+        verbose_name="Tesis",
     )
     device_id = models.CharField(
         max_length=100,
@@ -32,8 +32,8 @@ class SaisCabinet(models.Model):
     )
     code = models.CharField(
         max_length=50,
-        verbose_name="İstasyon Kodu",
-        help_text="Bakanlık istasyon kodu (örn. 30060001)",
+        verbose_name="Tesis Kodu",
+        help_text="Bakanlık tesis kodu (örn. 30060001)",
     )
     name = models.CharField(
         max_length=200,
@@ -422,14 +422,14 @@ class Scenario(models.Model):
     )
     is_active = models.BooleanField(
         default=False, verbose_name="Aktif",
-        help_text="Aynı istasyon + tür için yalnız bir senaryo aktif olabilir.",
+        help_text="Aynı tesis + tür için yalnız bir senaryo aktif olabilir.",
     )
     enabled = models.BooleanField(default=True, verbose_name="Etkin")
     station = models.ForeignKey(
         "api.Station", on_delete=models.CASCADE,
         blank=True, null=True,
-        related_name="sample_scenarios", verbose_name="İstasyon",
-        help_text="Boş senaryolar şablondur; aktif edilmeden önce istasyon atanır.",
+        related_name="sample_scenarios", verbose_name="Tesis",
+        help_text="Boş senaryolar şablondur; aktif edilmeden önce tesis atanır.",
     )
     avg_window = models.CharField(
         max_length=4, choices=WINDOW_CHOICES, default=WINDOW_15M,
@@ -611,7 +611,7 @@ class ScenarioRun(models.Model):
         Scenario, on_delete=models.CASCADE, related_name="runs", verbose_name="Senaryo",
     )
     station = models.ForeignKey(
-        "api.Station", on_delete=models.CASCADE, related_name="+", verbose_name="İstasyon",
+        "api.Station", on_delete=models.CASCADE, related_name="+", verbose_name="Tesis",
     )
     run_date = models.DateField(db_index=True, verbose_name="Tarih")
     status = models.CharField(
@@ -658,7 +658,7 @@ class ScenarioRunLog(models.Model):
         related_name="logs", verbose_name="Çalışma",
     )
     station = models.ForeignKey(
-        "api.Station", on_delete=models.CASCADE, related_name="+", verbose_name="İstasyon",
+        "api.Station", on_delete=models.CASCADE, related_name="+", verbose_name="Tesis",
     )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="Zaman")
     kind = models.CharField(max_length=8, choices=KIND_CHOICES, default=KIND_EVAL, verbose_name="Tür")
@@ -704,7 +704,7 @@ class ScenarioGraph(models.Model):
     )
     station = models.ForeignKey(
         "api.Station", on_delete=models.SET_NULL, blank=True, null=True,
-        related_name="+", verbose_name="İstasyon (bağlam)",
+        related_name="+", verbose_name="Tesis (bağlam)",
     )
     created_by = models.ForeignKey(
         CustomUser, on_delete=models.SET_NULL, blank=True, null=True, related_name="+",

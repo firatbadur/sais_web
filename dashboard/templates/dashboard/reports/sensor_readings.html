@@ -78,9 +78,9 @@
         <form method="get" id="report-filter-form" class="row g-5">
             <!-- İstasyon Seçimi -->
             <div class="col-md-6">
-                <label class="form-label fw-semibold">{% trans "İstasyon Seçimi" %}</label>
+                <label class="form-label fw-semibold">{% trans "Tesis Seçimi" %}</label>
                 <select name="station" id="filter-station" class="form-select" data-control="select2"
-                        data-placeholder='{% trans "İstasyon seçiniz" %}' data-allow-clear="true">
+                        data-placeholder='{% trans "Tesis seçiniz" %}' data-allow-clear="true">
                     <option></option>
                     {% for s in stations %}
                         <option value="{{ s.id }}" {% if filters.station_id == s.id %}selected{% endif %}>{{ s.name }}</option>
@@ -123,7 +123,7 @@
                     {% endif %}
                 </select>
                 <div class="form-text" id="parameter-hint">
-                    {% if filters.station_id %}{% trans "Sensör seçilmezse o istasyonun tüm sensörleri gösterilir." %}{% else %}{% trans "Önce bir istasyon seçin." %}{% endif %}
+                    {% if filters.station_id %}{% trans "Sensör seçilmezse o tesisin tüm sensörleri gösterilir." %}{% else %}{% trans "Önce bir tesis seçin." %}{% endif %}
                 </div>
             </div>
 
@@ -207,7 +207,7 @@
         {% if not filters.submitted or not filters.station_id %}
             <div class="text-center text-muted py-10">
                 <i class="ki-outline ki-information-5 fs-2hx text-muted mb-3 d-block"></i>
-                {% trans "Rapor oluşturmak için istasyon seçip 'Rapor Getir' butonuna basın." %}
+                {% trans "Rapor oluşturmak için tesis seçip 'Rapor Getir' butonuna basın." %}
             </div>
         {% else %}
             <!-- Grafik -->
@@ -295,13 +295,13 @@
     const paramHint    = document.getElementById('parameter-hint');
 
     const I18N = {
-        pickStation:   "{% trans 'Önce bir istasyon seçin.' %}",
+        pickStation:   "{% trans 'Önce bir tesis seçin.' %}",
         startGtEnd:    "{% trans 'Başlangıç tarihi bitiş tarihinden büyük olamaz.' %}",
         endLtStart:    "{% trans 'Bitiş tarihi başlangıç tarihinden küçük olamaz.' %}",
         invalidDate:   "{% trans 'Geçerli bir tarih giriniz (gg.aa.yyyy SS:DD:SS).' %}",
         emptyDate:     "{% trans 'Tarih boş olamaz.' %}",
-        paramHintIdle: "{% trans 'Sensör seçilmezse o istasyonun tüm sensörleri gösterilir.' %}",
-        paramHintNone: "{% trans 'Önce bir istasyon seçin.' %}",
+        paramHintIdle: "{% trans 'Sensör seçilmezse o tesisin tüm sensörleri gösterilir.' %}",
+        paramHintNone: "{% trans 'Önce bir tesis seçin.' %}",
     };
 
     function parseDate(txt) {

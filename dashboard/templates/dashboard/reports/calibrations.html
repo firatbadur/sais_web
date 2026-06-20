@@ -21,7 +21,7 @@
     <div class="card-body pt-2">
         <form method="get" id="report-filter-form" class="row g-5">
             <div class="col-md-3">
-                <label class="form-label fw-semibold">{% trans "İstasyon" %}</label>
+                <label class="form-label fw-semibold">{% trans "Tesis" %}</label>
                 <select name="station" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
                     <option value="">{% trans "Hepsi" %}</option>
                     {% for s in stations %}<option value="{{ s.id }}" {% if filters.station_id == s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
