@@ -2991,3 +2991,12 @@ msgstr "User not found."
 
 msgid "Token yalnızca Bakanlık kullanıcısı için üretilir."
 msgstr "Tokens are issued only for Ministry users."
+
+msgid "Güçlü Parola Oluştur"
+msgstr "Generate Strong Password"
+
+msgid "Göster / Gizle"
+msgstr "Show / Hide"
+
+msgid "Oluşturuldu — Panoya kopyalandı"
+msgstr "Generated — copied to clipboard"

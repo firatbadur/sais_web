@@ -53,11 +53,23 @@
                         {% endwith %}
                     </div>
                     {% if form.password1 %}
-                    <div class="col-md-6"></div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <button type="button" id="btn-generate-pw" class="btn btn-light-primary w-100">
+                            <i class="ki-outline ki-abstract-26 fs-4"></i>{% trans "Güçlü Parola Oluştur" %}
+                        </button>
+                    </div>
                     <div class="col-md-6">
                         {% with f=form.password1 %}
                         <label class="form-label required">{{ f.label }}</label>
-                        {{ f }}
+                        <div class="position-relative">
+                            {{ f }}
+                            <button type="button" id="btn-toggle-pw"
+                                    class="btn btn-icon btn-sm btn-active-light-primary position-absolute translate-middle-y top-50 end-0 me-2"
+                                    title="{% trans 'Göster / Gizle' %}">
+                                <i class="ki-outline ki-eye fs-3"></i>
+                                <i class="ki-outline ki-eye-slash fs-3 d-none"></i>
+                            </button>
+                        </div>
                         {% if f.help_text %}<div class="form-text">{{ f.help_text|safe }}</div>{% endif %}
                         {% for e in f.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
                         {% endwith %}
@@ -231,6 +243,85 @@
 {% endblock %}
 
 {% block extra_scripts %}
+{% if form.password1 %}
+<script>
+(function () {
+    var genBtn = document.getElementById('btn-generate-pw');
+    var toggleBtn = document.getElementById('btn-toggle-pw');
+    var pw1 = document.getElementById('id_password1');
+    var pw2 = document.getElementById('id_password2');
+
+    // Belirsizliği önlemek için karışan karakterler (I l 1 O 0 vb.) hariç tutuldu.
+    var UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    var LOWER = 'abcdefghijkmnpqrstuvwxyz';
+    var DIGIT = '23456789';
+    var SYMBOL = '!@#$%^&*-_=+?';
+    var ALL = UPPER + LOWER + DIGIT + SYMBOL;
+
+    function randInt(max) {
+        // Kriptografik güvenli rastgele.
+        var buf = new Uint32Array(1);
+        window.crypto.getRandomValues(buf);
+        return buf[0] % max;
+    }
+    function pick(set) { return set.charAt(randInt(set.length)); }
+
+    function generate(len) {
+        len = len || 16;
+        // Her sınıftan en az bir karakter garantile.
+        var chars = [pick(UPPER), pick(LOWER), pick(DIGIT), pick(SYMBOL)];
+        while (chars.length < len) chars.push(pick(ALL));
+        // Fisher-Yates karıştır.
+        for (var i = chars.length - 1; i > 0; i--) {
+            var j = randInt(i + 1);
+            var t = chars[i]; chars[i] = chars[j]; chars[j] = t;
+        }
+        return chars.join('');
+    }
+
+    function reveal(show) {
+        if (!pw1) return;
+        var type = show ? 'text' : 'password';
+        pw1.type = type;
+        if (pw2) pw2.type = type;
+        if (toggleBtn) {
+            var icons = toggleBtn.querySelectorAll('i');
+            if (icons.length === 2) {
+                icons[0].classList.toggle('d-none', show);
+                icons[1].classList.toggle('d-none', !show);
+            }
+        }
+    }
+
+    if (genBtn) genBtn.addEventListener('click', function () {
+        var pw = generate(16);
+        if (pw1) pw1.value = pw;
+        if (pw2) pw2.value = pw;
+        reveal(true);
+        // Panoya kopyala (kullanıcıya iletmek için).
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(pw).then(function () {
+                genBtn.classList.remove('btn-light-primary');
+                genBtn.classList.add('btn-light-success');
+                genBtn.setAttribute('data-orig', genBtn.innerHTML);
+                genBtn.innerHTML = '<i class="ki-outline ki-check fs-4"></i>{% trans "Oluşturuldu — Panoya kopyalandı" %}';
+                setTimeout(function () {
+                    if (genBtn.getAttribute('data-orig')) {
+                        genBtn.innerHTML = genBtn.getAttribute('data-orig');
+                        genBtn.classList.remove('btn-light-success');
+                        genBtn.classList.add('btn-light-primary');
+                    }
+                }, 2500);
+            }).catch(function () {});
+        }
+    });
+
+    if (toggleBtn) toggleBtn.addEventListener('click', function () {
+        reveal(pw1 && pw1.type === 'password');
+    });
+})();
+</script>
+{% endif %}
 {% if ministry_token %}
 <script>
 (function () {
