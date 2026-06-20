@@ -48,9 +48,9 @@ class StationAuthorityInline(admin.TabularInline):
 
 @admin.register(Station)
 class StationAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "station_type", "company", "domain", "port", "active", "user", "created_at")
+    list_display = ("id", "name", "station_type", "company", "active", "user", "created_at")
     list_filter = ("station_type", "active", "company")
-    search_fields = ("name", "address", "company", "domain")
+    search_fields = ("name", "address", "company")
     list_editable = ("active",)
     readonly_fields = ("created_at",)
     autocomplete_fields = ("station_type", "user")

@@ -65,8 +65,10 @@ class StationInfoSerializer(serializers.ModelSerializer):
     Name = serializers.CharField(source="name")
     DataPeriodMinute = serializers.IntegerField(source="data_period")
     LastDataDate = serializers.SerializerMethodField()
-    ConnectionDomainAddress = serializers.CharField(source="station.domain")
-    ConnectionPort = serializers.IntegerField(source="station.port")
+    # Domain + port artık istasyon başına değil, kurulumun tek web erişim
+    # ayarından (WebSettings) gelir; Caddy HTTPS'i daima 443'te sunar.
+    ConnectionDomainAddress = serializers.SerializerMethodField()
+    ConnectionPort = serializers.SerializerMethodField()
     ConnectionUser = serializers.CharField(source="auth_username")
     ConnectionPassword = serializers.CharField(source="auth_secret")
     Company = serializers.CharField(source="station.company")
@@ -86,6 +88,14 @@ class StationInfoSerializer(serializers.ModelSerializer):
 
     def get_LastDataDate(self, obj):
         return None
+
+    def get_ConnectionDomainAddress(self, obj):
+        from .models import WebSettings  # lazy — app yükleme sırası
+        return (WebSettings.load().domain or "").strip()
+
+    def get_ConnectionPort(self, obj):
+        # Caddy reverse proxy HTTPS'i daima 443'te sunar.
+        return 443
 
     def get_BirtDate(self, obj):
         return obj.created_at.isoformat() if obj.created_at else None

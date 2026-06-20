@@ -63,14 +63,6 @@ class Station(models.Model):
         max_length=250, blank=True, default="",
         verbose_name="İstasyon Adresi", help_text="İstasyon Adresi",
     )
-    domain = models.URLField(
-        max_length=100, blank=True, default="",
-        verbose_name="Domain", help_text="İstasyonun bağlı olduğu uygulamanın domaini",
-    )
-    port = models.IntegerField(
-        blank=True, null=True, default=443,
-        verbose_name="Port No", help_text="Port No",
-    )
     company = models.CharField(
         max_length=100, blank=True, default="",
         verbose_name="Kurum Adı", help_text="Kurum Adı",
