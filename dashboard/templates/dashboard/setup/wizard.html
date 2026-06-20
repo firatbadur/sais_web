@@ -93,7 +93,7 @@
                             <option></option>
                             {% for t in station_types %}
                             <option value="{{ t.code }}"
-                                {% if station.station_type and station.station_type.code == t.code %}selected{% endif %}>
+                                {% if t.code == default_type_code %}selected{% endif %}>
                                 {{ t.name }}
                             </option>
                             {% endfor %}

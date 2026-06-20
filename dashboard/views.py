@@ -200,6 +200,13 @@ class SetupWizardView(AdminRequiredMixin, TemplateView):
 
         ctx["station_types"] = StationType.objects.order_by("name")
         ctx["sais_type_codes"] = sorted(SAIS_CABINET_STATION_TYPES)
+        # Tesis tipi ön seçimi: mevcut tesisin tipi, yoksa "Genel SCADA İzleme"
+        # (scada_general) varsayılan gelir.
+        ctx["default_type_code"] = (
+            station.station_type.code
+            if station and station.station_type_id
+            else "scada_general"
+        )
         ctx["setup_state"] = SetupState.load()
         ctx["is_preview"] = self.request.GET.get("preview") == "1"
         return ctx
