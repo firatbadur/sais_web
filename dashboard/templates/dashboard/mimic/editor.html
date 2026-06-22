@@ -64,6 +64,7 @@
             background: transparent; border: 1px solid transparent; color: var(--mx-text); transition: .12s; }
         .r-tile:hover { background: var(--mx-panel-2); border-color: var(--mx-border); color: var(--mx-head); }
         .r-tile i { font-size: 30px; }
+        .r-tile .r-ico { width: 30px; height: 30px; display: block; }
         /* yalnız doğrudan-çocuk etiket span'i — keenicon .path1/.path2 span'lerini ETKİLEME */
         .r-tile > span { font-size: 11px; text-align: center; line-height: 1.1; white-space: nowrap; }
         .r-tile.has-caret > span::after { content: " ▾"; color: var(--mx-muted); }
@@ -79,7 +80,7 @@
         .menu-item i { font-size: 21px; color: var(--mx-accent); }
         .menu-item .mi-kbd { margin-left: auto; font-size: 10px; color: var(--mx-muted); font-weight: 600; }
         .menu-sep { height: 1px; background: var(--mx-border); margin: 5px 4px; }
-        .r-tile.accent i { color: var(--mx-accent); }
+        .r-tile.accent i, .r-tile.accent .r-ico { color: var(--mx-accent); }
         .r-tile.primary { background: var(--mx-accent); border-color: var(--mx-accent); color: #fff; }
         .r-tile.primary:hover { background: #0089d6; color: #fff; }
         .r-tile.primary i { color: #fff; }
@@ -271,18 +272,18 @@
     <!-- EKLE -->
     <div class="r-group">
         <div class="r-items">
-            <div class="r-tile" data-shape="rect"><i class="ki-duotone ki-abstract-26"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Dikdörtgen" %}</span></div>
-            <div class="r-tile" data-shape="roundrect"><i class="ki-duotone ki-abstract-41"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Yuvarlak" %}</span></div>
-            <div class="r-tile" data-shape="circle"><i class="ki-duotone ki-abstract-24"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Daire" %}</span></div>
-            <div class="r-tile" data-shape="ellipse"><i class="ki-duotone ki-abstract-25"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Elips" %}</span></div>
-            <div class="r-tile" data-shape="triangle"><i class="ki-duotone ki-abstract-8"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Üçgen" %}</span></div>
-            <div class="r-tile" data-shape="line"><i class="ki-duotone ki-minus"></i><span>{% trans "Çizgi" %}</span></div>
-            <div class="r-tile" data-shape="pipe"><i class="ki-duotone ki-minus-square"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Boru" %}</span></div>
-            <div class="r-tile" data-shape="arrow"><i class="ki-duotone ki-arrow-right"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Ok" %}</span></div>
-            <div class="r-tile" data-shape="text"><i class="ki-duotone ki-text"></i><span>{% trans "Metin" %}</span></div>
-            <div class="r-tile" data-shape="label"><i class="ki-duotone ki-notepad"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Etiket" %}</span></div>
-            <div class="r-tile accent" data-shape="button"><i class="ki-duotone ki-click"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i><span>{% trans "Buton" %}</span></div>
-            <div class="r-tile" id="btn-add-image"><i class="ki-duotone ki-picture"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Resim" %}</span></div>
+            <div class="r-tile" data-shape="rect"><svg class="r-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="1"/></svg><span>{% trans "Dikdörtgen" %}</span></div>
+            <div class="r-tile" data-shape="roundrect"><svg class="r-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="4.5"/></svg><span>{% trans "Yuvarlak" %}</span></div>
+            <div class="r-tile" data-shape="circle"><svg class="r-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/></svg><span>{% trans "Daire" %}</span></div>
+            <div class="r-tile" data-shape="ellipse"><svg class="r-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="9.5" ry="6"/></svg><span>{% trans "Elips" %}</span></div>
+            <div class="r-tile" data-shape="triangle"><svg class="r-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12,4 21,20 3,20"/></svg><span>{% trans "Üçgen" %}</span></div>
+            <div class="r-tile" data-shape="line"><svg class="r-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="19" x2="20" y2="5"/></svg><span>{% trans "Çizgi" %}</span></div>
+            <div class="r-tile" data-shape="pipe"><svg class="r-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"><line x1="4" y1="12" x2="20" y2="12"/></svg><span>{% trans "Boru" %}</span></div>
+            <div class="r-tile" data-shape="arrow"><svg class="r-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="19" y2="12"/><polyline points="14,7 20,12 14,17"/></svg><span>{% trans "Ok" %}</span></div>
+            <div class="r-tile" data-shape="text"><svg class="r-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 6h14M12 6v13"/></svg><span>{% trans "Metin" %}</span></div>
+            <div class="r-tile" data-shape="label"><svg class="r-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="2"/><line x1="7" y1="12" x2="17" y2="12"/></svg><span>{% trans "Etiket" %}</span></div>
+            <div class="r-tile accent" data-shape="button"><svg class="r-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="8" width="19" height="8" rx="4" fill="currentColor" stroke="none"/></svg><span>{% trans "Buton" %}</span></div>
+            <div class="r-tile" id="btn-add-image"><svg class="r-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 16l-5-5-9 9"/></svg><span>{% trans "Resim" %}</span></div>
         </div>
         <div class="r-caption">{% trans "Ekle" %}</div>
         <input type="file" id="file-image" accept="image/*,.svg" hidden>
