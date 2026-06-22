@@ -60,11 +60,12 @@
         .r-caption { font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--mx-muted);
             margin-top: 3px; font-weight: 700; }
         .r-tile { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px;
-            min-width: 56px; max-width: 84px; padding: 6px 7px; border-radius: 7px; cursor: pointer;
+            min-width: 62px; max-width: 92px; padding: 7px 8px; border-radius: 7px; cursor: pointer;
             background: transparent; border: 1px solid transparent; color: var(--mx-text); transition: .12s; }
         .r-tile:hover { background: var(--mx-panel-2); border-color: var(--mx-border); color: var(--mx-head); }
-        .r-tile i { font-size: 24px; }
-        .r-tile span { font-size: 10.5px; text-align: center; line-height: 1.1; white-space: nowrap; }
+        .r-tile i { font-size: 30px; }
+        .r-tile i.fs-2 { font-size: 30px; }
+        .r-tile span { font-size: 11px; text-align: center; line-height: 1.1; white-space: nowrap; }
         .r-tile.has-caret span::after { content: " ▾"; color: var(--mx-muted); }
 
         /* açılır menüler (Dosya / Dışa Aktar) */
@@ -75,7 +76,7 @@
         .menu-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent;
             border: none; color: var(--mx-text); padding: 9px 11px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; }
         .menu-item:hover { background: var(--mx-panel-2); color: var(--mx-head); }
-        .menu-item i { font-size: 18px; color: var(--mx-accent); }
+        .menu-item i { font-size: 21px; color: var(--mx-accent); }
         .menu-item .mi-kbd { margin-left: auto; font-size: 10px; color: var(--mx-muted); font-weight: 600; }
         .menu-sep { height: 1px; background: var(--mx-border); margin: 5px 4px; }
         .r-tile.accent i { color: var(--mx-accent); }
@@ -283,26 +284,25 @@
         <div class="r-caption">{% trans "Sırala" %}</div>
     </div>
 
-    <!-- HİZALA -->
+    <!-- HİZALA & DAĞIT (menü) -->
     <div class="r-group">
         <div class="r-items">
-            <div class="r-tile" data-align="left"><i class="ki-duotone ki-text-align-left"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i><span>{% trans "Sol" %}</span></div>
-            <div class="r-tile" data-align="centerH"><i class="ki-duotone ki-text-align-center"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i><span>{% trans "Yatay Orta" %}</span></div>
-            <div class="r-tile" data-align="right"><i class="ki-duotone ki-text-align-right"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i><span>{% trans "Sağ" %}</span></div>
-            <div class="r-tile" data-align="top"><i class="ki-duotone ki-up"></i><span>{% trans "Üst" %}</span></div>
-            <div class="r-tile" data-align="middle"><i class="ki-duotone ki-element-4"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Dikey Orta" %}</span></div>
-            <div class="r-tile" data-align="bottom"><i class="ki-duotone ki-down"></i><span>{% trans "Alt" %}</span></div>
+            <div class="r-menu">
+                <div class="r-tile has-caret" data-menu-toggle><i class="ki-duotone ki-element-4"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Hizala" %}</span></div>
+                <div class="r-menu-list">
+                    <button class="menu-item" data-align="left"><i class="ki-duotone ki-text-align-left"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>{% trans "Sola hizala" %}</button>
+                    <button class="menu-item" data-align="centerH"><i class="ki-duotone ki-text-align-center"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>{% trans "Yatay ortala" %}</button>
+                    <button class="menu-item" data-align="right"><i class="ki-duotone ki-text-align-right"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>{% trans "Sağa hizala" %}</button>
+                    <button class="menu-item" data-align="top"><i class="ki-duotone ki-up"></i>{% trans "Üste hizala" %}</button>
+                    <button class="menu-item" data-align="middle"><i class="ki-duotone ki-element-4"><span class="path1"></span><span class="path2"></span></i>{% trans "Dikey ortala" %}</button>
+                    <button class="menu-item" data-align="bottom"><i class="ki-duotone ki-down"></i>{% trans "Alta hizala" %}</button>
+                    <div class="menu-sep"></div>
+                    <button class="menu-item" data-distribute="h"><i class="ki-duotone ki-element-6"><span class="path1"></span><span class="path2"></span></i>{% trans "Yatay dağıt (3+ nesne)" %}</button>
+                    <button class="menu-item" data-distribute="v"><i class="ki-duotone ki-element-7"><span class="path1"></span><span class="path2"></span></i>{% trans "Dikey dağıt (3+ nesne)" %}</button>
+                </div>
+            </div>
         </div>
-        <div class="r-caption">{% trans "Hizala" %}</div>
-    </div>
-
-    <!-- DAĞIT -->
-    <div class="r-group">
-        <div class="r-items">
-            <div class="r-tile" data-distribute="h"><i class="ki-duotone ki-element-6"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Yatay Dağıt" %}</span></div>
-            <div class="r-tile" data-distribute="v"><i class="ki-duotone ki-element-7"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Dikey Dağıt" %}</span></div>
-        </div>
-        <div class="r-caption">{% trans "Dağıt" %}</div>
+        <div class="r-caption">{% trans "Hizala & Dağıt" %}</div>
     </div>
 
     <!-- GÖRÜNÜM -->
