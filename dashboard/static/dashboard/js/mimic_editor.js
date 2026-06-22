@@ -610,18 +610,83 @@
     function flipH() { var o = activeObj(); if (o) { o.set("flipX", !o.flipX); canvas.requestRenderAll(); pushUndo(); } }
     function flipV() { var o = activeObj(); if (o) { o.set("flipY", !o.flipY); canvas.requestRenderAll(); pushUndo(); } }
 
+    // Çoklu seçim → seçim nesnelerini mutlak koordinatla geri al (selection çöz).
+    function takeSelectionObjects() {
+        var a = canvas.getActiveObject();
+        if (a && a.type === "activeSelection") {
+            var os = a.getObjects().slice();
+            canvas.discardActiveObject();   // her objeye mutlak left/top geri yazılır
+            return os;
+        }
+        return null;
+    }
+    function reselect(objs) {
+        if (!objs || !objs.length) return;
+        if (objs.length === 1) { canvas.setActiveObject(objs[0]); return; }
+        var s = new fabric.ActiveSelection(objs, { canvas: canvas });
+        canvas.setActiveObject(s);
+    }
+    function unionBounds(objs) {
+        var l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+        objs.forEach(function (o) {
+            var rc = o.getBoundingRect(true, true);
+            l = Math.min(l, rc.left); t = Math.min(t, rc.top);
+            r = Math.max(r, rc.left + rc.width); b = Math.max(b, rc.top + rc.height);
+        });
+        return { left: l, top: t, right: r, bottom: b };
+    }
+    // Bounding-rect kenarına göre kaydır (origin'den bağımsız).
+    function moveEdge(o, how, target) {
+        var rc = o.getBoundingRect(true, true);
+        if (how === "left") o.left += target - rc.left;
+        else if (how === "right") o.left += target - (rc.left + rc.width);
+        else if (how === "centerH") o.left += target - (rc.left + rc.width / 2);
+        else if (how === "top") o.top += target - rc.top;
+        else if (how === "bottom") o.top += target - (rc.top + rc.height);
+        else if (how === "middle") o.top += target - (rc.top + rc.height / 2);
+        o.setCoords();
+    }
+
+    // Hizala: çoklu seçimde seçim sınırına, tek nesnede tuval (sayfa) sınırına göre.
     function align(how) {
-        var o = activeObj(); if (!o) return;
-        var b = { l: 0, t: 0, r: state.width, btm: state.height };
-        var w = o.getScaledWidth(), h = o.getScaledHeight();
-        var ox = o.originX === "center" ? w / 2 : 0, oy = o.originY === "center" ? h / 2 : 0;
-        if (how === "left") o.left = ox;
-        if (how === "right") o.left = b.r - w + ox;
-        if (how === "centerH") o.left = b.r / 2 - w / 2 + ox;
-        if (how === "top") o.top = oy;
-        if (how === "bottom") o.top = b.btm - h + oy;
-        if (how === "middle") o.top = b.btm / 2 - h / 2 + oy;
-        o.setCoords(); canvas.requestRenderAll(); pushUndo();
+        var multi = takeSelectionObjects();
+        var objs = multi || (activeObj() ? [activeObj()] : []);
+        if (!objs.length) return;
+        var b = multi
+            ? unionBounds(objs)
+            : { left: 0, top: 0, right: state.width, bottom: state.height };
+        var targets = {
+            left: b.left, right: b.right, centerH: (b.left + b.right) / 2,
+            top: b.top, bottom: b.bottom, middle: (b.top + b.bottom) / 2
+        };
+        if (targets[how] == null) return;
+        objs.forEach(function (o) { moveEdge(o, how, targets[how]); });
+        reselect(multi ? objs : null);
+        canvas.requestRenderAll(); pushUndo();
+    }
+
+    // Dağıt: seçili nesneleri (3+) yatay/dikey eşit aralıklarla yay.
+    function distribute(axis) {
+        var objs = takeSelectionObjects();
+        if (!objs || objs.length < 3) {
+            if (objs) reselect(objs);
+            toast("Dağıtmak için en az 3 nesne seçin.", "danger");
+            return;
+        }
+        var key = axis === "v" ? "y" : "x";
+        objs.sort(function (a, b) { return a.getCenterPoint()[key] - b.getCenterPoint()[key]; });
+        var first = objs[0].getCenterPoint()[key];
+        var last = objs[objs.length - 1].getCenterPoint()[key];
+        var step = (last - first) / (objs.length - 1);
+        objs.forEach(function (o, i) {
+            var c = o.getCenterPoint();
+            var nx = axis === "v" ? c.x : first + step * i;
+            var ny = axis === "v" ? first + step * i : c.y;
+            o.setPositionByOrigin(new fabric.Point(nx, ny), "center", "center");
+            o.setCoords();
+        });
+        reselect(objs);
+        canvas.requestRenderAll(); pushUndo();
     }
 
     // ----------------------------------------------------------------- //
@@ -894,6 +959,27 @@
     document.querySelectorAll("[data-align]").forEach(function (b) {
         b.addEventListener("click", function () { align(b.dataset.align); });
     });
+    document.querySelectorAll("[data-distribute]").forEach(function (b) {
+        b.addEventListener("click", function () { distribute(b.dataset.distribute); });
+    });
+
+    // Açılır menüler (Dosya / Aktar)
+    function closeMenus() {
+        document.querySelectorAll(".r-menu.open").forEach(function (m) { m.classList.remove("open"); });
+    }
+    document.querySelectorAll("[data-menu-toggle]").forEach(function (t) {
+        t.addEventListener("click", function (e) {
+            e.stopPropagation();
+            var menu = t.closest(".r-menu");
+            var isOpen = menu.classList.contains("open");
+            closeMenus();
+            if (!isOpen) menu.classList.add("open");
+        });
+    });
+    document.querySelectorAll(".r-menu-list .menu-item").forEach(function (it) {
+        it.addEventListener("click", function () { setTimeout(closeMenus, 0); });
+    });
+    document.addEventListener("click", closeMenus);
 
     on("zoom-in", "click", function () { setZoom(canvas.getZoom() * 1.15); });
     on("zoom-out", "click", function () { setZoom(canvas.getZoom() / 1.15); });

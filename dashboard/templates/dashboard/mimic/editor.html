@@ -47,7 +47,7 @@
             border-radius: 7px; padding: 7px 13px; font-size: 13px; font-weight: 600; cursor: pointer;
             display: inline-flex; align-items: center; gap: 6px; line-height: 1; transition: .12s; white-space: nowrap; }
         .mx-btn:hover { background: var(--mx-hover); color: var(--mx-head); }
-        .mx-btn i { font-size: 17px; }
+        .mx-btn i { font-size: 19px; }
         .mx-btn.btn-success { background: #2fb574; border-color: #2fb574; color: #fff; }
         .mx-btn.btn-danger { background: #e4544c; border-color: #e4544c; color: #fff; }
 
@@ -59,12 +59,25 @@
         .r-items { display: flex; gap: 2px; }
         .r-caption { font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--mx-muted);
             margin-top: 3px; font-weight: 700; }
-        .r-tile { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px;
-            min-width: 50px; max-width: 76px; padding: 5px 6px; border-radius: 7px; cursor: pointer;
+        .r-tile { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px;
+            min-width: 56px; max-width: 84px; padding: 6px 7px; border-radius: 7px; cursor: pointer;
             background: transparent; border: 1px solid transparent; color: var(--mx-text); transition: .12s; }
         .r-tile:hover { background: var(--mx-panel-2); border-color: var(--mx-border); color: var(--mx-head); }
-        .r-tile i { font-size: 19px; }
-        .r-tile span { font-size: 10px; text-align: center; line-height: 1.1; white-space: nowrap; }
+        .r-tile i { font-size: 24px; }
+        .r-tile span { font-size: 10.5px; text-align: center; line-height: 1.1; white-space: nowrap; }
+        .r-tile.has-caret span::after { content: " ▾"; color: var(--mx-muted); }
+
+        /* açılır menüler (Dosya / Dışa Aktar) */
+        .r-menu { position: relative; }
+        .r-menu-list { position: absolute; top: 100%; left: 0; margin-top: 4px; min-width: 210px; background: var(--mx-panel);
+            border: 1px solid var(--mx-border); border-radius: 9px; box-shadow: 0 10px 28px rgba(0,0,0,.2); padding: 6px; display: none; z-index: 50; }
+        .r-menu.open .r-menu-list { display: block; }
+        .menu-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent;
+            border: none; color: var(--mx-text); padding: 9px 11px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; }
+        .menu-item:hover { background: var(--mx-panel-2); color: var(--mx-head); }
+        .menu-item i { font-size: 18px; color: var(--mx-accent); }
+        .menu-item .mi-kbd { margin-left: auto; font-size: 10px; color: var(--mx-muted); font-weight: 600; }
+        .menu-sep { height: 1px; background: var(--mx-border); margin: 5px 4px; }
         .r-tile.accent i { color: var(--mx-accent); }
         .r-tile.primary { background: var(--mx-accent); border-color: var(--mx-accent); color: #fff; }
         .r-tile.primary:hover { background: #0089d6; color: #fff; }
@@ -209,13 +222,19 @@
 <!-- ===================== TIER 2: RIBBON ===================== -->
 <div class="mx-ribbon">
 
-    <!-- DOSYA -->
+    <!-- DOSYA (menü) -->
     <div class="r-group">
         <div class="r-items">
-            <div class="r-tile" id="btn-new"><i class="ki-duotone ki-file-added"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Yeni" %}</span></div>
-            <div class="r-tile" id="btn-open"><i class="ki-duotone ki-folder"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Aç" %}</span></div>
-            <div class="r-tile primary" id="btn-save"><i class="ki-duotone ki-cloud-download"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Kaydet" %}</span></div>
-            <div class="r-tile" id="btn-saveas"><i class="ki-duotone ki-copy"></i><span>{% trans "Farklı Kaydet" %}</span></div>
+            <div class="r-menu">
+                <div class="r-tile has-caret" data-menu-toggle><i class="ki-duotone ki-folder"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Dosya" %}</span></div>
+                <div class="r-menu-list">
+                    <button class="menu-item" id="btn-new"><i class="ki-duotone ki-file-added"><span class="path1"></span><span class="path2"></span></i>{% trans "Yeni" %}</button>
+                    <button class="menu-item" id="btn-open"><i class="ki-duotone ki-folder"><span class="path1"></span><span class="path2"></span></i>{% trans "Aç..." %}</button>
+                    <div class="menu-sep"></div>
+                    <button class="menu-item" id="btn-save"><i class="ki-duotone ki-cloud-download"><span class="path1"></span><span class="path2"></span></i>{% trans "Kaydet" %}<span class="mi-kbd">Ctrl+S</span></button>
+                    <button class="menu-item" id="btn-saveas"><i class="ki-duotone ki-copy"></i>{% trans "Farklı Kaydet" %}</button>
+                </div>
+            </div>
         </div>
         <div class="r-caption">{% trans "Dosya" %}</div>
     </div>
@@ -277,6 +296,15 @@
         <div class="r-caption">{% trans "Hizala" %}</div>
     </div>
 
+    <!-- DAĞIT -->
+    <div class="r-group">
+        <div class="r-items">
+            <div class="r-tile" data-distribute="h"><i class="ki-duotone ki-element-6"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Yatay Dağıt" %}</span></div>
+            <div class="r-tile" data-distribute="v"><i class="ki-duotone ki-element-7"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Dikey Dağıt" %}</span></div>
+        </div>
+        <div class="r-caption">{% trans "Dağıt" %}</div>
+    </div>
+
     <!-- GÖRÜNÜM -->
     <div class="r-group">
         <div class="r-items" style="align-items:center;">
@@ -291,13 +319,19 @@
         <div class="r-caption">{% trans "Görünüm" %}</div>
     </div>
 
-    <!-- DIŞA AKTAR -->
+    <!-- DIŞA / İÇE AKTAR (menü) -->
     <div class="r-group" style="border-right:none;">
         <div class="r-items">
-            <div class="r-tile" id="btn-export-png"><i class="ki-duotone ki-picture"><span class="path1"></span><span class="path2"></span></i><span>PNG</span></div>
-            <div class="r-tile" id="btn-export-svg"><i class="ki-duotone ki-code"><span class="path1"></span><span class="path2"></span></i><span>SVG</span></div>
-            <div class="r-tile" id="btn-export-json"><i class="ki-duotone ki-file-down"><span class="path1"></span><span class="path2"></span></i><span>JSON</span></div>
-            <div class="r-tile" id="btn-import-json"><i class="ki-duotone ki-file-up"><span class="path1"></span><span class="path2"></span></i><span>{% trans "İçe Aktar" %}</span></div>
+            <div class="r-menu">
+                <div class="r-tile has-caret" data-menu-toggle><i class="ki-duotone ki-exit-up"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Aktar" %}</span></div>
+                <div class="r-menu-list">
+                    <button class="menu-item" id="btn-export-png"><i class="ki-duotone ki-picture"><span class="path1"></span><span class="path2"></span></i>{% trans "PNG olarak indir" %}</button>
+                    <button class="menu-item" id="btn-export-svg"><i class="ki-duotone ki-code"><span class="path1"></span><span class="path2"></span></i>{% trans "SVG olarak indir" %}</button>
+                    <button class="menu-item" id="btn-export-json"><i class="ki-duotone ki-file-down"><span class="path1"></span><span class="path2"></span></i>{% trans "JSON olarak indir" %}</button>
+                    <div class="menu-sep"></div>
+                    <button class="menu-item" id="btn-import-json"><i class="ki-duotone ki-file-up"><span class="path1"></span><span class="path2"></span></i>{% trans "JSON içe aktar" %}</button>
+                </div>
+            </div>
             <input type="file" id="file-import" accept=".json" hidden>
         </div>
         <div class="r-caption">{% trans "Dışa/İçe Aktar" %}</div>
