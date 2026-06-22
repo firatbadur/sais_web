@@ -153,6 +153,19 @@
                 canvas.requestRenderAll();
             },
             isRunning: function () { return running; },
+            // HMI buton aksiyonları — bağlı etikete (scada.tag) değer uygular.
+            pressButton: function (o) {
+                var sc = o.scada || {}; if (!sc.tag) return;
+                var act = sc.action || "toggle";
+                if (act === "toggle") tags[sc.tag] = (Number(tags[sc.tag]) > 0) ? 0 : 100;
+                else if (act === "set") tags[sc.tag] = Number(sc.setValue == null ? 100 : sc.setValue);
+                else tags[sc.tag] = Number(sc.pressValue == null ? 100 : sc.pressValue); // momentary
+            },
+            releaseButton: function (o) {
+                var sc = o.scada || {}; if (!sc.tag) return;
+                if ((sc.action || "toggle") === "momentary")
+                    tags[sc.tag] = Number(sc.releaseValue == null ? 0 : sc.releaseValue);
+            },
             setTag: function (name, val) { tags[name] = Number(val); },
             setTags: function (obj) { tags = Object.assign({}, obj); },
             getTags: function () { return tags; },

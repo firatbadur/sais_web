@@ -20,7 +20,8 @@
         preserveObjectStacking: true,
         selection: true,
         fireRightClick: true,
-        stopContextMenu: true
+        stopContextMenu: true,
+        fireMiddleClick: true
     });
     fabric.Object.prototype.cornerColor = "#009ef7";
     fabric.Object.prototype.cornerStyle = "circle";
@@ -121,10 +122,20 @@
     // Pan: boşlukta sürükle (space) veya orta tuş
     var panning = false, spaceDown = false, lastPan = null;
     canvas.on("mouse:down", function (opt) {
+        // Simülasyon modunda butona basılıyorsa → etiket aksiyonu (pan değil)
+        if (runtime.isRunning()) {
+            if (opt.target && opt.target.isButton) {
+                runtime.pressButton(opt.target);
+                pulseButton(opt.target);
+                refreshSimRow(opt.target.scada && opt.target.scada.tag);
+            }
+            return;
+        }
         if (spaceDown || opt.e.button === 1) {
             panning = true; canvas.selection = false;
             lastPan = { x: opt.e.clientX, y: opt.e.clientY };
             canvas.setCursor("grabbing");
+            opt.e.preventDefault();   // orta tuş otomatik-kaydırma imlecini engelle
         }
     });
     canvas.on("mouse:move", function (opt) {
@@ -140,9 +151,27 @@
                 Math.round(opt.absolutePointer.x) + ", " + Math.round(opt.absolutePointer.y);
         }
     });
-    canvas.on("mouse:up", function () {
+    canvas.on("mouse:up", function (opt) {
+        if (runtime.isRunning() && opt.target && opt.target.isButton) {
+            runtime.releaseButton(opt.target);
+            unpulseButton(opt.target);
+            refreshSimRow(opt.target.scada && opt.target.scada.tag);
+            return;
+        }
         panning = false; lastPan = null; canvas.selection = true;
     });
+
+    // Buton basma görsel geri bildirimi
+    function pulseButton(o) { o._origOp = (o.opacity == null ? 1 : o.opacity); o.set("opacity", 0.7); canvas.requestRenderAll(); }
+    function unpulseButton(o) { o.set("opacity", o._origOp == null ? 1 : o._origOp); canvas.requestRenderAll(); }
+    function refreshSimRow(tag) {
+        if (!tag) return;
+        var disp = document.querySelector('[data-val="' + tag + '"]');
+        var rng = document.querySelector('input[data-tag="' + tag + '"]');
+        var v = runtime.getTags()[tag] || 0;
+        if (disp) disp.textContent = Math.round(v);
+        if (rng) rng.value = v;
+    }
 
     // ----------------------------------------------------------------- //
     // Snap-to-grid
@@ -158,7 +187,7 @@
     // Undo / redo
     // ----------------------------------------------------------------- //
     var undoStack = [], redoStack = [], suspend = false;
-    var SER_PROPS = ["scada", "name", "isHelper", "selectable", "evented"];
+    var SER_PROPS = ["scada", "name", "isHelper", "selectable", "evented", "isButton"];
     function serialize() { return JSON.stringify(canvas.toJSON(SER_PROPS)); }
     function pushUndo() {
         if (suspend) return;
@@ -238,11 +267,40 @@
         label: function () { return new fabric.Textbox("Etiket", { width: 140, fontSize: 20, fill: "#181c32", fontFamily: "Inter, Arial", textAlign: "center" }); }
     };
 
+    // HMI butonu — yuvarlatılmış kutu + ortalı metin grubu (isButton işaretli).
+    // Simülasyon/görüntüleyici modunda tıklanınca bağlı etikete aksiyon uygular.
+    function makeButton(opts) {
+        opts = opts || {};
+        var w = opts.w || 150, h = opts.h || 50;
+        var rect = new fabric.Rect({
+            width: w, height: h, rx: 8, ry: 8,
+            fill: opts.bg || "#009ef7", stroke: opts.stroke || "#0086d4", strokeWidth: 1,
+            originX: "center", originY: "center"
+        });
+        var label = new fabric.Textbox(opts.label || "BUTON", {
+            width: w - 16, fontSize: opts.fontSize || 18, fontWeight: "600",
+            fill: opts.fg || "#ffffff", textAlign: "center", fontFamily: "Inter, Arial",
+            originX: "center", originY: "center", editable: false, splitByGrapheme: false
+        });
+        var g = new fabric.Group([rect, label], { name: "Buton", subTargetCheck: false });
+        g.isButton = true;
+        g.scada = { tag: "", anim: "none", action: "toggle",
+                    pressValue: 100, releaseValue: 0, setValue: 100,
+                    onColor: "#3fbf6f", offColor: "#e4544c", min: 0, max: 100, threshold: 1,
+                    speed: 1, unit: "", decimals: 1, moveRange: 60 };
+        return g;
+    }
+
     function addShape(kind) {
+        if (kind === "button") { addObject(makeButton(), "Buton"); return; }
         var f = SHAPES[kind];
         if (!f) return;
         addObject(f(), kind);
     }
+
+    // Buton alt-parça erişimi
+    function btnRect(o) { return o && o._objects ? o._objects[0] : null; }
+    function btnLabel(o) { return o && o._objects ? o._objects[1] : null; }
 
     // SVG sembol ekle
     function addSymbol(sym) {
@@ -380,7 +438,27 @@
         // radius
         document.body.classList.toggle("sel-rect", o.type === "rect");
         if (o.type === "rect") setVal("p-radius", o.rx || 0);
+        // buton
+        var isBtn = !!o.isButton;
+        document.body.classList.toggle("sel-button", isBtn);
+        if (isBtn) {
+            var r = btnRect(o), l = btnLabel(o);
+            setVal("bt-label", l ? l.text : "");
+            if ($("bt-bg")) $("bt-bg").value = (r && typeof r.fill === "string") ? r.fill : "#009ef7";
+            if ($("bt-fg")) $("bt-fg").value = (l && typeof l.fill === "string") ? l.fill : "#ffffff";
+            setVal("bt-radius", r ? (r.rx || 0) : 0);
+            setVal("bt-fontsize", l ? l.fontSize : 18);
+            if ($("bt-action")) $("bt-action").value = (o.scada && o.scada.action) || "toggle";
+            setVal("bt-setvalue", (o.scada && o.scada.setValue != null) ? o.scada.setValue : 100);
+        }
         syncBindings();
+    }
+
+    // Buton özellik güncelleyicileri
+    function btnSet(fn) {
+        var o = activeObj(); if (!o || !o.isButton) return;
+        fn(o, btnRect(o), btnLabel(o));
+        o.dirty = true; canvas.requestRenderAll(); markDirty();
     }
 
     function applyProp(prop, value, isNumber) {
@@ -418,6 +496,15 @@
     bindInput("p-fontcolor", function (v) { var o = activeObj(); if (o && /text/i.test(o.type)) { o.set("fill", v); canvas.requestRenderAll(); } });
     var noFill = $("p-fill-none");
     if (noFill) noFill.addEventListener("change", function () { applyProp("fill", noFill.checked ? "" : ($("p-fill").value || "#c2ccd6")); });
+
+    // Buton input bağları
+    bindInput("bt-label", function (v) { btnSet(function (o, r, l) { if (l) l.set("text", v); }); });
+    bindInput("bt-bg", function (v) { btnSet(function (o, r) { if (r) r.set("fill", v); }); });
+    bindInput("bt-fg", function (v) { btnSet(function (o, r, l) { if (l) l.set("fill", v); }); });
+    bindInput("bt-radius", function (v) { btnSet(function (o, r) { if (r) r.set({ rx: parseFloat(v) || 0, ry: parseFloat(v) || 0 }); }); });
+    bindInput("bt-fontsize", function (v) { btnSet(function (o, r, l) { if (l) l.set("fontSize", parseFloat(v) || 14); }); });
+    bindInput("bt-action", function (v) { var o = activeObj(); if (o && o.isButton) { o.scada = o.scada || {}; o.scada.action = v; markDirty(); } });
+    bindInput("bt-setvalue", function (v) { var o = activeObj(); if (o && o.isButton) { o.scada = o.scada || {}; o.scada.setValue = parseFloat(v) || 0; markDirty(); } });
 
     // ----------------------------------------------------------------- //
     // Bağlama (animasyon) paneli
@@ -674,7 +761,12 @@
     function startSim() {
         document.body.classList.add("sim-mode");
         canvas.discardActiveObject();
-        canvas.forEachObject(function (o) { o.selectable = false; o.evented = false; });
+        // Diğer objeler kilitli; butonlar tıklanabilir kalır (etiket aksiyonu).
+        canvas.forEachObject(function (o) {
+            o.selectable = false;
+            o.evented = !!o.isButton;
+            if (o.isButton) o.hoverCursor = "pointer";
+        });
         canvas.requestRenderAll();
         runtime.start();
         buildSimPanel();

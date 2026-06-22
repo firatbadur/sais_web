@@ -71,9 +71,9 @@ window.V_CFG = {
     var CFG = window.V_CFG;
     var data = JSON.parse($("v-data").textContent || "{}");
 
-    var canvas = new fabric.Canvas("v-canvas", { selection: false, backgroundColor: CFG.background, renderOnAddRemove: false });
+    var canvas = new fabric.Canvas("v-canvas", { selection: false, backgroundColor: CFG.background, renderOnAddRemove: false, fireMiddleClick: true });
     var runtime = window.MimicRuntime(canvas);
-    var autoTimer = null;
+    var autoTimer = null, running = false;
 
     function resize() { var w = $("v-wrap"); canvas.setWidth(w.clientWidth); canvas.setHeight(w.clientHeight); fit(); }
     function fit() {
@@ -86,9 +86,45 @@ window.V_CFG = {
     }
 
     canvas.loadFromJSON(data, function () {
-        canvas.forEachObject(function (o) { o.selectable = false; o.evented = false; });
+        canvas.forEachObject(function (o) {
+            o.selectable = false;
+            o.evented = !!o.isButton;          // butonlar tıklanabilir
+            if (o.isButton) o.hoverCursor = "pointer";
+        });
         canvas.requestRenderAll();
         resize();
+    });
+
+    // Buton tıklama (yalnız simülasyon çalışırken etiketi etkiler)
+    canvas.on("mouse:down", function (opt) {
+        if (running && opt.target && opt.target.isButton) {
+            runtime.pressButton(opt.target); opt.target._op = opt.target.opacity; opt.target.set("opacity", 0.7);
+            canvas.requestRenderAll(); buildTagsSync(); return;
+        }
+        if (opt.e.button === 1) { panning = true; lastPan = { x: opt.e.clientX, y: opt.e.clientY }; opt.e.preventDefault(); }
+    });
+    canvas.on("mouse:up", function (opt) {
+        if (running && opt.target && opt.target.isButton) {
+            runtime.releaseButton(opt.target); opt.target.set("opacity", opt.target._op == null ? 1 : opt.target._op);
+            canvas.requestRenderAll(); buildTagsSync();
+        }
+        panning = false; lastPan = null;
+    });
+
+    // Orta tuş ile kaydırma + tekerlek ile yakınlaştırma
+    var panning = false, lastPan = null;
+    canvas.on("mouse:move", function (opt) {
+        if (panning && lastPan) {
+            var vpt = canvas.viewportTransform;
+            vpt[4] += opt.e.clientX - lastPan.x; vpt[5] += opt.e.clientY - lastPan.y;
+            canvas.requestRenderAll(); lastPan = { x: opt.e.clientX, y: opt.e.clientY };
+        }
+    });
+    canvas.on("mouse:wheel", function (opt) {
+        var z = canvas.getZoom() * (opt.e.deltaY > 0 ? 0.92 : 1.08);
+        z = Math.max(0.1, Math.min(6, z));
+        canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, z);
+        opt.e.preventDefault(); opt.e.stopPropagation();
     });
 
     function buildTags() {
@@ -128,7 +164,6 @@ window.V_CFG = {
     }
     function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
 
-    var running = false;
     $("v-run").addEventListener("click", function () {
         running = !running;
         var b = $("v-run");

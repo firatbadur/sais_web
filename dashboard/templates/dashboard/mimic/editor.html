@@ -100,9 +100,10 @@
         .prop-empty { padding: 28px 16px; text-align: center; color: var(--mx-muted); font-size: 12px; }
         body.has-selection .prop-empty { display: none; }
         body:not(.has-selection) .prop-when-sel { display: none; }
-        .sel-text-only, .sel-rect-only { display: none; }
+        .sel-text-only, .sel-rect-only, .sel-button-only { display: none; }
         body.sel-text .sel-text-only { display: block; }
         body.sel-rect .sel-rect-only { display: block; }
+        body.sel-button .sel-button-only { display: block; }
 
         /* layers */
         .layer-row { display: flex; align-items: center; gap: 7px; padding: 7px 10px; cursor: pointer;
@@ -261,6 +262,7 @@
                 <div class="shape-btn" data-shape="arrow"><i class="ki-duotone ki-arrow-right"><span class="path1"></span><span class="path2"></span></i>{% trans "Ok" %}</div>
                 <div class="shape-btn" data-shape="text"><i class="ki-duotone ki-text"></i>{% trans "Metin" %}</div>
                 <div class="shape-btn" data-shape="label"><i class="ki-duotone ki-notepad"><span class="path1"></span><span class="path2"></span></i>{% trans "Etiket Kutu" %}</div>
+                <div class="shape-btn" data-shape="button" style="grid-column:span 2;background:var(--mx-accent);color:#fff;border-color:var(--mx-accent);"><i class="ki-duotone ki-click"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i>{% trans "Buton (tıklanabilir)" %}</div>
             </div>
             <div style="padding:10px;">
                 <button class="mx-btn" id="btn-add-image" style="width:100%;justify-content:center;"><i class="ki-duotone ki-picture"><span class="path1"></span><span class="path2"></span></i> {% trans "Resim Ekle (PNG/SVG)" %}</button>
@@ -319,6 +321,30 @@
                         <div class="prop-field sel-rect-only"><label>{% trans "Köşe Yarıçapı" %}</label><input type="number" id="p-radius" min="0"></div>
                     </div>
                     <label class="mx-check" style="color:var(--mx-text);"><input type="checkbox" id="p-fill-none"> {% trans "Dolgusuz (şeffaf)" %}</label>
+                </div>
+                <div class="prop-sec sel-button-only">
+                    <h6>{% trans "Buton" %}</h6>
+                    <div class="prop-field" style="margin-bottom:7px;"><label>{% trans "Etiket" %}</label><input type="text" id="bt-label"></div>
+                    <div class="prop-row">
+                        <div class="prop-field"><label>{% trans "Arka Plan" %}</label><input type="color" id="bt-bg"></div>
+                        <div class="prop-field"><label>{% trans "Yazı Rengi" %}</label><input type="color" id="bt-fg"></div>
+                    </div>
+                    <div class="prop-row">
+                        <div class="prop-field"><label>{% trans "Köşe Yarıçapı" %}</label><input type="number" id="bt-radius" min="0"></div>
+                        <div class="prop-field"><label>{% trans "Punto" %}</label><input type="number" id="bt-fontsize" min="8"></div>
+                    </div>
+                    <div class="prop-field" style="margin-bottom:7px;">
+                        <label>{% trans "Tıklama Davranışı" %}</label>
+                        <select id="bt-action">
+                            <option value="toggle">{% trans "Aç/Kapa (0↔100)" %}</option>
+                            <option value="momentary">{% trans "Bas-Çek (basılıyken aktif)" %}</option>
+                            <option value="set">{% trans "Değer Ata" %}</option>
+                        </select>
+                    </div>
+                    <div class="prop-field"><label>{% trans "Atanacak Değer (Değer Ata)" %}</label><input type="number" id="bt-setvalue"></div>
+                    <div style="color:var(--mx-muted);font-size:10.5px;margin-top:6px;">
+                        {% trans "Butonun hangi etikete etki edeceğini Animasyon sekmesindeki 'Etiket Adı' alanından belirleyin. Simülasyonda butona tıklayarak test edin." %}
+                    </div>
                 </div>
                 <div class="prop-sec sel-text-only">
                     <h6>{% trans "Metin" %}</h6>
