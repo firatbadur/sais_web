@@ -101,6 +101,23 @@
         .mx-center { flex: 1; min-width: 0; position: relative;
             background: repeating-conic-gradient(var(--mx-cv-a) 0% 25%, var(--mx-cv-b) 0% 50%) 50% / 26px 26px; overflow: hidden; }
         #canvas-wrap { position: absolute; inset: 0; }
+
+        /* Yüzen görünüm (zoom) kontrolleri — tuvalin sağ alt köşesi */
+        #view-controls { position: absolute; right: 18px; bottom: 18px; display: flex; align-items: center; gap: 8px;
+            background: var(--mx-panel); border: 1px solid var(--mx-border); border-radius: 14px; padding: 9px 12px;
+            box-shadow: 0 10px 28px rgba(0,0,0,.22); z-index: 18; }
+        body.sim-mode #view-controls { opacity: .45; pointer-events: none; }
+        .vc-btn { height: 40px; min-width: 40px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-text); border-radius: 10px; cursor: pointer; }
+        .vc-btn:hover { background: var(--mx-hover); color: var(--mx-head); }
+        .vc-btn i { font-size: 24px; }
+        .vc-btn span { font-size: 15px; font-weight: 600; }
+        .vc-zoom { min-width: 70px; height: 40px; display: flex; align-items: center; justify-content: center;
+            font-size: 18px; font-weight: 700; color: var(--mx-head); }
+        .vc-sep { width: 1px; height: 30px; background: var(--mx-border); }
+        .vc-toggle { height: 40px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; cursor: pointer; user-select: none;
+            background: var(--mx-panel-2); border: 1px solid var(--mx-border); border-radius: 10px; color: var(--mx-text); font-size: 14px; font-weight: 600; }
+        .vc-toggle input { width: 18px; height: 18px; }
         .lp-head { padding: 9px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
             color: var(--mx-muted); border-bottom: 1px solid var(--mx-border); }
 
@@ -305,20 +322,6 @@
         <div class="r-caption">{% trans "Hizala & Dağıt" %}</div>
     </div>
 
-    <!-- GÖRÜNÜM -->
-    <div class="r-group">
-        <div class="r-items" style="align-items:center;">
-            <button class="r-mini" id="zoom-out"><i class="ki-duotone ki-minus"></i></button>
-            <span class="z-lbl" id="zoom-label">100%</span>
-            <button class="r-mini" id="zoom-in"><i class="ki-duotone ki-plus"></i></button>
-            <div class="r-tile" id="zoom-fit"><i class="ki-duotone ki-maximize"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Sığdır" %}</span></div>
-            <button class="r-mini" id="zoom-100">1:1</button>
-            <label class="r-toggle"><input type="checkbox" id="chk-grid" checked> {% trans "Izgara" %}</label>
-            <label class="r-toggle"><input type="checkbox" id="chk-snap" checked> {% trans "Yapış" %}</label>
-        </div>
-        <div class="r-caption">{% trans "Görünüm" %}</div>
-    </div>
-
     <!-- DIŞA / İÇE AKTAR (menü) -->
     <div class="r-group" style="border-right:none;">
         <div class="r-items">
@@ -351,6 +354,20 @@
     <!-- CENTER: canvas -->
     <div class="mx-center">
         <div id="canvas-wrap"><canvas id="mimic-canvas"></canvas></div>
+
+        <!-- Yüzen görünüm kontrolleri (sağ alt) -->
+        <div id="view-controls">
+            <button class="vc-btn" id="zoom-out" title="{% trans 'Uzaklaştır' %}"><i class="ki-duotone ki-minus"></i></button>
+            <span class="vc-zoom" id="zoom-label">100%</span>
+            <button class="vc-btn" id="zoom-in" title="{% trans 'Yakınlaştır' %}"><i class="ki-duotone ki-plus"></i></button>
+            <div class="vc-sep"></div>
+            <button class="vc-btn" id="zoom-fit"><i class="ki-duotone ki-maximize"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Sığdır" %}</span></button>
+            <button class="vc-btn" id="zoom-100"><span>1:1</span></button>
+            <div class="vc-sep"></div>
+            <label class="vc-toggle" title="{% trans 'Izgara' %}"><input type="checkbox" id="chk-grid" checked> {% trans "Izgara" %}</label>
+            <label class="vc-toggle" title="{% trans 'Izgaraya yapış' %}"><input type="checkbox" id="chk-snap" checked> {% trans "Yapış" %}</label>
+        </div>
+
         <div id="sim-panel">
             <div class="sp-head"><b>{% trans "Simülasyon — Etiketler" %}</b></div>
             <div id="sim-tags"></div>
