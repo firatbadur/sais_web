@@ -1,6 +1,6 @@
 {% load static i18n %}
 <!DOCTYPE html>
-<html lang="{{ LANGUAGE_CODE|default:'tr' }}" data-bs-theme="light">
+<html lang="{{ LANGUAGE_CODE|default:'tr' }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,82 +9,109 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700">
     <link href="{% static 'dashboard/plugins/global/plugins.bundle.css' %}" rel="stylesheet">
     <link href="{% static 'dashboard/css/style.bundle.css' %}" rel="stylesheet">
+    <script>
+        // Tema seçimini dashboard ile paylaş (localStorage 'data-bs-theme'); varsayılan açık.
+        (function () {
+            var t = localStorage.getItem("data-bs-theme") || "light";
+            if (t === "system") t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            document.documentElement.setAttribute("data-bs-theme", t);
+        })();
+    </script>
     <style>
-        :root {
-            --mx-bg: #1b1f27; --mx-panel: #232834; --mx-panel-2: #2b313d;
-            --mx-border: #353c4a; --mx-text: #c5ccd6; --mx-muted: #7e8794; --mx-accent: #009ef7;
+        /* ===================== TEMA DEĞİŞKENLERİ ===================== */
+        :root, [data-bs-theme="dark"] {
+            --mx-bg:#1b1f27; --mx-panel:#232834; --mx-panel-2:#2b313d; --mx-border:#353c4a;
+            --mx-text:#c5ccd6; --mx-head:#ffffff; --mx-muted:#7e8794; --mx-accent:#009ef7;
+            --mx-cv-a:#20242d; --mx-cv-b:#1b1f27; --mx-hover:#333b49;
+        }
+        [data-bs-theme="light"] {
+            --mx-bg:#eceff3; --mx-panel:#ffffff; --mx-panel-2:#f3f6f9; --mx-border:#dde2ea;
+            --mx-text:#4b5057; --mx-head:#181c32; --mx-muted:#9aa2af; --mx-accent:#009ef7;
+            --mx-cv-a:#e7ebf1; --mx-cv-b:#dce1e9; --mx-hover:#eaeef3;
         }
         * { box-sizing: border-box; }
         html, body { height: 100%; margin: 0; overflow: hidden; font-family: Inter, sans-serif; }
         body { background: var(--mx-bg); color: var(--mx-text); display: flex; flex-direction: column; }
 
-        /* ---------------- Top bar ---------------- */
-        .mx-topbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; flex-wrap: wrap;
-            background: var(--mx-panel); border-bottom: 1px solid var(--mx-border); flex: 0 0 auto; z-index: 30; }
-        .mx-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; color: #fff; padding-right: 8px; }
+        /* ===================== TIER 1 (üst şerit) ===================== */
+        .mx-tier1 { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--mx-panel);
+            border-bottom: 1px solid var(--mx-border); flex: 0 0 auto; z-index: 31; }
+        .mx-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--mx-head); }
         .mx-brand i { color: var(--mx-accent); }
-        .mx-name { background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: #fff;
-            border-radius: 6px; padding: 5px 10px; min-width: 200px; font-weight: 600; }
+        .mx-name { background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-head);
+            border-radius: 6px; padding: 6px 11px; min-width: 240px; font-weight: 600; }
         .mx-name:focus { outline: none; border-color: var(--mx-accent); }
-        .mx-sep { width: 1px; height: 24px; background: var(--mx-border); margin: 0 4px; }
-        .mx-group { display: flex; align-items: center; gap: 3px; }
+        .mx-dirty { width: 8px; height: 8px; border-radius: 50%; background: var(--mx-accent); display: none; }
+        .mx-spacer { flex: 1; }
         .mx-btn { background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-text);
-            border-radius: 6px; padding: 6px 9px; font-size: 13px; cursor: pointer; display: inline-flex;
-            align-items: center; gap: 5px; line-height: 1; transition: .12s; white-space: nowrap; }
-        .mx-btn:hover { background: #333b49; color: #fff; border-color: #475065; }
-        .mx-btn.icon { padding: 6px 8px; }
-        .mx-btn.primary { background: var(--mx-accent); border-color: var(--mx-accent); color: #fff; }
-        .mx-btn.primary:hover { background: #0089d6; }
+            border-radius: 7px; padding: 7px 13px; font-size: 13px; font-weight: 600; cursor: pointer;
+            display: inline-flex; align-items: center; gap: 6px; line-height: 1; transition: .12s; white-space: nowrap; }
+        .mx-btn:hover { background: var(--mx-hover); color: var(--mx-head); }
+        .mx-btn i { font-size: 17px; }
         .mx-btn.btn-success { background: #2fb574; border-color: #2fb574; color: #fff; }
         .mx-btn.btn-danger { background: #e4544c; border-color: #e4544c; color: #fff; }
-        .mx-btn i { font-size: 16px; }
-        .mx-dirty { width: 8px; height: 8px; border-radius: 50%; background: var(--mx-accent); display: none; margin-left: 6px; }
-        .mx-zoom { display: flex; align-items: center; gap: 2px; }
-        .mx-zoom .lbl { min-width: 46px; text-align: center; font-size: 12px; color: var(--mx-muted); }
-        .mx-check { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--mx-muted); cursor: pointer; }
-        .mx-spacer { flex: 1; }
 
-        /* ---------------- Body layout ---------------- */
+        /* ===================== TIER 2 (ribbon) ===================== */
+        .mx-ribbon { display: flex; flex-wrap: wrap; align-items: stretch; background: var(--mx-panel);
+            border-bottom: 1px solid var(--mx-border); flex: 0 0 auto; padding: 2px 4px; z-index: 30; }
+        .r-group { display: flex; flex-direction: column; align-items: center; padding: 4px 8px 2px;
+            border-right: 1px solid var(--mx-border); }
+        .r-items { display: flex; gap: 2px; }
+        .r-caption { font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--mx-muted);
+            margin-top: 3px; font-weight: 700; }
+        .r-tile { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px;
+            min-width: 50px; max-width: 76px; padding: 5px 6px; border-radius: 7px; cursor: pointer;
+            background: transparent; border: 1px solid transparent; color: var(--mx-text); transition: .12s; }
+        .r-tile:hover { background: var(--mx-panel-2); border-color: var(--mx-border); color: var(--mx-head); }
+        .r-tile i { font-size: 19px; }
+        .r-tile span { font-size: 10px; text-align: center; line-height: 1.1; white-space: nowrap; }
+        .r-tile.accent i { color: var(--mx-accent); }
+        .r-tile.primary { background: var(--mx-accent); border-color: var(--mx-accent); color: #fff; }
+        .r-tile.primary:hover { background: #0089d6; color: #fff; }
+        .r-tile.primary i { color: #fff; }
+        .r-toggle { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 48px; padding: 4px;
+            font-size: 10px; color: var(--mx-muted); cursor: pointer; user-select: none; }
+        .r-toggle input { margin: 0; }
+        .r-zoom { display: flex; align-items: center; gap: 2px; }
+        .r-zoom .z-lbl { min-width: 44px; text-align: center; font-size: 12px; color: var(--mx-muted); }
+        .r-mini { background: transparent; border: 1px solid var(--mx-border); color: var(--mx-text);
+            border-radius: 6px; padding: 6px 8px; cursor: pointer; font-size: 12px; }
+        .r-mini:hover { background: var(--mx-panel-2); color: var(--mx-head); }
+
+        /* ===================== BODY ===================== */
         .mx-body { flex: 1; display: flex; min-height: 0; }
         .mx-left { width: 232px; flex: 0 0 auto; background: var(--mx-panel); border-right: 1px solid var(--mx-border);
             display: flex; flex-direction: column; min-height: 0; }
         .mx-right { width: 290px; flex: 0 0 auto; background: var(--mx-panel); border-left: 1px solid var(--mx-border);
             display: flex; flex-direction: column; min-height: 0; }
-        .mx-center { flex: 1; min-width: 0; position: relative; background:
-            repeating-conic-gradient(#20242d 0% 25%, #1b1f27 0% 50%) 50% / 26px 26px; overflow: hidden; }
+        .mx-center { flex: 1; min-width: 0; position: relative;
+            background: repeating-conic-gradient(var(--mx-cv-a) 0% 25%, var(--mx-cv-b) 0% 50%) 50% / 26px 26px; overflow: hidden; }
         #canvas-wrap { position: absolute; inset: 0; }
+        .lp-head { padding: 9px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+            color: var(--mx-muted); border-bottom: 1px solid var(--mx-border); }
 
-        /* tabs */
+        /* tabs (right) */
         .mx-tabs { display: flex; border-bottom: 1px solid var(--mx-border); flex: 0 0 auto; }
-        .lp-tab, .rp-tab { flex: 1; text-align: center; padding: 9px 4px; font-size: 12px; font-weight: 600;
+        .rp-tab { flex: 1; text-align: center; padding: 9px 4px; font-size: 12px; font-weight: 600;
             color: var(--mx-muted); cursor: pointer; border-bottom: 2px solid transparent; }
-        .lp-tab.active, .rp-tab.active { color: #fff; border-bottom-color: var(--mx-accent); background: var(--mx-panel-2); }
-        .lp-pane, .rp-pane { display: none; flex: 1; min-height: 0; overflow-y: auto; }
-        .lp-pane.active, .rp-pane.active { display: block; }
+        .rp-tab.active { color: var(--mx-head); border-bottom-color: var(--mx-accent); background: var(--mx-panel-2); }
+        .rp-pane { display: none; flex: 1; min-height: 0; overflow-y: auto; }
+        .rp-pane.active { display: block; }
 
-        /* search */
+        /* search + palette */
         .mx-search { padding: 8px; }
         .mx-search input { width: 100%; background: var(--mx-panel-2); border: 1px solid var(--mx-border);
-            color: #fff; border-radius: 6px; padding: 6px 9px; font-size: 12px; }
+            color: var(--mx-head); border-radius: 6px; padding: 6px 9px; font-size: 12px; }
         .mx-search input:focus { outline: none; border-color: var(--mx-accent); }
-
-        /* palette */
         .pal-cat-title { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--mx-muted);
             padding: 8px 10px 4px; font-weight: 700; }
         .pal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 8px 8px; }
         .pal-item { background: var(--mx-panel-2); border: 1px solid var(--mx-border); border-radius: 7px;
             padding: 6px 4px 4px; text-align: center; cursor: pointer; transition: .12s; }
-        .pal-item:hover { border-color: var(--mx-accent); background: #2f3744; transform: translateY(-1px); }
+        .pal-item:hover { border-color: var(--mx-accent); transform: translateY(-1px); }
         .pal-item img { width: 100%; height: 42px; object-fit: contain; pointer-events: none; }
         .pal-item span { display: block; font-size: 9.5px; color: var(--mx-muted); margin-top: 2px;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-        /* shapes */
-        .shape-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 10px; }
-        .shape-btn { background: var(--mx-panel-2); border: 1px solid var(--mx-border); border-radius: 7px;
-            padding: 12px 4px; text-align: center; cursor: pointer; color: var(--mx-text); font-size: 11px; }
-        .shape-btn:hover { border-color: var(--mx-accent); color: #fff; }
-        .shape-btn i { font-size: 20px; display: block; margin-bottom: 4px; }
 
         /* property panel */
         .prop-sec { padding: 10px 12px; border-bottom: 1px solid var(--mx-border); }
@@ -93,10 +120,10 @@
         .prop-row { display: flex; gap: 8px; margin-bottom: 7px; }
         .prop-field { flex: 1; }
         .prop-field label { display: block; font-size: 10px; color: var(--mx-muted); margin-bottom: 2px; }
-        .prop-field input, .prop-field select { width: 100%; background: var(--mx-panel-2); border: 1px solid var(--mx-border);
-            color: #fff; border-radius: 5px; padding: 5px 7px; font-size: 12px; }
+        .prop-field input, .prop-field select, .prop-field textarea { width: 100%; background: var(--mx-panel-2);
+            border: 1px solid var(--mx-border); color: var(--mx-head); border-radius: 5px; padding: 5px 7px; font-size: 12px; }
         .prop-field input[type=color] { padding: 2px; height: 30px; cursor: pointer; }
-        .prop-field input:focus, .prop-field select:focus { outline: none; border-color: var(--mx-accent); }
+        .prop-field input:focus, .prop-field select:focus, .prop-field textarea:focus { outline: none; border-color: var(--mx-accent); }
         .prop-empty { padding: 28px 16px; text-align: center; color: var(--mx-muted); font-size: 12px; }
         body.has-selection .prop-empty { display: none; }
         body:not(.has-selection) .prop-when-sel { display: none; }
@@ -104,15 +131,16 @@
         body.sel-text .sel-text-only { display: block; }
         body.sel-rect .sel-rect-only { display: block; }
         body.sel-button .sel-button-only { display: block; }
+        .mx-check { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--mx-text); cursor: pointer; }
 
         /* layers */
         .layer-row { display: flex; align-items: center; gap: 7px; padding: 7px 10px; cursor: pointer;
-            border-bottom: 1px solid rgba(255,255,255,.04); font-size: 12px; }
+            border-bottom: 1px solid var(--mx-border); font-size: 12px; }
         .layer-row:hover { background: var(--mx-panel-2); }
         .layer-row.active { background: rgba(0,158,247,.15); }
         .layer-row .layer-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .layer-row .lyr-act { color: var(--mx-muted); padding: 2px; }
-        .layer-row .lyr-act:hover { color: #fff; }
+        .layer-row .lyr-act:hover { color: var(--mx-head); }
 
         /* status bar */
         .mx-status { flex: 0 0 auto; display: flex; align-items: center; gap: 18px; padding: 4px 14px;
@@ -121,15 +149,13 @@
 
         /* sim panel */
         #sim-panel { position: absolute; right: 14px; top: 14px; width: 270px; max-height: 70%;
-            background: rgba(27,31,39,.96); border: 1px solid var(--mx-border); border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,.5); display: none; flex-direction: column; z-index: 20; }
+            background: var(--mx-panel); border: 1px solid var(--mx-border); border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,.25); display: none; flex-direction: column; z-index: 20; }
         body.sim-mode #sim-panel { display: flex; }
-        #sim-panel .sp-head { padding: 10px 12px; border-bottom: 1px solid var(--mx-border); display: flex;
-            align-items: center; justify-content: space-between; }
-        #sim-panel .sp-head b { color: #fff; font-size: 13px; }
+        #sim-panel .sp-head { padding: 10px 12px; border-bottom: 1px solid var(--mx-border); }
+        #sim-panel .sp-head b { color: var(--mx-head); font-size: 13px; }
         #sim-tags { overflow-y: auto; padding: 6px; }
-        .sim-row { display: grid; grid-template-columns: 70px 1fr 34px 36px; gap: 6px; align-items: center;
-            padding: 5px 6px; font-size: 11px; }
+        .sim-row { display: grid; grid-template-columns: 70px 1fr 34px 36px; gap: 6px; align-items: center; padding: 5px 6px; font-size: 11px; }
         .sim-row label { color: var(--mx-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .sim-row .sim-val { text-align: right; color: var(--mx-accent); font-weight: 600; }
         .sim-row .sim-toggle { background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-text);
@@ -137,144 +163,160 @@
         .sp-foot { padding: 8px 12px; border-top: 1px solid var(--mx-border); }
 
         /* modal */
-        .mx-modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center;
-            justify-content: center; z-index: 100; }
+        .mx-modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 100; }
         .mx-modal.show { display: flex; }
         .mx-modal .mm-box { background: var(--mx-panel); border: 1px solid var(--mx-border); border-radius: 12px;
             width: 640px; max-width: 92vw; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; }
-        .mm-head { padding: 14px 18px; border-bottom: 1px solid var(--mx-border); display: flex;
-            justify-content: space-between; align-items: center; }
-        .mm-head b { color: #fff; font-size: 15px; }
+        .mm-head { padding: 14px 18px; border-bottom: 1px solid var(--mx-border); display: flex; justify-content: space-between; align-items: center; }
+        .mm-head b { color: var(--mx-head); font-size: 15px; }
         #open-list { padding: 14px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .open-card { background: var(--mx-panel-2); border: 1px solid var(--mx-border); border-radius: 8px;
-            overflow: hidden; cursor: pointer; transition: .12s; }
+        .open-card { background: var(--mx-panel-2); border: 1px solid var(--mx-border); border-radius: 8px; overflow: hidden; cursor: pointer; transition: .12s; }
         .open-card:hover { border-color: var(--mx-accent); }
         .open-thumb { height: 96px; background: #fff; display: flex; align-items: center; justify-content: center; }
         .open-thumb img { max-width: 100%; max-height: 100%; }
         .open-thumb span { color: #999; }
         .open-meta { padding: 8px 10px; }
-        .open-meta b { color: #fff; font-size: 13px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .open-meta b { color: var(--mx-head); font-size: 13px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .open-meta small { color: var(--mx-muted); font-size: 10px; }
 
         /* toast */
         .mimic-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
-            background: #232834; color: #fff; padding: 11px 20px; border-radius: 8px; border: 1px solid var(--mx-border);
-            box-shadow: 0 8px 24px rgba(0,0,0,.4); opacity: 0; transition: .3s; z-index: 200; font-size: 13px; }
+            background: var(--mx-panel); color: var(--mx-head); padding: 11px 20px; border-radius: 8px; border: 1px solid var(--mx-border);
+            box-shadow: 0 8px 24px rgba(0,0,0,.25); opacity: 0; transition: .3s; z-index: 200; font-size: 13px; }
         .mimic-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
         .mimic-toast.success { border-left: 3px solid #2fb574; }
         .mimic-toast.danger { border-left: 3px solid #e4544c; }
 
-        body.sim-mode .mx-left, body.sim-mode .mx-right { opacity: .4; pointer-events: none; }
+        body.sim-mode .mx-left, body.sim-mode .mx-right, body.sim-mode .mx-ribbon { opacity: .45; pointer-events: none; }
         ::-webkit-scrollbar { width: 9px; height: 9px; }
-        ::-webkit-scrollbar-thumb { background: #3a4250; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb { background: var(--mx-border); border-radius: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
     </style>
 </head>
 <body>
 
-<!-- ===================== TOP BAR ===================== -->
-<div class="mx-topbar">
-    <div class="mx-brand"><i class="ki-duotone ki-abstract-26 fs-2"><span class="path1"></span><span class="path2"></span></i> WebX</div>
+<!-- ===================== TIER 1 ===================== -->
+<div class="mx-tier1">
+    <div class="mx-brand"><i class="ki-duotone ki-abstract-26 fs-2"><span class="path1"></span><span class="path2"></span></i> {% trans "Mimik Editörü" %}</div>
     <input type="text" id="mimic-name" class="mx-name" placeholder="{% trans 'Ekran adı...' %}">
     <span class="mx-dirty" id="dirty-dot" title="{% trans 'Kaydedilmemiş değişiklik' %}"></span>
-
-    <div class="mx-sep"></div>
-    <div class="mx-group">
-        <button class="mx-btn" id="btn-new" title="{% trans 'Yeni' %}"><i class="ki-duotone ki-file-added"><span class="path1"></span><span class="path2"></span></i></button>
-        <button class="mx-btn" id="btn-open" title="{% trans 'Aç' %}"><i class="ki-duotone ki-folder"><span class="path1"></span><span class="path2"></span></i></button>
-        <button class="mx-btn primary" id="btn-save"><i class="ki-duotone ki-cloud-download"><span class="path1"></span><span class="path2"></span></i> {% trans "Kaydet" %}</button>
-        <button class="mx-btn" id="btn-saveas" title="{% trans 'Farklı Kaydet' %}"><i class="ki-duotone ki-copy"></i></button>
-    </div>
-
-    <div class="mx-sep"></div>
-    <div class="mx-group">
-        <button class="mx-btn icon" id="btn-undo" title="{% trans 'Geri Al (Ctrl+Z)' %}"><i class="ki-duotone ki-arrow-circle-left"><span class="path1"></span><span class="path2"></span></i></button>
-        <button class="mx-btn icon" id="btn-redo" title="{% trans 'İleri Al (Ctrl+Y)' %}"><i class="ki-duotone ki-arrow-circle-right"><span class="path1"></span><span class="path2"></span></i></button>
-        <button class="mx-btn icon" id="btn-duplicate" title="{% trans 'Çoğalt (Ctrl+D)' %}"><i class="ki-duotone ki-copy-success"><span class="path1"></span><span class="path2"></span></i></button>
-        <button class="mx-btn icon" id="btn-delete" title="{% trans 'Sil (Del)' %}"><i class="ki-duotone ki-trash"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i></button>
-    </div>
-
-    <div class="mx-sep"></div>
-    <div class="mx-group">
-        <button class="mx-btn icon" id="btn-front" title="{% trans 'Öne Getir' %}"><i class="ki-duotone ki-up-square"><span class="path1"></span><span class="path2"></span></i></button>
-        <button class="mx-btn icon" id="btn-back" title="{% trans 'Arkaya Gönder' %}"><i class="ki-duotone ki-down-square"><span class="path1"></span><span class="path2"></span></i></button>
-        <button class="mx-btn icon" id="btn-group" title="{% trans 'Grupla (Ctrl+G)' %}"><i class="ki-duotone ki-element-plus"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i></button>
-        <button class="mx-btn icon" id="btn-ungroup" title="{% trans 'Grup Çöz (Ctrl+Shift+G)' %}"><i class="ki-duotone ki-element-11"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i></button>
-        <button class="mx-btn icon" id="btn-fliph" title="{% trans 'Yatay Çevir' %}"><i class="ki-duotone ki-arrows-circle"><span class="path1"></span><span class="path2"></span></i></button>
-        <button class="mx-btn icon" id="btn-flipv" title="{% trans 'Dikey Çevir' %}"><i class="ki-duotone ki-arrows-loop"><span class="path1"></span><span class="path2"></span></i></button>
-    </div>
-
-    <div class="mx-sep"></div>
-    <div class="mx-group">
-        <button class="mx-btn icon" data-align="left" title="{% trans 'Sola hizala' %}"><i class="ki-duotone ki-text-align-left"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i></button>
-        <button class="mx-btn icon" data-align="centerH" title="{% trans 'Yatay ortala' %}"><i class="ki-duotone ki-text-align-center"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i></button>
-        <button class="mx-btn icon" data-align="right" title="{% trans 'Sağa hizala' %}"><i class="ki-duotone ki-text-align-right"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i></button>
-        <button class="mx-btn icon" data-align="middle" title="{% trans 'Dikey ortala' %}"><i class="ki-duotone ki-element-4"><span class="path1"></span><span class="path2"></span></i></button>
-    </div>
-
     <div class="mx-spacer"></div>
-
-    <label class="mx-check"><input type="checkbox" id="chk-grid" checked> {% trans "Izgara" %}</label>
-    <label class="mx-check"><input type="checkbox" id="chk-snap" checked> {% trans "Yapış" %}</label>
-    <div class="mx-sep"></div>
-    <div class="mx-zoom">
-        <button class="mx-btn icon" id="zoom-out"><i class="ki-duotone ki-minus"></i></button>
-        <span class="lbl" id="zoom-label">100%</span>
-        <button class="mx-btn icon" id="zoom-in"><i class="ki-duotone ki-plus"></i></button>
-        <button class="mx-btn icon" id="zoom-fit" title="{% trans 'Sığdır' %}"><i class="ki-duotone ki-maximize"><span class="path1"></span><span class="path2"></span></i></button>
-        <button class="mx-btn icon" id="zoom-100" title="100%">1:1</button>
-    </div>
-    <div class="mx-sep"></div>
-    <div class="mx-group">
-        <button class="mx-btn" id="btn-export-png" title="PNG">PNG</button>
-        <button class="mx-btn" id="btn-export-svg" title="SVG">SVG</button>
-        <button class="mx-btn" id="btn-export-json" title="JSON">JSON</button>
-        <button class="mx-btn icon" id="btn-import-json" title="{% trans 'JSON İçe Aktar' %}"><i class="ki-duotone ki-file-up"><span class="path1"></span><span class="path2"></span></i></button>
-        <input type="file" id="file-import" accept=".json" hidden>
-    </div>
-    <div class="mx-sep"></div>
+    <button class="mx-btn" id="btn-theme"><i class="ki-duotone ki-moon"><span class="path1"></span><span class="path2"></span></i> {% trans "Tema" %}</button>
+    <button class="mx-btn" id="btn-view-tab"><i class="ki-duotone ki-eye"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i> {% trans "Görüntüle" %}</button>
     <button class="mx-btn btn-success" id="btn-preview"><i class="ki-duotone ki-play"><span class="path1"></span><span class="path2"></span></i> {% trans "Simülasyon" %}</button>
-    <button class="mx-btn icon" id="btn-view-tab" title="{% trans 'Görüntüleyicide Aç' %}"><i class="ki-duotone ki-eye"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i></button>
+</div>
+
+<!-- ===================== TIER 2: RIBBON ===================== -->
+<div class="mx-ribbon">
+
+    <!-- DOSYA -->
+    <div class="r-group">
+        <div class="r-items">
+            <div class="r-tile" id="btn-new"><i class="ki-duotone ki-file-added"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Yeni" %}</span></div>
+            <div class="r-tile" id="btn-open"><i class="ki-duotone ki-folder"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Aç" %}</span></div>
+            <div class="r-tile primary" id="btn-save"><i class="ki-duotone ki-cloud-download"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Kaydet" %}</span></div>
+            <div class="r-tile" id="btn-saveas"><i class="ki-duotone ki-copy"></i><span>{% trans "Farklı Kaydet" %}</span></div>
+        </div>
+        <div class="r-caption">{% trans "Dosya" %}</div>
+    </div>
+
+    <!-- DÜZEN -->
+    <div class="r-group">
+        <div class="r-items">
+            <div class="r-tile" id="btn-undo"><i class="ki-duotone ki-arrow-circle-left"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Geri Al" %}</span></div>
+            <div class="r-tile" id="btn-redo"><i class="ki-duotone ki-arrow-circle-right"><span class="path1"></span><span class="path2"></span></i><span>{% trans "İleri Al" %}</span></div>
+            <div class="r-tile" id="btn-duplicate"><i class="ki-duotone ki-copy-success"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Çoğalt" %}</span></div>
+            <div class="r-tile" id="btn-delete"><i class="ki-duotone ki-trash"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i><span>{% trans "Sil" %}</span></div>
+        </div>
+        <div class="r-caption">{% trans "Düzen" %}</div>
+    </div>
+
+    <!-- EKLE -->
+    <div class="r-group">
+        <div class="r-items">
+            <div class="r-tile" data-shape="rect"><i class="ki-duotone ki-abstract-26"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Dikdörtgen" %}</span></div>
+            <div class="r-tile" data-shape="roundrect"><i class="ki-duotone ki-abstract-41"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Yuvarlak" %}</span></div>
+            <div class="r-tile" data-shape="circle"><i class="ki-duotone ki-abstract-24"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Daire" %}</span></div>
+            <div class="r-tile" data-shape="ellipse"><i class="ki-duotone ki-abstract-25"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Elips" %}</span></div>
+            <div class="r-tile" data-shape="triangle"><i class="ki-duotone ki-abstract-8"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Üçgen" %}</span></div>
+            <div class="r-tile" data-shape="line"><i class="ki-duotone ki-minus"></i><span>{% trans "Çizgi" %}</span></div>
+            <div class="r-tile" data-shape="pipe"><i class="ki-duotone ki-minus-square"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Boru" %}</span></div>
+            <div class="r-tile" data-shape="arrow"><i class="ki-duotone ki-arrow-right"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Ok" %}</span></div>
+            <div class="r-tile" data-shape="text"><i class="ki-duotone ki-text"></i><span>{% trans "Metin" %}</span></div>
+            <div class="r-tile" data-shape="label"><i class="ki-duotone ki-notepad"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Etiket" %}</span></div>
+            <div class="r-tile accent" data-shape="button"><i class="ki-duotone ki-click"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i><span>{% trans "Buton" %}</span></div>
+            <div class="r-tile" id="btn-add-image"><i class="ki-duotone ki-picture"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Resim" %}</span></div>
+        </div>
+        <div class="r-caption">{% trans "Ekle" %}</div>
+        <input type="file" id="file-image" accept="image/*,.svg" hidden>
+    </div>
+
+    <!-- SIRALA -->
+    <div class="r-group">
+        <div class="r-items">
+            <div class="r-tile" id="btn-front"><i class="ki-duotone ki-up-square"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Öne Getir" %}</span></div>
+            <div class="r-tile" id="btn-back"><i class="ki-duotone ki-down-square"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Arkaya" %}</span></div>
+            <div class="r-tile" id="btn-group"><i class="ki-duotone ki-element-plus"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i><span>{% trans "Grupla" %}</span></div>
+            <div class="r-tile" id="btn-ungroup"><i class="ki-duotone ki-element-11"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i><span>{% trans "Grup Çöz" %}</span></div>
+            <div class="r-tile" id="btn-fliph"><i class="ki-duotone ki-arrows-circle"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Yatay Çevir" %}</span></div>
+            <div class="r-tile" id="btn-flipv"><i class="ki-duotone ki-arrows-loop"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Dikey Çevir" %}</span></div>
+        </div>
+        <div class="r-caption">{% trans "Sırala" %}</div>
+    </div>
+
+    <!-- HİZALA -->
+    <div class="r-group">
+        <div class="r-items">
+            <div class="r-tile" data-align="left"><i class="ki-duotone ki-text-align-left"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i><span>{% trans "Sol" %}</span></div>
+            <div class="r-tile" data-align="centerH"><i class="ki-duotone ki-text-align-center"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i><span>{% trans "Yatay Orta" %}</span></div>
+            <div class="r-tile" data-align="right"><i class="ki-duotone ki-text-align-right"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i><span>{% trans "Sağ" %}</span></div>
+            <div class="r-tile" data-align="top"><i class="ki-duotone ki-up"></i><span>{% trans "Üst" %}</span></div>
+            <div class="r-tile" data-align="middle"><i class="ki-duotone ki-element-4"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Dikey Orta" %}</span></div>
+            <div class="r-tile" data-align="bottom"><i class="ki-duotone ki-down"></i><span>{% trans "Alt" %}</span></div>
+        </div>
+        <div class="r-caption">{% trans "Hizala" %}</div>
+    </div>
+
+    <!-- GÖRÜNÜM -->
+    <div class="r-group">
+        <div class="r-items" style="align-items:center;">
+            <button class="r-mini" id="zoom-out"><i class="ki-duotone ki-minus"></i></button>
+            <span class="z-lbl" id="zoom-label">100%</span>
+            <button class="r-mini" id="zoom-in"><i class="ki-duotone ki-plus"></i></button>
+            <div class="r-tile" id="zoom-fit"><i class="ki-duotone ki-maximize"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Sığdır" %}</span></div>
+            <button class="r-mini" id="zoom-100">1:1</button>
+            <label class="r-toggle"><input type="checkbox" id="chk-grid" checked> {% trans "Izgara" %}</label>
+            <label class="r-toggle"><input type="checkbox" id="chk-snap" checked> {% trans "Yapış" %}</label>
+        </div>
+        <div class="r-caption">{% trans "Görünüm" %}</div>
+    </div>
+
+    <!-- DIŞA AKTAR -->
+    <div class="r-group" style="border-right:none;">
+        <div class="r-items">
+            <div class="r-tile" id="btn-export-png"><i class="ki-duotone ki-picture"><span class="path1"></span><span class="path2"></span></i><span>PNG</span></div>
+            <div class="r-tile" id="btn-export-svg"><i class="ki-duotone ki-code"><span class="path1"></span><span class="path2"></span></i><span>SVG</span></div>
+            <div class="r-tile" id="btn-export-json"><i class="ki-duotone ki-file-down"><span class="path1"></span><span class="path2"></span></i><span>JSON</span></div>
+            <div class="r-tile" id="btn-import-json"><i class="ki-duotone ki-file-up"><span class="path1"></span><span class="path2"></span></i><span>{% trans "İçe Aktar" %}</span></div>
+            <input type="file" id="file-import" accept=".json" hidden>
+        </div>
+        <div class="r-caption">{% trans "Dışa/İçe Aktar" %}</div>
+    </div>
 </div>
 
 <!-- ===================== BODY ===================== -->
 <div class="mx-body">
 
-    <!-- LEFT: palette -->
+    <!-- LEFT: symbol library -->
     <div class="mx-left">
-        <div class="mx-tabs">
-            <div class="lp-tab active" data-pane="lp-symbols">{% trans "Semboller" %}</div>
-            <div class="lp-tab" data-pane="lp-shapes">{% trans "Şekiller" %}</div>
-        </div>
-        <div class="lp-pane active" id="lp-symbols" style="display:flex;flex-direction:column;">
-            <div class="mx-search"><input type="text" id="symbol-search" placeholder="{% trans 'Sembol ara...' %}"></div>
-            <div id="symbol-list" style="flex:1;overflow-y:auto;"></div>
-        </div>
-        <div class="lp-pane" id="lp-shapes">
-            <div class="shape-grid">
-                <div class="shape-btn" data-shape="rect"><i class="ki-duotone ki-abstract-26"><span class="path1"></span><span class="path2"></span></i>{% trans "Dikdörtgen" %}</div>
-                <div class="shape-btn" data-shape="roundrect"><i class="ki-duotone ki-abstract-41"><span class="path1"></span><span class="path2"></span></i>{% trans "Yuvarlak Kutu" %}</div>
-                <div class="shape-btn" data-shape="circle"><i class="ki-duotone ki-abstract-24"><span class="path1"></span><span class="path2"></span></i>{% trans "Daire" %}</div>
-                <div class="shape-btn" data-shape="ellipse"><i class="ki-duotone ki-abstract-25"><span class="path1"></span><span class="path2"></span></i>{% trans "Elips" %}</div>
-                <div class="shape-btn" data-shape="triangle"><i class="ki-duotone ki-abstract-8"><span class="path1"></span><span class="path2"></span></i>{% trans "Üçgen" %}</div>
-                <div class="shape-btn" data-shape="line"><i class="ki-duotone ki-minus"></i>{% trans "Çizgi" %}</div>
-                <div class="shape-btn" data-shape="pipe"><i class="ki-duotone ki-minus-square"><span class="path1"></span><span class="path2"></span></i>{% trans "Boru" %}</div>
-                <div class="shape-btn" data-shape="arrow"><i class="ki-duotone ki-arrow-right"><span class="path1"></span><span class="path2"></span></i>{% trans "Ok" %}</div>
-                <div class="shape-btn" data-shape="text"><i class="ki-duotone ki-text"></i>{% trans "Metin" %}</div>
-                <div class="shape-btn" data-shape="label"><i class="ki-duotone ki-notepad"><span class="path1"></span><span class="path2"></span></i>{% trans "Etiket Kutu" %}</div>
-                <div class="shape-btn" data-shape="button" style="grid-column:span 2;background:var(--mx-accent);color:#fff;border-color:var(--mx-accent);"><i class="ki-duotone ki-click"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i>{% trans "Buton (tıklanabilir)" %}</div>
-            </div>
-            <div style="padding:10px;">
-                <button class="mx-btn" id="btn-add-image" style="width:100%;justify-content:center;"><i class="ki-duotone ki-picture"><span class="path1"></span><span class="path2"></span></i> {% trans "Resim Ekle (PNG/SVG)" %}</button>
-                <input type="file" id="file-image" accept="image/*,.svg" hidden>
-            </div>
-        </div>
+        <div class="lp-head">{% trans "Sembol Kütüphanesi" %}</div>
+        <div class="mx-search"><input type="text" id="symbol-search" placeholder="{% trans 'Sembol ara...' %}"></div>
+        <div id="symbol-list" style="flex:1;overflow-y:auto;"></div>
     </div>
 
     <!-- CENTER: canvas -->
     <div class="mx-center">
         <div id="canvas-wrap"><canvas id="mimic-canvas"></canvas></div>
-        <!-- Sim panel -->
         <div id="sim-panel">
             <div class="sp-head"><b>{% trans "Simülasyon — Etiketler" %}</b></div>
             <div id="sim-tags"></div>
@@ -320,7 +362,7 @@
                         <div class="prop-field"><label>{% trans "Kenar Kalınlığı" %}</label><input type="number" id="p-strokew" min="0"></div>
                         <div class="prop-field sel-rect-only"><label>{% trans "Köşe Yarıçapı" %}</label><input type="number" id="p-radius" min="0"></div>
                     </div>
-                    <label class="mx-check" style="color:var(--mx-text);"><input type="checkbox" id="p-fill-none"> {% trans "Dolgusuz (şeffaf)" %}</label>
+                    <label class="mx-check"><input type="checkbox" id="p-fill-none"> {% trans "Dolgusuz (şeffaf)" %}</label>
                 </div>
                 <div class="prop-sec sel-button-only">
                     <h6>{% trans "Buton" %}</h6>
@@ -411,9 +453,7 @@
         </div>
 
         <!-- Layers -->
-        <div class="rp-pane" id="rp-layers">
-            <div id="layer-list"></div>
-        </div>
+        <div class="rp-pane" id="rp-layers"><div id="layer-list"></div></div>
 
         <!-- Canvas settings -->
         <div class="rp-pane" id="rp-canvas">
@@ -427,7 +467,7 @@
             </div>
             <div class="prop-sec">
                 <h6>{% trans "Açıklama" %}</h6>
-                <div class="prop-field"><textarea id="mimic-desc" rows="3" style="width:100%;background:var(--mx-panel-2);border:1px solid var(--mx-border);color:#fff;border-radius:5px;padding:6px;font-size:12px;"></textarea></div>
+                <div class="prop-field"><textarea id="mimic-desc" rows="3"></textarea></div>
             </div>
         </div>
     </div>
@@ -439,13 +479,13 @@
     <span>{% trans "Zoom" %}: <b id="status-zoom">100%</b></span>
     <span><b id="status-count">0 obje</b></span>
     <span>{% trans "Seçili" %}: <b id="status-sel">—</b></span>
-    <span style="margin-left:auto;color:var(--mx-muted);">{% trans "Boşluk+sürükle = kaydır · Tekerlek = yakınlaştır · Del = sil" %}</span>
+    <span style="margin-left:auto;color:var(--mx-muted);">{% trans "Orta tuş / Boşluk+sürükle = kaydır · Tekerlek = yakınlaştır · Del = sil" %}</span>
 </div>
 
 <!-- ===================== OPEN MODAL ===================== -->
 <div class="mx-modal" id="open-modal">
     <div class="mm-box">
-        <div class="mm-head"><b>{% trans "Mimik Aç" %}</b><button class="mx-btn icon" id="open-close"><i class="ki-duotone ki-cross fs-2"><span class="path1"></span><span class="path2"></span></i></button></div>
+        <div class="mm-head"><b>{% trans "Mimik Aç" %}</b><button class="mx-btn" id="open-close"><i class="ki-duotone ki-cross fs-2"><span class="path1"></span><span class="path2"></span></i></button></div>
         <div id="open-list"></div>
     </div>
 </div>
@@ -473,6 +513,12 @@ window.MIMIC_CONFIG = {
         data: JSON.parse(document.getElementById("mimic-initial-data").textContent || "{}")
     }{% else %}null{% endif %}
 };
+// Tema değiştir butonu — dashboard ile aynı localStorage anahtarını kullanır.
+document.getElementById("btn-theme").addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-bs-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-bs-theme", cur);
+    localStorage.setItem("data-bs-theme", cur);
+});
 </script>
 <script src="{% static 'dashboard/plugins/custom/fabric/fabric.min.js' %}"></script>
 <script src="{% static 'dashboard/js/mimic_symbols.js' %}"></script>

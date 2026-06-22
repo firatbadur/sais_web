@@ -606,6 +606,11 @@ Tamamen dashboard arayüzüne özgü → `dashboard/`.
     özellik+animasyon+katman panelleri, undo/redo, grup, hizalama, kaydet/yükle, PNG/SVG/JSON
     dışa+içe aktar, simülasyon). Vendored **Fabric.js 5.3** →
     `plugins/custom/fabric/fabric.min.js`.
+- **Arayüz**: üst **ribbon** (Dosya/Düzen/Ekle/Sırala/Hizala/Görünüm/Dışa Aktar) — tüm araçlar
+  ikon+yazılı etiket; şekiller + **Buton** (tıklanabilir HMI elemanı, `isButton`) + Resim "Ekle"
+  grubunda; sol panel yalnız sembol kütüphanesi. **Tema** dashboard ile paylaşılır (localStorage
+  `data-bs-theme`, varsayılan açık); editör + viewer CSS değişkenleriyle açık/koyu uyarlanır.
+  Orta fare tuşu (veya Boşluk+sürükle) ile kaydırma (`fireMiddleClick`).
 - **Serileştirme**: `canvas.toJSON(['scada','name','isHelper','selectable','evented'])`. Tuval
   sınırı (`boundary`) `excludeFromExport+isHelper` ile kaydedilmez, yüklemede JS yeniden kurar.
   PNG/thumbnail dışa aktarımı `withIdentityVpt` ile viewport transform sıfırlanarak yapılır (zoom/pan
