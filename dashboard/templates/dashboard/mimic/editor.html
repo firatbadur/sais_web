@@ -47,7 +47,7 @@
             border-radius: 8px; padding: 0 15px; height: 40px; font-size: 14px; font-weight: 600; cursor: pointer;
             display: inline-flex; align-items: center; gap: 7px; line-height: 1; transition: .12s; white-space: nowrap; }
         .mx-btn:hover { background: var(--mx-hover); color: var(--mx-head); }
-        .mx-btn i { font-size: 22px; }
+        .mx-btn i { font-size: 26px !important; }
         .mx-btn.btn-success { background: #2fb574; border-color: #2fb574; color: #fff; }
         .mx-btn.btn-danger { background: #e4544c; border-color: #e4544c; color: #fff; }
 
@@ -64,9 +64,9 @@
             background: transparent; border: 1px solid transparent; color: var(--mx-text); transition: .12s; }
         .r-tile:hover { background: var(--mx-panel-2); border-color: var(--mx-border); color: var(--mx-head); }
         .r-tile i { font-size: 30px; }
-        .r-tile i.fs-2 { font-size: 30px; }
-        .r-tile span { font-size: 11px; text-align: center; line-height: 1.1; white-space: nowrap; }
-        .r-tile.has-caret span::after { content: " ▾"; color: var(--mx-muted); }
+        /* yalnız doğrudan-çocuk etiket span'i — keenicon .path1/.path2 span'lerini ETKİLEME */
+        .r-tile > span { font-size: 11px; text-align: center; line-height: 1.1; white-space: nowrap; }
+        .r-tile.has-caret > span::after { content: " ▾"; color: var(--mx-muted); }
 
         /* açılır menüler (Dosya / Dışa Aktar) */
         .r-menu { position: relative; }
@@ -111,7 +111,7 @@
             background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-text); border-radius: 8px; cursor: pointer; }
         .vc-btn:hover { background: var(--mx-hover); color: var(--mx-head); }
         .vc-btn i { font-size: 18px; }
-        .vc-btn span { font-size: 13px; font-weight: 600; }
+        .vc-btn > span { font-size: 13px; font-weight: 600; }
         .vc-zoom { min-width: 56px; height: 30px; display: flex; align-items: center; justify-content: center;
             font-size: 14px; font-weight: 700; color: var(--mx-head); }
         .vc-sep { width: 1px; height: 22px; background: var(--mx-border); }
