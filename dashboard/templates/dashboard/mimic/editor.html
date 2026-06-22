@@ -103,21 +103,21 @@
         #canvas-wrap { position: absolute; inset: 0; }
 
         /* Yüzen görünüm (zoom) kontrolleri — tuvalin sağ alt köşesi */
-        #view-controls { position: absolute; right: 18px; bottom: 18px; display: flex; align-items: center; gap: 8px;
-            background: var(--mx-panel); border: 1px solid var(--mx-border); border-radius: 14px; padding: 9px 12px;
+        #view-controls { position: absolute; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 6px;
+            background: var(--mx-panel); border: 1px solid var(--mx-border); border-radius: 11px; padding: 6px 8px;
             box-shadow: 0 10px 28px rgba(0,0,0,.22); z-index: 18; }
         body.sim-mode #view-controls { opacity: .45; pointer-events: none; }
-        .vc-btn { height: 40px; min-width: 40px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-            background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-text); border-radius: 10px; cursor: pointer; }
+        .vc-btn { height: 30px; min-width: 30px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+            background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-text); border-radius: 8px; cursor: pointer; }
         .vc-btn:hover { background: var(--mx-hover); color: var(--mx-head); }
-        .vc-btn i { font-size: 24px; }
-        .vc-btn span { font-size: 15px; font-weight: 600; }
-        .vc-zoom { min-width: 70px; height: 40px; display: flex; align-items: center; justify-content: center;
-            font-size: 18px; font-weight: 700; color: var(--mx-head); }
-        .vc-sep { width: 1px; height: 30px; background: var(--mx-border); }
-        .vc-toggle { height: 40px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; cursor: pointer; user-select: none;
-            background: var(--mx-panel-2); border: 1px solid var(--mx-border); border-radius: 10px; color: var(--mx-text); font-size: 14px; font-weight: 600; }
-        .vc-toggle input { width: 18px; height: 18px; }
+        .vc-btn i { font-size: 18px; }
+        .vc-btn span { font-size: 13px; font-weight: 600; }
+        .vc-zoom { min-width: 56px; height: 30px; display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 700; color: var(--mx-head); }
+        .vc-sep { width: 1px; height: 22px; background: var(--mx-border); }
+        .vc-toggle { height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; cursor: pointer; user-select: none;
+            background: var(--mx-panel-2); border: 1px solid var(--mx-border); border-radius: 8px; color: var(--mx-text); font-size: 13px; font-weight: 600; }
+        .vc-toggle input { width: 15px; height: 15px; }
         .lp-head { padding: 9px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
             color: var(--mx-muted); border-bottom: 1px solid var(--mx-border); }
 
