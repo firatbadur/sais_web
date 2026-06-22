@@ -36,8 +36,9 @@
         /* ===================== TIER 1 (üst şerit) ===================== */
         .mx-tier1 { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--mx-panel);
             border-bottom: 1px solid var(--mx-border); flex: 0 0 auto; z-index: 31; }
-        .mx-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--mx-head); }
+        .mx-brand { display: flex; align-items: center; gap: 9px; font-weight: 700; color: var(--mx-head); }
         .mx-brand i { color: var(--mx-accent); }
+        .mx-brand .mx-logo { height: 30px; width: auto; display: block; }
         .mx-name { background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-head);
             border-radius: 8px; padding: 0 12px; height: 40px; min-width: 240px; font-weight: 600; }
         .mx-name:focus { outline: none; border-color: var(--mx-accent); }
@@ -229,7 +230,7 @@
 
 <!-- ===================== TIER 1 ===================== -->
 <div class="mx-tier1">
-    <div class="mx-brand"><i class="ki-duotone ki-abstract-26 fs-2"><span class="path1"></span><span class="path2"></span></i> {% trans "Mimik Editörü" %}</div>
+    <div class="mx-brand"><img src="{% static 'images/logo/icon.png' %}" alt="Envisoft" class="mx-logo"> {% trans "Mimik Editörü" %}</div>
     <input type="text" id="mimic-name" class="mx-name" placeholder="{% trans 'Ekran adı...' %}">
     <span class="mx-dirty" id="dirty-dot" title="{% trans 'Kaydedilmemiş değişiklik' %}"></span>
     <div class="mx-spacer"></div>
