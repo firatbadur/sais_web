@@ -308,7 +308,7 @@
             var grp = fabric.util.groupSVGElements(objects, options);
             grp.scaleToWidth(sym.w);
             grp.set({ name: sym.name });
-            grp.scada = { tag: "", anim: "none", onColor: "#3fbf6f", offColor: "#e4544c", min: 0, max: 100, threshold: 1, speed: 1, unit: "", decimals: 1, moveRange: 60 };
+            grp.scada = { tag: "", anim: "auto", onColor: "#3fbf6f", offColor: "#e4544c", min: 0, max: 100, threshold: 1, speed: 1, unit: "", decimals: 1, moveRange: 60 };
             grp.symbolKey = sym.key;
             var c = centerPoint();
             grp.set({ left: Math.round(c.x), top: Math.round(c.y), originX: "center", originY: "center" });
@@ -398,7 +398,7 @@
                     grp.scaleToWidth(sym.w);
                     grp.set({ left: p.x, top: p.y, originX: "center", originY: "center", name: sym.name });
                     grp.symbolKey = sym.key;
-                    grp.scada = { tag: "", anim: "none", onColor: "#3fbf6f", offColor: "#e4544c", min: 0, max: 100, threshold: 1, speed: 1, unit: "", decimals: 1, moveRange: 60 };
+                    grp.scada = { tag: "", anim: "auto", onColor: "#3fbf6f", offColor: "#e4544c", min: 0, max: 100, threshold: 1, speed: 1, unit: "", decimals: 1, moveRange: 60 };
                     canvas.add(grp); canvas.setActiveObject(grp);
                     canvas.requestRenderAll(); refreshLayers();
                 });

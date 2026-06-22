@@ -600,8 +600,14 @@ Tamamen dashboard arayüzüne özgü → `dashboard/`.
     boru/proses/elektrik SVG'leri); `window.MIMIC_SYMBOLS`.
   - `mimic_runtime.js` — animasyon/simülasyon motoru (`window.MimicRuntime`); editör önizleme +
     viewer paylaşır. Bağlama şeması obje üzerinde `obj.scada = {tag, anim, min, max, onColor,
-    offColor, threshold, speed, unit, decimals, moveRange}`. Animasyonlar: colorState, blink,
-    rotate, level, fillThreshold, visibility, opacity, moveX/Y, text.
+    offColor, threshold, speed, unit, decimals, moveRange, action...}`. Genel animasyonlar:
+    colorState, blink, rotate, level, fillThreshold, visibility, opacity, moveX/Y, text.
+    **Sembole özel "auto"** (varsayılan; `symbolKey`'e göre `autoKind` sınıflandırır): tank/havuz
+    → değere bağlı **su seviyesi + dalga** overlay, havalandırma → su + **kabarcık**, pompa/motor/
+    fan → merkezde **dönen rotor** overlay, gösterge → **ibre**, boru → **akış** çizgileri, vana/
+    lamba/pano → durum rengi, alarm/çakar → yanıp sönme. Overlay'ler `canvas.on("after:render")`
+    ile sembolün üstüne viewport-transform uygulanmış 2D context'e çizilir (fabric grup iç yapısına
+    bağımlı değil). HMI butonu (`isButton`) tıklayınca `pressButton/releaseButton` ile etiketi sürer.
   - `mimic_editor.js` — editör (tuval, zoom/pan, ızgara+snap, semboller/şekiller/resim ekleme,
     özellik+animasyon+katman panelleri, undo/redo, grup, hizalama, kaydet/yükle, PNG/SVG/JSON
     dışa+içe aktar, simülasyon). Vendored **Fabric.js 5.3** →
