@@ -83,6 +83,7 @@ window.V_CFG = {
     var CFG = window.V_CFG;
     var data = JSON.parse($("v-data").textContent || "{}");
 
+    document.addEventListener("contextmenu", function (e) { e.preventDefault(); }, true);
     var canvas = new fabric.Canvas("v-canvas", { selection: false, backgroundColor: CFG.background, renderOnAddRemove: false, fireMiddleClick: true });
     var runtime = window.MimicRuntime(canvas);
     var autoTimer = null, running = false;

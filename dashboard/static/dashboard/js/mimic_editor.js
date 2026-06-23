@@ -43,14 +43,10 @@
     var runtime = window.MimicRuntime(canvas);
     var boundary = null;
 
-    // Tarayıcının yerleşik sağ-tık menüsünü engelle (kendi animasyon/tag
-    // menümüz açılır). Capture fazında → fabric/diğer handler'lardan önce çalışır
-    // ve hangi katman canvas'a düşerse düşsün yakalar. Form alanlarında (input/
-    // textarea/select) native menü serbest bırakılır.
-    document.addEventListener("contextmenu", function (e) {
-        if (e.target && e.target.closest && e.target.closest("input, textarea, select")) return;
-        e.preventDefault();
-    }, true);
+    // Tarayıcının yerleşik sağ-tık menüsünü tüm sayfada engelle (mimik
+    // editöründe hiçbir yerde Chrome menüsü açılmasın). Capture fazında →
+    // fabric/diğer handler'lardan önce çalışır, hangi öğeye düşerse düşsün yakalar.
+    document.addEventListener("contextmenu", function (e) { e.preventDefault(); }, true);
 
     // ----------------------------------------------------------------- //
     // Grid (viewport-aware pattern background)
