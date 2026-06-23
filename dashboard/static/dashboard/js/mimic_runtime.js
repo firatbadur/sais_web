@@ -37,7 +37,7 @@
         aeration: "aeration", flow_arrow: "flow", screw_conveyor: "flow",
         beacon: "blink", alarm_horn: "blink", emergency_stop: "blink",
         gas_detector: "blink", lamp: "tint", value_display: "tint",
-        flow_cell: "water", sample_cell: "water"
+        flow_cell: "water", sample_cell: "water", sample_fridge: "carousel"
     };
     function autoKind(o) {
         var k = o.symbolKey || "";
@@ -48,7 +48,7 @@
         if (/^(valve|solenoid|lamp|pushbutton|switch|ups|plc|cabinet|hmi|rtu|breaker|vfd|generator|solar|energy|level_switch|float)/.test(k)) return "tint";
         return "tint";
     }
-    var OVERLAY_KINDS = { water: 1, aeration: 1, spin: 1, gauge: 1, flow: 1 };
+    var OVERLAY_KINDS = { water: 1, aeration: 1, spin: 1, gauge: 1, flow: 1, carousel: 1 };
 
     // --------------------------------------------------------------------- //
     // Overlay çizimleri (sahne koordinatında; viewport transform uygulanmış halde)
@@ -95,6 +95,28 @@
         }
         ctx.beginPath(); ctx.arc(0, 0, rad * 0.2, 0, 2 * Math.PI);
         ctx.fillStyle = "rgba(63,191,111,1)"; ctx.fill();
+        ctx.restore();
+    }
+    // Numune dolabı şişe karuseli — numune alma aktifken döner. Statik şişeleri
+    // örtmek için iç diski boyar, sonra dönen şişe halkası + göbek çizer.
+    function drawCarousel(ctx, r, t, speed) {
+        if (speed <= 0) return;
+        var cx = r.left + r.width * 0.5, cy = r.top + r.height * (80 / 130);
+        var maskR = r.width * (25 / 90), ringR = r.width * (18 / 90), bR = r.width * (4.5 / 90);
+        ctx.save();
+        ctx.beginPath(); ctx.arc(cx, cy, maskR, 0, 2 * Math.PI);
+        ctx.fillStyle = "#aeb9c4"; ctx.fill();
+        ctx.strokeStyle = "#5e6b7a"; ctx.lineWidth = Math.max(1, r.width * 0.02);
+        ctx.beginPath(); ctx.arc(cx, cy, ringR + bR + 1, 0, 2 * Math.PI); ctx.stroke();
+        var ang = (t / 1000) * speed * 1.1;
+        for (var i = 0; i < 8; i++) {
+            var a = ang + i * Math.PI / 4;
+            var bx = cx + Math.cos(a) * ringR, by = cy + Math.sin(a) * ringR;
+            ctx.beginPath(); ctx.arc(bx, by, bR, 0, 2 * Math.PI);
+            ctx.fillStyle = "#ffffff"; ctx.fill(); ctx.stroke();
+        }
+        ctx.beginPath(); ctx.arc(cx, cy, bR * 1.2, 0, 2 * Math.PI);
+        ctx.fillStyle = "#93a1b0"; ctx.fill(); ctx.stroke();
         ctx.restore();
     }
     function drawGauge(ctx, r, ratio) {
@@ -308,6 +330,7 @@
                 if (ak === "water") drawWater(ctx, r, ratio, t, false);
                 else if (ak === "aeration") drawWater(ctx, r, Math.max(ratio, 0.4), t, true);
                 else if (ak === "spin") drawSpin(ctx, r, t, (val >= num(sc.threshold, 1) && val > 0) ? num(sc.speed, 1) : 0);
+                else if (ak === "carousel") drawCarousel(ctx, r, t, (val >= num(sc.threshold, 1) && val > 0) ? num(sc.speed, 1) : 0);
                 else if (ak === "gauge") drawGauge(ctx, r, ratio);
                 else if (ak === "flow") {
                     if (val > 0) {
