@@ -126,6 +126,41 @@
         ctx.setLineDash([]);
     }
 
+    // Boru merkez hatları (normalize 0..1, sembolün viewBox'ına göre). Akış,
+    // objenin KENDİ dönüşüm matrisiyle çizilir → dirsek köşeyi döner, tee/cross
+    // dallanır, döndürme/aynalama otomatik takip edilir.
+    var FLOW_PATHS = {
+        pipe_h: [[[0, 0.5], [1, 0.5]]],
+        pipe_v: [[[0.5, 0], [0.5, 1]]],
+        // dirsek: üst açıklıktan sol açıklığa çeyrek yay (içerik kutusuna göre)
+        pipe_elbow: [[[0.857, 0], [0.743, 0.429], [0.429, 0.743], [0, 0.857]]],
+        pipe_tee: [[[0, 0.12], [1, 0.12]], [[0.5, 0.12], [0.5, 1]]],
+        pipe_cross: [[[0, 0.5], [1, 0.5]], [[0.5, 0], [0.5, 1]]],
+        pipe_reducer: [[[0, 0.5], [1, 0.5]]],
+        flow_arrow: [[[0, 0.5], [1, 0.5]]]
+    };
+    function drawFlowPath(ctx, obj, paths, t) {
+        var m = obj.calcTransformMatrix();
+        var w = obj.width, h = obj.height;
+        function P(n) {
+            return fabric.util.transformPoint(
+                new fabric.Point((n[0] - 0.5) * w, (n[1] - 0.5) * h), m);
+        }
+        var lw = Math.max(3, Math.min(obj.getScaledWidth(), obj.getScaledHeight()) * 0.34);
+        ctx.strokeStyle = "rgba(47,155,214,0.95)";
+        ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.lineWidth = lw;
+        ctx.setLineDash([5, 11]); ctx.lineDashOffset = -(t / 38) % 32;
+        paths.forEach(function (poly) {
+            ctx.beginPath();
+            poly.forEach(function (n, i) {
+                var p = P(n);
+                if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+            });
+            ctx.stroke();
+        });
+        ctx.setLineDash([]);
+    }
+
     // Bir objenin (grup ise tüm yapraklarının) dolgulu parçalarına renk uygula.
     function eachLeaf(obj, cb) {
         if (obj._objects && obj._objects.length) {
@@ -277,7 +312,13 @@
                 else if (ak === "aeration") drawWater(ctx, r, Math.max(ratio, 0.4), t, true);
                 else if (ak === "spin") drawSpin(ctx, r, t, (val >= num(sc.threshold, 1) && val > 0) ? num(sc.speed, 1) : 0);
                 else if (ak === "gauge") drawGauge(ctx, r, ratio);
-                else if (ak === "flow") drawFlow(ctx, r, t, val > 0);
+                else if (ak === "flow") {
+                    if (val > 0) {
+                        var fp = FLOW_PATHS[o.symbolKey];
+                        if (fp) drawFlowPath(ctx, o, fp, t);
+                        else drawFlow(ctx, r, t, true);
+                    }
+                }
             });
             ctx.restore();
         }
