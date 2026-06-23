@@ -589,6 +589,10 @@ Tamamen dashboard arayüzüne özgü → `dashboard/`.
 - **Model** [dashboard/models.py](dashboard/models.py) `MimicScreen`: `data` (Fabric `canvas.toJSON`),
   `thumbnail` (base64 PNG galeri önizleme), `width/height/background`, `is_template` (silinemez),
   `created_by`. Migration `dashboard/0002_mimicscreen`.
+- **Yerleşik şablon**: `python manage.py seed_mimic_templates` (idempotent) "SAIS Kabini — Örnek HMI"
+  şablonunu (`is_template=True`) tohumlar — eski "Kabin İzleme" demo'sunun mimik editörü formatındaki
+  karşılığı (pompalar/akış hücresi/analizör paneli/yıkama tankı/debimetre/durum lambaları; Fabric JSON
+  primitive + `symbolKey` ile üretilir, etiketler SAIS parametre kodlarıyla hizalı, "auto" animasyonlu).
 - **View'lar** [dashboard/views.py](dashboard/views.py): `MimicDashboardView` (galeri, ListView),
   `MimicEditorView` (standalone editör — `mimic/editor.html`), `MimicViewerView` (standalone
   salt-okunur görüntüleyici/simülatör — `mimic/viewer.html`). Galeri kartları/butonları editör ve
