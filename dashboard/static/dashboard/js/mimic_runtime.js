@@ -139,14 +139,11 @@
         pipe_reducer: [[[0, 0.5], [1, 0.5]]],
         flow_arrow: [[[0, 0.5], [1, 0.5]]]
     };
-    function drawFlowPath(ctx, obj, paths, t) {
-        var m = obj.calcTransformMatrix();
-        var w = obj.width, h = obj.height;
-        function P(n) {
-            return fabric.util.transformPoint(
-                new fabric.Point((n[0] - 0.5) * w, (n[1] - 0.5) * h), m);
-        }
-        var lw = Math.max(3, Math.min(obj.getScaledWidth(), obj.getScaledHeight()) * 0.34);
+    // Akışı objenin GÖRÜNEN sınır kutusuna (getBoundingRect) oturtarak çiz —
+    // grup iç koordinatlarına bağlı değil, eksen-hizalı yerleşimde kesin doğru.
+    function drawFlowPath(ctx, r, paths, t) {
+        function P(n) { return { x: r.left + n[0] * r.width, y: r.top + n[1] * r.height }; }
+        var lw = Math.max(3, Math.min(r.width, r.height) * 0.34);
         ctx.strokeStyle = "rgba(47,155,214,0.95)";
         ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.lineWidth = lw;
         ctx.setLineDash([5, 11]); ctx.lineDashOffset = -(t / 38) % 32;
@@ -315,7 +312,7 @@
                 else if (ak === "flow") {
                     if (val > 0) {
                         var fp = FLOW_PATHS[o.symbolKey];
-                        if (fp) drawFlowPath(ctx, o, fp, t);
+                        if (fp) drawFlowPath(ctx, r, fp, t);
                         else drawFlow(ctx, r, t, true);
                     }
                 }
