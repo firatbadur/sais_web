@@ -187,7 +187,7 @@
     // Undo / redo
     // ----------------------------------------------------------------- //
     var undoStack = [], redoStack = [], suspend = false;
-    var SER_PROPS = ["scada", "name", "isHelper", "selectable", "evented", "isButton"];
+    var SER_PROPS = ["scada", "name", "isHelper", "selectable", "evented", "isButton", "symbolKey"];
     function serialize() { return JSON.stringify(canvas.toJSON(SER_PROPS)); }
     function pushUndo() {
         if (suspend) return;
@@ -581,22 +581,72 @@
     // ----------------------------------------------------------------- //
     // Düzen aksiyonları
     // ----------------------------------------------------------------- //
-    var clipboard = null;
+    // Pano localStorage'da tutulur → AYNI tarayıcının tüm sekmeleri/mimik
+    // sayfaları paylaşır (farklı template'ler arası kopyala-yapıştır).
+    var CLIP_KEY = "mimic.clipboard.v1";
+    var clipboard = null;   // bellek içi yedek (localStorage kapalıysa)
+
     function delActive() {
         var objs = canvas.getActiveObjects();
         objs.forEach(function (o) { if (!o.isHelper) canvas.remove(o); });
         canvas.discardActiveObject(); canvas.requestRenderAll(); refreshLayers();
     }
-    function copyActive() { var o = activeObj(); if (o) o.clone(function (c) { clipboard = c; }, SER_PROPS); }
-    function pasteActive() {
-        if (!clipboard) return;
-        clipboard.clone(function (c) {
-            c.set({ left: c.left + 24, top: c.top + 24 });
-            c.scada = JSON.parse(JSON.stringify(clipboard.scada || {}));
-            canvas.add(c); canvas.setActiveObject(c); canvas.requestRenderAll(); refreshLayers();
-        }, SER_PROPS);
+
+    // Seçili (tek veya çoklu) nesneleri scada/symbolKey dahil JSON'a serialize et.
+    // Çoklu seçimde önce selection çözülür → alt nesneler MUTLAK koordinata döner
+    // (yoksa seçim-merkezine göreli koordinatlar yapıştırmayı bozar), sonra
+    // selection geri kurulur.
+    function serializeActive() {
+        var active = canvas.getActiveObject();
+        var multi = active && active.type === "activeSelection";
+        var objs;
+        if (multi) { objs = active.getObjects().slice(); canvas.discardActiveObject(); }
+        else { objs = canvas.getActiveObjects(); }
+        objs = objs.filter(function (o) { return !o.isHelper; });
+        if (!objs.length) return null;
+        var data = objs.map(function (o) { return o.toObject(SER_PROPS); });
+        if (multi) {
+            canvas.setActiveObject(new fabric.ActiveSelection(objs, { canvas: canvas }));
+            canvas.requestRenderAll();
+        }
+        return data;
     }
-    function duplicateActive() { copyActive(); setTimeout(pasteActive, 30); }
+    function copyActive() {
+        var data = serializeActive();
+        if (!data || !data.length) return;
+        clipboard = data;
+        try { localStorage.setItem(CLIP_KEY, JSON.stringify({ v: 1, objects: data })); } catch (e) {}
+        toast(data.length > 1 ? (data.length + " nesne kopyalandı") : "Nesne kopyalandı", "success");
+    }
+    function readClipboard() {
+        try {
+            var raw = localStorage.getItem(CLIP_KEY);
+            if (raw) { var p = JSON.parse(raw); if (p && p.objects && p.objects.length) return p.objects; }
+        } catch (e) {}
+        return clipboard;   // bellek yedeği
+    }
+    function _addEnlivened(data, offset) {
+        if (!data || !data.length) return;
+        // toplu yapıştırmada göreli konum korunsun diye derin kopya al
+        var clone = JSON.parse(JSON.stringify(data));
+        fabric.util.enlivenObjects(clone, function (objs) {
+            canvas.discardActiveObject();
+            var added = [];
+            objs.forEach(function (o) {
+                o.set({ left: (o.left || 0) + offset, top: (o.top || 0) + offset,
+                        selectable: true, evented: true });
+                o.scada = o.scada || { tag: "", anim: "none" };
+                o.setCoords();
+                canvas.add(o);
+                added.push(o);
+            });
+            if (added.length === 1) canvas.setActiveObject(added[0]);
+            else if (added.length > 1) canvas.setActiveObject(new fabric.ActiveSelection(added, { canvas: canvas }));
+            canvas.requestRenderAll(); refreshLayers(); markDirty();
+        });
+    }
+    function pasteActive() { _addEnlivened(readClipboard(), 24); }
+    function duplicateActive() { _addEnlivened(serializeActive(), 20); }
     function groupActive() {
         var sel = canvas.getActiveObject();
         if (sel && sel.type === "activeSelection") { sel.toGroup(); canvas.requestRenderAll(); refreshLayers(); }
