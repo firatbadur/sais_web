@@ -320,6 +320,21 @@
               '<rect x="18" y="14" width="44" height="62" rx="8" fill="rgba(120,180,210,0.12)" stroke="'+EDGE+'" stroke-width="3"/>' +
               '<rect x="19" y="44" width="42" height="31" rx="6" fill="'+LIQ+'" opacity="0.55" data-level="1"/>' +
               '<path d="M19 48 q7 -5 14 0 t14 0 t14 0" fill="none" stroke="'+LIQ+'" stroke-width="2" opacity="0.8"/></svg>'),
+            S("sample_fridge", "Numune Dolabı", 90, 130,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 130">' +
+              '<rect x="8" y="6" width="74" height="118" rx="9" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="3" data-dyn="1"/>' +
+              '<rect x="16" y="14" width="58" height="22" rx="3" fill="'+DARK+'"/>' +
+              '<text x="40" y="30" font-size="13" font-weight="bold" font-family="monospace" fill="'+GREEN+'" text-anchor="middle">4°C</text>' +
+              '<circle cx="66" cy="25" r="3" fill="'+GREEN+'"/>' +
+              '<circle cx="45" cy="80" r="31" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="2.5"/>' +
+              '<circle cx="45" cy="80" r="24" fill="none" stroke="'+EDGE+'" stroke-width="1.5" opacity="0.5"/>' +
+              '<g fill="'+WHITE+'" stroke="'+EDGE+'" stroke-width="1.5">' +
+              '<circle cx="63" cy="80" r="4.5"/><circle cx="57.7" cy="92.7" r="4.5"/><circle cx="45" cy="98" r="4.5"/>' +
+              '<circle cx="32.3" cy="92.7" r="4.5"/><circle cx="27" cy="80" r="4.5"/><circle cx="32.3" cy="67.3" r="4.5"/>' +
+              '<circle cx="45" cy="62" r="4.5"/><circle cx="57.7" cy="67.3" r="4.5"/></g>' +
+              '<circle cx="45" cy="80" r="5" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="1.5"/>' +
+              '<rect x="70" y="52" width="6" height="44" rx="3" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="1.5"/>' +
+              '<path d="M14 116 l5 -7 l5 7 m-5 -7 v7" stroke="#2f9bd6" stroke-width="1.5" fill="none" opacity="0.7"/></svg>'),
             S("filter", "Filtre", 70, 110,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 110">' +
               '<rect x="14" y="10" width="42" height="90" rx="8" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +
