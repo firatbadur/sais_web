@@ -43,6 +43,14 @@
     var runtime = window.MimicRuntime(canvas);
     var boundary = null;
 
+    // Tuval alanında tarayıcının yerleşik sağ-tık menüsünü engelle (kendi
+    // sağ-tık menümüz açılır). Üst/alt katman canvas'lar + sarmalayıcı dahil.
+    (function () {
+        var center = document.querySelector(".mx-center");
+        if (center) center.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+        if (canvas.wrapperEl) canvas.wrapperEl.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+    })();
+
     // ----------------------------------------------------------------- //
     // Grid (viewport-aware pattern background)
     // ----------------------------------------------------------------- //
