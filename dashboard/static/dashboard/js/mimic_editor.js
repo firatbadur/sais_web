@@ -43,13 +43,14 @@
     var runtime = window.MimicRuntime(canvas);
     var boundary = null;
 
-    // Tuval alanında tarayıcının yerleşik sağ-tık menüsünü engelle (kendi
-    // sağ-tık menümüz açılır). Üst/alt katman canvas'lar + sarmalayıcı dahil.
-    (function () {
-        var center = document.querySelector(".mx-center");
-        if (center) center.addEventListener("contextmenu", function (e) { e.preventDefault(); });
-        if (canvas.wrapperEl) canvas.wrapperEl.addEventListener("contextmenu", function (e) { e.preventDefault(); });
-    })();
+    // Tarayıcının yerleşik sağ-tık menüsünü engelle (kendi animasyon/tag
+    // menümüz açılır). Capture fazında → fabric/diğer handler'lardan önce çalışır
+    // ve hangi katman canvas'a düşerse düşsün yakalar. Form alanlarında (input/
+    // textarea/select) native menü serbest bırakılır.
+    document.addEventListener("contextmenu", function (e) {
+        if (e.target && e.target.closest && e.target.closest("input, textarea, select")) return;
+        e.preventDefault();
+    }, true);
 
     // ----------------------------------------------------------------- //
     // Grid (viewport-aware pattern background)
