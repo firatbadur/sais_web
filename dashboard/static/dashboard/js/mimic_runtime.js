@@ -36,7 +36,8 @@
         gauge: "gauge", rotameter: "gauge", transmitter: "tint", analyzer: "tint",
         aeration: "aeration", flow_arrow: "flow", screw_conveyor: "flow",
         beacon: "blink", alarm_horn: "blink", emergency_stop: "blink",
-        gas_detector: "blink", lamp: "tint", value_display: "tint"
+        gas_detector: "blink", lamp: "tint", value_display: "tint",
+        flow_cell: "water", sample_cell: "water"
     };
     function autoKind(o) {
         var k = o.symbolKey || "";

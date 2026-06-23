@@ -292,6 +292,23 @@
         // PROSES EKİPMANI
         // ----------------------------------------------------------------- //
         { group: "process", label: "Proses Ekipmanı", items: [
+            S("flow_cell", "Akış Hücresi", 70, 130,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 130">' +
+              '<rect x="6" y="104" width="22" height="12" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<rect x="42" y="16" width="22" height="12" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<rect x="22" y="8" width="26" height="114" rx="9" fill="rgba(120,180,210,0.12)" stroke="'+EDGE+'" stroke-width="3"/>' +
+              '<rect x="23" y="60" width="24" height="61" rx="7" fill="'+LIQ+'" opacity="0.55" data-level="1"/>' +
+              '<path d="M23 64 q6 -5 12 0 t12 0" fill="none" stroke="'+LIQ+'" stroke-width="2" opacity="0.8"/>' +
+              '<rect x="30" y="2" width="10" height="10" fill="'+DARK+'" stroke="'+EDGE+'" stroke-width="1.5"/>' +
+              '<line x1="35" y1="12" x2="35" y2="96" stroke="'+METAL+'" stroke-width="3"/>' +
+              '<circle cx="35" cy="100" r="5" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="1.5" data-dyn="1"/></svg>'),
+            S("sample_cell", "Numune Hücresi", 80, 90,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 90">' +
+              '<rect x="2" y="38" width="18" height="12" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<rect x="60" y="38" width="18" height="12" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<rect x="18" y="14" width="44" height="62" rx="8" fill="rgba(120,180,210,0.12)" stroke="'+EDGE+'" stroke-width="3"/>' +
+              '<rect x="19" y="44" width="42" height="31" rx="6" fill="'+LIQ+'" opacity="0.55" data-level="1"/>' +
+              '<path d="M19 48 q7 -5 14 0 t14 0 t14 0" fill="none" stroke="'+LIQ+'" stroke-width="2" opacity="0.8"/></svg>'),
             S("filter", "Filtre", 70, 110,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 110">' +
               '<rect x="14" y="10" width="42" height="90" rx="8" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +

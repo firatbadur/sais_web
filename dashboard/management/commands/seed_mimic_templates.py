@@ -127,8 +127,8 @@ def build_sais_cabinet():
 
     # --- Akış hücresi / ölçüm kolonu ---
     objs.append(_text(372, 150, "Akış Hücresi", 14, "#181c32", "600", "lbl-kolon"))
-    objs.append(_rect(376, 176, 84, 300, fill=LIQ, stroke=EDGE, sw=3, rx=8, name="akis-hucresi",
-                      symbol="tank_vertical", scada=_scada("AkisHizi", min=0, max=100)))
+    objs.append(_rect(376, 176, 84, 300, fill="#dfeaf1", stroke=EDGE, sw=3, rx=10, name="akis-hucresi",
+                      symbol="flow_cell", scada=_scada("AkisHizi", min=0, max=100)))
     objs.append(_rect(396, 484, 44, 10, fill=METAL, name="kolon-cikis"))
 
     # --- Analizör paneli ---
