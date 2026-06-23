@@ -245,6 +245,7 @@
             padding: 7px 8px; border-radius: 5px; font-size: 12px; cursor: pointer; text-align: left; }
         .ctx-mi:hover { background: var(--mx-panel-2); color: var(--mx-head); }
         .ctx-mi i { font-size: 16px; }
+        .ctx-mi .mi-kbd { margin-left: auto; font-size: 10px; color: var(--mx-muted); font-weight: 600; }
         .ctx-mi.danger { color: #e4544c; }
         .ctx-mi.danger:hover { background: rgba(228,84,76,.12); }
 
@@ -596,7 +597,9 @@
     </div>
     <div class="ctx-sep"></div>
     <div class="ctx-menulist">
-        <button class="ctx-mi" id="ctx-dup"><i class="ki-duotone ki-copy"></i>{% trans "Çoğalt" %}</button>
+        <button class="ctx-mi" id="ctx-copy"><i class="ki-duotone ki-copy"></i>{% trans "Kopyala" %}<span class="mi-kbd">Ctrl+C</span></button>
+        <button class="ctx-mi" id="ctx-paste"><i class="ki-duotone ki-clipboard"><span class="path1"></span><span class="path2"></span></i>{% trans "Yapıştır" %}<span class="mi-kbd">Ctrl+V</span></button>
+        <button class="ctx-mi" id="ctx-dup"><i class="ki-duotone ki-copy-success"><span class="path1"></span><span class="path2"></span></i>{% trans "Çoğalt" %}</button>
         <button class="ctx-mi" id="ctx-front"><i class="ki-duotone ki-up-square"><span class="path1"></span><span class="path2"></span></i>{% trans "Öne Getir" %}</button>
         <button class="ctx-mi" id="ctx-back"><i class="ki-duotone ki-down-square"><span class="path1"></span><span class="path2"></span></i>{% trans "Arkaya Gönder" %}</button>
         <button class="ctx-mi danger" id="ctx-del"><i class="ki-duotone ki-trash"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>{% trans "Sil" %}</button>

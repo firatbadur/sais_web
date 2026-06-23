@@ -1232,6 +1232,8 @@
         if ($("ctx-anim")) $("ctx-anim").value = "none";
         updateCtxLive();
     });
+    on("ctx-copy", "click", function () { copyActive(); hideCtxMenu(); });
+    on("ctx-paste", "click", function () { hideCtxMenu(); pasteActive(); });
     on("ctx-dup", "click", function () { hideCtxMenu(); duplicateActive(); });
     on("ctx-front", "click", function () { hideCtxMenu(); bringFront(); });
     on("ctx-back", "click", function () { hideCtxMenu(); sendBack(); });
