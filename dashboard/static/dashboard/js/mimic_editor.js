@@ -1205,7 +1205,11 @@
     canvas.on("mouse:down", function (opt) {
         if (runtime.isRunning()) return;
         if (opt.e.button === 2 && opt.target && !opt.target.isHelper) {
-            canvas.setActiveObject(opt.target);
+            // Çoklu seçim içindeyse seçimi koru (Grupla çalışsın); değilse tek seç.
+            var act = canvas.getActiveObject();
+            var inSel = act && act.type === "activeSelection" &&
+                        act.getObjects().indexOf(opt.target) >= 0;
+            if (!inSel) canvas.setActiveObject(opt.target);
             canvas.requestRenderAll();
             showCtxMenu(opt.target, opt.e.clientX, opt.e.clientY);
         } else {
@@ -1240,6 +1244,8 @@
     on("ctx-copy", "click", function () { copyActive(); hideCtxMenu(); });
     on("ctx-paste", "click", function () { hideCtxMenu(); pasteActive(); });
     on("ctx-dup", "click", function () { hideCtxMenu(); duplicateActive(); });
+    on("ctx-group", "click", function () { hideCtxMenu(); groupActive(); });
+    on("ctx-ungroup", "click", function () { hideCtxMenu(); ungroupActive(); });
     on("ctx-front", "click", function () { hideCtxMenu(); bringFront(); });
     on("ctx-back", "click", function () { hideCtxMenu(); sendBack(); });
     on("ctx-del", "click", function () { hideCtxMenu(); delActive(); });

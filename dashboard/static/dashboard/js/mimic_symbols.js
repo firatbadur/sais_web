@@ -24,6 +24,17 @@
         return { key: key, name: name, w: w, h: h, svg: svg.trim() };
     }
 
+    // Su kalitesi probu — ortak gövde, ölçüm etiketi (pH/DO/ORP/EC/...) değişir.
+    function _probe(label) {
+        var fs = label.length > 3 ? 8 : 10;
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 115">' +
+            '<rect x="11" y="4" width="28" height="26" rx="4" fill="' + DARK + '" stroke="' + EDGE + '" stroke-width="2"/>' +
+            '<text x="25" y="22" font-size="' + fs + '" font-weight="bold" fill="' + WHITE + '" text-anchor="middle">' + label + '</text>' +
+            '<rect x="17" y="30" width="16" height="62" fill="' + STEEL + '" stroke="' + EDGE + '" stroke-width="2" data-dyn="1"/>' +
+            '<g stroke="' + EDGE + '" stroke-width="1" opacity="0.5"><line x1="17" y1="44" x2="33" y2="44"/><line x1="17" y1="58" x2="33" y2="58"/></g>' +
+            '<path d="M17 92 Q25 110 33 92 Z" fill="' + LIQ + '" stroke="' + EDGE + '" stroke-width="2"/></svg>';
+    }
+
     var SYMBOLS = [
         // ----------------------------------------------------------------- //
         // VANALAR
@@ -679,6 +690,114 @@
               '<circle cx="32" cy="32" r="30" fill="'+AMBER+'" stroke="'+EDGE+'" stroke-width="3"/>' +
               '<circle cx="32" cy="32" r="20" fill="'+RED+'" stroke="'+DARK+'" stroke-width="2" data-dyn="1"/>' +
               '<text x="32" y="37" font-size="9" font-weight="bold" fill="'+WHITE+'" text-anchor="middle">STOP</text></svg>'),
+        ]},
+
+        // ----------------------------------------------------------------- //
+        // SENSÖRLER (Saha ölçüm)
+        // ----------------------------------------------------------------- //
+        { group: "sensors", label: "Sensörler", items: [
+            S("hydrostatic_level", "Hidrostatik Seviye", 60, 130,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 130">' +
+              '<rect x="16" y="4" width="28" height="22" rx="4" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2.5" data-dyn="1"/>' +
+              '<text x="30" y="19" font-size="10" font-weight="bold" fill="'+DARK+'" text-anchor="middle">LT</text>' +
+              '<line x1="30" y1="26" x2="30" y2="96" stroke="'+DARK+'" stroke-width="3"/>' +
+              '<rect x="22" y="96" width="16" height="26" rx="8" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="2.5"/>' +
+              '<line x1="26" y1="120" x2="34" y2="120" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<circle cx="30" cy="118" r="2.5" fill="'+EDGE+'"/></svg>'),
+            S("radar_level", "Radar Seviye", 70, 110,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 110">' +
+              '<rect x="20" y="6" width="30" height="26" rx="4" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2.5" data-dyn="1"/>' +
+              '<text x="35" y="24" font-size="11" font-weight="bold" fill="'+DARK+'" text-anchor="middle">LR</text>' +
+              '<path d="M24 32 L46 32 L40 56 L30 56 Z" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2.5"/>' +
+              '<g fill="none" stroke="#2f9bd6" stroke-width="2.5" opacity="0.8">' +
+              '<path d="M22 66 Q35 76 48 66"/><path d="M18 78 Q35 92 52 78"/><path d="M14 90 Q35 108 56 90"/></g></svg>'),
+            S("ultrasonic_level", "Ultrasonik Seviye", 70, 110,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 110">' +
+              '<rect x="18" y="6" width="34" height="30" rx="5" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2.5" data-dyn="1"/>' +
+              '<text x="35" y="26" font-size="10" font-weight="bold" fill="'+DARK+'" text-anchor="middle">LU</text>' +
+              '<rect x="26" y="36" width="18" height="10" rx="2" fill="'+DARK+'"/>' +
+              '<g fill="none" stroke="#2f9bd6" stroke-width="2.5" opacity="0.8">' +
+              '<path d="M24 52 Q35 60 46 52"/><path d="M20 64 Q35 76 50 64"/><path d="M16 78 Q35 94 54 78"/></g></svg>'),
+            S("guided_radar", "Kılavuzlu Radar (TDR)", 50, 130,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 130">' +
+              '<rect x="12" y="4" width="26" height="24" rx="4" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2.5" data-dyn="1"/>' +
+              '<text x="25" y="20" font-size="9" font-weight="bold" fill="'+DARK+'" text-anchor="middle">GWR</text>' +
+              '<line x1="25" y1="28" x2="25" y2="124" stroke="'+METAL+'" stroke-width="4"/>' +
+              '<circle cx="25" cy="124" r="4" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="1.5"/></svg>'),
+            S("capacitive_level", "Kapasitif Seviye", 50, 120,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 120">' +
+              '<rect x="12" y="4" width="26" height="22" rx="4" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2.5" data-dyn="1"/>' +
+              '<text x="25" y="19" font-size="10" font-weight="bold" fill="'+DARK+'" text-anchor="middle">LC</text>' +
+              '<rect x="20" y="26" width="10" height="88" rx="5" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/></svg>'),
+            S("dp_level", "Diferansiyel Basınç", 80, 80,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">' +
+              '<circle cx="40" cy="34" r="26" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="3" data-dyn="1"/>' +
+              '<text x="40" y="40" font-size="14" font-weight="bold" fill="'+DARK+'" text-anchor="middle">ΔP</text>' +
+              '<line x1="22" y1="58" x2="22" y2="76" stroke="'+METAL+'" stroke-width="4"/>' +
+              '<line x1="58" y1="58" x2="58" y2="76" stroke="'+METAL+'" stroke-width="4"/></svg>'),
+            S("mag_flow", "Elektromanyetik Debimetre", 110, 80,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 80">' +
+              '<rect x="2" y="40" width="20" height="20" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<rect x="88" y="40" width="20" height="20" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<rect x="22" y="34" width="66" height="32" rx="4" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="2.5" data-dyn="1"/>' +
+              '<rect x="40" y="4" width="30" height="34" rx="4" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2.5"/>' +
+              '<text x="55" y="26" font-size="12" font-weight="bold" fill="'+DARK+'" text-anchor="middle">FM</text>' +
+              '<path d="M34 50 H76" stroke="#2f9bd6" stroke-width="3"/></svg>'),
+            S("ultrasonic_flow", "Ultrasonik Debimetre", 120, 60,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60">' +
+              '<rect x="2" y="22" width="116" height="22" rx="3" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="2.5" data-dyn="1"/>' +
+              '<rect x="30" y="10" width="16" height="14" fill="'+DARK+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<rect x="74" y="42" width="16" height="14" fill="'+DARK+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<line x1="38" y1="24" x2="82" y2="42" stroke="#2f9bd6" stroke-width="2" stroke-dasharray="3 3"/></svg>'),
+            S("vortex_flow", "Vortex Debimetre", 100, 80,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80">' +
+              '<rect x="2" y="40" width="18" height="20" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<rect x="80" y="40" width="18" height="20" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<rect x="20" y="36" width="60" height="28" rx="3" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="2.5" data-dyn="1"/>' +
+              '<rect x="36" y="6" width="28" height="32" rx="4" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2.5"/>' +
+              '<text x="50" y="27" font-size="11" font-weight="bold" fill="'+DARK+'" text-anchor="middle">VX</text>' +
+              '<path d="M40 50 q5 -6 10 0 q5 6 10 0" fill="none" stroke="#2f9bd6" stroke-width="2"/></svg>'),
+            S("pressure_tx", "Basınç Transmitteri", 60, 90,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 90">' +
+              '<circle cx="30" cy="30" r="24" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="3" data-dyn="1"/>' +
+              '<text x="30" y="36" font-size="14" font-weight="bold" fill="'+DARK+'" text-anchor="middle">PT</text>' +
+              '<rect x="24" y="54" width="12" height="20" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<rect x="20" y="74" width="20" height="10" rx="2" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/></svg>'),
+            S("temp_rtd", "Sıcaklık (RTD/PT100)", 50, 120,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 120">' +
+              '<circle cx="25" cy="20" r="16" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2.5" data-dyn="1"/>' +
+              '<text x="25" y="25" font-size="11" font-weight="bold" fill="'+DARK+'" text-anchor="middle">TT</text>' +
+              '<rect x="19" y="36" width="12" height="14" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<rect x="21" y="50" width="8" height="64" rx="4" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="2"/></svg>'),
+            S("flow_switch", "Akış Anahtarı", 70, 80,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 80">' +
+              '<rect x="2" y="44" width="66" height="18" rx="3" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="2.5" data-dyn="1"/>' +
+              '<rect x="24" y="10" width="22" height="34" rx="4" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2.5"/>' +
+              '<text x="35" y="32" font-size="11" font-weight="bold" fill="'+DARK+'" text-anchor="middle">FS</text>' +
+              '<path d="M30 54 l8 0 l-3 -4 m3 4 l-3 4" stroke="#2f9bd6" stroke-width="2" fill="none"/></svg>'),
+            S("proximity_sensor", "Yakınlık Sensörü", 50, 90,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 90">' +
+              '<rect x="14" y="8" width="22" height="60" rx="6" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2.5" data-dyn="1"/>' +
+              '<circle cx="25" cy="20" r="6" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="1.5"/>' +
+              '<rect x="20" y="68" width="10" height="16" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<circle cx="25" cy="20" r="2.5" fill="'+AMBER+'"/></svg>'),
+            // --- Su kalitesi probları (ortak gövde, farklı ölçüm etiketi) ---
+            S("ph_sensor", "pH Sensörü", 50, 115,
+              _probe("pH")),
+            S("orp_sensor", "ORP / Redoks", 50, 115,
+              _probe("ORP")),
+            S("do_sensor", "Çözünmüş Oksijen (DO)", 50, 115,
+              _probe("DO")),
+            S("conductivity_sensor", "İletkenlik (EC)", 50, 115,
+              _probe("EC")),
+            S("turbidity_sensor", "Bulanıklık (NTU)", 50, 115,
+              _probe("TUR")),
+            S("chlorine_sensor", "Klor (Cl₂)", 50, 115,
+              _probe("Cl")),
+            S("ammonium_sensor", "Amonyum / Nitrat", 50, 115,
+              _probe("NH₄")),
+            S("tss_sensor", "Askıda Katı (TSS/MLSS)", 50, 115,
+              _probe("TSS")),
         ]},
     ];
 
