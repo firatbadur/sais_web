@@ -20,6 +20,7 @@
                 <thead class="fs-7 fw-bold text-uppercase text-gray-500">
                     <tr>
                         <th>{% trans "ID" %}</th>
+                        <th>{% trans "Tag" %}</th>
                         <th>{% trans "Parametre" %}</th>
                         <th>{% trans "Bağlantı" %}</th>
                         <th>{% trans "Scan Grubu" %}</th>
@@ -35,6 +36,7 @@
                     {% for s in sensors %}
                         <tr>
                             <td>{{ s.pk }}</td>
+                            <td><span class="badge badge-light-info font-monospace">{{ s.tag|default:"—" }}</span></td>
                             <td class="fw-semibold">{{ s.parameter.display_name|default:"-" }}</td>
                             <td>{{ s.connection.name|default:"-" }}</td>
                             <td>{{ s.scan_group.name|default:"—" }}</td>
@@ -56,7 +58,7 @@
                             </td>
                         </tr>
                     {% empty %}
-                        <tr><td colspan="10" class="text-center text-muted py-5">{% trans "Sensör yok." %}</td></tr>
+                        <tr><td colspan="11" class="text-center text-muted py-5">{% trans "Sensör yok." %}</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

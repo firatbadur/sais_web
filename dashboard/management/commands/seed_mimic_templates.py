@@ -39,48 +39,57 @@ def _scada(tag, anim="auto", **over):
     return d
 
 
-def _rect(left, top, w, h, fill=BODY, stroke=EDGE, sw=2, rx=0, name="rect",
-          scada=None, symbol=None, opacity=1):
-    o = {
-        "type": "rect", "left": left, "top": top, "width": w, "height": h,
-        "fill": fill, "stroke": stroke, "strokeWidth": sw, "rx": rx, "ry": rx,
-        "originX": "left", "originY": "top", "opacity": opacity, "name": name,
-        "scada": scada or {"tag": "", "anim": "none"},
+# Fabric.js canonical obje özellik seti — editörde kaydedilen objelerle birebir
+# parite (eksik özellik etkileşim/sürükleme hatasına yol açıyordu).
+def _base(**over):
+    d = {
+        "version": "5.3.0", "originX": "left", "originY": "top",
+        "angle": 0, "scaleX": 1, "scaleY": 1, "flipX": False, "flipY": False,
+        "skewX": 0, "skewY": 0, "opacity": 1, "visible": True,
+        "selectable": True, "evented": True,
+        "fill": BODY, "stroke": EDGE, "strokeWidth": 2,
+        "strokeDashArray": None, "strokeLineCap": "butt", "strokeDashOffset": 0,
+        "strokeLineJoin": "miter", "strokeMiterLimit": 4, "strokeUniform": False,
+        "backgroundColor": "", "fillRule": "nonzero", "paintFirst": "fill",
+        "globalCompositeOperation": "source-over", "shadow": None,
     }
+    d.update(over)
+    return d
+
+
+def _rect(left, top, w, h, fill=BODY, stroke=EDGE, sw=2, rx=0, name="rect",
+          scada=None, symbol=None, opacity=1, extra=None):
+    o = _base(type="rect", left=left, top=top, width=w, height=h, fill=fill,
+              stroke=stroke, strokeWidth=sw, rx=rx, ry=rx, opacity=opacity, name=name,
+              scada=scada or {"tag": "", "anim": "none"})
     if symbol:
         o["symbolKey"] = symbol
+    if extra:
+        o.update(extra)
     return o
 
 
 def _circle(left, top, r, fill=BODY, stroke=EDGE, sw=2, name="circle",
             scada=None, symbol=None):
-    o = {
-        "type": "circle", "left": left, "top": top, "radius": r,
-        "fill": fill, "stroke": stroke, "strokeWidth": sw,
-        "originX": "left", "originY": "top", "name": name,
-        "scada": scada or {"tag": "", "anim": "none"},
-    }
+    o = _base(type="circle", left=left, top=top, radius=r, fill=fill,
+              stroke=stroke, strokeWidth=sw, name=name,
+              scada=scada or {"tag": "", "anim": "none"})
     if symbol:
         o["symbolKey"] = symbol
     return o
 
 
 def _text(left, top, text, size=14, fill="#181c32", weight="normal", name="text"):
-    return {
-        "type": "i-text", "left": left, "top": top, "text": text,
-        "fontSize": size, "fill": fill, "fontWeight": weight,
-        "fontFamily": "Inter, Arial", "originX": "left", "originY": "top",
-        "name": name, "scada": {"tag": "", "anim": "none"},
-    }
+    return _base(type="i-text", left=left, top=top, text=text, fontSize=size,
+                 fill=fill, stroke=None, fontWeight=weight, fontFamily="Inter, Arial",
+                 textAlign="left", name=name, scada={"tag": "", "anim": "none"})
 
 
 def _value(left, top, w, text, fill=GREEN, size=22, scada=None):
-    return {
-        "type": "textbox", "left": left, "top": top, "width": w, "text": text,
-        "fontSize": size, "fill": fill, "textAlign": "center", "fontWeight": "bold",
-        "fontFamily": "monospace", "originX": "left", "originY": "top",
-        "name": "value", "scada": scada or {"tag": "", "anim": "none"},
-    }
+    return _base(type="textbox", left=left, top=top, width=w, text=text,
+                 fontSize=size, fill=fill, stroke=None, textAlign="center",
+                 fontWeight="bold", fontFamily="monospace", name="value",
+                 scada=scada or {"tag": "", "anim": "none"})
 
 
 def build_sais_cabinet():
@@ -91,7 +100,10 @@ def build_sais_cabinet():
     objs.append(_text(42, 64, "Envisoft WebX — Örnek HMI Şablonu", 14, GRAY, "normal", "altbaslik"))
 
     # --- Kabin çerçevesi (dekoratif) ---
-    objs.append(_rect(24, 96, 1232, 600, fill="", stroke="#c9d3dd", sw=2, rx=14, name="cerceve"))
+    # fill="" + perPixelTargetFind: iç boşluğa tıklayınca çerçeveyi seçmez
+    # (altındaki nesneler/tuval hedeflenir) — "her tıklama çerçeveyi kapıyor" önlenir.
+    objs.append(_rect(24, 96, 1232, 600, fill="", stroke="#c9d3dd", sw=2, rx=14, name="cerceve",
+                      extra={"perPixelTargetFind": True}))
 
     # --- Giriş hattı + pompalar ---
     objs.append(_text(70, 150, "Numune Pompaları", 14, "#181c32", "600", "lbl-pompa"))

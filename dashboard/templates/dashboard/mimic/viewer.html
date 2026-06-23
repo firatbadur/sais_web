@@ -53,6 +53,7 @@
     <span class="name">{{ screen.name }}</span>
     {% if screen.description %}<span class="desc">— {{ screen.description }}</span>{% endif %}
     <span style="flex:1"></span>
+    <label class="v-check"><input type="checkbox" id="v-live"> {% trans "Canlı (gerçek değerler)" %}</label>
     <label class="v-check"><input type="checkbox" id="v-auto"> {% trans "Otomatik değerler" %}</label>
     <button class="v-btn" id="v-fit"><i class="ki-duotone ki-maximize"><span class="path1"></span><span class="path2"></span></i> {% trans "Sığdır" %}</button>
     <button class="v-btn run" id="v-run"><i class="ki-duotone ki-play"><span class="path1"></span><span class="path2"></span></i> {% trans "Simülasyonu Başlat" %}</button>
@@ -69,7 +70,8 @@
 {{ screen.data|json_script:"v-data" }}
 <script>
 window.V_CFG = {
-    width: {{ screen.width }}, height: {{ screen.height }}, background: "{{ screen.background|escapejs }}"
+    width: {{ screen.width }}, height: {{ screen.height }}, background: "{{ screen.background|escapejs }}",
+    tagsUrl: "{% url 'dashboard:api_mimic_tags' %}"
 };
 </script>
 <script src="{% static 'dashboard/plugins/custom/fabric/fabric.min.js' %}"></script>
@@ -186,7 +188,32 @@ window.V_CFG = {
             b.classList.remove("on"); b.innerHTML = '<i class="ki-duotone ki-play"><span class="path1"></span><span class="path2"></span></i> {% trans "Simülasyonu Başlat" %}';
         }
     });
-    $("v-auto").addEventListener("change", function (e) { if (running) { e.target.checked ? startAuto() : stopAuto(); } });
+    $("v-auto").addEventListener("change", function (e) {
+        if (e.target.checked) { $("v-live").checked = false; stopLive(); }
+        if (running) { e.target.checked ? startAuto() : stopAuto(); }
+    });
+
+    // Canlı mod — gerçek sensör değerlerini periyodik çek
+    var liveTimer = null;
+    function pollLive() {
+        fetch(V_CFG.tagsUrl, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d || !d.values) return;
+                Object.keys(d.values).forEach(function (t) { runtime.setTag(t, d.values[t]); });
+                if (running) buildTagsSync();
+            }).catch(function () {});
+    }
+    function startLive() { stopLive(); pollLive(); liveTimer = setInterval(pollLive, 4000); }
+    function stopLive() { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
+    $("v-live").addEventListener("change", function (e) {
+        if (e.target.checked) {
+            $("v-auto").checked = false; stopAuto();
+            if (!running) $("v-run").click();   // animasyon için motoru başlat
+            startLive();
+        } else { stopLive(); }
+    });
+
     $("v-fit").addEventListener("click", fit);
     window.addEventListener("resize", resize);
 })();

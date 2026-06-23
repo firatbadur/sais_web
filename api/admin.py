@@ -199,21 +199,22 @@ class ScanGroupAdmin(admin.ModelAdmin):
 class SensorAdmin(admin.ModelAdmin):
     form = _SensorAdminForm
     list_display = (
-        "id", "parameter", "connection", "scan_group", "sensor_type", "brand", "model",
+        "id", "tag", "parameter", "connection", "scan_group", "sensor_type", "brand", "model",
         "slave_id", "address", "function", "data_type", "scale", "offset", "decimals",
         "is_active", "dashboard_hidden", "is_simulated", "report_status",
     )
     list_filter = ("sensor_type", "signal_type", "function", "data_type", "is_active",
                    "dashboard_hidden", "is_simulated", "report_status", "connection",
                    "scan_group")
-    search_fields = ("brand", "model", "serial_number", "ascii_code", "ascii_request")
+    search_fields = ("tag", "brand", "model", "serial_number", "ascii_code", "ascii_request")
     list_editable = ("is_active", "dashboard_hidden")
     autocomplete_fields = ("parameter", "connection", "scan_group")
     fieldsets = (
         ("Kimlik", {
-            "fields": ("parameter", "brand", "model", "serial_number", "sensor_type",
+            "fields": ("tag", "parameter", "brand", "model", "serial_number", "sensor_type",
                        "signal_type", "is_active", "dashboard_hidden", "is_simulated",
                        "sim_min", "sim_max", "report_status"),
+            "description": "Tag boş bırakılırsa kayıtta parametre kodundan otomatik üretilir.",
         }),
         ("Bağlantı", {
             "fields": ("connection", "scan_group"),

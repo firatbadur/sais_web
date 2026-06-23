@@ -471,6 +471,12 @@ class Sensor(models.Model):
         Parameter, on_delete=models.CASCADE,
         blank=True, null=True, related_name="sensors",
     )
+    tag = models.CharField(
+        max_length=80, blank=True, default="", db_index=True,
+        verbose_name="SCADA Etiketi (Tag)",
+        help_text="Mimik/HMI bağlama için benzersiz etiket. Boş bırakılırsa "
+                  "kayıtta parametre kodundan otomatik üretilir (gerçek SCADA'daki gibi).",
+    )
     sensor_type = models.IntegerField(
         choices=SENSOR_TYPE, default=0, blank=True, null=True,
         verbose_name="Sensör Tipi",
@@ -728,6 +734,25 @@ class Sensor(models.Model):
         if self._state.adding and self.save_on_change is None:
             self.save_on_change = self.sensor_type in (2, 3)
         super().save(*args, **kwargs)
+        # Otomatik SCADA etiketi — gerçek bir SCADA'da her tag benzersizdir.
+        # Boşsa parametre kodundan üretilip yazılır (pk gerektiği için save sonrası).
+        if not self.tag:
+            self.tag = self._generate_tag()
+            super().save(update_fields=["tag"])
+
+    def _generate_tag(self) -> str:
+        """Parametre kodundan benzersiz, SCADA-uyumlu bir tag türetir.
+
+        İlk sensör için kod adının kendisi (ör. 'pH', 'Pompa1'); aynı kod
+        başka bir sensörde kullanılıyorsa pk eklenir ('pH_42').
+        """
+        import re
+        raw = ""
+        if self.parameter_id:
+            raw = self.parameter.parameter_name or self.parameter.parameter_txt or ""
+        base = re.sub(r"[^0-9A-Za-z_]+", "_", raw).strip("_") or f"TAG{self.pk}"
+        clash = type(self).objects.filter(tag=base).exclude(pk=self.pk).exists()
+        return base if not clash else f"{base}_{self.pk}"
 
     def clean(self):
         """scan_group set ise address sınır doğrulaması.

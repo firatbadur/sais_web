@@ -589,6 +589,12 @@ Tamamen dashboard arayüzüne özgü → `dashboard/`.
 - **Model** [dashboard/models.py](dashboard/models.py) `MimicScreen`: `data` (Fabric `canvas.toJSON`),
   `thumbnail` (base64 PNG galeri önizleme), `width/height/background`, `is_template` (silinemez),
   `created_by`. Migration `dashboard/0002_mimicscreen`.
+- **Gerçek SCADA etiketleri**: `Sensor.tag` (api/, otomatik üretilir — `save()` boşsa parametre
+  kodundan benzersiz tag türetir; migration `0025`/`0026` mevcutları doldurur). Sensör listesi +
+  Jazzmin admin'de görünür. Editör tag alanı `/dashboard/api/mimic/tags/`'ten (gerçek sensör tag +
+  `SensorLatest` anlık değer) datalist ile beslenir; **canlı mod** (editör sim + viewer) bu
+  endpoint'i 4 sn'de bir poll'layıp animasyonları gerçek değerlerle sürer. Objeye **sağ tık** →
+  hızlı tag + animasyon atama menüsü (`#ctx-menu`).
 - **Yerleşik şablon**: `python manage.py seed_mimic_templates` (idempotent) "SAIS Kabini — Örnek HMI"
   şablonunu (`is_template=True`) tohumlar — eski "Kabin İzleme" demo'sunun mimik editörü formatındaki
   karşılığı (pompalar/akış hücresi/analizör paneli/yıkama tankı/debimetre/durum lambaları; Fabric JSON

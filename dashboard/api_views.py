@@ -3230,3 +3230,41 @@ def mimic_screen_delete(request):
     return JsonResponse({"ok": True})
 
 
+@login_required
+def mimic_tags(request):
+    """Mimik bağlama için gerçek SCADA etiketleri + canlı değerleri.
+
+    Her aktif sensörün otomatik `tag`'i, okunabilir etiketi, birimi, tipi ve
+    `SensorLatest` anlık değeri döner. Editör tag dropdown'unu ve görüntüleyici
+    canlı modunu besler. `values` haritası tag→değer (canlı poll için).
+    """
+    denied = _require_admin(request)
+    if denied:
+        return denied
+
+    sensors = (
+        Sensor.objects.filter(is_active=True)
+        .exclude(tag="")
+        .select_related("parameter", "connection__station", "latest")
+        .order_by("connection__station__name", "display_order", "id")
+    )
+    items, values = [], {}
+    for s in sensors:
+        latest = getattr(s, "latest", None)
+        val = latest.value if (latest and latest.value is not None) else 0
+        param = s.parameter
+        label = (param.display_name if param else None) or s.tag
+        station = s.connection.station.name if (s.connection_id and s.connection.station_id) else ""
+        items.append({
+            "tag": s.tag,
+            "label": label,
+            "station": station,
+            "unit": (param.unit_txt or param.unit or "") if param else "",
+            "type": s.sensor_type,
+            "digital": s.sensor_type in (2, 3),
+            "value": round(float(val), 3) if val is not None else 0,
+        })
+        values[s.tag] = round(float(val), 3) if val is not None else 0
+    return JsonResponse({"ok": True, "results": items, "values": values})
+
+

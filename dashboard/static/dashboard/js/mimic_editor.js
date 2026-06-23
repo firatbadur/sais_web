@@ -793,7 +793,7 @@
     // ----------------------------------------------------------------- //
     // Simülasyon modu
     // ----------------------------------------------------------------- //
-    var simInterval = null;
+    var simInterval = null, simLiveTimer = null;
     function buildSimPanel() {
         var host = $("sim-tags"); if (!host) return;
         host.innerHTML = "";
@@ -837,14 +837,37 @@
         buildSimPanel();
         var auto = $("sim-auto");
         if (auto && auto.checked) startAuto();
+        var live = $("sim-live");
+        if (live && live.checked) startLive();
     }
     function stopSim() {
         document.body.classList.remove("sim-mode");
         runtime.stop();
         stopAuto();
+        stopLive();
         canvas.forEachObject(function (o) { if (!o.isHelper) { o.selectable = true; o.evented = true; } });
         canvas.requestRenderAll();
     }
+    // Canlı mod: gerçek sensör değerlerini periyodik çek → runtime'a uygula.
+    function pollLive() {
+        fetch(CFG.urls.tags, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d || !d.values) return;
+                Object.keys(d.values).forEach(function (t) {
+                    runtime.setTag(t, d.values[t]);
+                    refreshSimRow(t);
+                });
+            }).catch(function () {});
+    }
+    function startLive() {
+        stopAuto();                       // canlı varken rastgele kapalı
+        var a = $("sim-auto"); if (a) a.checked = false;
+        stopLive();
+        pollLive();
+        simLiveTimer = setInterval(pollLive, 4000);
+    }
+    function stopLive() { if (simLiveTimer) { clearInterval(simLiveTimer); simLiveTimer = null; } }
     function startAuto() {
         stopAuto();
         simInterval = setInterval(function () {
@@ -1014,7 +1037,14 @@
         });
     });
 
-    on("sim-auto", "change", function (e) { if (runtime.isRunning()) { e.target.checked ? startAuto() : stopAuto(); } });
+    on("sim-auto", "change", function (e) {
+        if (e.target.checked) { var l = $("sim-live"); if (l) l.checked = false; stopLive(); }
+        if (runtime.isRunning()) { e.target.checked ? startAuto() : stopAuto(); }
+    });
+    on("sim-live", "change", function (e) {
+        if (e.target.checked) { var a = $("sim-auto"); if (a) a.checked = false; stopAuto(); }
+        if (runtime.isRunning()) { e.target.checked ? startLive() : stopLive(); }
+    });
 
     // Klavye kısayolları
     document.addEventListener("keydown", function (e) {
@@ -1062,11 +1092,108 @@
     }
 
     // ----------------------------------------------------------------- //
+    // Gerçek SCADA etiketleri (sensör tag'leri) — datalist + canlı değer
+    // ----------------------------------------------------------------- //
+    var TAGS = [], TAGMAP = {};
+    function loadTags() {
+        if (!CFG.urls || !CFG.urls.tags) return;
+        fetch(CFG.urls.tags, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                TAGS = (d && d.results) || [];
+                TAGMAP = {};
+                var dl = $("tag-options");
+                if (dl) dl.innerHTML = "";
+                TAGS.forEach(function (it) {
+                    TAGMAP[it.tag] = it;
+                    if (dl) {
+                        var opt = document.createElement("option");
+                        opt.value = it.tag;
+                        opt.label = it.label + (it.station ? " · " + it.station : "") +
+                                    (it.unit ? " (" + it.unit + ")" : "");
+                        dl.appendChild(opt);
+                    }
+                });
+            }).catch(function () {});
+    }
+    function tagInfo(tag) {
+        var it = TAGMAP[tag];
+        if (!it) return "";
+        return it.label + (it.unit ? " · " + it.unit : "") + " — son değer: " + it.value;
+    }
+
+    // ----------------------------------------------------------------- //
+    // Sağ-tık menüsü — hızlı tag + animasyon ataması
+    // ----------------------------------------------------------------- //
+    var ctxObj = null;
+    function showCtxMenu(o, x, y) {
+        ctxObj = o;
+        var sc = o.scada || (o.scada = { tag: "", anim: "none" });
+        if ($("ctx-objname")) $("ctx-objname").textContent = (o.name || o.type) + (o.symbolKey ? " · " + o.symbolKey : "");
+        if ($("ctx-tag")) $("ctx-tag").value = sc.tag || "";
+        if ($("ctx-anim")) $("ctx-anim").value = sc.anim || "none";
+        updateCtxLive();
+        var m = $("ctx-menu"); m.classList.add("show");
+        // ekran içinde tut
+        var mw = m.offsetWidth || 252, mh = m.offsetHeight || 300;
+        m.style.left = Math.min(x, window.innerWidth - mw - 8) + "px";
+        m.style.top = Math.min(y, window.innerHeight - mh - 8) + "px";
+    }
+    function hideCtxMenu() { var m = $("ctx-menu"); if (m) m.classList.remove("show"); }
+    function updateCtxLive() {
+        var el = $("ctx-livehint"); if (!el) return;
+        var tag = $("ctx-tag") ? $("ctx-tag").value.trim() : "";
+        el.innerHTML = (tag && TAGMAP[tag]) ? ("<b>" + tag + "</b> → " + tagInfo(tag)) :
+            (tag ? "Serbest etiket (sensör listesinde yok)" : "");
+    }
+    // sağ tık → menü
+    canvas.on("mouse:down", function (opt) {
+        if (runtime.isRunning()) return;
+        if (opt.e.button === 2 && opt.target && !opt.target.isHelper) {
+            canvas.setActiveObject(opt.target);
+            canvas.requestRenderAll();
+            showCtxMenu(opt.target, opt.e.clientX, opt.e.clientY);
+        } else {
+            hideCtxMenu();
+        }
+    });
+    document.addEventListener("mousedown", function (e) {
+        var m = $("ctx-menu");
+        if (m && m.classList.contains("show") && !m.contains(e.target)) {
+            // canvas üstündeki sağ tık zaten yukarıda ele alınıyor
+            if (e.button !== 2) hideCtxMenu();
+        }
+    });
+    on("ctx-tag", "input", function () {
+        if (ctxObj) { ctxObj.scada = ctxObj.scada || {}; ctxObj.scada.tag = $("ctx-tag").value; markDirty(); syncBindings(); }
+        updateCtxLive();
+    });
+    on("ctx-anim", "change", function () {
+        if (ctxObj) { ctxObj.scada = ctxObj.scada || {}; ctxObj.scada.anim = $("ctx-anim").value; markDirty(); syncBindings(); }
+    });
+    on("ctx-detail", "click", function () {
+        hideCtxMenu();
+        var t = document.querySelector('.rp-tab[data-pane="rp-bind"]');
+        if (t) t.click();
+    });
+    on("ctx-clear", "click", function () {
+        if (ctxObj) { ctxObj.scada = { tag: "", anim: "none" }; markDirty(); syncBindings(); }
+        if ($("ctx-tag")) $("ctx-tag").value = "";
+        if ($("ctx-anim")) $("ctx-anim").value = "none";
+        updateCtxLive();
+    });
+    on("ctx-dup", "click", function () { hideCtxMenu(); duplicateActive(); });
+    on("ctx-front", "click", function () { hideCtxMenu(); bringFront(); });
+    on("ctx-back", "click", function () { hideCtxMenu(); sendBack(); });
+    on("ctx-del", "click", function () { hideCtxMenu(); delActive(); });
+
+    // ----------------------------------------------------------------- //
     // Başlat
     // ----------------------------------------------------------------- //
     function init() {
         resizeCanvas();
         buildPalette("");
+        loadTags();
         if ($("mimic-name")) $("mimic-name").value = state.name;
         if ($("cfg-width")) $("cfg-width").value = state.width;
         if ($("cfg-height")) $("cfg-height").value = state.height;

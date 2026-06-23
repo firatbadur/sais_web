@@ -220,6 +220,34 @@
         .mimic-toast.success { border-left: 3px solid #2fb574; }
         .mimic-toast.danger { border-left: 3px solid #e4544c; }
 
+        /* sağ-tık menüsü */
+        #ctx-menu { position: fixed; z-index: 300; width: 252px; background: var(--mx-panel);
+            border: 1px solid var(--mx-border); border-radius: 10px; box-shadow: 0 12px 34px rgba(0,0,0,.28);
+            padding: 10px; display: none; }
+        #ctx-menu.show { display: block; }
+        .ctx-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--mx-head);
+            margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ctx-title i { color: var(--mx-accent); font-size: 17px; }
+        .ctx-field { margin-bottom: 7px; }
+        .ctx-field label { display: block; font-size: 10px; color: var(--mx-muted); margin-bottom: 2px; }
+        .ctx-field input, .ctx-field select { width: 100%; background: var(--mx-panel-2); border: 1px solid var(--mx-border);
+            color: var(--mx-head); border-radius: 5px; padding: 6px 8px; font-size: 12px; }
+        .ctx-field input:focus, .ctx-field select:focus { outline: none; border-color: var(--mx-accent); }
+        .ctx-live { font-size: 10.5px; color: var(--mx-muted); min-height: 14px; margin: 2px 0 6px; }
+        .ctx-live b { color: var(--mx-accent); }
+        .ctx-actions { display: flex; gap: 6px; }
+        .ctx-btn { flex: 1; background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-text);
+            border-radius: 6px; padding: 7px 6px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+        .ctx-btn:hover { background: var(--mx-hover); color: var(--mx-head); }
+        .ctx-sep { height: 1px; background: var(--mx-border); margin: 9px 0; }
+        .ctx-menulist { display: flex; flex-direction: column; gap: 1px; }
+        .ctx-mi { display: flex; align-items: center; gap: 8px; background: transparent; border: none; color: var(--mx-text);
+            padding: 7px 8px; border-radius: 5px; font-size: 12px; cursor: pointer; text-align: left; }
+        .ctx-mi:hover { background: var(--mx-panel-2); color: var(--mx-head); }
+        .ctx-mi i { font-size: 16px; }
+        .ctx-mi.danger { color: #e4544c; }
+        .ctx-mi.danger:hover { background: rgba(228,84,76,.12); }
+
         body.sim-mode .mx-left, body.sim-mode .mx-right, body.sim-mode .mx-ribbon { opacity: .45; pointer-events: none; }
         ::-webkit-scrollbar { width: 9px; height: 9px; }
         ::-webkit-scrollbar-thumb { background: var(--mx-border); border-radius: 5px; }
@@ -373,7 +401,10 @@
         <div id="sim-panel">
             <div class="sp-head"><b>{% trans "Simülasyon — Etiketler" %}</b></div>
             <div id="sim-tags"></div>
-            <div class="sp-foot"><label class="mx-check"><input type="checkbox" id="sim-auto"> {% trans "Otomatik rastgele değerler" %}</label></div>
+            <div class="sp-foot">
+                <label class="mx-check"><input type="checkbox" id="sim-live"> {% trans "Canlı (gerçek sensör değerleri)" %}</label>
+                <label class="mx-check" style="margin-top:6px;"><input type="checkbox" id="sim-auto"> {% trans "Otomatik rastgele değerler" %}</label>
+            </div>
         </div>
     </div>
 
@@ -459,8 +490,10 @@
                 <div class="prop-sec">
                     <h6>{% trans "Etiket Bağlama" %}</h6>
                     <div class="prop-field" style="margin-bottom:7px;">
-                        <label>{% trans "Etiket Adı (Tag)" %}</label>
-                        <input type="text" id="b-tag" placeholder="ör. Pompa1, pH, Seviye1">
+                        <label>{% trans "Etiket Adı (Tag) — gerçek sensör" %}</label>
+                        <input type="text" id="b-tag" list="tag-options" autocomplete="off"
+                               placeholder="{% trans 'Sensör tag’i seçin veya yazın' %}">
+                        <datalist id="tag-options"></datalist>
                     </div>
                     <div class="prop-field">
                         <label>{% trans "Animasyon Tipi" %}</label>
@@ -536,6 +569,40 @@
     <span style="margin-left:auto;color:var(--mx-muted);">{% trans "Orta tuş / Boşluk+sürükle = kaydır · Tekerlek = yakınlaştır · Del = sil" %}</span>
 </div>
 
+<!-- ===================== SAĞ-TIK MENÜSÜ (animasyon & tag) ===================== -->
+<div id="ctx-menu">
+    <div class="ctx-title"><i class="ki-duotone ki-abstract-26"><span class="path1"></span><span class="path2"></span></i> <span id="ctx-objname">{% trans "Nesne" %}</span></div>
+    <div class="ctx-field"><label>{% trans "Etiket (Tag) — gerçek sensör" %}</label>
+        <input type="text" id="ctx-tag" list="tag-options" autocomplete="off" placeholder="{% trans 'Sensör tag’i...' %}"></div>
+    <div class="ctx-field"><label>{% trans "Animasyon" %}</label>
+        <select id="ctx-anim">
+            <option value="auto">{% trans "Otomatik (sembole özel)" %}</option>
+            <option value="none">{% trans "Yok" %}</option>
+            <option value="colorState">{% trans "Durum Rengi" %}</option>
+            <option value="blink">{% trans "Yanıp Sönme" %}</option>
+            <option value="rotate">{% trans "Dönme" %}</option>
+            <option value="level">{% trans "Doluluk" %}</option>
+            <option value="fillThreshold">{% trans "Eşik Rengi" %}</option>
+            <option value="visibility">{% trans "Görünürlük" %}</option>
+            <option value="opacity">{% trans "Saydamlık" %}</option>
+            <option value="moveX">{% trans "Yatay Hareket" %}</option>
+            <option value="moveY">{% trans "Dikey Hareket" %}</option>
+            <option value="text">{% trans "Metin Değeri" %}</option>
+        </select></div>
+    <div id="ctx-livehint" class="ctx-live"></div>
+    <div class="ctx-actions">
+        <button class="ctx-btn" id="ctx-detail"><i class="ki-duotone ki-setting-2"><span class="path1"></span><span class="path2"></span></i>{% trans "Detaylı Ayar" %}</button>
+        <button class="ctx-btn" id="ctx-clear">{% trans "Bağı Temizle" %}</button>
+    </div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-menulist">
+        <button class="ctx-mi" id="ctx-dup"><i class="ki-duotone ki-copy"></i>{% trans "Çoğalt" %}</button>
+        <button class="ctx-mi" id="ctx-front"><i class="ki-duotone ki-up-square"><span class="path1"></span><span class="path2"></span></i>{% trans "Öne Getir" %}</button>
+        <button class="ctx-mi" id="ctx-back"><i class="ki-duotone ki-down-square"><span class="path1"></span><span class="path2"></span></i>{% trans "Arkaya Gönder" %}</button>
+        <button class="ctx-mi danger" id="ctx-del"><i class="ki-duotone ki-trash"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>{% trans "Sil" %}</button>
+    </div>
+</div>
+
 <!-- ===================== OPEN MODAL ===================== -->
 <div class="mx-modal" id="open-modal">
     <div class="mm-box">
@@ -554,6 +621,7 @@ window.MIMIC_CONFIG = {
         get: "{% url 'dashboard:api_mimic_get' %}",
         list: "{% url 'dashboard:api_mimic_list' %}",
         del: "{% url 'dashboard:api_mimic_delete' %}",
+        tags: "{% url 'dashboard:api_mimic_tags' %}",
         editorNew: "{% url 'dashboard:mimic_editor_new' %}",
         editorBase: "/dashboard/admin-pages/mimic/editor/",
         viewerBase: "/dashboard/admin-pages/mimic/viewer/"
