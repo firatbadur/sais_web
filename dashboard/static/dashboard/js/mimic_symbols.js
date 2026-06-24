@@ -325,13 +325,13 @@
               '<circle cx="45" cy="80" r="5" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="1.5"/>' +
               '<rect x="70" y="52" width="6" height="44" rx="3" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="1.5"/>' +
               '<path d="M14 116 l5 -7 l5 7 m-5 -7 v7" stroke="#2f9bd6" stroke-width="1.5" fill="none" opacity="0.7"/></svg>'),
-            S("wash_bar", "Yıkama Çubuğu", 40, 130,
-              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 130">' +
-              '<rect x="13" y="2" width="14" height="11" rx="2" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
-              '<rect x="16" y="13" width="8" height="109" rx="4" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="2.5" data-dyn="1"/>' +
-              '<g fill="'+DARK+'"><circle cx="20" cy="30" r="2"/><circle cx="20" cy="48" r="2"/><circle cx="20" cy="66" r="2"/>' +
-              '<circle cx="20" cy="84" r="2"/><circle cx="20" cy="102" r="2"/></g>' +
-              '<circle cx="20" cy="124" r="4.5" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="1.5"/></svg>'),
+            S("wash_bar", "Yıkama Çubuğu", 30, 180,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 180">' +
+              '<rect x="9" y="2" width="12" height="10" rx="2" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
+              '<rect x="12" y="12" width="6" height="160" rx="3" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="2" data-dyn="1"/>' +
+              '<g fill="'+DARK+'"><circle cx="15" cy="34" r="1.6"/><circle cx="15" cy="56" r="1.6"/><circle cx="15" cy="78" r="1.6"/>' +
+              '<circle cx="15" cy="100" r="1.6"/><circle cx="15" cy="122" r="1.6"/><circle cx="15" cy="144" r="1.6"/></g>' +
+              '<circle cx="15" cy="172" r="3.5" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="1.5"/></svg>'),
             S("filter", "Filtre", 70, 110,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 110">' +
               '<rect x="14" y="10" width="42" height="90" rx="8" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +

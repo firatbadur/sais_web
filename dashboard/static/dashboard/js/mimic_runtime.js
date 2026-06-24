@@ -164,8 +164,8 @@
         if (speed <= 0) return;
         var cx = r.left + r.width * 0.5;
         var rodHalf = r.width * 0.1;
-        var maxReach = r.width * 1.4 * speed;
-        var holes = [0.23, 0.37, 0.51, 0.65, 0.78];
+        var maxReach = r.width * 1.6 * speed;
+        var holes = [0.19, 0.31, 0.43, 0.56, 0.68, 0.8];
         ctx.fillStyle = "rgba(47,155,214,0.85)";
         for (var hI = 0; hI < holes.length; hI++) {
             var y0 = r.top + holes[hI] * r.height;
