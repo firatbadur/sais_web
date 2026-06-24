@@ -2,7 +2,8 @@ import pandas as pd
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import generics
-from rest_framework.authentication import BasicAuthentication
+from rest_framework.authentication import BasicAuthentication  # noqa: F401 (geçici test sırasında kullanılmıyor)
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -17,7 +18,7 @@ from .models import (
     SensorLatest,
     SystemLog,
 )
-from .permissions import IsAdminUserOrReadOnly
+from .permissions import IsAdminUserOrReadOnly  # noqa: F401 (geçici test sırasında kullanılmıyor)
 from .serializers import (
     CalibrationResultSerializer,
     ChannelInfoSerializer,
@@ -48,11 +49,24 @@ def get_query_param(request, name, default=None):
     return default
 
 
-# Sunucu saatini getiren servis
-class GetServerDatetimeView(APIView):
+# ---------------------------------------------------------------------------
+# GEÇİCİ TEST: Bakanlık SAIS/SIM legacy servislerinde auth bypass.
+# Bakanlık entegrasyon testleri için tüm bu servisler HERHANGİ BİR auth olmadan
+# yanıt verir (basic auth devre dışı). Global REST_FRAMEWORK default'u
+# BasicAuthentication + MinistryReadOnly'dir; bu mixin per-view override eder.
+# TODO: Test bitince bu mixin'i view base listelerinden kaldır → auth geri gelir.
+# ---------------------------------------------------------------------------
+class _MinistryNoAuth:
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
-    permission_classes = [IsAdminUserOrReadOnly]
-    authentication_classes = [BasicAuthentication]
+
+# Sunucu saatini getiren servis
+class GetServerDatetimeView(_MinistryNoAuth, APIView):
+
+    # GEÇİCİ TEST: auth yoruma alındı (yukarıdaki _MinistryNoAuth bypass ediyor).
+    # permission_classes = [IsAdminUserOrReadOnly]
+    # authentication_classes = [BasicAuthentication]
 
     def get(self, request, format=None):
         station_id = get_query_param(request, "stationId")
@@ -72,7 +86,7 @@ class GetServerDatetimeView(APIView):
 
 
 # İki tarih arası verileri döndüren servis
-class GetReadsDataView(generics.ListAPIView):
+class GetReadsDataView(_MinistryNoAuth, generics.ListAPIView):
     serializer_class = ReadsDataSerializer
 
     def get_queryset(self):
@@ -162,7 +176,7 @@ class GetReadsDataView(generics.ListAPIView):
 
 
 # Anlık verileri döndüren servis
-class GetLatestReadsView(generics.ListAPIView):
+class GetLatestReadsView(_MinistryNoAuth, generics.ListAPIView):
     serializer_class = ReadsDataSerializer
 
     def get_queryset(self):
@@ -235,7 +249,7 @@ class GetLatestReadsView(generics.ListAPIView):
 
 
 # Son Veri saatini döndüren servis
-class GetLastReadTimeView(generics.ListAPIView):
+class GetLastReadTimeView(_MinistryNoAuth, generics.ListAPIView):
 
     def get_queryset(self):
         return Reading.objects.none()
@@ -275,7 +289,7 @@ class GetLastReadTimeView(generics.ListAPIView):
 
 
 # Kanal Bilgileri Döndürme Servisi
-class GetChannelInfoView(generics.ListAPIView):
+class GetChannelInfoView(_MinistryNoAuth, generics.ListAPIView):
     serializer_class = ChannelInfoSerializer
 
     def get_queryset(self):
@@ -314,7 +328,7 @@ class GetChannelInfoView(generics.ListAPIView):
 
 
 # İstasyon Bilgileri Döndürme Servisi
-class GetStationInformationView(generics.ListAPIView):
+class GetStationInformationView(_MinistryNoAuth, generics.ListAPIView):
     serializer_class = StationInfoSerializer
 
     def get_queryset(self):
@@ -338,7 +352,7 @@ class GetStationInformationView(generics.ListAPIView):
 
 
 # Kalibrasyon Kayıtlarını Döndüren Servis
-class GetCalibrationView(generics.ListAPIView):
+class GetCalibrationView(_MinistryNoAuth, generics.ListAPIView):
     serializer_class = CalibrationResultSerializer
 
     def get_queryset(self):
@@ -394,7 +408,7 @@ class GetCalibrationView(generics.ListAPIView):
 
 
 # Açılma Kapanma tarihlerini bildiren servis
-class GetPoweroffView(generics.ListAPIView):
+class GetPoweroffView(_MinistryNoAuth, generics.ListAPIView):
     serializer_class = PoweroffResultSerializer
 
     def get_queryset(self):
@@ -441,7 +455,7 @@ class GetPoweroffView(generics.ListAPIView):
 
 
 # Log kayıtları görünütüleme servisi
-class GetLogView(generics.ListAPIView):
+class GetLogView(_MinistryNoAuth, generics.ListAPIView):
     serializer_class = LogResultSerializer
 
     def get_queryset(self):
@@ -491,7 +505,7 @@ class GetLogView(generics.ListAPIView):
 
 
 # Numune almaya başla servisi
-class StartSampleView(APIView):
+class StartSampleView(_MinistryNoAuth, APIView):
     def get(self, request, *args, **kwargs):
         try:
             station_id = get_query_param(request, "stationId")
