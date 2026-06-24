@@ -37,7 +37,8 @@
         aeration: "aeration", flow_arrow: "flow", screw_conveyor: "flow",
         beacon: "blink", alarm_horn: "blink", emergency_stop: "blink",
         gas_detector: "blink", lamp: "tint", value_display: "tint",
-        flow_cell: "water", sample_cell: "water", sample_fridge: "carousel"
+        flow_cell: "water", sample_cell: "water", sample_fridge: "carousel",
+        wash_bar: "washbar"
     };
     function autoKind(o) {
         var k = o.symbolKey || "";
@@ -48,7 +49,7 @@
         if (/^(valve|solenoid|lamp|pushbutton|switch|ups|plc|cabinet|hmi|rtu|breaker|vfd|generator|solar|energy|level_switch|float)/.test(k)) return "tint";
         return "tint";
     }
-    var OVERLAY_KINDS = { water: 1, aeration: 1, spin: 1, gauge: 1, flow: 1, carousel: 1 };
+    var OVERLAY_KINDS = { water: 1, aeration: 1, spin: 1, gauge: 1, flow: 1, carousel: 1, washbar: 1 };
 
     // --------------------------------------------------------------------- //
     // Overlay çizimleri (sahne koordinatında; viewport transform uygulanmış halde)
@@ -156,6 +157,33 @@
         ctx.beginPath(); ctx.arc(cx, cy, bR * 1.2, 0, 2 * Math.PI);
         ctx.fillStyle = "#93a1b0"; ctx.fill(); ctx.stroke();
         ctx.restore();
+    }
+    // Yıkama çubuğu — aktifken (yıkama true) deliklerinden iki yana su fışkırtır;
+    // sweep (zamanla değişen menzil) çubuğun dönüşünü ima eder.
+    function drawWashBar(ctx, r, t, speed) {
+        if (speed <= 0) return;
+        var cx = r.left + r.width * 0.5;
+        var rodHalf = r.width * 0.1;
+        var maxReach = r.width * 1.4 * speed;
+        var holes = [0.23, 0.37, 0.51, 0.65, 0.78];
+        ctx.fillStyle = "rgba(47,155,214,0.85)";
+        for (var hI = 0; hI < holes.length; hI++) {
+            var y0 = r.top + holes[hI] * r.height;
+            var sweep = 0.55 + 0.45 * Math.abs(Math.sin(t / 240 + hI * 1.3));
+            for (var side = -1; side <= 1; side += 2) {
+                for (var d = 0; d < 4; d++) {
+                    var prog = frac(t / 480 + d * 0.25 + (side > 0 ? 0.12 : 0));
+                    var dist = prog * maxReach * sweep;
+                    var dx = cx + side * (rodHalf + dist);
+                    var dy = y0 + dist * 0.3 * prog + 2;
+                    ctx.globalAlpha = 0.9 * (1 - prog);
+                    ctx.beginPath();
+                    ctx.arc(dx, dy, 2.4 * (1 - prog) + 0.6, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            }
+        }
+        ctx.globalAlpha = 1;
     }
     function drawGauge(ctx, r, ratio) {
         var cx = r.left + r.width / 2, cy = r.top + r.height * 0.52;
@@ -370,6 +398,7 @@
                 else if (ak === "aeration") drawWater(ctx, r, Math.max(ratio, 0.4), t, true, wshape);
                 else if (ak === "spin") drawSpin(ctx, r, t, (val >= num(sc.threshold, 1) && val > 0) ? num(sc.speed, 1) : 0);
                 else if (ak === "carousel") drawCarousel(ctx, r, t, (val >= num(sc.threshold, 1) && val > 0) ? num(sc.speed, 1) : 0);
+                else if (ak === "washbar") drawWashBar(ctx, r, t, (val >= num(sc.threshold, 1) && val > 0) ? num(sc.speed, 1) : 0);
                 else if (ak === "gauge") drawGauge(ctx, r, ratio);
                 else if (ak === "flow") {
                     if (val > 0) {
