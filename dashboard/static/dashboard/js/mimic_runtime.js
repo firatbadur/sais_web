@@ -42,7 +42,7 @@
     function autoKind(o) {
         var k = o.symbolKey || "";
         if (AUTO_OVERRIDE[k]) return AUTO_OVERRIDE[k];
-        if (/^(tank|silo|reactor|basin|clarifier|wet_well|grit|weir|open_channel|dosing_tank|sand_filter|carbon_filter|bag_filter|cartridge)/.test(k)) return "water";
+        if (/^(tank|reactor|basin|clarifier|wet_well|grit|weir|open_channel)/.test(k)) return "water";
         if (/^(pump|motor|fan|mixer|blower|compressor|dosing_pump|uf_module|ro_membrane)/.test(k)) return "spin";
         if (/^(pipe|union|flange|expansion|strainer)/.test(k)) return "flow";
         if (/^(valve|solenoid|lamp|pushbutton|switch|ups|plc|cabinet|hmi|rtu|breaker|vfd|generator|solar|energy|level_switch|float)/.test(k)) return "tint";

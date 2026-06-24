@@ -172,19 +172,16 @@
             S("tank_vertical", "Dikey Tank", 90, 120,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 120">' +
               '<path d="M10 24 Q10 6 45 6 Q80 6 80 24 L80 100 Q80 114 45 114 Q10 114 10 100 Z" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +
-              '<ellipse cx="45" cy="24" rx="35" ry="12" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2"/>' +
-              '<rect x="11" y="60" width="68" height="52" fill="'+LIQ+'" opacity="0.55" data-level="1"/></svg>'),
+              '<ellipse cx="45" cy="24" rx="35" ry="12" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2"/></svg>'),
             S("tank_horizontal", "Yatay Tank", 130, 70,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 70">' +
               '<rect x="20" y="10" width="90" height="50" rx="6" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +
               '<ellipse cx="20" cy="35" rx="14" ry="25" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="3"/>' +
-              '<ellipse cx="110" cy="35" rx="14" ry="25" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="3"/>' +
-              '<rect x="20" y="38" width="90" height="22" fill="'+LIQ+'" opacity="0.55" data-level="1"/></svg>'),
+              '<ellipse cx="110" cy="35" rx="14" ry="25" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="3"/></svg>'),
             S("tank_cone", "Konik Tank", 100, 130,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 130">' +
               '<path d="M14 20 L86 20 L86 86 L50 122 L14 86 Z" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +
-              '<ellipse cx="50" cy="20" rx="36" ry="11" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2"/>' +
-              '<path d="M15 70 L85 70 L50 120 Z" fill="'+LIQ+'" opacity="0.55" data-level="1"/></svg>'),
+              '<ellipse cx="50" cy="20" rx="36" ry="11" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2"/></svg>'),
             S("silo", "Silo", 100, 130,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 130">' +
               '<path d="M20 30 L20 92 L50 116 L80 92 L80 30 Z" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +
@@ -195,19 +192,16 @@
               '<rect x="38" y="2" width="24" height="16" rx="3" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2"/>' +
               '<text x="50" y="14" font-size="11" font-weight="bold" fill="'+DARK+'" text-anchor="middle">M</text>' +
               '<path d="M16 34 Q16 18 50 18 Q84 18 84 34 L84 96 Q84 116 50 116 Q16 116 16 96 Z" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +
-              '<rect x="17" y="66" width="66" height="48" fill="'+LIQ+'" opacity="0.5" data-level="1"/>' +
               '<line x1="50" y1="18" x2="50" y2="90" stroke="'+METAL+'" stroke-width="3"/>' +
               '<line x1="50" y1="82" x2="34" y2="74" stroke="'+DARK+'" stroke-width="2.5"/>' +
               '<line x1="50" y1="82" x2="66" y2="74" stroke="'+DARK+'" stroke-width="2.5"/></svg>'),
             S("basin", "Havuz / Bazen", 140, 80,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 80">' +
-              '<path d="M8 10 L132 10 L122 72 L18 72 Z" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +
-              '<path d="M14 34 L126 34 L122 72 L18 72 Z" fill="'+LIQ+'" opacity="0.5" data-level="1"/></svg>'),
+              '<path d="M8 10 L132 10 L122 72 L18 72 Z" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/></svg>'),
             S("clarifier", "Çökeltme Havuzu", 130, 90,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 90">' +
               '<ellipse cx="65" cy="20" rx="58" ry="14" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2.5"/>' +
               '<path d="M7 20 L7 56 Q7 72 65 72 Q123 72 123 56 L123 20" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="2.5"/>' +
-              '<ellipse cx="65" cy="38" rx="56" ry="12" fill="'+LIQ+'" opacity="0.45" data-level="1"/>' +
               '<line x1="65" y1="6" x2="65" y2="20" stroke="'+DARK+'" stroke-width="3"/>' +
               '<line x1="20" y1="30" x2="110" y2="30" stroke="'+DARK+'" stroke-width="2.5" data-dyn="1"/></svg>'),
         ]},
@@ -308,8 +302,6 @@
               '<rect x="6" y="104" width="22" height="12" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
               '<rect x="42" y="16" width="22" height="12" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
               '<rect x="22" y="8" width="26" height="114" rx="9" fill="rgba(120,180,210,0.12)" stroke="'+EDGE+'" stroke-width="3"/>' +
-              '<rect x="23" y="60" width="24" height="61" rx="7" fill="'+LIQ+'" opacity="0.55" data-level="1"/>' +
-              '<path d="M23 64 q6 -5 12 0 t12 0" fill="none" stroke="'+LIQ+'" stroke-width="2" opacity="0.8"/>' +
               '<rect x="30" y="2" width="10" height="10" fill="'+DARK+'" stroke="'+EDGE+'" stroke-width="1.5"/>' +
               '<line x1="35" y1="12" x2="35" y2="96" stroke="'+METAL+'" stroke-width="3"/>' +
               '<circle cx="35" cy="100" r="5" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="1.5" data-dyn="1"/></svg>'),
@@ -317,9 +309,7 @@
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 90">' +
               '<rect x="2" y="38" width="18" height="12" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
               '<rect x="60" y="38" width="18" height="12" fill="'+METAL+'" stroke="'+EDGE+'" stroke-width="2"/>' +
-              '<rect x="18" y="14" width="44" height="62" rx="8" fill="rgba(120,180,210,0.12)" stroke="'+EDGE+'" stroke-width="3"/>' +
-              '<rect x="19" y="44" width="42" height="31" rx="6" fill="'+LIQ+'" opacity="0.55" data-level="1"/>' +
-              '<path d="M19 48 q7 -5 14 0 t14 0 t14 0" fill="none" stroke="'+LIQ+'" stroke-width="2" opacity="0.8"/></svg>'),
+              '<rect x="18" y="14" width="44" height="62" rx="8" fill="rgba(120,180,210,0.12)" stroke="'+EDGE+'" stroke-width="3"/></svg>'),
             S("sample_fridge", "Numune Dolabı", 90, 130,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 130">' +
               '<rect x="8" y="6" width="74" height="118" rx="9" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="3" data-dyn="1"/>' +
@@ -456,13 +446,10 @@
               '<ellipse cx="45" cy="30" rx="14" ry="6" fill="none" stroke="'+DARK+'" stroke-width="2"/></svg>'),
             S("weir", "Savak", 110, 70,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 70">' +
-              '<path d="M6 14 L46 14 L55 30 L64 14 L104 14 L104 62 L6 62 Z" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +
-              '<path d="M6 40 L46 40 L55 30 L64 40 L104 40 L104 62 L6 62 Z" fill="'+LIQ+'" opacity="0.5" data-level="1"/>' +
-              '<path d="M55 30 L48 48 L62 48 Z" fill="'+LIQ+'" opacity="0.7"/></svg>'),
+              '<path d="M6 14 L46 14 L55 30 L64 14 L104 14 L104 62 L6 62 Z" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/></svg>'),
             S("open_channel", "Açık Kanal", 130, 60,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 60">' +
-              '<path d="M6 10 L24 10 L24 44 L106 44 L106 10 L124 10 L124 54 L6 54 Z" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +
-              '<rect x="24" y="30" width="82" height="14" fill="'+LIQ+'" opacity="0.5" data-level="1"/></svg>'),
+              '<path d="M6 10 L24 10 L24 44 L106 44 L106 10 L124 10 L124 54 L6 54 Z" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/></svg>'),
             S("bar_screen", "Izgara (Bar Screen)", 90, 100,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 100">' +
               '<rect x="10" y="8" width="70" height="84" rx="3" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3" data-dyn="1"/>' +
@@ -471,26 +458,19 @@
             S("grit_chamber", "Kum Tutucu", 120, 80,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80">' +
               '<path d="M8 12 L112 12 L112 48 L74 70 L46 70 L8 48 Z" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +
-              '<rect x="9" y="30" width="102" height="18" fill="'+LIQ+'" opacity="0.45" data-level="1"/>' +
               '<path d="M46 70 L74 70 L60 76 Z" fill="'+DARK+'" opacity="0.5"/></svg>'),
             S("aeration", "Havalandırma Havuzu", 130, 84,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 84">' +
               '<rect x="8" y="14" width="114" height="60" rx="3" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +
-              '<rect x="9" y="34" width="112" height="40" fill="'+LIQ+'" opacity="0.4" data-level="1"/>' +
-              '<g fill="'+WHITE+'" opacity="0.7"><circle cx="28" cy="60" r="2.5"/><circle cx="34" cy="50" r="2"/><circle cx="40" cy="62" r="2.5"/>' +
-              '<circle cx="64" cy="52" r="2.5"/><circle cx="70" cy="62" r="2"/><circle cx="76" cy="50" r="2.5"/>' +
-              '<circle cx="98" cy="60" r="2.5"/><circle cx="104" cy="50" r="2"/></g>' +
               '<rect x="20" y="68" width="90" height="5" fill="'+DARK+'" opacity="0.5"/></svg>'),
             S("wet_well", "Pompa Çukuru", 100, 100,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
               '<path d="M12 10 L12 76 Q12 92 50 92 Q88 92 88 76 L88 10" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="3"/>' +
-              '<path d="M13 46 L87 46 L87 76 Q87 90 50 90 Q13 90 13 76 Z" fill="'+LIQ+'" opacity="0.5" data-level="1"/>' +
               '<rect x="40" y="60" width="20" height="22" rx="3" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2"/></svg>'),
             S("clarifier_round", "Çamur Yoğunlaştırıcı", 120, 90,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90">' +
               '<ellipse cx="60" cy="20" rx="54" ry="14" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="2.5"/>' +
               '<path d="M6 20 L60 78 L114 20" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="2.5"/>' +
-              '<path d="M18 28 L60 70 L102 28" fill="'+LIQ+'" opacity="0.4" data-level="1"/>' +
               '<line x1="60" y1="6" x2="60" y2="20" stroke="'+DARK+'" stroke-width="3"/>' +
               '<line x1="20" y1="14" x2="100" y2="14" stroke="'+DARK+'" stroke-width="2.5" data-dyn="1"/></svg>'),
             S("outfall", "Deşarj Ağzı", 110, 60,
