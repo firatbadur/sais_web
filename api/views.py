@@ -14,6 +14,7 @@ from .models import (
     PowerOff,
     Reading,
     Sensor,
+    SensorLatest,
     SystemLog,
 )
 from .permissions import IsAdminUserOrReadOnly
@@ -109,6 +110,7 @@ class GetReadsDataView(generics.ListAPIView):
                 Reading.objects
                 .filter(
                     sensor__parameter__station__sais_cabinets__device_id=station_id,
+                    sensor__sensor_type__in=[0, 1],  # yalnız analog (0=AI, 1=AO)
                     time_iso__range=[startDate, endDate],
                 )
                 .select_related("sensor", "sensor__parameter", "status")
@@ -176,34 +178,36 @@ class GetLatestReadsView(generics.ListAPIView):
                     "objects": None,
                 })
 
-            last_record = (
-                Reading.objects
-                .filter(sensor__parameter__station__sais_cabinets__device_id=station_id)
-                .order_by("-time_iso")
-                .first()
-            )
-            if not last_record:
-                return Response({"result": True, "message": None, "objects": []})
-
-            last_time = last_record.time_iso
-
-            qs = (
-                Reading.objects
+            # Anlık veriyi SensorLatest snapshot'ından alıyoruz: her analog
+            # sensörün son değeri ayrı satırda tutulur, böylece tek bir
+            # time_iso'ya bağlı kalmadan TÜM analog sinyaller döner.
+            latests = (
+                SensorLatest.objects
                 .filter(
                     sensor__parameter__station__sais_cabinets__device_id=station_id,
-                    time_iso=last_time,
+                    sensor__sensor_type__in=[0, 1],  # yalnız analog (0=AI, 1=AO)
                 )
                 .select_related("sensor", "sensor__parameter", "status")
             )
 
-            if not qs.exists():
-                return Response({"result": True, "message": None, "objects": []})
+            rows = [
+                {
+                    "ParameterName": sl.sensor.parameter.parameter_name,
+                    "ReadTime": sl.readtime,
+                    "Value": sl.value,
+                    "Status": sl.status_id,
+                }
+                for sl in latests
+                if sl.sensor.parameter is not None
+            ]
 
-            ser = ReadsDataSerializer(qs, many=True)
-            df = pd.DataFrame(ser.data)
+            df = pd.DataFrame(rows)
 
             if df.empty:
                 return Response({"result": True, "message": None, "objects": []})
+
+            # Snapshot'ı tek satıra indir: en güncel okuma zamanını referans al.
+            df["ReadTime"] = df["ReadTime"].max()
 
             df_pivot = df.pivot_table(
                 index="ReadTime",
@@ -289,6 +293,7 @@ class GetChannelInfoView(generics.ListAPIView):
 
             qs = self.get_queryset().filter(
                 parameter__station__sais_cabinets__device_id=station_id,
+                sensor_type__in=[0, 1],  # yalnız analog (0=AI, 1=AO)
             )
 
             if not qs.exists():
