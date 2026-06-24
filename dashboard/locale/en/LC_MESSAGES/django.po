@@ -3138,3 +3138,57 @@ msgstr "Username is required."
 
 msgid "Şifre değiştirildi."
 msgstr "Password changed."
+
+msgid "Host & Kullanıcı Güncelle"
+msgstr "Update Host & User"
+
+msgid "İstasyon Host & Kullanıcı Bilgisi Güncelle"
+msgstr "Update Station Host & User Info"
+
+msgid "Bakanlık merkezi yazılımındaki dış erişim bilgilerini (SendHostChanged) günceller: kabin yazılımı kullanıcı adı/şifresi ile erişim host/port. Başarılı olursa yerel kayıt da otomatik güncellenir."
+msgstr "Updates the external access info in the Ministry central system (SendHostChanged): cabin software username/password and access host/port. On success the local record is updated automatically."
+
+msgid "Kullanıcı Adı (ConnectionUser)"
+msgstr "Username (ConnectionUser)"
+
+msgid "Kabin yazılımı kullanıcı adı"
+msgstr "Cabin software username"
+
+msgid "Şifre (ConnectionPassword)"
+msgstr "Password (ConnectionPassword)"
+
+msgid "Kabin yazılımı şifresi"
+msgstr "Cabin software password"
+
+msgid "Host / IP (ConnectionDomainAddress)"
+msgstr "Host / IP (ConnectionDomainAddress)"
+
+msgid "Port (ConnectionPort)"
+msgstr "Port (ConnectionPort)"
+
+msgid "Bakanlık'a Gönder"
+msgstr "Send to Ministry"
+
+msgid "Bakanlık Yanıtı"
+msgstr "Ministry Response"
+
+msgid "Gönderim sonrası Bakanlık'ın döndürdüğü ham yanıt burada görünür."
+msgstr "The raw response returned by the Ministry appears here after sending."
+
+msgid "Bakanlık tarafındaki bağlantı bilgileri güncellenecek. Devam edilsin mi?"
+msgstr "The connection info on the Ministry side will be updated. Continue?"
+
+msgid "Gönderiliyor..."
+msgstr "Sending..."
+
+msgid "Bakanlık yanıtı (ham)"
+msgstr "Ministry response (raw)"
+
+msgid "Bağlantı bilgileri güncellendi."
+msgstr "Connection info updated."
+
+msgid "Şifre zorunlu."
+msgstr "Password is required."
+
+msgid "Host/IP adresi zorunlu."
+msgstr "Host/IP address is required."

@@ -2016,13 +2016,16 @@ class SimSettingsView(OperatorRequiredMixin, TemplateView):
     template_name = "dashboard/admin_pages/sim_settings.html"
 
     def get_context_data(self, **kwargs):
-        from api.models import Station
+        from api.models import Station, WebSettings
         from sais_domain.models import SaisCabinet
         ctx = super().get_context_data(**kwargs)
         ctx["cabinets"] = (
             SaisCabinet.objects.select_related("station").order_by("created_at")
         )
         ctx["stations"] = Station.objects.order_by("name")
+        # SendHostChanged ön-dolgusu: dış erişim host (WebSettings.domain) + Caddy 443.
+        ctx["web_domain"] = (WebSettings.load().domain or "").strip()
+        ctx["web_port"] = 443
         return ctx
 
 

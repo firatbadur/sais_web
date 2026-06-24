@@ -193,7 +193,8 @@ urlpatterns = [
     path("api/sim/cabinet-save/", api_views.sim_cabinet_save, name="api_sim_cabinet_save"),
     path("api/sim/cabinet-delete/", api_views.sim_cabinet_delete, name="api_sim_cabinet_delete"),
     path("api/sim/station-query/", api_views.sim_station_query, name="api_sim_station_query"),
-    path("api/sim/change-password/", api_views.sim_change_password, name="api_sim_change_password"),
+    path("api/sim/send-host-changed/", api_views.sim_send_host_changed,
+         name="api_sim_send_host_changed"),
 
     # --- AJAX API (Numune Senaryosu) ---
     path("api/scenario/list/", api_views.scenario_list, name="api_scenario_list"),

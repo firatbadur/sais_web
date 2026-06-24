@@ -4,7 +4,7 @@
 ``entegrationsais.csb.gov.tr`` üzerindeki resmi servis kümesini sarar:
 
 - ``POST /Security/login`` — kullanıcı/şifre ile ticket alır
-- ``POST /Security/ChangePassword`` — Bakanlık hesabının şifresini değiştirir
+- ``POST /SAIS/SendHostChanged`` — istasyon host + kabin kullanıcı/şifre güncelle
 - ``POST /SAIS/GetStationInformation`` — Bakanlık'taki istasyon kayıt bilgisi
 - ``POST /SAIS/GetLastData`` — bakanlığa aktarılan en son veri tarihini sorgu
 - ``POST /SAIS/GetMissingDates`` — eksik veri pencereleri
@@ -434,34 +434,43 @@ class SaisSimClient(BaseHttpClient):
         )
         return self._unwrap(response)
 
-    def change_password(
+    def send_host_changed(
         self,
-        new_password: str,
         *,
+        connection_user: str,
+        connection_password: str,
+        domain_address: str,
+        port: Any,
         triggered_by: Any = None,
     ) -> Any:
-        """``/Security/ChangePassword`` — Bakanlık hesabının şifresini değiştirir.
+        """``/SAIS/SendHostChanged`` — istasyon host + kabin kullanıcı/şifre güncelle.
 
-        ``login`` ile birebir aynı çift-MD5 hashleme uygulanır: mevcut şifre
-        (``cabinet.auth_secret``) ve yeni şifre hash'lenip gönderilir. Bakanlık
-        kabul ederse (HTTP 200 + ``result=true``) çağıran yerel
-        ``SaisCabinet.auth_secret``'i yeni değerle güncellemekle yükümlüdür.
+        Bakanlık merkezi yazılımındaki kayıtlı dış-erişim bilgilerini günceller:
+        kabin yazılımı kullanıcı adı/şifresi (``ConnectionUser`` /
+        ``ConnectionPassword``) ve dış erişim host/port (``ConnectionDomainAddress``
+        / ``ConnectionPort``). Bunlar Bakanlık'ın kabin yazılımına bağlanırken
+        kullandığı bilgilerdir (bizim ``GetStationInformation`` yanıtımızdaki
+        alanlarla birebir).
 
-        Bu uçta ``objects`` tipik olarak ``null``'dır; anlamlı bilgi zarfın
-        ``result`` (bool) + ``message`` (str) alanlarındadır — bu yüzden
-        ``_unwrap`` yerine **ham zarf** döndürülür (``send_calibration`` ile
-        aynı sözleşme).
+        Şifre **düz metin** gönderilir (bu uç login değil; spec body örneği düz
+        ``ConnectionPassword`` bekler). Çağıran başarı (HTTP 200 + ``result=true``)
+        durumunda yerel ``SaisCabinet.auth_username``/``auth_secret``'i senkronlar.
+
+        Anlamlı bilgi zarfın ``result``/``message`` alanlarındadır → ``_unwrap``
+        yerine **ham zarf** döndürülür (``send_calibration`` ile aynı sözleşme).
         """
         payload = {
-            "username": self.cabinet.auth_username,
-            "password": self._hashed_password(),
-            "newPassword": double_md5(new_password or ""),
+            "StationId": self.cabinet.device_id,
+            "ConnectionUser": connection_user,
+            "ConnectionPassword": connection_password,
+            "ConnectionDomainAddress": domain_address,
+            "ConnectionPort": str(port),
         }
         response = self._post_authenticated(
-            "/Security/ChangePassword",
+            "/SAIS/SendHostChanged",
             json_body=payload,
             triggered_by=triggered_by,
-            log_component=f"{self.component}.change_password",
+            log_component=f"{self.component}.send_host_changed",
         )
         return self._envelope(response)
 

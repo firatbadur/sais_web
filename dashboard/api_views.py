@@ -3466,7 +3466,12 @@ def sim_station_query(request):
     except SaisAuthError as exc:
         return JsonResponse({"ok": False, "error": f"Bakanlık girişi başarısız: {exc}"}, status=502)
     except SaisResponseError as exc:
-        return JsonResponse({"ok": False, "error": f"Bakanlık yanıt hatası: {exc}"}, status=502)
+        return JsonResponse({
+            "ok": False,
+            "error": f"Bakanlık yanıt hatası: {exc}",
+            "detail": (exc.response_text or "")[:2000],
+            "status_code": exc.status_code,
+        }, status=502)
     except Exception as exc:  # noqa: BLE001 — ağ/timeout vb.
         return JsonResponse({"ok": False, "error": f"Sorgu başarısız: {exc}"}, status=502)
     finally:
@@ -3476,9 +3481,13 @@ def sim_station_query(request):
 
 
 @login_required
-def sim_change_password(request):
-    """Bakanlık `ChangePassword` + başarılıysa yerel auth_secret güncelle.
-    POST JSON {cabinet_id, new_password}."""
+def sim_send_host_changed(request):
+    """Bakanlık `SendHostChanged` — istasyon host + kabin kullanıcı/şifre günceller;
+    başarılıysa yerel `SaisCabinet.auth_username`/`auth_secret`'i senkronlar.
+
+    POST JSON {cabinet_id, connection_user, connection_password, domain_address, port}.
+    Bakanlık'ın döndürdüğü ham yanıt (result/message + hata gövdesi) debug için
+    response'a eklenir."""
     import json
 
     denied = _require_operator(request)
@@ -3494,9 +3503,16 @@ def sim_change_password(request):
     except (ValueError, TypeError):
         return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
 
-    new_password = (data.get("new_password") or "").strip()
-    if len(new_password) < 4:
-        return JsonResponse({"ok": False, "error": "Yeni şifre en az 4 karakter olmalı."}, status=400)
+    conn_user = (data.get("connection_user") or "").strip()
+    conn_pass = (data.get("connection_password") or "").strip()
+    domain_address = (data.get("domain_address") or "").strip()
+    port = (str(data.get("port") or "")).strip() or "443"
+    if not conn_user:
+        return JsonResponse({"ok": False, "error": "Kullanıcı adı zorunlu."}, status=400)
+    if not conn_pass:
+        return JsonResponse({"ok": False, "error": "Şifre zorunlu."}, status=400)
+    if not domain_address:
+        return JsonResponse({"ok": False, "error": "Host/IP adresi zorunlu."}, status=400)
 
     cab, client, err = _sim_client_for(data.get("cabinet_id"))
     if err:
@@ -3504,11 +3520,22 @@ def sim_change_password(request):
         return JsonResponse({"ok": False, "error": err}, status=status)
 
     try:
-        envelope = client.change_password(new_password, triggered_by=request.user)
+        envelope = client.send_host_changed(
+            connection_user=conn_user,
+            connection_password=conn_pass,
+            domain_address=domain_address,
+            port=port,
+            triggered_by=request.user,
+        )
     except SaisAuthError as exc:
         return JsonResponse({"ok": False, "error": f"Bakanlık girişi başarısız: {exc}"}, status=502)
     except SaisResponseError as exc:
-        return JsonResponse({"ok": False, "error": f"Bakanlık yanıt hatası: {exc}"}, status=502)
+        return JsonResponse({
+            "ok": False,
+            "error": f"Bakanlık yanıt hatası: {exc}",
+            "detail": (exc.response_text or "")[:2000],
+            "status_code": exc.status_code,
+        }, status=502)
     except Exception as exc:  # noqa: BLE001
         return JsonResponse({"ok": False, "error": f"İşlem başarısız: {exc}"}, status=502)
     finally:
@@ -3519,13 +3546,19 @@ def sim_change_password(request):
     if not result:
         return JsonResponse({
             "ok": False,
-            "error": message or "Bakanlık şifre değişikliğini reddetti.",
+            "error": message or "Bakanlık güncellemeyi reddetti.",
+            "detail": json.dumps(envelope, ensure_ascii=False)[:2000] if envelope is not None else "",
         }, status=400)
 
-    # Bakanlık kabul etti → yerel şifreyi senkronla (cache'teki ticket eskiyebilir;
-    # SaisSimClient bir sonraki çağrıda 401 alıp yeniden login eder).
-    cab.auth_secret = new_password[:255]
-    cab.save(update_fields=["auth_secret"])
-    return JsonResponse({"ok": True, "message": message or "Şifre değiştirildi."})
+    # Bakanlık kabul etti → yerel erişim bilgilerini senkronla. (Cache'teki ticket
+    # bayatlayabilir; SaisSimClient sonraki çağrıda 401 alıp yeniden login eder.)
+    cab.auth_username = conn_user[:50]
+    cab.auth_secret = conn_pass[:255]
+    cab.save(update_fields=["auth_username", "auth_secret"])
+    return JsonResponse({
+        "ok": True,
+        "message": message or "Bağlantı bilgileri güncellendi.",
+        "response": envelope,
+    })
 
 

@@ -21,8 +21,8 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link" data-bs-toggle="tab" href="#tab-password">
-            <i class="ki-outline ki-lock fs-4 me-1"></i>{% trans "Şifre Değiştir" %}
+        <a class="nav-link" data-bs-toggle="tab" href="#tab-host">
+            <i class="ki-outline ki-router fs-4 me-1"></i>{% trans "Host & Kullanıcı Güncelle" %}
         </a>
     </li>
 </ul>
@@ -159,28 +159,28 @@
 </div>
 
 {# ================================================================== #}
-{#  SEKME: Şifre Değiştir                                             #}
+{#  SEKME: Host & Kullanıcı Güncelle (SendHostChanged)                #}
 {# ================================================================== #}
-<div class="tab-pane fade" id="tab-password" role="tabpanel">
+<div class="tab-pane fade" id="tab-host" role="tabpanel">
     <div class="row g-5">
-        <div class="col-xl-6">
+        <div class="col-xl-7">
             <div class="card card-flush">
                 <div class="card-header">
                     <h3 class="card-title">
-                        <i class="ki-outline ki-lock fs-2 me-2 text-primary"></i>
-                        {% trans "Bakanlık Şifresini Değiştir" %}
+                        <i class="ki-outline ki-router fs-2 me-2 text-primary"></i>
+                        {% trans "İstasyon Host & Kullanıcı Bilgisi Güncelle" %}
                     </h3>
                 </div>
                 <div class="card-body">
                     <div class="alert alert-warning d-flex align-items-center mb-5">
                         <i class="ki-outline ki-information-5 fs-2 text-warning me-3"></i>
                         <div class="fs-8">
-                            {% trans "Şifre Bakanlık SAIS sisteminde değiştirilir; başarılı olursa yerel kayıt da otomatik güncellenir. Yanlış değişiklik veri gönderimini durdurabilir." %}
+                            {% trans "Bakanlık merkezi yazılımındaki dış erişim bilgilerini (SendHostChanged) günceller: kabin yazılımı kullanıcı adı/şifresi ile erişim host/port. Başarılı olursa yerel kayıt da otomatik güncellenir." %}
                         </div>
                     </div>
                     <div class="mb-4">
                         <label class="form-label required">{% trans "Kabin" %}</label>
-                        <select class="form-select" id="pw-cabinet-select" data-control="select2"
+                        <select class="form-select" id="hc-cabinet-select" data-control="select2"
                                 data-placeholder="{% trans 'Kabin seçin' %}">
                             <option></option>
                             {% for cab in cabinets %}
@@ -190,25 +190,45 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="mb-4">
-                        <label class="form-label">{% trans "Kullanıcı Adı" %}</label>
-                        <input type="text" class="form-control form-control-solid" id="pw-username" readonly
-                               placeholder="—">
+                    <div class="row g-3">
+                        <div class="col-md-6 mb-4">
+                            <label class="form-label required">{% trans "Kullanıcı Adı (ConnectionUser)" %}</label>
+                            <input type="text" class="form-control" id="hc-user" autocomplete="off"
+                                   placeholder="{% trans 'Kabin yazılımı kullanıcı adı' %}">
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <label class="form-label required">{% trans "Şifre (ConnectionPassword)" %}</label>
+                            <input type="password" class="form-control" id="hc-pass" autocomplete="new-password"
+                                   placeholder="{% trans 'Kabin yazılımı şifresi' %}">
+                        </div>
                     </div>
-                    <div class="mb-4">
-                        <label class="form-label required">{% trans "Yeni Şifre" %}</label>
-                        <input type="password" class="form-control" id="pw-new" autocomplete="new-password"
-                               placeholder="{% trans 'Yeni şifre' %}">
+                    <div class="row g-3">
+                        <div class="col-md-8 mb-5">
+                            <label class="form-label required">{% trans "Host / IP (ConnectionDomainAddress)" %}</label>
+                            <input type="text" class="form-control" id="hc-domain"
+                                   value="{{ web_domain }}" placeholder="ör. sais-tesis1.envisoft.com.tr">
+                        </div>
+                        <div class="col-md-4 mb-5">
+                            <label class="form-label required">{% trans "Port (ConnectionPort)" %}</label>
+                            <input type="number" class="form-control" id="hc-port" value="{{ web_port }}" min="1">
+                        </div>
                     </div>
-                    <div class="mb-5">
-                        <label class="form-label required">{% trans "Yeni Şifre (Tekrar)" %}</label>
-                        <input type="password" class="form-control" id="pw-new2" autocomplete="new-password"
-                               placeholder="{% trans 'Yeni şifre tekrar' %}">
-                    </div>
-                    <button type="button" class="btn btn-primary" id="btn-change-password">
-                        <i class="ki-outline ki-shield-tick fs-4"></i>{% trans "Bakanlık'ta Değiştir" %}
+                    <button type="button" class="btn btn-primary" id="btn-host-changed">
+                        <i class="ki-outline ki-cloud-change fs-4"></i>{% trans "Bakanlık'a Gönder" %}
                     </button>
-                    <div id="pw-result" class="mt-4"></div>
+                    <div id="hc-result" class="mt-4"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-5">
+            <div class="card card-flush h-100">
+                <div class="card-header">
+                    <h3 class="card-title">{% trans "Bakanlık Yanıtı" %}</h3>
+                </div>
+                <div class="card-body">
+                    <div id="hc-raw" class="text-muted fs-7 text-center py-6">
+                        {% trans "Gönderim sonrası Bakanlık'ın döndürdüğü ham yanıt burada görünür." %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -298,12 +318,11 @@
         confirmDelete: "{% trans 'Bu kabin kaydı silinecek. Emin misiniz?' %}",
         querying: "{% trans 'Sorgulanıyor...' %}",
         noData: "{% trans 'Bakanlık kaydı bulunamadı.' %}",
-        pwMismatch: "{% trans 'Şifreler eşleşmiyor.' %}",
-        pwShort: "{% trans 'Yeni şifre en az 4 karakter olmalı.' %}",
-        pwConfirm: "{% trans 'Bakanlık şifresi değiştirilecek. Devam edilsin mi?' %}",
+        hcConfirm: "{% trans 'Bakanlık tarafındaki bağlantı bilgileri güncellenecek. Devam edilsin mi?' %}",
         selectCabinet: "{% trans 'Önce bir kabin seçin.' %}",
-        changing: "{% trans 'Değiştiriliyor...' %}",
+        sending: "{% trans 'Gönderiliyor...' %}",
         genericError: "{% trans 'İşlem başarısız.' %}",
+        respLabel: "{% trans 'Bakanlık yanıtı (ham)' %}",
     };
 
     function csrf() {
@@ -439,7 +458,7 @@
                 if (d.ok) { renderStationResult(d.device_id, d.objects); }
                 else {
                     box.className = '';
-                    box.innerHTML = '<div class="alert alert-danger mb-0">' + esc(d.error || I18N.genericError) + '</div>';
+                    box.innerHTML = errBlock(d);
                 }
             })
             .catch(function () {
@@ -449,45 +468,74 @@
             });
     });
 
-    // ---------------------------------------------------------------- Şifre değiştir
-    const pwSelect = document.getElementById('pw-cabinet-select');
-    function syncPwUsername() {
-        const opt = pwSelect.options[pwSelect.selectedIndex];
-        document.getElementById('pw-username').value = (opt && opt.getAttribute('data-username')) || '';
-    }
-    if (pwSelect) {
-        // select2 değişimini de yakala
-        pwSelect.addEventListener('change', syncPwUsername);
-        if (window.jQuery) { jQuery(pwSelect).on('change', syncPwUsername); }
+    // Bakanlık hata bloğu — error + (varsa) ham yanıt gövdesi / status kodu.
+    function errBlock(d) {
+        let html = '<div class="alert alert-danger mb-0">' + esc(d.error || I18N.genericError);
+        if (d.status_code) { html += ' <span class="badge badge-light-danger ms-1">HTTP ' + esc(d.status_code) + '</span>'; }
+        html += '</div>';
+        if (d.detail) {
+            html += '<div class="mt-3"><div class="text-muted fs-8 mb-1">' + esc(I18N.respLabel) + '</div>'
+                  + '<pre class="bg-light rounded p-3 fs-8 mb-0" style="white-space:pre-wrap;word-break:break-word;">'
+                  + esc(d.detail) + '</pre></div>';
+        }
+        return html;
     }
 
-    const btnPw = document.getElementById('btn-change-password');
-    btnPw.addEventListener('click', function () {
-        const cabId = pwSelect.value;
-        const pw1 = document.getElementById('pw-new').value;
-        const pw2 = document.getElementById('pw-new2').value;
-        const res = document.getElementById('pw-result');
+    // ---------------------------------------------------------------- Host & Kullanıcı (SendHostChanged)
+    const hcSelect = document.getElementById('hc-cabinet-select');
+    function syncHcUser() {
+        const opt = hcSelect.options[hcSelect.selectedIndex];
+        document.getElementById('hc-user').value = (opt && opt.getAttribute('data-username')) || '';
+    }
+    if (hcSelect) {
+        hcSelect.addEventListener('change', syncHcUser);
+        if (window.jQuery) { jQuery(hcSelect).on('change', syncHcUser); }
+    }
+
+    function renderRaw(d) {
+        const raw = document.getElementById('hc-raw');
+        raw.className = '';
+        const payload = (d && (d.response !== undefined ? d.response : d.detail));
+        let text;
+        try { text = (typeof payload === 'string') ? payload : JSON.stringify(payload, null, 2); }
+        catch (e) { text = String(payload); }
+        raw.innerHTML = '<pre class="bg-light rounded p-3 fs-8 mb-0" style="white-space:pre-wrap;word-break:break-word;">'
+                      + esc(text || '—') + '</pre>';
+    }
+
+    const btnHc = document.getElementById('btn-host-changed');
+    btnHc.addEventListener('click', function () {
+        const cabId = hcSelect.value;
+        const res = document.getElementById('hc-result');
         res.innerHTML = '';
         if (!cabId) { res.innerHTML = '<div class="alert alert-warning mb-0">' + esc(I18N.selectCabinet) + '</div>'; return; }
-        if (pw1.length < 4) { res.innerHTML = '<div class="alert alert-warning mb-0">' + esc(I18N.pwShort) + '</div>'; return; }
-        if (pw1 !== pw2) { res.innerHTML = '<div class="alert alert-warning mb-0">' + esc(I18N.pwMismatch) + '</div>'; return; }
-        if (!confirm(I18N.pwConfirm)) return;
+        const payload = {
+            cabinet_id: cabId,
+            connection_user: document.getElementById('hc-user').value.trim(),
+            connection_password: document.getElementById('hc-pass').value,
+            domain_address: document.getElementById('hc-domain').value.trim(),
+            port: document.getElementById('hc-port').value.trim() || '443',
+        };
+        if (!payload.connection_user) { res.innerHTML = '<div class="alert alert-warning mb-0">' + esc("{% trans 'Kullanıcı adı zorunlu.' %}") + '</div>'; return; }
+        if (!payload.connection_password) { res.innerHTML = '<div class="alert alert-warning mb-0">' + esc("{% trans 'Şifre zorunlu.' %}") + '</div>'; return; }
+        if (!payload.domain_address) { res.innerHTML = '<div class="alert alert-warning mb-0">' + esc("{% trans 'Host/IP adresi zorunlu.' %}") + '</div>'; return; }
+        if (!confirm(I18N.hcConfirm)) return;
 
-        btnPw.disabled = true;
-        res.innerHTML = '<div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>' + esc(I18N.changing) + '</div>';
-        postJSON("{% url 'dashboard:api_sim_change_password' %}", { cabinet_id: cabId, new_password: pw1 })
+        btnHc.disabled = true;
+        res.innerHTML = '<div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>' + esc(I18N.sending) + '</div>';
+        postJSON("{% url 'dashboard:api_sim_send_host_changed' %}", payload)
             .then(function (d) {
-                btnPw.disabled = false;
+                btnHc.disabled = false;
+                renderRaw(d);
                 if (d.ok) {
-                    res.innerHTML = '<div class="alert alert-success mb-0">' + esc(d.message || "{% trans 'Şifre değiştirildi.' %}") + '</div>';
-                    document.getElementById('pw-new').value = '';
-                    document.getElementById('pw-new2').value = '';
+                    res.innerHTML = '<div class="alert alert-success mb-0">' + esc(d.message || "{% trans 'Bağlantı bilgileri güncellendi.' %}") + '</div>';
+                    document.getElementById('hc-pass').value = '';
                 } else {
-                    res.innerHTML = '<div class="alert alert-danger mb-0">' + esc(d.error || I18N.genericError) + '</div>';
+                    res.innerHTML = errBlock(d);
                 }
             })
             .catch(function () {
-                btnPw.disabled = false;
+                btnHc.disabled = false;
                 res.innerHTML = '<div class="alert alert-danger mb-0">' + esc(I18N.genericError) + '</div>';
             });
     });
