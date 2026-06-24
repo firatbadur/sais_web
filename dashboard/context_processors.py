@@ -80,6 +80,12 @@ MENU = [
         ],
     },
     {
+        "label": _("SIM Ayarları"),
+        "url_name": "dashboard:admin_sim_settings",
+        "icon": "ki-cloud-change",
+        "roles": (ROLE_ADMIN, ROLE_OPERATOR),
+    },
+    {
         "label": _("Takvim Hatırlatıcı"),
         "url_name": "dashboard:reminders",
         "icon": "ki-calendar-tick",

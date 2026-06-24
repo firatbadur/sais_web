@@ -3268,3 +3268,224 @@ def mimic_tags(request):
     return JsonResponse({"ok": True, "results": items, "values": values})
 
 
+# --------------------------------------------------------------------------- #
+# SIM Ayarları: SAIS kabin CRUD + Bakanlık istasyon sorgu + şifre değiştir
+# --------------------------------------------------------------------------- #
+# Tüm uçlar rol 1/2 (OperatorRequiredMixin sayfasıyla aynı kapı). Bakanlık
+# servisleri (GetStationInformation / ChangePassword) `SaisSimClient` üzerinden
+# çağrılır; her çağrı ApiLog(direction='out') olarak otomatik kaydedilir.
+
+
+def _cabinet_dict(cab):
+    """Bir SaisCabinet'i JSON-safe sözlüğe çevirir. Şifre maskelenir —
+    yalnız tanımlı olup olmadığı (`has_secret`) döner, ham değer asla."""
+    return {
+        "id": cab.pk,
+        "station_id": cab.station_id,
+        "station_name": cab.station.name if cab.station_id else "",
+        "device_id": cab.device_id,
+        "code": cab.code,
+        "name": cab.name,
+        "data_period": cab.data_period,
+        "auth_username": cab.auth_username,
+        "has_secret": bool(cab.auth_secret),
+        "created_at": cab.created_at.isoformat() if cab.created_at else None,
+    }
+
+
+@login_required
+def sim_cabinet_save(request):
+    """SAIS kabin oluştur/güncelle. POST JSON:
+    {id?, station_id, device_id, code, name, data_period, auth_username, auth_secret?}
+
+    Düzenlemede `auth_secret` boş bırakılırsa mevcut şifre korunur (maskeli
+    alandan boş gelmesi şifreyi silmesin)."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    from api.models import Station
+    from sais_domain.models import SaisCabinet
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    station = Station.objects.filter(pk=data.get("station_id")).first()
+    if station is None:
+        return JsonResponse({"ok": False, "error": "Tesis seçilmedi veya bulunamadı."}, status=400)
+
+    device_id = (data.get("device_id") or "").strip()
+    name = (data.get("name") or "").strip()
+    auth_username = (data.get("auth_username") or "").strip()
+    if not device_id:
+        return JsonResponse({"ok": False, "error": "Bakanlık SIM ID zorunlu."}, status=400)
+    if not name:
+        return JsonResponse({"ok": False, "error": "Kabin adı zorunlu."}, status=400)
+    if not auth_username:
+        return JsonResponse({"ok": False, "error": "Bakanlık kullanıcı adı zorunlu."}, status=400)
+
+    try:
+        data_period = int(data.get("data_period") or 1)
+    except (TypeError, ValueError):
+        data_period = 1
+
+    cab_id = data.get("id")
+    if cab_id:
+        cab = SaisCabinet.objects.filter(pk=cab_id).first()
+        if cab is None:
+            return JsonResponse({"ok": False, "error": "Kabin bulunamadı."}, status=404)
+    else:
+        cab = SaisCabinet(user=request.user)
+
+    cab.station = station
+    cab.device_id = device_id[:100]
+    cab.code = (data.get("code") or "").strip()[:50]
+    cab.name = name[:200]
+    cab.data_period = data_period
+    cab.auth_username = auth_username[:50]
+
+    secret = data.get("auth_secret")
+    if secret:  # boş/None → mevcut korunur (yeni kayıtta da boş kalabilir)
+        cab.auth_secret = str(secret)[:255]
+    elif not cab_id:
+        cab.auth_secret = ""
+
+    cab.save()
+    return JsonResponse({"ok": True, "cabinet": _cabinet_dict(cab)})
+
+
+@login_required
+def sim_cabinet_delete(request):
+    """SAIS kabin sil. POST JSON {id}."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    from sais_domain.models import SaisCabinet
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    cab = SaisCabinet.objects.filter(pk=data.get("id")).first()
+    if cab is None:
+        return JsonResponse({"ok": False, "error": "Kabin bulunamadı."}, status=404)
+    cab.delete()
+    return JsonResponse({"ok": True})
+
+
+def _sim_client_for(cabinet_id):
+    """(cabinet, client) üretir veya (None, error_message) döner."""
+    from sais_domain.clients.sim import SaisSimClient
+    from sais_domain.models import SaisCabinet
+
+    cab = SaisCabinet.objects.select_related("station").filter(pk=cabinet_id).first()
+    if cab is None:
+        return None, None, "Kabin bulunamadı."
+    if not cab.auth_username or not cab.auth_secret:
+        return cab, None, "Bu kabinde Bakanlık kullanıcı adı/şifresi tanımlı değil."
+    return cab, SaisSimClient(cab), None
+
+
+@login_required
+def sim_station_query(request):
+    """Bakanlık `GetStationInformation` canlı sorgusu. POST JSON {cabinet_id}."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    from sais_domain.clients.exceptions import SaisAuthError, SaisResponseError
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    cab, client, err = _sim_client_for(data.get("cabinet_id"))
+    if err:
+        status = 404 if cab is None else 400
+        return JsonResponse({"ok": False, "error": err}, status=status)
+
+    try:
+        objects = client.get_station_information(triggered_by=request.user)
+    except SaisAuthError as exc:
+        return JsonResponse({"ok": False, "error": f"Bakanlık girişi başarısız: {exc}"}, status=502)
+    except SaisResponseError as exc:
+        return JsonResponse({"ok": False, "error": f"Bakanlık yanıt hatası: {exc}"}, status=502)
+    except Exception as exc:  # noqa: BLE001 — ağ/timeout vb.
+        return JsonResponse({"ok": False, "error": f"Sorgu başarısız: {exc}"}, status=502)
+    finally:
+        client.close()
+
+    return JsonResponse({"ok": True, "device_id": cab.device_id, "objects": objects})
+
+
+@login_required
+def sim_change_password(request):
+    """Bakanlık `ChangePassword` + başarılıysa yerel auth_secret güncelle.
+    POST JSON {cabinet_id, new_password}."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    from sais_domain.clients.exceptions import SaisAuthError, SaisResponseError
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    new_password = (data.get("new_password") or "").strip()
+    if len(new_password) < 4:
+        return JsonResponse({"ok": False, "error": "Yeni şifre en az 4 karakter olmalı."}, status=400)
+
+    cab, client, err = _sim_client_for(data.get("cabinet_id"))
+    if err:
+        status = 404 if cab is None else 400
+        return JsonResponse({"ok": False, "error": err}, status=status)
+
+    try:
+        envelope = client.change_password(new_password, triggered_by=request.user)
+    except SaisAuthError as exc:
+        return JsonResponse({"ok": False, "error": f"Bakanlık girişi başarısız: {exc}"}, status=502)
+    except SaisResponseError as exc:
+        return JsonResponse({"ok": False, "error": f"Bakanlık yanıt hatası: {exc}"}, status=502)
+    except Exception as exc:  # noqa: BLE001
+        return JsonResponse({"ok": False, "error": f"İşlem başarısız: {exc}"}, status=502)
+    finally:
+        client.close()
+
+    result = bool(envelope.get("result")) if isinstance(envelope, dict) else False
+    message = (envelope.get("message") if isinstance(envelope, dict) else None) or ""
+    if not result:
+        return JsonResponse({
+            "ok": False,
+            "error": message or "Bakanlık şifre değişikliğini reddetti.",
+        }, status=400)
+
+    # Bakanlık kabul etti → yerel şifreyi senkronla (cache'teki ticket eskiyebilir;
+    # SaisSimClient bir sonraki çağrıda 401 alıp yeniden login eder).
+    cab.auth_secret = new_password[:255]
+    cab.save(update_fields=["auth_secret"])
+    return JsonResponse({"ok": True, "message": message or "Şifre değiştirildi."})
+
+

@@ -3000,3 +3000,141 @@ msgstr "Show / Hide"
 
 msgid "Oluşturuldu — Panoya kopyalandı"
 msgstr "Generated — copied to clipboard"
+
+msgid "SIM Ayarları"
+msgstr "SIM Settings"
+
+msgid "Kabin Kayıtları"
+msgstr "Cabinet Records"
+
+msgid "Bakanlık İstasyon Bilgisi"
+msgstr "Ministry Station Information"
+
+msgid "SAIS Kabin Kayıtları"
+msgstr "SAIS Cabinet Records"
+
+msgid "Yeni Kabin"
+msgstr "New Cabinet"
+
+msgid "Bakanlık SAIS kayıtları (SIM ID + kurum kodu + erişim bilgileri). Bu bilgiler SendData ve diğer Bakanlık servislerinde kullanılır. Şifreler maskelenir."
+msgstr "Ministry SAIS records (SIM ID + institution code + access credentials). These are used by SendData and other Ministry services. Passwords are masked."
+
+msgid "SIM ID"
+msgstr "SIM ID"
+
+msgid "Tesis Kodu"
+msgstr "Station Code"
+
+msgid "Kabin Adı"
+msgstr "Cabinet Name"
+
+msgid "Periyot (dk)"
+msgstr "Period (min)"
+
+msgid "Tanımlı"
+msgstr "Set"
+
+msgid "Tanımlı kabin kaydı yok. \"Yeni Kabin\" ile ekleyin."
+msgstr "No cabinet records defined. Add one with \"New Cabinet\"."
+
+msgid "İstasyon Bilgisi Sorgula"
+msgstr "Query Station Information"
+
+msgid "Seçili kabin için Bakanlık SAIS sistemindeki istasyon kayıt bilgisini (GetStationInformation) canlı sorgular."
+msgstr "Queries the station record (GetStationInformation) in the Ministry SAIS system live for the selected cabinet."
+
+msgid "Kabin"
+msgstr "Cabinet"
+
+msgid "Kabin seçin"
+msgstr "Select cabinet"
+
+msgid "Sorgula"
+msgstr "Query"
+
+msgid "Sonuç"
+msgstr "Result"
+
+msgid "Sorgulamak için bir kabin seçip \"Sorgula\" deyin."
+msgstr "Select a cabinet and click \"Query\" to look it up."
+
+msgid "Bakanlık Şifresini Değiştir"
+msgstr "Change Ministry Password"
+
+msgid "Şifre Bakanlık SAIS sisteminde değiştirilir; başarılı olursa yerel kayıt da otomatik güncellenir. Yanlış değişiklik veri gönderimini durdurabilir."
+msgstr "The password is changed in the Ministry SAIS system; on success the local record is updated automatically. An incorrect change may stop data transmission."
+
+msgid "Yeni şifre"
+msgstr "New password"
+
+msgid "Yeni şifre tekrar"
+msgstr "New password again"
+
+msgid "Bakanlık'ta Değiştir"
+msgstr "Change at Ministry"
+
+msgid "Seçin"
+msgstr "Select"
+
+msgid "Bakanlık SIM ID"
+msgstr "Ministry SIM ID"
+
+msgid "Bakanlık Kullanıcı Adı"
+msgstr "Ministry Username"
+
+msgid "Veri Periyodu (dk)"
+msgstr "Data Period (min)"
+
+msgid "Bakanlık Şifresi"
+msgstr "Ministry Password"
+
+msgid "Kaydediliyor..."
+msgstr "Saving..."
+
+msgid "Kabin Düzenle"
+msgstr "Edit Cabinet"
+
+msgid "Değiştirmek istemiyorsanız boş bırakın (mevcut şifre korunur)."
+msgstr "Leave blank to keep the current password."
+
+msgid "Bakanlık veri gönderimi için gerekli."
+msgstr "Required for Ministry data transmission."
+
+msgid "Bu kabin kaydı silinecek. Emin misiniz?"
+msgstr "This cabinet record will be deleted. Are you sure?"
+
+msgid "Sorgulanıyor..."
+msgstr "Querying..."
+
+msgid "Bakanlık kaydı bulunamadı."
+msgstr "No Ministry record found."
+
+msgid "Şifreler eşleşmiyor."
+msgstr "Passwords do not match."
+
+msgid "Yeni şifre en az 4 karakter olmalı."
+msgstr "New password must be at least 4 characters."
+
+msgid "Bakanlık şifresi değiştirilecek. Devam edilsin mi?"
+msgstr "The Ministry password will be changed. Continue?"
+
+msgid "Önce bir kabin seçin."
+msgstr "Select a cabinet first."
+
+msgid "Değiştiriliyor..."
+msgstr "Changing..."
+
+msgid "İşlem başarısız."
+msgstr "Operation failed."
+
+msgid "Bakanlık SIM ID zorunlu."
+msgstr "Ministry SIM ID is required."
+
+msgid "Kabin adı zorunlu."
+msgstr "Cabinet name is required."
+
+msgid "Kullanıcı adı zorunlu."
+msgstr "Username is required."
+
+msgid "Şifre değiştirildi."
+msgstr "Password changed."

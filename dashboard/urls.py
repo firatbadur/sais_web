@@ -95,6 +95,8 @@ urlpatterns = [
          name="mimic_viewer"),
     path("admin-pages/notifications/", views.NotificationCenterView.as_view(),
          name="admin_notifications"),
+    path("admin-pages/sim-settings/", views.SimSettingsView.as_view(),
+         name="admin_sim_settings"),
 
     # --- License lock screen (menüsüz; middleware buraya yönlendirir) ---
     path("license-expired/", views.LicenseExpiredView.as_view(), name="license_expired"),
@@ -185,6 +187,12 @@ urlpatterns = [
     # --- AJAX API (Alarm Yönetimi) ---
     path("api/alarms/io/", api_views.alarm_io, name="api_alarm_io"),
     path("api/alarms/rules/", api_views.alarm_rules, name="api_alarm_rules"),
+
+    # --- AJAX API (SIM Ayarları) ---
+    path("api/sim/cabinet-save/", api_views.sim_cabinet_save, name="api_sim_cabinet_save"),
+    path("api/sim/cabinet-delete/", api_views.sim_cabinet_delete, name="api_sim_cabinet_delete"),
+    path("api/sim/station-query/", api_views.sim_station_query, name="api_sim_station_query"),
+    path("api/sim/change-password/", api_views.sim_change_password, name="api_sim_change_password"),
 
     # --- AJAX API (Numune Senaryosu) ---
     path("api/scenario/list/", api_views.scenario_list, name="api_scenario_list"),

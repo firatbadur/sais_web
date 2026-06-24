@@ -1997,6 +1997,36 @@ class NotificationCenterView(OperatorRequiredMixin, TemplateView):
 
 
 # ---------------------------------------------------------------------------
+# SIM Ayarları (SAIS kabin kayıtları + Bakanlık servisleri)
+# ---------------------------------------------------------------------------
+class SimSettingsView(OperatorRequiredMixin, TemplateView):
+    """Yönetici/Operatör → SIM Ayarları.
+
+    Üç sekme:
+    - **Kabin Kayıtları**: ``SaisCabinet`` (Bakanlık SIM ID + erişim bilgileri)
+      listeleme + oluştur/güncelle/sil (AJAX modal).
+    - **Bakanlık İstasyon Bilgisi**: seçili kabin için Bakanlık
+      ``GetStationInformation`` canlı sorgusu.
+    - **Şifre Değiştir**: seçili kabin için Bakanlık ``ChangePassword`` —
+      başarılı olursa yerel ``auth_secret`` da güncellenir.
+
+    Kabin kayıtları Bakanlık kullanıcı adı/şifresi içerir; bu yüzden şifre
+    alanları listede maskelenir, yalnız rol=1/2 erişebilir (OperatorRequiredMixin).
+    """
+    template_name = "dashboard/admin_pages/sim_settings.html"
+
+    def get_context_data(self, **kwargs):
+        from api.models import Station
+        from sais_domain.models import SaisCabinet
+        ctx = super().get_context_data(**kwargs)
+        ctx["cabinets"] = (
+            SaisCabinet.objects.select_related("station").order_by("created_at")
+        )
+        ctx["stations"] = Station.objects.order_by("name")
+        return ctx
+
+
+# ---------------------------------------------------------------------------
 # Doküman Yönetimi
 # ---------------------------------------------------------------------------
 class DocumentListView(RoleRequiredMixin, ListView):

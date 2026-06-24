@@ -4,6 +4,8 @@
 ``entegrationsais.csb.gov.tr`` üzerindeki resmi servis kümesini sarar:
 
 - ``POST /Security/login`` — kullanıcı/şifre ile ticket alır
+- ``POST /Security/ChangePassword`` — Bakanlık hesabının şifresini değiştirir
+- ``POST /SAIS/GetStationInformation`` — Bakanlık'taki istasyon kayıt bilgisi
 - ``POST /SAIS/GetLastData`` — bakanlığa aktarılan en son veri tarihini sorgu
 - ``POST /SAIS/GetMissingDates`` — eksik veri pencereleri
 - ``POST /SAIS/SendData`` — periyodik ölçüm gönderimi
@@ -413,6 +415,55 @@ class SaisSimClient(BaseHttpClient):
             log_component=f"{self.component}.get_sample_code",
         )
         return self._unwrap(response)
+
+    def get_station_information(self, *, triggered_by: Any = None) -> Any:
+        """``/SAIS/GetStationInformation`` — Bakanlık'taki istasyon kayıt bilgisi.
+
+        Bakanlık SAIS sisteminde bu kabin (``stationId`` = SIM ID) için tanımlı
+        istasyon meta verisini döndürür (kod, ad, veri periyodu, kurulum/doğum
+        tarihi, adres, firma vb.). Diğer sorgu uçları (``GetLastData`` /
+        ``GetMissingDates``) ile aynı ``stationId`` query-param sözleşmesini
+        izler; yanıt zarfının ``objects`` alanı olduğu gibi döndürülür.
+        """
+        params = {"stationId": self.cabinet.device_id}
+        response = self._post_authenticated(
+            "/SAIS/GetStationInformation",
+            params=params,
+            triggered_by=triggered_by,
+            log_component=f"{self.component}.get_station_information",
+        )
+        return self._unwrap(response)
+
+    def change_password(
+        self,
+        new_password: str,
+        *,
+        triggered_by: Any = None,
+    ) -> Any:
+        """``/Security/ChangePassword`` — Bakanlık hesabının şifresini değiştirir.
+
+        ``login`` ile birebir aynı çift-MD5 hashleme uygulanır: mevcut şifre
+        (``cabinet.auth_secret``) ve yeni şifre hash'lenip gönderilir. Bakanlık
+        kabul ederse (HTTP 200 + ``result=true``) çağıran yerel
+        ``SaisCabinet.auth_secret``'i yeni değerle güncellemekle yükümlüdür.
+
+        Bu uçta ``objects`` tipik olarak ``null``'dır; anlamlı bilgi zarfın
+        ``result`` (bool) + ``message`` (str) alanlarındadır — bu yüzden
+        ``_unwrap`` yerine **ham zarf** döndürülür (``send_calibration`` ile
+        aynı sözleşme).
+        """
+        payload = {
+            "username": self.cabinet.auth_username,
+            "password": self._hashed_password(),
+            "newPassword": double_md5(new_password or ""),
+        }
+        response = self._post_authenticated(
+            "/Security/ChangePassword",
+            json_body=payload,
+            triggered_by=triggered_by,
+            log_component=f"{self.component}.change_password",
+        )
+        return self._envelope(response)
 
     # ------------------------------------------------------------ Helpers
 
