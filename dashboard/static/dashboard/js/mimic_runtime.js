@@ -53,33 +53,71 @@
     // --------------------------------------------------------------------- //
     // Overlay çizimleri (sahne koordinatında; viewport transform uygulanmış halde)
     // --------------------------------------------------------------------- //
-    function drawWater(ctx, r, ratio, t, bubbles) {
-        var inset = 0.12;
-        var x = r.left + r.width * inset, w = r.width * (1 - 2 * inset);
-        var top = r.top + r.height * 0.10, fullH = r.height * 0.82;
+    // Suyu, varsa sembolün iç hazne şekline (WATER_SHAPES) KIRPARAK çizer →
+    // konik dip / yuvarlak gövde gibi şekillerde su dışarı taşmaz, şekli izler.
+    function drawWater(ctx, r, ratio, t, bubbles, shape) {
+        var x, w, top, fullH, clipped = false;
+        if (shape && shape.length) {
+            var minY = 1, maxY = 0, i;
+            for (i = 0; i < shape.length; i++) {
+                if (shape[i][1] < minY) minY = shape[i][1];
+                if (shape[i][1] > maxY) maxY = shape[i][1];
+            }
+            ctx.save(); clipped = true;
+            ctx.beginPath();
+            for (i = 0; i < shape.length; i++) {
+                var sx = r.left + shape[i][0] * r.width, sy = r.top + shape[i][1] * r.height;
+                if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+            }
+            ctx.closePath(); ctx.clip();
+            x = r.left; w = r.width;
+            top = r.top + minY * r.height; fullH = (maxY - minY) * r.height;
+        } else {
+            x = r.left + r.width * 0.12; w = r.width * 0.76;
+            top = r.top + r.height * 0.10; fullH = r.height * 0.82;
+        }
         var h = fullH * ratio, y = top + fullH - h;
-        var amp = clamp(w * 0.035, 1.5, 5), k = (2 * Math.PI) / (w / 1.25), ph = t / 280;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        for (var px = 0; px <= w; px += 3) ctx.lineTo(x + px, y + Math.sin(px * k + ph) * amp);
-        ctx.lineTo(x + w, top + fullH); ctx.lineTo(x, top + fullH); ctx.closePath();
-        ctx.fillStyle = "rgba(47,155,214,0.55)"; ctx.fill();
-        ctx.strokeStyle = "rgba(150,210,240,0.85)"; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(x, y);
-        for (px = 0; px <= w; px += 3) ctx.lineTo(x + px, y + Math.sin(px * k + ph) * amp);
+        var amp = clamp(w * 0.03, 1.5, 5), k = (2 * Math.PI) / (w / 1.25), ph = t / 280;
+        var x0 = x - 3, x1 = x + w + 3, bot = top + fullH + 4;
+        ctx.beginPath(); ctx.moveTo(x0, y);
+        for (var px = -3; px <= w + 3; px += 3) ctx.lineTo(x + px, y + Math.sin(px * k + ph) * amp);
+        ctx.lineTo(x1, bot); ctx.lineTo(x0, bot); ctx.closePath();
+        ctx.fillStyle = "rgba(47,155,214,0.6)"; ctx.fill();
+        ctx.strokeStyle = "rgba(150,210,240,0.9)"; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x0, y);
+        for (px = -3; px <= w + 3; px += 3) ctx.lineTo(x + px, y + Math.sin(px * k + ph) * amp);
         ctx.stroke();
         if (bubbles && h > 4) {
             ctx.fillStyle = "rgba(255,255,255,0.7)";
-            for (var i = 0; i < 9; i++) {
-                var seed = i * 1.61;
+            for (var b = 0; b < 9; b++) {
+                var seed = b * 1.61;
                 var bx = x + w * (0.08 + 0.84 * frac(seed * 0.37));
-                var prog = frac(t / 1500 + i * 0.19);
+                var prog = frac(t / 1500 + b * 0.19);
                 var by = top + fullH - prog * (h - 2);
-                var rad = 1.4 + 1.6 * frac(seed);
-                ctx.beginPath(); ctx.arc(bx, by, rad, 0, 2 * Math.PI); ctx.fill();
+                ctx.beginPath(); ctx.arc(bx, by, 1.4 + 1.6 * frac(seed), 0, 2 * Math.PI); ctx.fill();
             }
         }
+        if (clipped) ctx.restore();
     }
+
+    // Tank iç hazne şekilleri (normalize 0..1, sembolün sınır kutusuna göre) —
+    // su bu çokgene kırpılır. SVG gövde yollarından türetildi.
+    var WATER_SHAPES = {
+        tank_vertical: [[0.027, 0.179], [0.5, 0.018], [0.973, 0.179], [0.973, 0.857], [0.5, 0.982], [0.027, 0.857]],
+        tank_horizontal: [[0.119, 0.037], [0.881, 0.037], [1, 0.5], [0.881, 0.963], [0.119, 0.963], [0, 0.5]],
+        tank_cone: [[0.026, 0.103], [0.974, 0.103], [0.974, 0.672], [0.5, 0.983], [0.026, 0.672]],
+        reactor: [[0.028, 0.291], [0.5, 0.154], [0.972, 0.291], [0.972, 0.821], [0.5, 0.991], [0.028, 0.821]],
+        basin: [[0.016, 0.03], [0.984, 0.03], [0.906, 0.97], [0.094, 0.97]],
+        clarifier: [[0.017, 0.206], [0.983, 0.206], [0.983, 0.735], [0.5, 0.971], [0.017, 0.735]],
+        clarifier_round: [[0.018, 0.189], [0.982, 0.189], [0.5, 0.973]],
+        wet_well: [[0.025, 0.023], [0.975, 0.023], [0.975, 0.791], [0.5, 0.977], [0.025, 0.791]],
+        grit_chamber: [[0.019, 0.032], [0.981, 0.032], [0.981, 0.613], [0.63, 0.968], [0.37, 0.968], [0.019, 0.613]],
+        weir: [[0.02, 0.038], [0.412, 0.038], [0.5, 0.346], [0.588, 0.038], [0.98, 0.038], [0.98, 0.962], [0.02, 0.962]],
+        open_channel: [[0.164, 0.042], [0.836, 0.042], [0.836, 0.75], [0.164, 0.75]],
+        aeration: [[0.025, 0.048], [0.975, 0.048], [0.975, 0.984], [0.025, 0.984]],
+        flow_cell: [[0.293, 0.05], [0.707, 0.05], [0.707, 0.992], [0.293, 0.992]],
+        sample_cell: [[0.224, 0.016], [0.776, 0.016], [0.776, 0.984], [0.224, 0.984]]
+    };
     function drawSpin(ctx, r, t, speed) {
         if (speed <= 0) return;
         var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
@@ -327,8 +365,9 @@
                 var val = num(tags[sc.tag], 0);
                 var ratio = ratioOf(val, num(sc.min, 0), num(sc.max, 100));
                 var r = o.getBoundingRect(true, true);
-                if (ak === "water") drawWater(ctx, r, ratio, t, false);
-                else if (ak === "aeration") drawWater(ctx, r, Math.max(ratio, 0.4), t, true);
+                var wshape = o._objects ? WATER_SHAPES[o.symbolKey] : null;
+                if (ak === "water") drawWater(ctx, r, ratio, t, false, wshape);
+                else if (ak === "aeration") drawWater(ctx, r, Math.max(ratio, 0.4), t, true, wshape);
                 else if (ak === "spin") drawSpin(ctx, r, t, (val >= num(sc.threshold, 1) && val > 0) ? num(sc.speed, 1) : 0);
                 else if (ak === "carousel") drawCarousel(ctx, r, t, (val >= num(sc.threshold, 1) && val > 0) ? num(sc.speed, 1) : 0);
                 else if (ak === "gauge") drawGauge(ctx, r, ratio);
