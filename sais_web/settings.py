@@ -288,6 +288,16 @@ API_LOG_SKIP_PATHS = env_list(
     "API_LOG_SKIP_PATHS",
     "/static/,/media/,/__debug__/,/admin/jsi18n/,/favicon.ico",
 )
+# Allowlist: yalnız bu prefix'lere gelen istekler ApiLog(direction='in')'e
+# yazılır. Amaç: sadece (SAIS/SIM) API'ye gelen istekleri tut; dashboard
+# sayfaları + iç AJAX (/dashboard/..., /admin/...) gibi yüksek hacimli iç
+# trafiği loglama. Boş bırakılırsa (eski davranış) her şey loglanır.
+API_LOG_INCLUDE_PATHS = env_list(
+    "API_LOG_INCLUDE_PATHS",
+    "/GetServerDatetime,/GetData,/GetInstantData,/GetLastDataDate,"
+    "/GetChannelInformation,/GetStationInformation,/GetCalibration,"
+    "/GetPowerOffTimes,/GetLog,/StartSample,/api/",
+)
 
 # Reading historian retention (her seviye için ayrı — prune_readings kullanır)
 #   raw      = Reading tablosu (en kritik, hızlı büyür)

@@ -1,9 +1,8 @@
 import pandas as pd
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from rest_framework import exceptions, generics
+from rest_framework import generics
 from rest_framework.authentication import BasicAuthentication
-from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -18,7 +17,7 @@ from .models import (
     SensorLatest,
     SystemLog,
 )
-from .permissions import IsAdminUserOrReadOnly  # noqa: F401 (geçici test sırasında kullanılmıyor)
+from .permissions import IsAdminUserOrReadOnly
 from .serializers import (
     CalibrationResultSerializer,
     ChannelInfoSerializer,
@@ -49,48 +48,11 @@ def get_query_param(request, name, default=None):
     return default
 
 
-# ---------------------------------------------------------------------------
-# Bakanlık SAIS/SIM legacy servisleri — "açık okuma" politikası.
-# Basic auth DEVREDE: geçerli kimlik gönderilirse kullanıcı doğrulanır
-# (request.user set olur). ANCAK yanlış/eksik kimlik gelse bile istek
-# reddedilmez — herkes read yapabilir. Bunun için BasicAuthentication
-# yanlış kimlikte 401 atmak yerine anonim (None) döner; permission AllowAny.
-# Global REST_FRAMEWORK default'unu (BasicAuthentication + MinistryReadOnly)
-# bu mixin per-view override eder.
-# ---------------------------------------------------------------------------
-class LenientBasicAuthentication(BasicAuthentication):
-    """Basic auth'u uygular ama yanlış/bozuk kimlikte reddetmez.
-
-    Geçerli kullanıcı/parola gelirse normal doğrular; aksi halde
-    AuthenticationFailed'i yutup anonim olarak devam eder (veri yine döner).
-    """
-
-    def authenticate(self, request):
-        try:
-            return super().authenticate(request)
-        except exceptions.AuthenticationFailed:
-            return None
-
-    def authenticate_credentials(self, userid, password, request=None):
-        # request=None bilinçli: yanlış kimlikte Django `user_login_failed`
-        # sinyali tetikleniyor; users.signals._on_login_failed bunu log_event'e
-        # DRF Request ile geçirince request.user yeniden auth'a girip sonsuz
-        # döngü (RecursionError) oluşturuyordu. request'i geçmeyerek kırıyoruz.
-        return super().authenticate_credentials(userid, password, request=None)
-
-
-class _MinistryNoAuth:
-    authentication_classes = [LenientBasicAuthentication]
-    permission_classes = [AllowAny]
-
-
 # Sunucu saatini getiren servis
-class GetServerDatetimeView(_MinistryNoAuth, APIView):
+class GetServerDatetimeView(APIView):
 
-    # Açık okuma: auth/permission _MinistryNoAuth mixin'inden gelir
-    # (LenientBasicAuthentication + AllowAny). Eski katı ayarlar:
-    # permission_classes = [IsAdminUserOrReadOnly]
-    # authentication_classes = [BasicAuthentication]
+    permission_classes = [IsAdminUserOrReadOnly]
+    authentication_classes = [BasicAuthentication]
 
     def get(self, request, format=None):
         station_id = get_query_param(request, "stationId")
@@ -110,7 +72,7 @@ class GetServerDatetimeView(_MinistryNoAuth, APIView):
 
 
 # İki tarih arası verileri döndüren servis
-class GetReadsDataView(_MinistryNoAuth, generics.ListAPIView):
+class GetReadsDataView(generics.ListAPIView):
     serializer_class = ReadsDataSerializer
 
     def get_queryset(self):
@@ -200,7 +162,7 @@ class GetReadsDataView(_MinistryNoAuth, generics.ListAPIView):
 
 
 # Anlık verileri döndüren servis
-class GetLatestReadsView(_MinistryNoAuth, generics.ListAPIView):
+class GetLatestReadsView(generics.ListAPIView):
     serializer_class = ReadsDataSerializer
 
     def get_queryset(self):
@@ -273,7 +235,7 @@ class GetLatestReadsView(_MinistryNoAuth, generics.ListAPIView):
 
 
 # Son Veri saatini döndüren servis
-class GetLastReadTimeView(_MinistryNoAuth, generics.ListAPIView):
+class GetLastReadTimeView(generics.ListAPIView):
 
     def get_queryset(self):
         return Reading.objects.none()
@@ -313,7 +275,7 @@ class GetLastReadTimeView(_MinistryNoAuth, generics.ListAPIView):
 
 
 # Kanal Bilgileri Döndürme Servisi
-class GetChannelInfoView(_MinistryNoAuth, generics.ListAPIView):
+class GetChannelInfoView(generics.ListAPIView):
     serializer_class = ChannelInfoSerializer
 
     def get_queryset(self):
@@ -352,7 +314,7 @@ class GetChannelInfoView(_MinistryNoAuth, generics.ListAPIView):
 
 
 # İstasyon Bilgileri Döndürme Servisi
-class GetStationInformationView(_MinistryNoAuth, generics.ListAPIView):
+class GetStationInformationView(generics.ListAPIView):
     serializer_class = StationInfoSerializer
 
     def get_queryset(self):
@@ -376,7 +338,7 @@ class GetStationInformationView(_MinistryNoAuth, generics.ListAPIView):
 
 
 # Kalibrasyon Kayıtlarını Döndüren Servis
-class GetCalibrationView(_MinistryNoAuth, generics.ListAPIView):
+class GetCalibrationView(generics.ListAPIView):
     serializer_class = CalibrationResultSerializer
 
     def get_queryset(self):
@@ -432,7 +394,7 @@ class GetCalibrationView(_MinistryNoAuth, generics.ListAPIView):
 
 
 # Açılma Kapanma tarihlerini bildiren servis
-class GetPoweroffView(_MinistryNoAuth, generics.ListAPIView):
+class GetPoweroffView(generics.ListAPIView):
     serializer_class = PoweroffResultSerializer
 
     def get_queryset(self):
@@ -479,7 +441,7 @@ class GetPoweroffView(_MinistryNoAuth, generics.ListAPIView):
 
 
 # Log kayıtları görünütüleme servisi
-class GetLogView(_MinistryNoAuth, generics.ListAPIView):
+class GetLogView(generics.ListAPIView):
     serializer_class = LogResultSerializer
 
     def get_queryset(self):
@@ -529,7 +491,7 @@ class GetLogView(_MinistryNoAuth, generics.ListAPIView):
 
 
 # Numune almaya başla servisi
-class StartSampleView(_MinistryNoAuth, APIView):
+class StartSampleView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             station_id = get_query_param(request, "stationId")

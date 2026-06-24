@@ -32,6 +32,16 @@ def _skip_paths() -> Iterable[str]:
     return getattr(settings, "API_LOG_SKIP_PATHS", [])
 
 
+def _include_paths() -> Iterable[str]:
+    """Yalnız bu prefix'lerle başlayan istekleri logla (allowlist).
+
+    Boş/tanımsızsa filtre uygulanmaz (eski davranış: her şey loglanır).
+    Amaç: sadece API'ye gelen istekleri tut; dashboard sayfaları + iç AJAX
+    (`/dashboard/...`, `/admin/...`) gibi yüksek hacimli iç trafiği loglama.
+    """
+    return getattr(settings, "API_LOG_INCLUDE_PATHS", [])
+
+
 def _is_enabled() -> bool:
     return bool(getattr(settings, "API_LOG_ENABLED", True))
 
@@ -72,19 +82,35 @@ def _request_headers(request) -> dict:
 def _decode_basic_auth(auth_header: str):
     """`Authorization: Basic <base64>` header'ından (username, password) çıkar.
 
-    Basic dışı şema, eksik/bozuk base64 ya da boş header için None döner.
+    Basic dışı şema, çözülemeyen base64 ya da boş header için None döner.
     Şifre içinde ':' olabilir → yalnız ilk ':' ayraç sayılır.
+
+    Sağlamlık (her zaman çözebilmek için):
+    - Şema/token herhangi bir boşlukla (space/tab/çoklu) ayrılmış olabilir.
+    - Bazı istemciler base64 padding ('=') eklemez → eksik padding tamamlanır.
+    - validate KAPALI: standart-dışı/whitespace karakterler reddetmek yerine
+      atlanır (validate=True bunlarda patlıyordu).
+    - Karakter kümesi: Basic auth tarihsel olarak ISO-8859-1; modern istemciler
+      UTF-8. Önce UTF-8 denenir, olmazsa latin-1'e düşülür (asla patlamaz).
     """
     if not auth_header:
         return None
-    parts = auth_header.split(" ", 1)
+    parts = auth_header.split(None, 1)  # herhangi bir boşluk; baştakileri yutar
     if len(parts) != 2 or parts[0].lower() != "basic":
         return None
+    token = parts[1].strip()
+    if not token:
+        return None
+    token += "=" * (-len(token) % 4)  # eksik padding'i tamamla
     try:
-        raw = base64.b64decode(parts[1].strip(), validate=True).decode("utf-8", "replace")
+        raw = base64.b64decode(token)  # validate=False → bozuk char'ları atla
     except (binascii.Error, ValueError):
         return None
-    username, sep, password = raw.partition(":")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1", "replace")
+    username, sep, password = text.partition(":")
     return username, (password if sep else "")
 
 
@@ -124,9 +150,14 @@ class ApiLoggingMiddleware:
 
     @staticmethod
     def _should_skip(path: str) -> bool:
+        # Önce kara liste (static/media vb.) — her zaman atla.
         for prefix in _skip_paths():
             if path.startswith(prefix):
                 return True
+        # Sonra beyaz liste: tanımlıysa yalnız eşleşen path'ler loglanır.
+        include = list(_include_paths())
+        if include and not any(path.startswith(p) for p in include):
+            return True
         return False
 
     @staticmethod
