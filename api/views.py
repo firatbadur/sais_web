@@ -1,8 +1,8 @@
 import pandas as pd
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from rest_framework import generics
-from rest_framework.authentication import BasicAuthentication  # noqa: F401 (geçici test sırasında kullanılmıyor)
+from rest_framework import exceptions, generics
+from rest_framework.authentication import BasicAuthentication
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -50,21 +50,45 @@ def get_query_param(request, name, default=None):
 
 
 # ---------------------------------------------------------------------------
-# GEÇİCİ TEST: Bakanlık SAIS/SIM legacy servislerinde auth bypass.
-# Bakanlık entegrasyon testleri için tüm bu servisler HERHANGİ BİR auth olmadan
-# yanıt verir (basic auth devre dışı). Global REST_FRAMEWORK default'u
-# BasicAuthentication + MinistryReadOnly'dir; bu mixin per-view override eder.
-# TODO: Test bitince bu mixin'i view base listelerinden kaldır → auth geri gelir.
+# Bakanlık SAIS/SIM legacy servisleri — "açık okuma" politikası.
+# Basic auth DEVREDE: geçerli kimlik gönderilirse kullanıcı doğrulanır
+# (request.user set olur). ANCAK yanlış/eksik kimlik gelse bile istek
+# reddedilmez — herkes read yapabilir. Bunun için BasicAuthentication
+# yanlış kimlikte 401 atmak yerine anonim (None) döner; permission AllowAny.
+# Global REST_FRAMEWORK default'unu (BasicAuthentication + MinistryReadOnly)
+# bu mixin per-view override eder.
 # ---------------------------------------------------------------------------
+class LenientBasicAuthentication(BasicAuthentication):
+    """Basic auth'u uygular ama yanlış/bozuk kimlikte reddetmez.
+
+    Geçerli kullanıcı/parola gelirse normal doğrular; aksi halde
+    AuthenticationFailed'i yutup anonim olarak devam eder (veri yine döner).
+    """
+
+    def authenticate(self, request):
+        try:
+            return super().authenticate(request)
+        except exceptions.AuthenticationFailed:
+            return None
+
+    def authenticate_credentials(self, userid, password, request=None):
+        # request=None bilinçli: yanlış kimlikte Django `user_login_failed`
+        # sinyali tetikleniyor; users.signals._on_login_failed bunu log_event'e
+        # DRF Request ile geçirince request.user yeniden auth'a girip sonsuz
+        # döngü (RecursionError) oluşturuyordu. request'i geçmeyerek kırıyoruz.
+        return super().authenticate_credentials(userid, password, request=None)
+
+
 class _MinistryNoAuth:
-    authentication_classes = []
+    authentication_classes = [LenientBasicAuthentication]
     permission_classes = [AllowAny]
 
 
 # Sunucu saatini getiren servis
 class GetServerDatetimeView(_MinistryNoAuth, APIView):
 
-    # GEÇİCİ TEST: auth yoruma alındı (yukarıdaki _MinistryNoAuth bypass ediyor).
+    # Açık okuma: auth/permission _MinistryNoAuth mixin'inden gelir
+    # (LenientBasicAuthentication + AllowAny). Eski katı ayarlar:
     # permission_classes = [IsAdminUserOrReadOnly]
     # authentication_classes = [BasicAuthentication]
 
