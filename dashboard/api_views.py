@@ -924,6 +924,46 @@ def backup_download(request, pk):
     )
 
 
+@login_required
+def api_log_detail(request, pk):
+    """Tek bir ApiLog satırının tam detayı (header/body) — API Logları modal'ı.
+
+    Gelen Basic auth kimliği (kim hangi kullanıcı adı/şifre ile denedi)
+    `request_headers` içindeki `Authorization-Basic-Decoded` anahtarında durur;
+    bu endpoint onu olduğu gibi döndürür, frontend modal'da gösterir.
+    """
+    denied = _require_admin(request)
+    if denied:
+        return denied
+
+    from api.models import ApiLog
+
+    log = ApiLog.objects.select_related("user").filter(pk=pk).first()
+    if not log:
+        return JsonResponse({"ok": False, "error": "Kayıt bulunamadı."}, status=404)
+
+    return JsonResponse({
+        "ok": True,
+        "log": {
+            "id": log.id,
+            "created_at": log.created_at.strftime("%d.%m.%Y %H:%M:%S") if log.created_at else "",
+            "direction": log.direction,
+            "method": log.method,
+            "url": log.url,
+            "query_string": log.query_string,
+            "response_status": log.response_status,
+            "duration_ms": log.duration_ms,
+            "remote_ip": log.remote_ip or "",
+            "user": (log.user.get_username() if log.user else "") or log.source_component or "",
+            "user_agent": log.user_agent or "",
+            "request_headers": log.request_headers or "",
+            "request_body": log.request_body or "",
+            "response_body": log.response_body or "",
+            "error_message": log.error_message or "",
+        },
+    })
+
+
 # ---------------------------------------------------------------------------
 # Sürüm / güncelleme + 443 port kontrolü (Sistem Kontrol sayfası)
 # ---------------------------------------------------------------------------

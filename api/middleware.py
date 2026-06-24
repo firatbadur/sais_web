@@ -7,6 +7,8 @@ Outbound (giden) istekler için bkz. `api/api_logging.py`.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 import time
 from typing import Iterable
@@ -54,7 +56,36 @@ def _request_headers(request) -> dict:
         headers["Content-Type"] = request.META["CONTENT_TYPE"]
     if "CONTENT_LENGTH" in request.META:
         headers["Content-Length"] = request.META["CONTENT_LENGTH"]
+
+    # Gelen Basic auth kimliğini çöz: kim hangi kullanıcı adı/şifre ile deniyor
+    # görünsün. Orijinal "Authorization" header'ı redact_headers ile yine
+    # [REDACTED] kalır; çözülmüş hali ayrı (maskelenmeyen) anahtarda tutulur.
+    decoded = _decode_basic_auth(request.META.get("HTTP_AUTHORIZATION", ""))
+    if decoded is not None:
+        username, password = decoded
+        headers["Authorization-Basic-Decoded"] = (
+            f"username={username!r} password={password!r}"
+        )
     return headers
+
+
+def _decode_basic_auth(auth_header: str):
+    """`Authorization: Basic <base64>` header'ından (username, password) çıkar.
+
+    Basic dışı şema, eksik/bozuk base64 ya da boş header için None döner.
+    Şifre içinde ':' olabilir → yalnız ilk ':' ayraç sayılır.
+    """
+    if not auth_header:
+        return None
+    parts = auth_header.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "basic":
+        return None
+    try:
+        raw = base64.b64decode(parts[1].strip(), validate=True).decode("utf-8", "replace")
+    except (binascii.Error, ValueError):
+        return None
+    username, sep, password = raw.partition(":")
+    return username, (password if sep else "")
 
 
 class ApiLoggingMiddleware:

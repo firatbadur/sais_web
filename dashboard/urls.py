@@ -169,6 +169,7 @@ urlpatterns = [
          name="api_system_control_status"),
     path("api/connection-toggle/", api_views.connection_toggle,
          name="api_connection_toggle"),
+    path("api/api-logs/<int:pk>/", api_views.api_log_detail, name="api_api_log_detail"),
     path("api/backups/status/", api_views.backup_status, name="api_backup_status"),
     path("api/backups/<int:pk>/download/", api_views.backup_download, name="api_backup_download"),
     path("api/version/", api_views.version_info, name="api_version_info"),
