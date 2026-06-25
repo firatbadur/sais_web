@@ -3192,3 +3192,12 @@ msgstr "Password is required."
 
 msgid "Host/IP adresi zorunlu."
 msgstr "Host/IP address is required."
+
+msgid "Oturum Süresi"
+msgstr "Session Duration"
+
+msgid "Bu süre boyunca işlem yapılmasa bile oturum açık kalır; süre dolunca otomatik çıkış yapılır. Bir sonraki girişten itibaren değil, hemen geçerli olur."
+msgstr "Your session stays open for this duration even without activity; once it expires you are signed out automatically. It takes effect immediately, not from your next login."
+
+msgid "Tercihler kaydedildi."
+msgstr "Preferences saved."
