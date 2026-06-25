@@ -128,8 +128,24 @@ class DashboardLogoutView(LogoutView):
 
 
 class ForgotPasswordView(TemplateView):
-    """E-posta yapılandırması yok — sadece info sayfası."""
+    """E-posta yapılandırması yok — sadece info sayfası.
+
+    Yönetici e-posta(ları) hardcode değil; aktif rol=1 (Sistem Yöneticisi)
+    kullanıcılarının e-postalarından dinamik gösterilir.
+    """
     template_name = "dashboard/auth/forgot_password.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        emails = list(
+            User.objects.filter(rol=ROLE_ADMIN, is_active=True)
+            .exclude(email="")
+            .order_by("email")
+            .values_list("email", flat=True)
+            .distinct()
+        )
+        ctx["admin_emails"] = emails
+        return ctx
 
 
 # --------------------------------------------------------------------------- #
