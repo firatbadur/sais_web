@@ -3381,7 +3381,9 @@ def sim_cabinet_save(request):
         if cab is None:
             return JsonResponse({"ok": False, "error": "Kabin bulunamadı."}, status=404)
     else:
-        cab = SaisCabinet(user=request.user)
+        # cabinet.user, post_save sinyaliyle otomatik Bakanlık kullanıcısına
+        # bağlanır (oluşturan kişi değil) — burada set etme.
+        cab = SaisCabinet()
 
     cab.station = station
     cab.device_id = device_id[:100]

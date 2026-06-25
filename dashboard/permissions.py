@@ -60,6 +60,39 @@ def user_has_role(user, *roles: int) -> bool:
     return getattr(user, "rol", None) in roles
 
 
+def can_manage_target_user(acting_user, target) -> bool:
+    """`acting_user`, `target` kullanıcısını düzenleyebilir/şifresini sıfırlayabilir mi?
+
+    Kural: **Sistem Yöneticisi'nin (rol=1 / superuser) eklediği** kullanıcılara
+    operatör (rol=2) müdahale edemez; ayrıca hedef kullanıcının kendisi admin ise
+    de korunur. Admin/superuser her kullanıcıyı yönetir.
+
+    "Ekleyen" bilgisi ``CustomUser.added_by`` (oluşturanın id'si) üzerinden
+    çözülür; legacy kayıtlarda default 1 (ilk admin) olduğundan onlar da korunur.
+    """
+    # Admin/superuser her zaman yönetebilir.
+    if user_has_role(acting_user, ROLE_ADMIN):
+        return True
+
+    # Hedefin kendisi admin/superuser ise operatör dokunamaz.
+    if getattr(target, "is_superuser", False) or getattr(target, "rol", None) == ROLE_ADMIN:
+        return False
+
+    # Hedefi ekleyen kişi admin/superuser ise operatör dokunamaz.
+    creator = None
+    added_by = getattr(target, "added_by", None)
+    if added_by:
+        from django.contrib.auth import get_user_model
+        creator = get_user_model().objects.filter(pk=added_by).first()
+    if creator is not None and (
+        getattr(creator, "is_superuser", False)
+        or getattr(creator, "rol", None) == ROLE_ADMIN
+    ):
+        return False
+
+    return True
+
+
 def can_view_admin_events(user) -> bool:
     """Sistem yöneticisinin (rol=1 / superuser) hareketlerini görme yetkisi.
 

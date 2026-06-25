@@ -3201,3 +3201,15 @@ msgstr "Your session stays open for this duration even without activity; once it
 
 msgid "Tercihler kaydedildi."
 msgstr "Preferences saved."
+
+msgid "Bu kullanıcı Sistem Yöneticisi tarafından eklenmiş; düzenleme yetkiniz yok."
+msgstr "This user was added by the System Administrator; you cannot edit it."
+
+msgid "Bu kullanıcı Sistem Yöneticisi tarafından eklenmiş; şifre sıfırlama yetkiniz yok."
+msgstr "This user was added by the System Administrator; you cannot reset its password."
+
+msgid "Sistem Yöneticisi tarafından eklendi — düzenlenemez."
+msgstr "Added by the System Administrator — cannot be edited."
+
+msgid "Korumalı"
+msgstr "Protected"

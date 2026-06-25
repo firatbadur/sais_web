@@ -38,7 +38,13 @@
                             <td>{% if u.is_active %}<span class="badge badge-light-success">{% trans "Aktif" %}</span>{% else %}<span class="badge badge-light-secondary">{% trans "Pasif" %}</span>{% endif %}</td>
                             <td class="text-muted">{{ u.last_login|date:"Y-m-d H:i"|default:"—" }}</td>
                             <td class="text-end">
-                                <a href="{% url 'dashboard:admin_user_edit' u.pk %}" class="btn btn-sm btn-light">{% trans "Düzenle" %}</a>
+                                {% if u.can_manage %}
+                                    <a href="{% url 'dashboard:admin_user_edit' u.pk %}" class="btn btn-sm btn-light">{% trans "Düzenle" %}</a>
+                                {% else %}
+                                    <span class="badge badge-light-secondary" title="{% trans 'Sistem Yöneticisi tarafından eklendi — düzenlenemez.' %}">
+                                        <i class="ki-outline ki-lock fs-7 me-1"></i>{% trans "Korumalı" %}
+                                    </span>
+                                {% endif %}
                             </td>
                         </tr>
                     {% empty %}

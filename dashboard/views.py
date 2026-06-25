@@ -72,6 +72,7 @@ from .permissions import (
     AdminRequiredMixin,
     OperatorRequiredMixin,
     RoleRequiredMixin,
+    can_manage_target_user,
     can_view_admin_events,
     user_has_role,
 )
@@ -1129,6 +1130,13 @@ class UserListView(OperatorRequiredMixin, ListView):
     context_object_name = "users"
     paginate_by = 50
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # Her satır için: operatör admin'in eklediği kullanıcıya dokunamaz.
+        for u in ctx.get("users", []):
+            u.can_manage = can_manage_target_user(self.request.user, u)
+        return ctx
+
 
 class UserCreateView(OperatorRequiredMixin, CreateView):
     model = User
@@ -1143,6 +1151,10 @@ class UserCreateView(OperatorRequiredMixin, CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
+        # Ekleyeni damgala (kim ekledi → düzenleme yetkisi bununla belirlenir).
+        if self.object.added_by != self.request.user.pk:
+            self.object.added_by = self.request.user.pk
+            self.object.save(update_fields=["added_by"])
         _sync_ministry_token(self.object)
         messages.success(self.request, _("Kullanıcı oluşturuldu."))
         log_event(
@@ -1158,6 +1170,19 @@ class UserUpdateView(OperatorRequiredMixin, UpdateView):
     form_class = AdminUserUpdateForm
     template_name = "dashboard/admin_pages/user_form.html"
     success_url = reverse_lazy("dashboard:admin_users")
+
+    def dispatch(self, request, *args, **kwargs):
+        # Operatör, Sistem Yöneticisi'nin eklediği kullanıcıya müdahale edemez.
+        if request.user.is_authenticated:
+            target = self.get_object()
+            if not can_manage_target_user(request.user, target):
+                messages.error(
+                    request,
+                    _("Bu kullanıcı Sistem Yöneticisi tarafından eklenmiş; "
+                      "düzenleme yetkiniz yok."),
+                )
+                return redirect("dashboard:admin_users")
+        return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -1195,6 +1220,13 @@ class UserResetPasswordView(OperatorRequiredMixin, TemplateView):
 
     def post(self, request, pk):
         target = User.objects.get(pk=pk)
+        if not can_manage_target_user(request.user, target):
+            messages.error(
+                request,
+                _("Bu kullanıcı Sistem Yöneticisi tarafından eklenmiş; "
+                  "şifre sıfırlama yetkiniz yok."),
+            )
+            return redirect("dashboard:admin_users")
         alphabet = string.ascii_letters + string.digits
         new_password = "".join(secrets.choice(alphabet) for _ in range(12))
         target.set_password(new_password)
