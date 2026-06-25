@@ -12,9 +12,30 @@ class CustomUser(AbstractUser):
         (4, 'Bakanlık Kullanıcısı'),
     )
 
+    # Oturum (session) otomatik düşme süresi — kullanıcı tercihi. Login'de ve
+    # Tercihler sayfasında `request.session.set_expiry()` ile uygulanır.
+    # 0 = tarayıcı kapanınca; diğerleri dakika cinsinden. Varsayılan 8 saat.
+    session_timeout_choices = (
+        (0, 'Tarayıcı kapanınca'),
+        (60, '1 saat'),
+        (240, '4 saat'),
+        (480, '8 saat'),
+        (720, '12 saat'),
+        (1440, '1 gün'),
+        (10080, '7 gün'),
+        (43200, '30 gün'),
+    )
+
     rol = models.IntegerField(verbose_name="Rol", help_text="Rol", blank=False,
                               null=True,choices=rol_choices,default=3)
     isDark = models.BooleanField(verbose_name="Tema", help_text="Durum", blank=False, default=False)
+
+    session_timeout_minutes = models.IntegerField(
+        verbose_name="Oturum Süresi",
+        help_text="Oturumun otomatik düşeceği süre (0 = tarayıcı kapanınca)",
+        choices=session_timeout_choices,
+        default=480,
+    )
 
     device_id = models.CharField(max_length=250, blank=True, null=True)
     added_by = models.IntegerField(verbose_name="Ekleyen Kullanıcı", help_text="Ekleyen Kullanıcı", blank=False,

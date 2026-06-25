@@ -34,6 +34,21 @@
             </div>
             <div class="form-text">{% trans "Tema tercihi tarayıcınızda saklanır." %}</div>
         </div>
+
+        <form method="post" class="mb-2">
+            {% csrf_token %}
+            <label class="form-label">{% trans "Oturum Süresi" %}</label>
+            {{ prefs_form.session_timeout_minutes }}
+            {% if prefs_form.session_timeout_minutes.errors %}
+            <div class="text-danger small mt-1">{{ prefs_form.session_timeout_minutes.errors.0 }}</div>
+            {% endif %}
+            <div class="form-text">
+                {% trans "Bu süre boyunca işlem yapılmasa bile oturum açık kalır; süre dolunca otomatik çıkış yapılır. Bir sonraki girişten itibaren değil, hemen geçerli olur." %}
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-sm btn-primary">{% trans "Kaydet" %}</button>
+            </div>
+        </form>
     </div>
 </div>
 </div>

@@ -66,12 +66,12 @@ def _restrict_rol_for_operator(form, acting_user):
 
 
 class DashboardLoginForm(AuthenticationForm):
-    """Metronic stili login formu + 'beni hatırla' checkbox'ı."""
+    """Metronic stili login formu.
 
-    remember_me = forms.BooleanField(
-        required=False, initial=False,
-        label=_("Beni Hatırla"),
-    )
+    Oturum süresi artık kullanıcının kalıcı tercihi
+    (`CustomUser.session_timeout_minutes`) ile belirlenir; login'de
+    ayrı bir 'beni hatırla' seçimi yoktur.
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -153,6 +153,22 @@ class ProfileForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control form-control-solid")
+
+
+class PreferencesForm(forms.ModelForm):
+    """Kullanıcı tercihleri — şimdilik oturum süresi.
+
+    Kaydedildiğinde view ayrıca mevcut oturuma `set_expiry()` uygular ki
+    değişiklik anında geçerli olsun (bir sonraki login'i beklemeden)."""
+
+    class Meta:
+        model = User
+        fields = ("session_timeout_minutes",)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["session_timeout_minutes"].widget.attrs.setdefault(
+            "class", "form-select form-select-solid")
 
 
 class ChangePasswordForm(forms.Form):

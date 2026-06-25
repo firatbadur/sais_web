@@ -59,6 +59,7 @@ from .forms import (
     DashboardLoginForm,
     DocumentUploadForm,
     NotificationSettingsForm,
+    PreferencesForm,
     ProfileForm,
     SensorConfigForm,
     WebSettingsForm,
@@ -115,13 +116,10 @@ class DashboardLoginView(LoginView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        remember = form.cleaned_data.get("remember_me")
-        if remember:
-            # 30 gün — "beni hatırla"
-            self.request.session.set_expiry(60 * 60 * 24 * 30)
-        else:
-            # Default 24 saat (settings.SESSION_COOKIE_AGE)
-            self.request.session.set_expiry(None)
+        # Oturum süresi kullanıcının kalıcı tercihinden (varsayılan 8 saat).
+        # 0 = tarayıcı kapanınca; diğerleri dakika cinsinden.
+        minutes = getattr(self.request.user, "session_timeout_minutes", 480)
+        self.request.session.set_expiry(0 if minutes == 0 else minutes * 60)
         return response
 
 
@@ -1837,6 +1835,23 @@ class ChangePasswordView(LoginRequiredMixin, FormView):
 
 class PreferencesView(LoginRequiredMixin, TemplateView):
     template_name = "dashboard/settings/preferences.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx.setdefault("prefs_form", PreferencesForm(instance=self.request.user))
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        form = PreferencesForm(request.POST, instance=request.user)
+        if form.is_valid():
+            user = form.save()
+            # Değişiklik anında geçerli olsun — mevcut oturuma da uygula.
+            minutes = user.session_timeout_minutes
+            request.session.set_expiry(0 if minutes == 0 else minutes * 60)
+            messages.success(request, _("Tercihler kaydedildi."))
+            return redirect("dashboard:preferences")
+        ctx = self.get_context_data(prefs_form=form)
+        return self.render_to_response(ctx)
 
 
 # --------------------------------------------------------------------------- #
