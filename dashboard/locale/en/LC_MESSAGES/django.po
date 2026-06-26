@@ -3348,3 +3348,30 @@ msgstr "Columns"
 
 msgid "Ara"
 msgstr "Search"
+
+msgid "gelen veri üzerinde süzer"
+msgstr "filters the fetched data"
+
+msgid "gelen veri üzerinde"
+msgstr "on fetched data"
+
+msgid "Günlük Geçerli Veri"
+msgstr "Daily Valid Data"
+
+msgid "Aylık Geçerli"
+msgstr "Monthly Valid"
+
+msgid "Aylık oranı yeniden hesapla"
+msgstr "Recalculate monthly ratio"
+
+msgid "Tarih / Saat"
+msgstr "Date / Time"
+
+msgid "Kabin seçin."
+msgstr "Select a cabinet."
+
+msgid "hata"
+msgstr "error"
+
+msgid "eşik"
+msgstr "threshold"

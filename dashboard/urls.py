@@ -201,6 +201,7 @@ urlpatterns = [
          name="api_sim_send_host_changed"),
     path("api/sim/service-call/", api_views.sim_service_call, name="api_sim_service_call"),
     path("api/sim/data-report/", api_views.sim_data_report, name="api_sim_data_report"),
+    path("api/sim/valid-ratio/", api_views.sim_valid_ratio, name="api_sim_valid_ratio"),
 
     # --- AJAX API (Numune Senaryosu) ---
     path("api/scenario/list/", api_views.scenario_list, name="api_scenario_list"),

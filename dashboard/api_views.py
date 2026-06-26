@@ -3796,6 +3796,38 @@ _SIM_DATA_META_KEYS = {
 }
 
 
+_SIM_STATUS_BY_CODE = {s["code"]: s for s in SIM_DATA_STATUS_CODES}
+
+
+def _sim_valid_stats(rows, expected_minutes):
+    """Validasyon (``_N``) status'larına göre geçerli veri oranını hesaplar.
+
+    Her parametre için ``valid_count / expected_minutes`` oranı bulunur; genel
+    oran bunların ortalamasıdır (parametre bazlı %80 kuralına yakın bir tek
+    gösterge). Eksik dakikalar geçersiz sayılır (oranı düşürür). ``_N_Status``
+    yoksa ham ``_Status`` kullanılır."""
+    params = _detect_sim_params(rows)
+    if expected_minutes <= 0:
+        expected_minutes = max(len(rows), 1)
+    if not params:
+        return {"valid_pct": 0.0, "received": len(rows),
+                "expected": expected_minutes, "per_param": {}}
+    counts = {p: 0 for p in params}
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        for p in params:
+            nkey = p + "_N_Status"
+            skey = nkey if nkey in r else (p + "_Status")
+            st = _SIM_STATUS_BY_CODE.get(r.get(skey))
+            if st and st["valid"]:
+                counts[p] += 1
+    per_param = {p: round(min(100.0, counts[p] / expected_minutes * 100), 1) for p in params}
+    valid_pct = round(min(100.0, sum(per_param.values()) / len(per_param)), 1)
+    return {"valid_pct": valid_pct, "received": len(rows),
+            "expected": expected_minutes, "per_param": per_param}
+
+
 def _detect_sim_params(rows):
     """Veri satırlarından temel parametre anahtarlarını sıralı tespit eder.
 
@@ -3917,6 +3949,101 @@ def sim_data_report(request):
         "count": len(rows),
         "parameters": parameters,
         "rows": [_slim_sim_row(r) for r in rows],
+        "request_url": request_url,
+    })
+
+
+@login_required
+def sim_valid_ratio(request):
+    """Aylık geçerli veri oranı — bir ay için tek `GetDataByBetweenTwoDate`.
+
+    POST JSON {cabinet_id, month (YYYY-MM)}. Ayın başından (geçerli ay ise) şu ana
+    veya (geçmiş ay ise) ay sonuna kadar dakikalık veriyi (period=1) **tek** istekle
+    çeker, validasyon (``_N``) status'larına göre geçerli veri yüzdesini hesaplar.
+    SİM'e yalnız bu tek istek gider; frontend ay-bazlı cache'ler. SAIS kabini aylık
+    en az %80 geçerli veri sağlamalıdır — kart bu eşiğe göre renklenir."""
+    import json
+    from calendar import monthrange
+    from datetime import datetime
+    from urllib.parse import urlencode
+
+    from django.utils import timezone
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    from sais_domain.clients.exceptions import SaisAuthError, SaisResponseError
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    month_str = (data.get("month") or "").strip()
+    try:
+        year, mon = (int(x) for x in month_str.split("-"))
+        month_start = datetime(year, mon, 1, 0, 0, 0)
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz ay (YYYY-MM)."}, status=400)
+
+    now = timezone.localtime().replace(tzinfo=None)
+    last_day = monthrange(year, mon)[1]
+    if (year, mon) == (now.year, now.month):
+        end_dt = now.replace(second=59, microsecond=0)
+    else:
+        end_dt = datetime(year, mon, last_day, 23, 59, 59)
+    if end_dt < month_start:
+        return JsonResponse({"ok": False, "error": "Gelecek ay sorgulanamaz."}, status=400)
+
+    expected_minutes = int((end_dt - month_start).total_seconds() // 60) + 1
+    start_str = month_start.strftime("%Y-%m-%d %H:%M:%S")
+    end_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    cab, client, err = _sim_client_for(data.get("cabinet_id"))
+    if err:
+        status = 404 if cab is None else 400
+        return JsonResponse({"ok": False, "error": err}, status=status)
+
+    request_url = (
+        f"{client.base_url}/SAIS/GetDataByBetweenTwoDate?"
+        + urlencode({
+            "stationId": cab.device_id, "period": 1,
+            "startDate": start_str, "endDate": end_str,
+        })
+    )
+
+    try:
+        objects = client.get_data_between(
+            period=1, start_date=start_str, end_date=end_str,
+            triggered_by=request.user,
+        )
+    except SaisAuthError as exc:
+        return JsonResponse({"ok": False, "request_url": request_url,
+                             "error": f"Bakanlık girişi başarısız: {exc}"}, status=502)
+    except SaisResponseError as exc:
+        return JsonResponse({
+            "ok": False, "request_url": request_url,
+            "error": f"Bakanlık yanıt hatası: {exc}",
+            "detail": (exc.response_text or "")[:2000], "status_code": exc.status_code,
+        }, status=502)
+    except Exception as exc:  # noqa: BLE001
+        return JsonResponse({"ok": False, "request_url": request_url,
+                             "error": f"Sorgu başarısız: {exc}"}, status=502)
+    finally:
+        client.close()
+
+    rows = objects if isinstance(objects, list) else []
+    stats = _sim_valid_stats(rows, expected_minutes)
+    return JsonResponse({
+        "ok": True,
+        "month": month_str,
+        "valid_pct": stats["valid_pct"],
+        "received": stats["received"],
+        "expected": stats["expected"],
+        "per_param": stats["per_param"],
         "request_url": request_url,
     })
 
