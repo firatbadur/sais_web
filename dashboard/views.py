@@ -2107,6 +2107,9 @@ class SimServicesView(OperatorRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         from collections import OrderedDict
 
+        from django.conf import settings
+
+        from sais_domain.clients.sim import SaisSimClient
         from sais_domain.models import SaisCabinet
 
         from .api_views import SIM_SERVICE_CATALOG
@@ -2121,6 +2124,16 @@ class SimServicesView(OperatorRequiredMixin, TemplateView):
             groups.setdefault(svc["group"], []).append(svc)
         ctx["service_groups"] = groups
         ctx["service_count"] = len(SIM_SERVICE_CATALOG)
+        # İstek URL'i canlı önizlemesi için Bakanlık base URL'i (server'daki ile aynı).
+        ctx["sim_base_url"] = (
+            getattr(settings, "SAIS_SIM_BASE_URL", None)
+            or SaisSimClient.DEFAULT_BASE_URL
+        ).rstrip("/")
+        # stationId'siz (body/param yok) uçlar — JS request URL önizlemesi için.
+        ctx["no_station_endpoints"] = [
+            "GetServerDateTime", "GetParameters", "GetUnits",
+            "GetDataStatusDescription", "GetDiagnosticTypes",
+        ]
         return ctx
 
 

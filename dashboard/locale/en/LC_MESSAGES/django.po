@@ -3273,3 +3273,24 @@ msgstr "records"
 
 msgid "Kopyalandı"
 msgstr "Copied"
+
+msgid "Servis"
+msgstr "Service"
+
+msgid "İstek URL"
+msgstr "Request URL"
+
+msgid "Servisi Çağır"
+msgstr "Call Service"
+
+msgid "Kabin seçin, soldan bir servis seçip çağırın."
+msgstr "Select a cabinet, then pick a service on the left and call it."
+
+msgid "Soldan bir servis seçin."
+msgstr "Select a service on the left."
+
+msgid "Servisi çağırınca yanıt burada görünür."
+msgstr "The response appears here once you call the service."
+
+msgid "Başlangıç ve bitiş tarihi gerekli."
+msgstr "Start and end date required."
