@@ -99,6 +99,8 @@ urlpatterns = [
          name="admin_sim_settings"),
     path("admin-pages/sim-services/", views.SimServicesView.as_view(),
          name="admin_sim_services"),
+    path("admin-pages/sim-data-report/", views.SimDataReportView.as_view(),
+         name="admin_sim_data_report"),
 
     # --- License lock screen (menüsüz; middleware buraya yönlendirir) ---
     path("license-expired/", views.LicenseExpiredView.as_view(), name="license_expired"),
@@ -198,6 +200,7 @@ urlpatterns = [
     path("api/sim/send-host-changed/", api_views.sim_send_host_changed,
          name="api_sim_send_host_changed"),
     path("api/sim/service-call/", api_views.sim_service_call, name="api_sim_service_call"),
+    path("api/sim/data-report/", api_views.sim_data_report, name="api_sim_data_report"),
 
     # --- AJAX API (Numune Senaryosu) ---
     path("api/scenario/list/", api_views.scenario_list, name="api_scenario_list"),

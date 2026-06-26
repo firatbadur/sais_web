@@ -3294,3 +3294,57 @@ msgstr "The response appears here once you call the service."
 
 msgid "Başlangıç ve bitiş tarihi gerekli."
 msgstr "Start and end date required."
+
+msgid "Dinamik Veri Raporu"
+msgstr "Dynamic Data Report"
+
+msgid "Önceki Gün"
+msgstr "Previous Day"
+
+msgid "Sonraki Gün"
+msgstr "Next Day"
+
+msgid "Getir"
+msgstr "Fetch"
+
+msgid "Bakanlıktan yeniden çek"
+msgstr "Re-fetch from Ministry"
+
+msgid "Görünüm"
+msgstr "View"
+
+msgid "Doğrulanmış (N)"
+msgstr "Validated (N)"
+
+msgid "Sadece sorunlu satırlar"
+msgstr "Only problematic rows"
+
+msgid "Toplam Kayıt"
+msgstr "Total Records"
+
+msgid "Geçerli Satır"
+msgstr "Valid Rows"
+
+msgid "Sorunlu Satır"
+msgstr "Problematic Rows"
+
+msgid "Doluluk"
+msgstr "Fill Rate"
+
+msgid "Durum Kodları"
+msgstr "Status Codes"
+
+msgid "Dinamik veri raporu için önce bir kabin kaydı (SIM ID + erişim bilgileri) ekleyin."
+msgstr "To use the dynamic data report, first add a cabinet record (SIM ID + access credentials)."
+
+msgid "Yükleniyor…"
+msgstr "Loading…"
+
+msgid "Bu güne ait veri bulunamadı."
+msgstr "No data found for this day."
+
+msgid "Sütunlar"
+msgstr "Columns"
+
+msgid "Ara"
+msgstr "Search"

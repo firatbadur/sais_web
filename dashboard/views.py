@@ -2137,6 +2137,33 @@ class SimServicesView(OperatorRequiredMixin, TemplateView):
         return ctx
 
 
+class SimDataReportView(OperatorRequiredMixin, TemplateView):
+    """Yönetici/Operatör → SIM Ayarları → Dinamik Veri Raporu.
+
+    Bakanlık'a gönderilen dakikalık veriyi gün-bazlı görüntüler: kullanıcı bir
+    gün seçer (varsayılan bugün), ``GetDataByBetweenTwoDate`` ile o günün
+    verileri + status'ları tablo olarak gelir. Parametreler sütun sütün; ham +
+    doğrulama (``_N``) sonucu ayrı görünür. SİM'e **sürekli** sorgu atılmaz —
+    yalnız kullanıcı gün değiştirince tek istek gider (frontend cache'ler).
+    """
+    template_name = "dashboard/admin_pages/sim_data_report.html"
+
+    def get_context_data(self, **kwargs):
+        from django.utils import timezone
+
+        from sais_domain.models import SaisCabinet
+
+        from .api_views import SIM_DATA_STATUS_CODES
+
+        ctx = super().get_context_data(**kwargs)
+        ctx["cabinets"] = (
+            SaisCabinet.objects.select_related("station").order_by("created_at")
+        )
+        ctx["status_codes"] = SIM_DATA_STATUS_CODES
+        ctx["today"] = timezone.localdate().isoformat()
+        return ctx
+
+
 # ---------------------------------------------------------------------------
 # Doküman Yönetimi
 # ---------------------------------------------------------------------------

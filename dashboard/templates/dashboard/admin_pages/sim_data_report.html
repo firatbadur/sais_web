@@ -1,0 +1,493 @@
+{% extends "dashboard/base.html" %}
+{% load i18n static %}
+
+{% block title %}{% trans "Dinamik Veri Raporu" %}{% endblock %}
+{% block page_title %}{% trans "Dinamik Veri Raporu" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .sim-day-nav .btn { min-width: 42px; }
+    .sim-day-label { font-weight: 700; font-size: 1.05rem; min-width: 160px; text-align: center; }
+    #rep-table { font-size: .84rem; }
+    #rep-table th { white-space: nowrap; font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; }
+    #rep-table td { white-space: nowrap; }
+    .cell-val { font-weight: 600; }
+    .cell-bad .cell-val { color: var(--bs-danger); }
+    .cell-ok  .cell-val { color: var(--bs-gray-800); }
+    .cell-op  .cell-val { color: var(--bs-info); }
+    .cell-status { font-size: .64rem; font-weight: 600; }
+    .stat-pill { border-radius: .65rem; padding: .55rem .9rem; background: var(--bs-gray-100); }
+    .stat-pill .v { font-size: 1.25rem; font-weight: 700; line-height: 1; }
+    .stat-pill .l { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--bs-gray-500); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    [data-bs-theme="dark"] .stat-pill { background: var(--bs-gray-200); }
+    #rep-content { opacity: 0; }
+    body.page-ready #rep-content { opacity: 1; transition: opacity .18s ease-in-out; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+{{ status_codes|json_script:"sim-status-codes" }}
+
+{% if cabinets %}
+<div id="rep-content">
+
+{# ----------------------------------------------------------------- Filtreler #}
+<div class="card card-flush mb-5">
+    <div class="card-body py-4">
+        <div class="row g-4 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fs-8 text-muted mb-1 required">{% trans "Kabin" %}</label>
+                <select class="form-select form-select-sm" id="rep-cabinet" data-control="select2"
+                        data-placeholder="{% trans 'Kabin seçin' %}">
+                    <option></option>
+                    {% for cab in cabinets %}
+                    <option value="{{ cab.pk }}" data-device-id="{{ cab.device_id }}">
+                        {{ cab.station.name }} — {{ cab.device_id }} ({{ cab.name }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fs-8 text-muted mb-1">{% trans "Gün" %}</label>
+                <div class="d-flex align-items-center gap-2 sim-day-nav">
+                    <button type="button" class="btn btn-sm btn-light-primary" id="btn-prev-day"
+                            title="{% trans 'Önceki Gün' %}"><i class="ki-outline ki-left fs-4 m-0"></i></button>
+                    <input type="date" class="form-control form-control-sm" id="rep-date"
+                           value="{{ today }}" max="{{ today }}">
+                    <button type="button" class="btn btn-sm btn-light-primary" id="btn-next-day"
+                            title="{% trans 'Sonraki Gün' %}"><i class="ki-outline ki-right fs-4 m-0"></i></button>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fs-8 text-muted mb-1">{% trans "Periyot" %}</label>
+                <select class="form-select form-select-sm" id="rep-period">
+                    <option value="1" selected>{% trans "1 Dakika" %}</option>
+                    <option value="2">{% trans "5 Dakika" %}</option>
+                    <option value="4">{% trans "30 Dakika" %}</option>
+                    <option value="8">{% trans "Saatlik" %}</option>
+                    <option value="16">{% trans "Günlük" %}</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-primary flex-grow-1" id="btn-fetch">
+                    <i class="ki-outline ki-magnifier fs-5"></i>{% trans "Getir" %}
+                </button>
+                <button type="button" class="btn btn-sm btn-light-primary" id="btn-refresh"
+                        title="{% trans 'Bakanlıktan yeniden çek' %}"><i class="ki-outline ki-arrows-circle fs-4 m-0"></i></button>
+            </div>
+        </div>
+
+        <div class="separator my-4"></div>
+
+        <div class="row g-4 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fs-8 text-muted mb-1">{% trans "Görünüm" %}</label>
+                <div class="btn-group w-100" role="group" id="view-toggle">
+                    <input type="radio" class="btn-check" name="rep-view" id="view-raw" value="raw" checked>
+                    <label class="btn btn-sm btn-light-primary" for="view-raw">{% trans "Ham" %}</label>
+                    <input type="radio" class="btn-check" name="rep-view" id="view-n" value="n">
+                    <label class="btn btn-sm btn-light-primary" for="view-n">{% trans "Doğrulanmış (N)" %}</label>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fs-8 text-muted mb-1">{% trans "Status Filtresi" %}</label>
+                <select class="form-select form-select-sm" id="rep-status-filter" multiple
+                        data-control="select2" data-placeholder="{% trans 'Tümü' %}">
+                    {% for s in status_codes %}
+                    <option value="{{ s.code }}">{{ s.code }} — {{ s.desc }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-check form-switch form-check-custom form-check-solid mt-6">
+                    <input class="form-check-input" type="checkbox" id="rep-only-invalid">
+                    <span class="form-check-label fs-7 fw-semibold">{% trans "Sadece sorunlu satırlar" %}</span>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ----------------------------------------------------------------- İstatistik #}
+<div class="row g-3 mb-5" id="rep-stats">
+    <div class="col-6 col-md-3"><div class="stat-pill"><div class="v" id="st-total">—</div><div class="l">{% trans "Toplam Kayıt" %}</div></div></div>
+    <div class="col-6 col-md-3"><div class="stat-pill"><div class="v text-success" id="st-valid">—</div><div class="l">{% trans "Geçerli Satır" %}</div></div></div>
+    <div class="col-6 col-md-3"><div class="stat-pill"><div class="v text-danger" id="st-bad">—</div><div class="l">{% trans "Sorunlu Satır" %}</div></div></div>
+    <div class="col-6 col-md-3"><div class="stat-pill"><div class="v text-primary" id="st-fill">—</div><div class="l">{% trans "Doluluk" %}</div></div></div>
+</div>
+
+{# ----------------------------------------------------------------- Sonuç #}
+<div class="card card-flush">
+    <div class="card-header min-h-50px">
+        <h3 class="card-title fs-5 fw-bold">
+            <i class="ki-outline ki-data fs-3 text-primary me-2"></i>
+            <span class="sim-day-label" id="rep-day-title">—</span>
+        </h3>
+        <div class="card-toolbar">
+            <span id="rep-status-badge" class="badge d-none me-2"></span>
+        </div>
+    </div>
+    <div class="card-body pt-2">
+        <div class="sim-req-url text-muted fs-8 mb-3 d-none" id="rep-req-url" style="font-family:var(--bs-font-monospace);word-break:break-all;"></div>
+        <div id="rep-table-wrap">
+            <div class="text-muted text-center py-10" id="rep-placeholder">
+                <span class="spinner-border spinner-border-sm me-2"></span>{% trans "Yükleniyor…" %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ----------------------------------------------------------------- Legend #}
+<div class="card card-flush mt-5">
+    <div class="card-header min-h-45px collapsible cursor-pointer" data-bs-toggle="collapse" data-bs-target="#legend-body">
+        <h3 class="card-title fs-6 fw-bold">
+            <i class="ki-outline ki-information fs-3 text-primary me-2"></i>{% trans "Durum Kodları" %}
+        </h3>
+    </div>
+    <div id="legend-body" class="collapse">
+        <div class="card-body pt-2">
+            <div class="row g-2">
+                {% for s in status_codes %}
+                <div class="col-md-4 col-lg-3 d-flex align-items-center gap-2">
+                    <span class="legend-dot {% if s.valid %}bg-success{% else %}bg-danger{% endif %}"></span>
+                    <span class="fs-8"><span class="fw-bold">{{ s.code }}</span> — {{ s.desc }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>{# /rep-content #}
+{% else %}
+<div class="card card-flush">
+    <div class="card-body text-center py-15">
+        <i class="ki-outline ki-information-5 fs-3x text-muted mb-4 d-block"></i>
+        <div class="fs-5 fw-bold text-gray-800 mb-2">{% trans "Tanımlı SAIS kabini yok" %}</div>
+        <div class="text-muted mb-5">
+            {% trans "Dinamik veri raporu için önce bir kabin kaydı (SIM ID + erişim bilgileri) ekleyin." %}
+        </div>
+        <a href="{% url 'dashboard:admin_sim_settings' %}" class="btn btn-primary">
+            <i class="ki-outline ki-plus fs-4"></i>{% trans "Kabin Ayarları" %}
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    "use strict";
+    if (!{{ cabinets|yesno:"true,false" }}) return;
+
+    const URL_REPORT = "{% url 'dashboard:api_sim_data_report' %}";
+    const TODAY = "{{ today }}";
+    const I18N = {
+        selectCabinet: "{% trans 'Önce bir kabin seçin.' %}",
+        loading: "{% trans 'Yükleniyor…' %}",
+        empty: "{% trans 'Bu güne ait veri bulunamadı.' %}",
+        error: "{% trans 'Sorgu başarısız.' %}",
+        time: "{% trans 'Saat' %}",
+        records: "{% trans 'kayıt' %}",
+        copy: "{% trans 'Kopyala' %}", csv: "CSV", excel: "Excel", print: "{% trans 'Yazdır' %}",
+        colvis: "{% trans 'Sütunlar' %}", search: "{% trans 'Ara' %}", all: "{% trans 'Hepsi' %}",
+    };
+
+    // Status haritası: code -> {name, desc, valid}
+    const STATUS = {};
+    (JSON.parse(document.getElementById('sim-status-codes').textContent) || []).forEach(function (s) {
+        STATUS[s.code] = s;
+    });
+    // Operasyonel (geçerli ama özel) kodlar — mavi vurgulu.
+    const OP_CODES = { 15: 1, 23: 1, 24: 1, 31: 1 };
+
+    function csrf() {
+        const el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
+    }
+    function postJSON(url, body) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+            body: JSON.stringify(body || {}),
+        }).then(function (r) { return r.json().catch(function () { return { ok: false, error: 'HTTP ' + r.status }; }); });
+    }
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    const cabSel = document.getElementById('rep-cabinet');
+    const dateEl = document.getElementById('rep-date');
+    const periodEl = document.getElementById('rep-period');
+    const onlyInvalidEl = document.getElementById('rep-only-invalid');
+    const statusFilterEl = document.getElementById('rep-status-filter');
+    const badgeEl = document.getElementById('rep-status-badge');
+    const reqUrlEl = document.getElementById('rep-req-url');
+
+    function cabinetId() { return cabSel ? cabSel.value : ''; }
+    function viewMode() {
+        const r = document.querySelector('input[name=rep-view]:checked');
+        return r ? r.value : 'raw';
+    }
+    function selectedStatuses() {
+        return Array.prototype.map.call(statusFilterEl.selectedOptions, function (o) { return parseInt(o.value, 10); });
+    }
+
+    // ------------------------------------------------------------- Cache + state
+    const cache = {};   // key "cab|date|period" -> {parameters, rows, count, request_url}
+    let currentData = null;
+    let dt = null;
+
+    function cacheKey(date) { return cabinetId() + '|' + date + '|' + periodEl.value; }
+
+    function setBadge(type, text) {
+        badgeEl.className = 'badge badge-light-' + type + ' me-2';
+        badgeEl.textContent = text;
+        badgeEl.classList.remove('d-none');
+    }
+
+    function fmtTitle(date) {
+        const p = date.split('-');
+        return p.length === 3 ? (p[2] + '.' + p[1] + '.' + p[0]) : date;
+    }
+
+    // ------------------------------------------------------------- Hücre render
+    function fmtNum(v) {
+        if (v === null || v === undefined || v === -9999) return null;
+        if (typeof v === 'number') return (Math.round(v * 1000) / 1000).toString();
+        return String(v);
+    }
+    function cellHtml(row, paramKey) {
+        const vKey = viewMode() === 'n' ? (paramKey + '_N') : paramKey;
+        const sKey = vKey + '_Status';
+        const raw = row[vKey];
+        const code = row[sKey];
+        const st = STATUS[code] || { name: '?', desc: 'Bilinmeyen (' + code + ')', valid: false };
+        const num = fmtNum(raw);
+        let cls = st.valid ? (OP_CODES[code] ? 'cell-op' : 'cell-ok') : 'cell-bad';
+        const order = (raw === -9999 || raw == null) ? -1e15 : (typeof raw === 'number' ? raw : 0);
+        const valDisp = (num === null) ? '—' : esc(num);
+        let badge = '';
+        if (code !== 1) {
+            const bc = st.valid ? (OP_CODES[code] ? 'info' : 'success') : 'danger';
+            badge = '<div class="cell-status text-' + bc + '" title="' + esc(st.desc) + ' (kod ' + code + ')">'
+                  + esc(st.name) + '</div>';
+        }
+        return { html: '<div class="' + cls + '"><span class="cell-val">' + valDisp + '</span>' + badge + '</div>', order: order };
+    }
+
+    function rowStatuses(row) {
+        // mevcut görünümdeki tüm parametre status kodları
+        const mode = viewMode();
+        return currentData.parameters.map(function (p) {
+            const sKey = (mode === 'n' ? (p.key + '_N') : p.key) + '_Status';
+            return row[sKey];
+        });
+    }
+    function rowIsBad(row) {
+        return rowStatuses(row).some(function (c) {
+            const st = STATUS[c];
+            return !st || !st.valid;
+        });
+    }
+
+    // ------------------------------------------------------------- Tablo render
+    function buildTable() {
+        const wrap = document.getElementById('rep-table-wrap');
+        const params = currentData.parameters;
+        let rows = currentData.rows.slice();
+
+        // Filtre: sadece sorunlu
+        if (onlyInvalidEl.checked) rows = rows.filter(rowIsBad);
+        // Filtre: status seçimi
+        const sel = selectedStatuses();
+        if (sel.length) {
+            rows = rows.filter(function (r) {
+                return rowStatuses(r).some(function (c) { return sel.indexOf(c) !== -1; });
+            });
+        }
+
+        // Header
+        let thead = '<tr><th>' + esc(I18N.time) + '</th>';
+        params.forEach(function (p) {
+            const unit = p.unit && p.unit !== '--' ? (' <span class="text-muted">(' + esc(p.unit) + ')</span>') : '';
+            thead += '<th>' + esc(p.label) + unit + '</th>';
+        });
+        thead += '</tr>';
+
+        // Body
+        let tbody = '';
+        rows.forEach(function (r) {
+            const rt = (r.ReadTime || '').replace('T', ' ');
+            const hm = rt.length >= 16 ? rt.slice(11, 16) : rt;
+            const tOrder = rt.slice(11, 19) || rt;
+            tbody += '<tr><td data-order="' + esc(tOrder) + '" class="fw-bold">' + esc(hm) + '</td>';
+            params.forEach(function (p) {
+                const c = cellHtml(r, p.key);
+                tbody += '<td data-order="' + c.order + '">' + c.html + '</td>';
+            });
+            tbody += '</tr>';
+        });
+
+        wrap.innerHTML = '<table id="rep-table" class="table table-row-bordered table-row-gray-300 align-middle gs-2 gy-2 w-100">'
+            + '<thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
+
+        if (dt) { try { dt.destroy(); } catch (e) {} dt = null; }
+        if (window.jQuery && jQuery.fn.DataTable) {
+            dt = jQuery('#rep-table').DataTable({
+                order: [[0, 'desc']],
+                pageLength: 25,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, I18N.all]],
+                dom: "<'row align-items-center mb-3'<'col-sm-6'B><'col-sm-6 text-end'f>>" +
+                     "<'table-responsive't><'row align-items-center mt-3'<'col-sm-5'i><'col-sm-7'p>>",
+                buttons: [
+                    { extend: 'copyHtml5', text: '<i class="ki-outline ki-copy fs-6"></i>' + I18N.copy, className: 'btn btn-sm btn-light-primary' },
+                    { extend: 'csvHtml5', text: '<i class="ki-outline ki-file-down fs-6"></i>' + I18N.csv, className: 'btn btn-sm btn-light-primary' },
+                    { extend: 'excelHtml5', text: '<i class="ki-outline ki-file-down fs-6"></i>' + I18N.excel, className: 'btn btn-sm btn-light-success' },
+                    { extend: 'print', text: '<i class="ki-outline ki-printer fs-6"></i>' + I18N.print, className: 'btn btn-sm btn-light-info' },
+                    { extend: 'colvis', text: '<i class="ki-outline ki-eye fs-6"></i>' + I18N.colvis, className: 'btn btn-sm btn-light' },
+                ],
+                language: {
+                    search: '', searchPlaceholder: I18N.search,
+                    lengthMenu: '_MENU_',
+                    info: '_START_–_END_ / _TOTAL_',
+                    infoEmpty: '0 ' + I18N.records, infoFiltered: '',
+                    zeroRecords: I18N.empty, emptyTable: I18N.empty,
+                    paginate: { first: '«', previous: '‹', next: '›', last: '»' },
+                },
+            });
+        }
+        updateStats(rows);
+    }
+
+    function updateStats(visibleRows) {
+        const total = currentData.rows.length;
+        let bad = 0;
+        currentData.rows.forEach(function (r) { if (rowIsBad(r)) bad++; });
+        const valid = total - bad;
+        document.getElementById('st-total').textContent = total;
+        document.getElementById('st-valid').textContent = valid;
+        document.getElementById('st-bad').textContent = bad;
+        // Doluluk: periyot 1 -> 1440 dk/gün
+        const per = parseInt(periodEl.value, 10) || 1;
+        const expectedMap = { 1: 1440, 2: 288, 4: 48, 8: 24, 16: 1 };
+        const expected = expectedMap[per] || total;
+        const pct = expected ? Math.min(100, Math.round(total / expected * 100)) : 0;
+        document.getElementById('st-fill').textContent = pct + '%';
+    }
+
+    function renderCurrent() {
+        if (!currentData) return;
+        buildTable();
+    }
+
+    // ------------------------------------------------------------- Veri yükle
+    function showLoading() {
+        document.getElementById('rep-table-wrap').innerHTML =
+            '<div class="text-muted text-center py-10"><span class="spinner-border spinner-border-sm me-2"></span>' + esc(I18N.loading) + '</div>';
+    }
+
+    function loadDay(date, force) {
+        const cab = cabinetId();
+        document.getElementById('rep-day-title').textContent = fmtTitle(date);
+        document.getElementById('btn-next-day').disabled = (date >= TODAY);
+        if (!cab) {
+            document.getElementById('rep-table-wrap').innerHTML =
+                '<div class="alert alert-warning">' + esc(I18N.selectCabinet) + '</div>';
+            badgeEl.classList.add('d-none');
+            return;
+        }
+        const key = cacheKey(date);
+        if (!force && cache[key]) {
+            currentData = cache[key];
+            applyMeta(currentData);
+            renderCurrent();
+            return;
+        }
+        showLoading();
+        badgeEl.classList.add('d-none');
+        postJSON(URL_REPORT, { cabinet_id: cab, date: date, period: periodEl.value })
+            .then(function (d) {
+                if (!d.ok) {
+                    document.getElementById('rep-table-wrap').innerHTML =
+                        '<div class="alert alert-danger">' + esc(d.error || I18N.error) +
+                        (d.detail ? '<pre class="mt-2 mb-0" style="white-space:pre-wrap;font-size:.75rem;">' + esc(d.detail) + '</pre>' : '') +
+                        '</div>';
+                    if (d.request_url) { reqUrlEl.textContent = d.request_url; reqUrlEl.classList.remove('d-none'); }
+                    setBadge('danger', d.status_code ? ('HTTP ' + d.status_code) : 'Hata');
+                    return;
+                }
+                cache[key] = d;
+                currentData = d;
+                applyMeta(d);
+                renderCurrent();
+            })
+            .catch(function () {
+                document.getElementById('rep-table-wrap').innerHTML =
+                    '<div class="alert alert-danger">' + esc(I18N.error) + '</div>';
+            });
+    }
+
+    function applyMeta(d) {
+        if (d.request_url) { reqUrlEl.textContent = d.request_url; reqUrlEl.classList.remove('d-none'); }
+        setBadge(d.count ? 'success' : 'warning', (d.count || 0) + ' ' + I18N.records);
+    }
+
+    function shiftDay(delta) {
+        const cur = dateEl.value || TODAY;
+        const dd = new Date(cur + 'T00:00:00');
+        dd.setDate(dd.getDate() + delta);
+        const ds = dd.toISOString().slice(0, 10);
+        if (ds > TODAY) return;     // geleceğe gitme
+        dateEl.value = ds;
+        loadDay(ds, false);
+    }
+
+    // ------------------------------------------------------------- Olaylar
+    document.getElementById('btn-fetch').addEventListener('click', function () { loadDay(dateEl.value || TODAY, false); });
+    document.getElementById('btn-refresh').addEventListener('click', function () { loadDay(dateEl.value || TODAY, true); });
+    document.getElementById('btn-prev-day').addEventListener('click', function () { shiftDay(-1); });
+    document.getElementById('btn-next-day').addEventListener('click', function () { shiftDay(1); });
+    dateEl.addEventListener('change', function () { loadDay(dateEl.value || TODAY, false); });
+    periodEl.addEventListener('change', function () { loadDay(dateEl.value || TODAY, false); });
+
+    // Görünüm/filtre değişimi → SADECE yeniden render (yeni SİM isteği YOK).
+    document.querySelectorAll('input[name=rep-view]').forEach(function (r) {
+        r.addEventListener('change', renderCurrent);
+    });
+    onlyInvalidEl.addEventListener('change', renderCurrent);
+    if (window.jQuery) {
+        jQuery(statusFilterEl).on('change', renderCurrent);
+    } else {
+        statusFilterEl.addEventListener('change', renderCurrent);
+    }
+    // Kabin değişince mevcut günü (cache yoksa) çek.
+    if (window.jQuery) {
+        jQuery(cabSel).on('change', function () { loadDay(dateEl.value || TODAY, false); });
+    } else {
+        cabSel.addEventListener('change', function () { loadDay(dateEl.value || TODAY, false); });
+    }
+
+    // FOUC + açılışta otomatik TEK sorgu (bugün). Kabin tek ise otomatik seç.
+    function reveal() { requestAnimationFrame(function () { document.body.classList.add('page-ready'); }); }
+    if (document.readyState === 'complete') reveal(); else window.addEventListener('load', reveal);
+    setTimeout(reveal, 1200);
+
+    const opts = cabSel ? cabSel.options : [];
+    if (opts.length === 2) {           // boş + tek kabin
+        cabSel.value = opts[1].value;
+        if (window.jQuery) jQuery(cabSel).trigger('change.select2');
+        loadDay(TODAY, false);         // tek otomatik sorgu
+    } else {
+        document.getElementById('rep-table-wrap').innerHTML =
+            '<div class="text-muted text-center py-10">' + esc(I18N.selectCabinet) + '</div>';
+        document.getElementById('rep-day-title').textContent = fmtTitle(TODAY);
+        document.getElementById('btn-next-day').disabled = true;
+    }
+})();
+</script>
+{% endblock %}

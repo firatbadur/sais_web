@@ -3731,3 +3731,193 @@ def sim_service_call(request):
     })
 
 
+# --------------------------------------------------------------------------- #
+# SIM Ayarları: Dinamik Veri Raporu (GetDataByBetweenTwoDate — gün gün)
+# --------------------------------------------------------------------------- #
+# Bakanlık'ın iki tarih arası veri servisini gün-bazlı çağırır: kullanıcı bir
+# gün seçer (varsayılan bugün), o güne ait dakikalık veriler + status'lar tablo
+# olarak gelir. Sayfa SİM'e SÜREKLİ sorgu atmaz — yalnız kullanıcı gün değiştirince
+# (veya Getir'e basınca) tek bir GetDataByBetweenTwoDate isteği gider; frontend
+# çekilen günleri cache'ler.
+
+# Bakanlık veri durum kodları (GetDataStatusDescription çıktısı ile birebir).
+# Legend + hücre status rozetlerini decode etmek için. Bakanlık'tan canlı
+# çekmek yerine sabit tutuluyor — ekstra istek atmamak için (kodlar stabil).
+SIM_DATA_STATUS_CODES = [
+    {"code": 0, "name": "VeriYok", "desc": "Veri Yok", "valid": False},
+    {"code": 1, "name": "VeriGecerli", "desc": "Veri Geçerli", "valid": True},
+    {"code": 4, "name": "Gecersiz", "desc": "Geçersiz", "valid": False},
+    {"code": 7, "name": "KalLimitDisi", "desc": "Kalibrasyon Limit Dışı", "valid": False},
+    {"code": 8, "name": "IletisimHatasi", "desc": "İletişim Hatası", "valid": False},
+    {"code": 9, "name": "SistemKal", "desc": "Sistem Kalibrasyon", "valid": False},
+    {"code": 12, "name": "Alarm", "desc": "Alarm", "valid": False},
+    {"code": 15, "name": "Purge", "desc": "Purge", "valid": True},
+    {"code": 19, "name": "KalHatasi", "desc": "Kalibrasyon Hatası", "valid": False},
+    {"code": 21, "name": "AkisYok", "desc": "Akış ölçerde hata var", "valid": False},
+    {"code": 22, "name": "DesarjYok", "desc": "Deşarj Yok", "valid": False},
+    {"code": 23, "name": "Yikama", "desc": "Yıkama", "valid": True},
+    {"code": 24, "name": "HaftalikYikama", "desc": "Haftalık Yıkama", "valid": True},
+    {"code": 25, "name": "IstasyonBakimda", "desc": "İstasyon Bakımda", "valid": False},
+    {"code": 26, "name": "TesisBakimda", "desc": "Tesis Bakımda", "valid": False},
+    {"code": 30, "name": "Cihaz Bakımda", "desc": "Cihaz Bakımda", "valid": False},
+    {"code": 31, "name": "Debi Arızası", "desc": "Debi Arızası", "valid": True},
+    {"code": 35, "name": "Nokta1Kalibrasyon", "desc": "1. Nokta Kalibrasyonu", "valid": False},
+    {"code": 36, "name": "Nokta2Kalibrasyon", "desc": "2. Nokta Kalibrasyonu", "valid": False},
+    {"code": 39, "name": "OlcumAraligiDisinda", "desc": "Ölçüm aralığı dışında", "valid": False},
+    {"code": 200, "name": "Eksik/Geçersiz Yıkama", "desc": "Eksik veya Geçersiz Yıkama", "valid": False},
+    {"code": 201, "name": "Eksik/Geçersiz Haftalık Yıkama", "desc": "Eksik veya Geçersiz Haftalık Yıkama", "valid": False},
+    {"code": 202, "name": "Geçersiz/Eksik Aylık Kalibrasyon", "desc": "Geçersiz veya Eksik Aylık Kalibrasyon", "valid": False},
+    {"code": 203, "name": "Geçersiz Akış Hızı", "desc": "Geçersiz Akış Hızı Değeri", "valid": False},
+    {"code": 204, "name": "Geçersiz Debi", "desc": "Geçersiz Debi Değeri", "valid": False},
+    {"code": 205, "name": "Tekrar Veri", "desc": "Tekrar Veri", "valid": False},
+    {"code": 206, "name": "Geçersiz Birim", "desc": "Geçersiz Birim", "valid": False},
+]
+
+# Bakanlık parametre anahtarı → (görünen ad, birim). Bilinmeyen anahtar key adıyla
+# gösterilir. Doküman §6.1 parametre/birim tablosu ile uyumlu.
+SIM_PARAM_META = {
+    "AKM": ("AKM", "mg/l"),
+    "CozunmusOksijen": ("Çözünmüş Oksijen", "mg/l"),
+    "Debi": ("Debi", "m³/dk"),
+    "KOi": ("KOİ", "mg/l"),
+    "KOI": ("KOİ", "mg/l"),
+    "pH": ("pH", "--"),
+    "Sicaklik": ("Sıcaklık", "°C"),
+    "Iletkenlik": ("İletkenlik", "mS/cm"),
+    "AkisHizi": ("Akış Hızı", "m/sn"),
+    "HariciDebi": ("Harici Debi", "m³/dk"),
+    "DesarjDebi": ("Deşarj Debi", "m³/dk"),
+}
+
+# Veri satırındaki ölçüm-dışı (audit/meta) anahtarlar — parametre tespitinde + slim'de atlanır.
+_SIM_DATA_META_KEYS = {
+    "id", "created", "createdby", "changed", "changedby",
+    "Stationid", "StationId", "SoftwareVersion",
+}
+
+
+def _detect_sim_params(rows):
+    """Veri satırlarından temel parametre anahtarlarını sıralı tespit eder.
+
+    `{Param}` (taban) anahtarlarını döndürür; `_Status`, `_N`, `_N_Status` ve
+    meta/audit anahtarları hariç. Sıra ilk satırın anahtar sırasını korur."""
+    params = []
+    seen = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for k in row.keys():
+            if k in _SIM_DATA_META_KEYS:
+                continue
+            if k in ("ReadTime", "Period"):
+                continue
+            if k.endswith("_Status") or k.endswith("_N"):
+                continue
+            if k not in seen:
+                seen.add(k)
+                params.append(k)
+        if params:
+            break
+    return params
+
+
+def _slim_sim_row(row):
+    """Audit/meta alanlarını atıp ReadTime/Period + tüm parametre/status anahtarlarını korur."""
+    if not isinstance(row, dict):
+        return {}
+    return {k: v for k, v in row.items() if k not in _SIM_DATA_META_KEYS}
+
+
+@login_required
+def sim_data_report(request):
+    """Dinamik Veri Raporu — tek gün için Bakanlık `GetDataByBetweenTwoDate`.
+
+    POST JSON {cabinet_id, date (YYYY-MM-DD), period?}. O günün 00:00:00–23:59:59
+    aralığını sorgular; dakikalık satırlar + tespit edilen parametre listesini
+    döndürür. SİM'e yalnız bu çağrı gider (polling yok)."""
+    import json
+    from datetime import datetime
+    from urllib.parse import urlencode
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    from sais_domain.clients.exceptions import SaisAuthError, SaisResponseError
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    date_str = (data.get("date") or "").strip()
+    try:
+        day = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz tarih (YYYY-MM-DD)."}, status=400)
+    try:
+        period = int(data.get("period") or 1)
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz periyot."}, status=400)
+
+    start = f"{date_str} 00:00:00"
+    end = f"{date_str} 23:59:59"
+
+    cab, client, err = _sim_client_for(data.get("cabinet_id"))
+    if err:
+        status = 404 if cab is None else 400
+        return JsonResponse({"ok": False, "error": err}, status=status)
+
+    request_url = (
+        f"{client.base_url}/SAIS/GetDataByBetweenTwoDate?"
+        + urlencode({
+            "stationId": cab.device_id, "period": period,
+            "startDate": start, "endDate": end,
+        })
+    )
+
+    try:
+        objects = client.get_data_between(
+            period=period, start_date=start, end_date=end,
+            triggered_by=request.user,
+        )
+    except SaisAuthError as exc:
+        return JsonResponse({
+            "ok": False, "request_url": request_url,
+            "error": f"Bakanlık girişi başarısız: {exc}",
+        }, status=502)
+    except SaisResponseError as exc:
+        return JsonResponse({
+            "ok": False, "request_url": request_url,
+            "error": f"Bakanlık yanıt hatası: {exc}",
+            "detail": (exc.response_text or "")[:4000],
+            "status_code": exc.status_code,
+        }, status=502)
+    except Exception as exc:  # noqa: BLE001
+        return JsonResponse({
+            "ok": False, "request_url": request_url,
+            "error": f"Sorgu başarısız: {exc}",
+        }, status=502)
+    finally:
+        client.close()
+
+    rows = objects if isinstance(objects, list) else []
+    param_keys = _detect_sim_params(rows)
+    parameters = []
+    for key in param_keys:
+        label, unit = SIM_PARAM_META.get(key, (key, ""))
+        parameters.append({"key": key, "label": label, "unit": unit})
+
+    return JsonResponse({
+        "ok": True,
+        "date": date_str,
+        "period": period,
+        "count": len(rows),
+        "parameters": parameters,
+        "rows": [_slim_sim_row(r) for r in rows],
+        "request_url": request_url,
+    })
+
+
