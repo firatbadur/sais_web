@@ -12,11 +12,10 @@
     #rep-table th { white-space: nowrap; font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; }
     #rep-table td { white-space: nowrap; }
     .cell-val { font-weight: 600; color: var(--bs-gray-800); }
-    .cell-val.is-empty { color: var(--bs-gray-500); }
-    .status-dot {
-        display: inline-block; width: 9px; height: 9px; border-radius: 50%;
-        margin-left: 6px; vertical-align: middle; cursor: help;
-    }
+    /* Sorunlu (geçersiz) hücre — arka planı boyanır; geçerli hücrelere dokunulmaz */
+    #rep-table td.sim-bad { background-color: rgba(241, 65, 108, .13); cursor: help; }
+    #rep-table td.sim-bad .cell-val { color: var(--bs-danger); }
+    [data-bs-theme="dark"] #rep-table td.sim-bad { background-color: rgba(241, 65, 108, .22); }
     .stat-pill { border-radius: .65rem; padding: .6rem .9rem; background: var(--bs-gray-100); height: 100%; }
     .stat-pill .v { font-size: 1.45rem; font-weight: 700; line-height: 1.1; }
     .stat-pill .l { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--bs-gray-500); }
@@ -231,7 +230,6 @@
 
     const STATUS = {};
     (JSON.parse(document.getElementById('sim-status-codes').textContent) || []).forEach(function (s) { STATUS[s.code] = s; });
-    const OP_CODES = { 15: 1, 23: 1, 24: 1, 31: 1 };   // geçerli ama operasyonel → mavi
 
     function csrf() { const el = document.querySelector('[name=csrfmiddlewaretoken]'); return el ? el.value : ''; }
     function postJSON(url, body) {
@@ -281,13 +279,12 @@
         const code = row[vKey + '_Status'];
         const st = STATUS[code] || { name: '?', desc: 'Bilinmeyen', valid: false };
         const num = fmtNum(raw);
-        const dotColor = st.valid ? (OP_CODES[code] ? 'bg-info' : 'bg-success') : 'bg-danger';
         const order = (raw === -9999 || raw == null) ? -1e15 : (typeof raw === 'number' ? raw : 0);
-        const valCls = (num === null) ? 'cell-val is-empty' : 'cell-val';
         const valDisp = (num === null) ? '—' : esc(num);
-        const tip = esc(st.name + ' — ' + st.desc + ' (kod ' + code + ')');
-        const dot = '<span class="status-dot ' + dotColor + '" title="' + tip + '"></span>';
-        return { html: '<span class="' + valCls + '">' + valDisp + '</span>' + dot, order: order };
+        const html = '<span class="cell-val">' + valDisp + '</span>';
+        // Geçerli veri → sade (hiçbir işaret yok). Sorunlu → hücre boyanır + tooltip.
+        if (st.valid) return { html: html, order: order, bad: false, tip: '' };
+        return { html: html, order: order, bad: true, tip: esc(st.name + ' — ' + st.desc + ' (kod ' + code + ')') };
     }
 
     function rowIsBad(row) {
@@ -320,7 +317,11 @@
             const dp = dPart.split('-');
             const disp = (dp.length === 3 ? (dp[2] + '.' + dp[1] + '.' + dp[0]) : dPart) + ' ' + tPart;
             tbody += '<tr><td data-order="' + esc(rt) + '" class="fw-bold">' + esc(disp) + '</td>';
-            params.forEach(function (p) { const c = cellHtml(r, p.key); tbody += '<td data-order="' + c.order + '">' + c.html + '</td>'; });
+            params.forEach(function (p) {
+                const c = cellHtml(r, p.key);
+                const attrs = c.bad ? (' class="sim-bad" title="' + c.tip + '"') : '';
+                tbody += '<td data-order="' + c.order + '"' + attrs + '>' + c.html + '</td>';
+            });
             tbody += '</tr>';
         });
 
