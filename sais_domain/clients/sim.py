@@ -434,6 +434,125 @@ class SaisSimClient(BaseHttpClient):
         )
         return self._unwrap(response)
 
+    # -------------------------------------------------- Sorgu (read-only) uçları
+    # Bakanlık → kabin yönünden değil, kabin → Bakanlık yönündeki bilgi/sorgu
+    # servisleri. Hepsi POST; çoğu body/param almaz, parametreli olanlar query
+    # string ile gider (Bakanlık spec'i ile birebir).
+
+    def get_server_datetime(self, *, triggered_by: Any = None) -> Any:
+        """``/SAIS/GetServerDateTime`` — Bakanlık merkez sunucu saati.
+
+        Body/param yok; ``objects`` düz bir ISO tarih-saat string'idir
+        (örn. ``"2020-10-17T10:18:12"``)."""
+        response = self._post_authenticated(
+            "/SAIS/GetServerDateTime",
+            triggered_by=triggered_by,
+            log_component=f"{self.component}.get_server_datetime",
+        )
+        return self._unwrap(response, allow_non_dict=True)
+
+    def get_channel_information(self, *, triggered_by: Any = None) -> Any:
+        """``/SAIS/GetChannelInformationByStationId`` — Bakanlık'taki kanal listesi."""
+        params = {"stationId": self.cabinet.device_id}
+        response = self._post_authenticated(
+            "/SAIS/GetChannelInformationByStationId",
+            params=params,
+            triggered_by=triggered_by,
+            log_component=f"{self.component}.get_channel_information",
+        )
+        return self._unwrap(response)
+
+    def get_parameters(self, *, triggered_by: Any = None) -> Any:
+        """``/SAIS/GetParameters`` — geçerli parametre adları + tipleri (body yok)."""
+        response = self._post_authenticated(
+            "/SAIS/GetParameters",
+            triggered_by=triggered_by,
+            log_component=f"{self.component}.get_parameters",
+        )
+        return self._unwrap(response)
+
+    def get_units(self, *, triggered_by: Any = None) -> Any:
+        """``/SAIS/GetUnits`` — birim kimlik + adları (body yok)."""
+        response = self._post_authenticated(
+            "/SAIS/GetUnits",
+            triggered_by=triggered_by,
+            log_component=f"{self.component}.get_units",
+        )
+        return self._unwrap(response)
+
+    def get_data_between(
+        self,
+        *,
+        period: int = 1,
+        start_date: str,
+        end_date: str,
+        triggered_by: Any = None,
+    ) -> Any:
+        """``/SAIS/GetDataByBetweenTwoDate`` — iki tarih arası gönderilmiş veri.
+
+        ``start_date`` / ``end_date`` Bakanlık'ın beklediği
+        ``"YYYY-MM-DD HH:MM:SS"`` (boşluklu) formatında string olmalı."""
+        params = {
+            "stationId": self.cabinet.device_id,
+            "period": period,
+            "startDate": start_date,
+            "endDate": end_date,
+        }
+        response = self._post_authenticated(
+            "/SAIS/GetDataByBetweenTwoDate",
+            params=params,
+            timeout=self.MISSING_DATES_TIMEOUT,
+            triggered_by=triggered_by,
+            log_component=f"{self.component}.get_data_between",
+        )
+        return self._unwrap(response)
+
+    def get_data_status_descriptions(self, *, triggered_by: Any = None) -> Any:
+        """``/SAIS/GetDataStatusDescription`` — geçerli veri durum kodları.
+
+        Bu uç istisnai olarak yanıtı **düz dizi** döndürür (``{result, message,
+        objects}`` zarfı yok); ``_unwrap`` dict olmayan gövdeyi olduğu gibi geri
+        verir."""
+        response = self._post_authenticated(
+            "/SAIS/GetDataStatusDescription",
+            triggered_by=triggered_by,
+            log_component=f"{self.component}.get_data_status_descriptions",
+        )
+        return self._unwrap(response, allow_non_dict=True)
+
+    def get_diagnostic_types(self, *, triggered_by: Any = None) -> Any:
+        """``/SAIS/GetDiagnosticTypes`` — diagnostik tip kodları (body yok)."""
+        response = self._post_authenticated(
+            "/SAIS/GetDiagnosticTypes",
+            triggered_by=triggered_by,
+            log_component=f"{self.component}.get_diagnostic_types",
+        )
+        return self._unwrap(response)
+
+    def get_calibration(
+        self,
+        *,
+        start_date: str,
+        end_date: str,
+        triggered_by: Any = None,
+    ) -> Any:
+        """``/SAIS/GetCalibration`` — iki tarih arası merkeze gönderilen kalibrasyonlar.
+
+        ``start_date`` / ``end_date`` ``"YYYY-MM-DD"`` veya
+        ``"YYYY-MM-DD HH:MM:SS"`` string olabilir (Bakanlık her ikisini kabul eder)."""
+        params = {
+            "stationId": self.cabinet.device_id,
+            "startDate": start_date,
+            "endDate": end_date,
+        }
+        response = self._post_authenticated(
+            "/SAIS/GetCalibration",
+            params=params,
+            triggered_by=triggered_by,
+            log_component=f"{self.component}.get_calibration",
+        )
+        return self._unwrap(response)
+
     def send_host_changed(
         self,
         *,

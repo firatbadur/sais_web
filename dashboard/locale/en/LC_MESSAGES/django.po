@@ -3213,3 +3213,63 @@ msgstr "Added by the System Administrator — cannot be edited."
 
 msgid "Korumalı"
 msgstr "Protected"
+
+msgid "Bakanlık Servisleri"
+msgstr "Ministry Services"
+
+msgid "Kabin Ayarları"
+msgstr "Cabinet Settings"
+
+msgid "Çalıştır"
+msgstr "Run"
+
+msgid "Tümünü Sorgula"
+msgstr "Query All"
+
+msgid "Bakanlık Canlı Sorgu Konsolu"
+msgstr "Ministry Live Query Console"
+
+msgid "sorgu servisi — kabin seçip çalıştırın."
+msgstr "query services — select a cabinet and run."
+
+msgid "Tanımlı SAIS kabini yok"
+msgstr "No SAIS cabinet defined"
+
+msgid "Bakanlık servislerini sorgulamak için önce bir kabin kaydı (SIM ID + erişim bilgileri) ekleyin."
+msgstr "To query Ministry services, first add a cabinet record (SIM ID + access credentials)."
+
+msgid "1 Dakika"
+msgstr "1 Minute"
+
+msgid "5 Dakika"
+msgstr "5 Minutes"
+
+msgid "30 Dakika"
+msgstr "30 Minutes"
+
+msgid "Aylık"
+msgstr "Monthly"
+
+msgid "İstek"
+msgstr "Request"
+
+msgid "Henüz çalıştırılmadı."
+msgstr "Not run yet."
+
+msgid "Sorgu başarısız."
+msgstr "Query failed."
+
+msgid "Başlangıç ve bitiş tarihi gerekli — atlandı."
+msgstr "Start and end date required — skipped."
+
+msgid "Ham JSON"
+msgstr "Raw JSON"
+
+msgid "Tablo"
+msgstr "Table"
+
+msgid "kayıt"
+msgstr "records"
+
+msgid "Kopyalandı"
+msgstr "Copied"

@@ -81,9 +81,15 @@ MENU = [
     },
     {
         "label": _("SIM Ayarları"),
-        "url_name": "dashboard:admin_sim_settings",
+        "menu_key": "sim",
         "icon": "ki-cloud-change",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR),
+        "children": [
+            {"label": _("Kabin Ayarları"), "url_name": "dashboard:admin_sim_settings",
+             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
+            {"label": _("Bakanlık Servisleri"), "url_name": "dashboard:admin_sim_services",
+             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
+        ],
     },
     {
         "label": _("Takvim Hatırlatıcı"),

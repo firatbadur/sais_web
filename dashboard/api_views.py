@@ -3564,3 +3564,170 @@ def sim_send_host_changed(request):
     })
 
 
+# --------------------------------------------------------------------------- #
+# SIM Ayarları: Bakanlık sorgu servisleri konsolu (read-only canlı sorgular)
+# --------------------------------------------------------------------------- #
+# "Bakanlık Servisleri" sayfası bu katalogtaki sorgu uçlarını tek tek (veya
+# topluca) çağırır; her çağrı `SaisSimClient` üzerinden ApiLog(direction='out')
+# olarak otomatik loglanır. Yalnız okuma/sorgu uçları — veri/numune gönderimi
+# (SendData / SampleRequest*) bilinçli olarak DIŞARIDA tutuldu (yanlışlıkla
+# Bakanlık'a kayıt düşmesin diye).
+#
+# Her giriş:
+#   key      — frontend ile eşleşen kısa anahtar
+#   label    — kullanıcıya görünen Türkçe ad
+#   endpoint — Bakanlık servis adı (request URL'i + rozet için)
+#   method   — SaisSimClient metot adı
+#   params   — kullanıcının doldurması gereken parametreler (period/date)
+#   group    — sol komut rayında gruplama
+SIM_SERVICE_CATALOG = [
+    {"key": "server_datetime", "label": "Sunucu Saati",
+     "endpoint": "GetServerDateTime", "method": "get_server_datetime",
+     "params": [], "group": "Zaman / İstasyon", "icon": "ki-time"},
+    {"key": "station_information", "label": "İstasyon Bilgileri",
+     "endpoint": "GetStationInformation", "method": "get_station_information",
+     "params": [], "group": "Zaman / İstasyon", "icon": "ki-cloud"},
+    {"key": "channel_information", "label": "Kanal Bilgileri",
+     "endpoint": "GetChannelInformationByStationId", "method": "get_channel_information",
+     "params": [], "group": "Zaman / İstasyon", "icon": "ki-abstract-26"},
+    {"key": "parameters", "label": "Parametre Bilgileri",
+     "endpoint": "GetParameters", "method": "get_parameters",
+     "params": [], "group": "Genel Bilgiler", "icon": "ki-data"},
+    {"key": "units", "label": "Birim Bilgileri",
+     "endpoint": "GetUnits", "method": "get_units",
+     "params": [], "group": "Genel Bilgiler", "icon": "ki-ruler"},
+    {"key": "data_status", "label": "Veri Durum Kodları",
+     "endpoint": "GetDataStatusDescription", "method": "get_data_status_descriptions",
+     "params": [], "group": "Genel Bilgiler", "icon": "ki-shield-search"},
+    {"key": "diagnostic_types", "label": "Diagnostik Tipleri",
+     "endpoint": "GetDiagnosticTypes", "method": "get_diagnostic_types",
+     "params": [], "group": "Genel Bilgiler", "icon": "ki-pulse"},
+    {"key": "last_data", "label": "Son Gönderilen Veri",
+     "endpoint": "GetLastData", "method": "get_last_data",
+     "params": ["period"], "group": "Veri Sorguları", "icon": "ki-some-files"},
+    {"key": "missing_dates", "label": "Eksik Veri Tarihleri",
+     "endpoint": "GetMissingDates", "method": "get_missing_dates",
+     "params": [], "group": "Veri Sorguları", "icon": "ki-calendar-remove"},
+    {"key": "data_between", "label": "İki Tarih Arası Veri",
+     "endpoint": "GetDataByBetweenTwoDate", "method": "get_data_between",
+     "params": ["period", "start_date", "end_date"], "group": "Veri Sorguları",
+     "icon": "ki-calendar-search"},
+    {"key": "calibration", "label": "Kalibrasyon Kayıtları",
+     "endpoint": "GetCalibration", "method": "get_calibration",
+     "params": ["start_date", "end_date"], "group": "Veri Sorguları",
+     "icon": "ki-test-tubes"},
+]
+
+_SIM_SERVICE_BY_KEY = {s["key"]: s for s in SIM_SERVICE_CATALOG}
+
+
+def _sim_service_request_url(client, spec, kwargs):
+    """Çağrının temsilî request URL'ini üretir (sayfada gösterim için).
+
+    Gerçek istek POST + query-string ile gider; burada okunabilir bir özet
+    üretilir (örn. ``.../SAIS/GetLastData?stationId=...&period=1``)."""
+    from urllib.parse import urlencode
+
+    base = f"{client.base_url}/SAIS/{spec['endpoint']}"
+    query = {}
+    # stationId hemen her parametreli uçta var; period/date varsa ekle.
+    if spec["endpoint"] not in ("GetServerDateTime", "GetParameters",
+                                "GetUnits", "GetDataStatusDescription",
+                                "GetDiagnosticTypes"):
+        query["stationId"] = client.cabinet.device_id
+    if "period" in kwargs:
+        query["period"] = kwargs["period"]
+    if "start_date" in kwargs:
+        query["startDate"] = kwargs["start_date"]
+    if "end_date" in kwargs:
+        query["endDate"] = kwargs["end_date"]
+    return f"{base}?{urlencode(query)}" if query else base
+
+
+@login_required
+def sim_service_call(request):
+    """Bakanlık sorgu servisi canlı çağrısı. POST JSON:
+    {cabinet_id, service, period?, start_date?, end_date?}.
+
+    `service` SIM_SERVICE_CATALOG anahtarı olmalı. Yanıt: çağrının `objects`'i +
+    temsilî request URL + endpoint adı. Hata durumunda Bakanlık'ın ham yanıtı
+    (`detail`) ve HTTP kodu döner (sim_station_query ile aynı sözleşme)."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    from sais_domain.clients.exceptions import SaisAuthError, SaisResponseError
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    spec = _SIM_SERVICE_BY_KEY.get((data.get("service") or "").strip())
+    if spec is None:
+        return JsonResponse({"ok": False, "error": "Bilinmeyen servis."}, status=400)
+
+    # Parametreleri topla + doğrula.
+    kwargs = {}
+    if "period" in spec["params"]:
+        try:
+            kwargs["period"] = int(data.get("period") or 1)
+        except (ValueError, TypeError):
+            return JsonResponse({"ok": False, "error": "Geçersiz periyot."}, status=400)
+    for date_key in ("start_date", "end_date"):
+        if date_key in spec["params"]:
+            val = (data.get(date_key) or "").strip()
+            if not val:
+                return JsonResponse(
+                    {"ok": False, "error": "Başlangıç ve bitiş tarihi zorunlu."},
+                    status=400,
+                )
+            kwargs[date_key] = val
+
+    cab, client, err = _sim_client_for(data.get("cabinet_id"))
+    if err:
+        status = 404 if cab is None else 400
+        return JsonResponse({"ok": False, "error": err}, status=status)
+
+    request_url = _sim_service_request_url(client, spec, kwargs)
+    try:
+        method = getattr(client, spec["method"])
+        objects = method(triggered_by=request.user, **kwargs)
+    except SaisAuthError as exc:
+        return JsonResponse({
+            "ok": False, "service": spec["key"], "endpoint": spec["endpoint"],
+            "request_url": request_url,
+            "error": f"Bakanlık girişi başarısız: {exc}",
+        }, status=502)
+    except SaisResponseError as exc:
+        return JsonResponse({
+            "ok": False, "service": spec["key"], "endpoint": spec["endpoint"],
+            "request_url": request_url,
+            "error": f"Bakanlık yanıt hatası: {exc}",
+            "detail": (exc.response_text or "")[:4000],
+            "status_code": exc.status_code,
+        }, status=502)
+    except Exception as exc:  # noqa: BLE001 — ağ/timeout vb.
+        return JsonResponse({
+            "ok": False, "service": spec["key"], "endpoint": spec["endpoint"],
+            "request_url": request_url,
+            "error": f"Sorgu başarısız: {exc}",
+        }, status=502)
+    finally:
+        client.close()
+
+    return JsonResponse({
+        "ok": True,
+        "service": spec["key"],
+        "label": spec["label"],
+        "endpoint": spec["endpoint"],
+        "request_url": request_url,
+        "device_id": cab.device_id,
+        "objects": objects,
+    })
+
+

@@ -2092,6 +2092,38 @@ class SimSettingsView(OperatorRequiredMixin, TemplateView):
         return ctx
 
 
+class SimServicesView(OperatorRequiredMixin, TemplateView):
+    """Yönetici/Operatör → SIM Ayarları → Bakanlık Servisleri.
+
+    Bakanlık SAIS sorgu (read-only) servislerini canlı çağıran konsol: kabin
+    seç, servisi (veya tümünü) çalıştır, dönen yanıtı tablo/kart olarak gör.
+    Servis kataloğu ``api_views.SIM_SERVICE_CATALOG``'ta tek kaynak; her çağrı
+    ``SaisSimClient`` üzerinden ``api/sim/service-call/`` AJAX ucuna gider ve
+    ApiLog'a düşer. Veri/numune **gönderim** uçları bilinçli olarak yok —
+    yalnız sorgu.
+    """
+    template_name = "dashboard/admin_pages/sim_services.html"
+
+    def get_context_data(self, **kwargs):
+        from collections import OrderedDict
+
+        from sais_domain.models import SaisCabinet
+
+        from .api_views import SIM_SERVICE_CATALOG
+
+        ctx = super().get_context_data(**kwargs)
+        ctx["cabinets"] = (
+            SaisCabinet.objects.select_related("station").order_by("created_at")
+        )
+        # Katalogu sol komut rayı için gruplara böl (sıra korunur).
+        groups = OrderedDict()
+        for svc in SIM_SERVICE_CATALOG:
+            groups.setdefault(svc["group"], []).append(svc)
+        ctx["service_groups"] = groups
+        ctx["service_count"] = len(SIM_SERVICE_CATALOG)
+        return ctx
+
+
 # ---------------------------------------------------------------------------
 # Doküman Yönetimi
 # ---------------------------------------------------------------------------

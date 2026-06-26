@@ -1,0 +1,485 @@
+{% extends "dashboard/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Bakanlık Servisleri" %}{% endblock %}
+{% block page_title %}{% trans "Bakanlık Servisleri" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Sol komut rayı — sticky */
+    .sim-rail { position: sticky; top: 90px; }
+    .sim-cmd-group-title {
+        font-size: .7rem; font-weight: 700; letter-spacing: .08em;
+        text-transform: uppercase; color: var(--bs-gray-500);
+        padding: .25rem .25rem .35rem;
+    }
+    .sim-cmd-btn {
+        display: flex; align-items: center; gap: .6rem; width: 100%;
+        padding: .55rem .75rem; margin-bottom: .35rem; border: 0;
+        border-radius: .65rem; background: var(--bs-gray-100);
+        color: var(--bs-gray-800); font-weight: 600; font-size: .9rem;
+        text-align: left; transition: all .15s ease;
+    }
+    .sim-cmd-btn:hover { background: var(--bs-primary); color: #fff; }
+    .sim-cmd-btn:hover .sim-cmd-ep { color: rgba(255,255,255,.75); }
+    .sim-cmd-btn .ki-outline { font-size: 1.15rem; }
+    .sim-cmd-ep { font-size: .68rem; color: var(--bs-gray-500); font-weight: 500; }
+    .sim-cmd-flex { display: flex; flex-direction: column; line-height: 1.1; }
+
+    /* Servis kartı */
+    .sim-card { scroll-margin-top: 90px; }
+    .sim-card.is-running { border-color: var(--bs-primary); }
+    .sim-ep-code {
+        font-family: var(--bs-font-monospace); font-size: .72rem;
+        background: var(--bs-gray-100); color: var(--bs-gray-700);
+        padding: .15rem .5rem; border-radius: .4rem;
+    }
+    .sim-req-url {
+        font-family: var(--bs-font-monospace); font-size: .72rem;
+        white-space: nowrap; overflow-x: auto; color: var(--bs-gray-700);
+        background: var(--bs-gray-100); border-radius: .5rem; padding: .5rem .75rem;
+    }
+    .sim-result-table { font-size: .82rem; }
+    .sim-result-table th {
+        position: sticky; top: 0; background: var(--bs-gray-100);
+        font-size: .68rem; text-transform: uppercase; letter-spacing: .04em;
+        color: var(--bs-gray-600); white-space: nowrap;
+    }
+    .sim-result-scroll { max-height: 420px; overflow: auto; }
+    .sim-kv-key { color: var(--bs-gray-600); font-weight: 600; width: 38%; }
+    .sim-json {
+        background: var(--bs-gray-100); border-radius: .5rem; padding: .85rem;
+        font-size: .76rem; white-space: pre-wrap; word-break: break-word;
+        max-height: 420px; overflow: auto; margin: 0;
+    }
+    .sim-scalar {
+        font-size: 1.5rem; font-weight: 700; color: var(--bs-primary);
+        font-family: var(--bs-font-monospace);
+    }
+    [data-bs-theme="dark"] .sim-cmd-btn { background: var(--bs-gray-200); }
+    [data-bs-theme="dark"] .sim-ep-code,
+    [data-bs-theme="dark"] .sim-req-url,
+    [data-bs-theme="dark"] .sim-json { background: var(--bs-gray-200); }
+</style>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+
+{# ----------------------------------------------------------------- Başlık #}
+<div class="card card-flush mb-5">
+    <div class="card-body d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-4 py-4">
+        <div class="d-flex align-items-center gap-3">
+            <span class="symbol symbol-45px">
+                <span class="symbol-label bg-light-primary">
+                    <i class="ki-outline ki-cloud-download fs-1 text-primary"></i>
+                </span>
+            </span>
+            <div>
+                <div class="fs-4 fw-bold text-gray-900">{% trans "Bakanlık Canlı Sorgu Konsolu" %}</div>
+                <div class="text-muted fs-7">
+                    {{ service_count }} {% trans "sorgu servisi — kabin seçip çalıştırın." %}
+                </div>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <div style="min-width: 280px;">
+                <select class="form-select form-select-sm" id="sim-cabinet" data-control="select2"
+                        data-placeholder="{% trans 'Kabin seçin' %}">
+                    <option></option>
+                    {% for cab in cabinets %}
+                    <option value="{{ cab.pk }}">{{ cab.station.name }} — {{ cab.device_id }} ({{ cab.name }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="button" class="btn btn-sm btn-primary" id="btn-run-all">
+                <i class="ki-outline ki-rocket fs-4"></i>{% trans "Tümünü Sorgula" %}
+            </button>
+        </div>
+    </div>
+</div>
+
+{% if cabinets %}
+<div class="row g-5">
+    {# --------------------------------------------------------- Sol komut rayı #}
+    <div class="col-xl-3">
+        <div class="sim-rail">
+            <div class="card card-flush">
+                <div class="card-body p-4">
+                    <div class="sim-cmd-group-title mb-2">{% trans "Komutlar" %}</div>
+                    {% for group_name, services in service_groups.items %}
+                    <div class="sim-cmd-group-title mt-3">{{ group_name }}</div>
+                    {% for svc in services %}
+                    <button type="button" class="sim-cmd-btn" data-jump="{{ svc.key }}">
+                        <i class="ki-outline {{ svc.icon }}"></i>
+                        <span class="sim-cmd-flex">
+                            <span>{{ svc.label }}</span>
+                            <span class="sim-cmd-ep">{{ svc.endpoint }}</span>
+                        </span>
+                    </button>
+                    {% endfor %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ----------------------------------------------------- Sağ: servis kartları #}
+    <div class="col-xl-9">
+        {% for group_name, services in service_groups.items %}
+        <div class="d-flex align-items-center mb-3 mt-2">
+            <span class="fs-5 fw-bold text-gray-800">{{ group_name }}</span>
+            <span class="flex-grow-1 border-bottom border-gray-300 ms-3"></span>
+        </div>
+
+        {% for svc in services %}
+        <div class="card card-flush mb-5 sim-card" id="card-{{ svc.key }}"
+             data-service="{{ svc.key }}">
+            <div class="card-header flex-nowrap min-h-50px py-3">
+                <div class="card-title flex-grow-1 d-flex align-items-center gap-2 flex-wrap">
+                    <i class="ki-outline {{ svc.icon }} fs-3 text-primary"></i>
+                    <span class="fw-bold fs-6 text-gray-900">{{ svc.label }}</span>
+                    <span class="sim-ep-code">{{ svc.endpoint }}</span>
+                    <span class="sim-status badge d-none"></span>
+                </div>
+                <div class="card-toolbar">
+                    <button type="button" class="btn btn-sm btn-light-primary btn-run-service">
+                        <i class="ki-outline ki-play fs-5"></i>{% trans "Çalıştır" %}
+                    </button>
+                </div>
+            </div>
+            <div class="card-body pt-2">
+                {# Parametreler #}
+                {% if svc.params %}
+                <div class="row g-3 mb-4 sim-params">
+                    {% if "period" in svc.params %}
+                    <div class="col-md-3">
+                        <label class="form-label fs-8 text-muted mb-1">{% trans "Periyot" %}</label>
+                        <select class="form-select form-select-sm sim-p-period">
+                            <option value="1">{% trans "1 Dakika" %}</option>
+                            <option value="2">{% trans "5 Dakika" %}</option>
+                            <option value="4">{% trans "30 Dakika" %}</option>
+                            <option value="8">{% trans "Saatlik" %}</option>
+                            <option value="16">{% trans "Günlük" %}</option>
+                            <option value="32">{% trans "Aylık" %}</option>
+                        </select>
+                    </div>
+                    {% endif %}
+                    {% if "start_date" in svc.params %}
+                    <div class="col-md-4">
+                        <label class="form-label fs-8 text-muted mb-1">{% trans "Başlangıç" %}</label>
+                        <input type="datetime-local" class="form-control form-control-sm sim-p-start">
+                    </div>
+                    {% endif %}
+                    {% if "end_date" in svc.params %}
+                    <div class="col-md-4">
+                        <label class="form-label fs-8 text-muted mb-1">{% trans "Bitiş" %}</label>
+                        <input type="datetime-local" class="form-control form-control-sm sim-p-end">
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {# Request URL (çalıştırınca dolar) #}
+                <div class="sim-req-url-wrap d-none mb-3">
+                    <div class="text-muted fs-8 mb-1">{% trans "İstek" %}</div>
+                    <div class="sim-req-url"></div>
+                </div>
+
+                {# Sonuç #}
+                <div class="sim-result text-muted fs-7 py-4 text-center">
+                    {% trans "Henüz çalıştırılmadı." %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="card card-flush">
+    <div class="card-body text-center py-15">
+        <i class="ki-outline ki-information-5 fs-3x text-muted mb-4 d-block"></i>
+        <div class="fs-5 fw-bold text-gray-800 mb-2">{% trans "Tanımlı SAIS kabini yok" %}</div>
+        <div class="text-muted mb-5">
+            {% trans "Bakanlık servislerini sorgulamak için önce bir kabin kaydı (SIM ID + erişim bilgileri) ekleyin." %}
+        </div>
+        <a href="{% url 'dashboard:admin_sim_settings' %}" class="btn btn-primary">
+            <i class="ki-outline ki-plus fs-4"></i>{% trans "Kabin Ayarları" %}
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    "use strict";
+
+    const URL_CALL = "{% url 'dashboard:api_sim_service_call' %}";
+    const I18N = {
+        selectCabinet: "{% trans 'Önce bir kabin seçin.' %}",
+        running: "{% trans 'Sorgulanıyor...' %}",
+        success: "{% trans 'Başarılı' %}",
+        empty: "{% trans 'Kayıt bulunamadı.' %}",
+        genericError: "{% trans 'Sorgu başarısız.' %}",
+        needDates: "{% trans 'Başlangıç ve bitiş tarihi gerekli — atlandı.' %}",
+        rawJson: "{% trans 'Ham JSON' %}",
+        table: "{% trans 'Tablo' %}",
+        rows: "{% trans 'kayıt' %}",
+        copy: "{% trans 'Kopyala' %}",
+        copied: "{% trans 'Kopyalandı' %}",
+        notRun: "{% trans 'Henüz çalıştırılmadı.' %}",
+    };
+
+    function csrf() {
+        const el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
+    }
+    function postJSON(url, body) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+            body: JSON.stringify(body || {}),
+        }).then(function (r) {
+            return r.json().catch(function () { return { ok: false, error: 'HTTP ' + r.status }; });
+        });
+    }
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+    function cabinetId() {
+        const el = document.getElementById('sim-cabinet');
+        return el ? el.value : '';
+    }
+
+    // datetime-local "2020-10-18T10:22" -> Bakanlık "2020-10-18 10:22:00"
+    function fmtDate(v) {
+        if (!v) return '';
+        v = v.replace('T', ' ');
+        // saniye yoksa ekle
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(v)) v += ':00';
+        return v;
+    }
+
+    // --------------------------------------------------------------- Renderer
+    function isPlainObject(x) {
+        return x !== null && typeof x === 'object' && !Array.isArray(x);
+    }
+    function renderScalar(v) {
+        if (v === null || v === undefined) return '<span class="text-muted">—</span>';
+        if (typeof v === 'boolean') {
+            return v ? '<span class="badge badge-light-success">true</span>'
+                     : '<span class="badge badge-light-danger">false</span>';
+        }
+        return esc(v);
+    }
+    function renderArrayOfObjects(arr) {
+        // Sütun birleşimi (ilk eleman sırası + ekstralar)
+        const cols = [];
+        const seen = {};
+        arr.forEach(function (row) {
+            Object.keys(row).forEach(function (k) {
+                if (!seen[k]) { seen[k] = true; cols.push(k); }
+            });
+        });
+        let h = '<div class="sim-result-scroll"><table class="table table-row-bordered table-row-gray-300 align-middle sim-result-table mb-0">';
+        h += '<thead><tr>';
+        cols.forEach(function (c) { h += '<th>' + esc(c) + '</th>'; });
+        h += '</tr></thead><tbody>';
+        arr.forEach(function (row) {
+            h += '<tr>';
+            cols.forEach(function (c) {
+                let cell = row[c];
+                if (cell !== null && typeof cell === 'object') cell = JSON.stringify(cell);
+                h += '<td>' + renderScalar(cell) + '</td>';
+            });
+            h += '</tr>';
+        });
+        h += '</tbody></table></div>';
+        return h;
+    }
+    function renderArray(arr) {
+        if (!arr.length) return '<div class="text-muted py-3 text-center">' + esc(I18N.empty) + '</div>';
+        if (arr.every(isPlainObject)) return renderArrayOfObjects(arr);
+        // skalar dizi -> badge listesi
+        let h = '<div class="d-flex flex-wrap gap-2">';
+        arr.forEach(function (v) {
+            if (v !== null && typeof v === 'object') v = JSON.stringify(v);
+            h += '<span class="badge badge-light-primary">' + esc(v) + '</span>';
+        });
+        h += '</div>';
+        return h;
+    }
+    function renderObject(obj) {
+        let h = '<div class="table-responsive"><table class="table table-row-bordered align-middle gs-2 gy-2 mb-0">';
+        h += '<tbody>';
+        Object.keys(obj).forEach(function (k) {
+            const v = obj[k];
+            let cellHtml;
+            if (Array.isArray(v)) {
+                cellHtml = renderArray(v);
+            } else if (isPlainObject(v)) {
+                cellHtml = renderObject(v);
+            } else {
+                cellHtml = '<span class="fw-bold">' + renderScalar(v) + '</span>';
+            }
+            h += '<tr><td class="sim-kv-key">' + esc(k) + '</td><td>' + cellHtml + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+        return h;
+    }
+    function renderValue(v) {
+        if (Array.isArray(v)) return renderArray(v);
+        if (isPlainObject(v)) return renderObject(v);
+        // skalar (string/sayı) -> büyük değer
+        if (v === null || v === undefined) {
+            return '<div class="text-muted py-3 text-center">' + esc(I18N.empty) + '</div>';
+        }
+        return '<div class="py-2"><span class="sim-scalar">' + esc(v) + '</span></div>';
+    }
+
+    function setStatus(card, type, text) {
+        const el = card.querySelector('.sim-status');
+        el.className = 'sim-status badge badge-light-' + type;
+        el.textContent = text;
+        el.classList.remove('d-none');
+    }
+
+    function rowCount(objects) {
+        if (Array.isArray(objects)) return objects.length;
+        if (isPlainObject(objects) && Array.isArray(objects.MissingDates)) return objects.MissingDates.length;
+        return null;
+    }
+
+    function renderResult(card, d) {
+        const box = card.querySelector('.sim-result');
+        // İstek URL'i
+        const urlWrap = card.querySelector('.sim-req-url-wrap');
+        if (d.request_url) {
+            urlWrap.classList.remove('d-none');
+            urlWrap.querySelector('.sim-req-url').textContent = d.request_url;
+        }
+        if (!d.ok) {
+            setStatus(card, 'danger', d.status_code ? ('HTTP ' + d.status_code) : 'Hata');
+            let html = '<div class="alert alert-danger mb-0 text-start">' + esc(d.error || I18N.genericError) + '</div>';
+            if (d.detail) {
+                html += '<pre class="sim-json mt-3 text-start">' + esc(d.detail) + '</pre>';
+            }
+            box.className = 'sim-result';
+            box.innerHTML = html;
+            return;
+        }
+        const n = rowCount(d.objects);
+        setStatus(card, 'success', n != null ? (n + ' ' + I18N.rows) : I18N.success);
+
+        const jsonText = JSON.stringify(d.objects, null, 2);
+        const uid = 'json-' + d.service + '-' + Math.random().toString(36).slice(2, 7);
+        let html = '';
+        // Sekme: Tablo / JSON
+        html += '<ul class="nav nav-pills nav-pills-sm mb-3">';
+        html += '<li class="nav-item"><a class="nav-link active py-1 px-3 fs-8" data-bs-toggle="tab" href="#' + uid + '-t">' + esc(I18N.table) + '</a></li>';
+        html += '<li class="nav-item"><a class="nav-link py-1 px-3 fs-8" data-bs-toggle="tab" href="#' + uid + '-j">' + esc(I18N.rawJson) + '</a></li>';
+        html += '</ul>';
+        html += '<div class="tab-content">';
+        html += '<div class="tab-pane fade show active" id="' + uid + '-t">' + renderValue(d.objects) + '</div>';
+        html += '<div class="tab-pane fade" id="' + uid + '-j"><pre class="sim-json text-start">' + esc(jsonText) + '</pre></div>';
+        html += '</div>';
+        box.className = 'sim-result text-start';
+        box.innerHTML = html;
+    }
+
+    // ------------------------------------------------------------- Çalıştırma
+    function collectParams(card) {
+        const p = {};
+        const period = card.querySelector('.sim-p-period');
+        const start = card.querySelector('.sim-p-start');
+        const end = card.querySelector('.sim-p-end');
+        if (period) p.period = period.value;
+        if (start) p.start_date = fmtDate(start.value);
+        if (end) p.end_date = fmtDate(end.value);
+        return { params: p, needsDates: !!(start || end), hasDates: !!(start && end && start.value && end.value) };
+    }
+
+    function runService(card) {
+        const cab = cabinetId();
+        if (!cab) { window.toastWarn ? toastWarn(I18N.selectCabinet) : alert(I18N.selectCabinet); return Promise.resolve(); }
+        const svc = card.dataset.service;
+        const collected = collectParams(card);
+        const body = Object.assign({ cabinet_id: cab, service: svc }, collected.params);
+
+        const box = card.querySelector('.sim-result');
+        const btn = card.querySelector('.btn-run-service');
+        card.classList.add('is-running');
+        if (btn) btn.disabled = true;
+        const st = card.querySelector('.sim-status');
+        st.className = 'sim-status badge badge-light-primary';
+        st.textContent = I18N.running;
+        st.classList.remove('d-none');
+        box.className = 'sim-result text-muted fs-7 py-4 text-center';
+        box.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + esc(I18N.running);
+
+        return postJSON(URL_CALL, body)
+            .then(function (d) { renderResult(card, d); })
+            .catch(function () {
+                setStatus(card, 'danger', 'Hata');
+                box.className = 'sim-result';
+                box.innerHTML = '<div class="alert alert-danger mb-0">' + esc(I18N.genericError) + '</div>';
+            })
+            .finally(function () {
+                card.classList.remove('is-running');
+                if (btn) btn.disabled = false;
+            });
+    }
+
+    // Buton bağla
+    document.querySelectorAll('.sim-card').forEach(function (card) {
+        const btn = card.querySelector('.btn-run-service');
+        if (btn) btn.addEventListener('click', function () { runService(card); });
+    });
+
+    // Sol ray -> ilgili karta kaydır + çalıştır
+    document.querySelectorAll('[data-jump]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            const card = document.getElementById('card-' + b.dataset.jump);
+            if (!card) return;
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            runService(card);
+        });
+    });
+
+    // Tümünü sorgula — sırayla; tarih gereken ama dolu olmayanları atla.
+    const btnAll = document.getElementById('btn-run-all');
+    if (btnAll) {
+        btnAll.addEventListener('click', function () {
+            const cab = cabinetId();
+            if (!cab) { alert(I18N.selectCabinet); return; }
+            const cards = Array.prototype.slice.call(document.querySelectorAll('.sim-card'));
+            btnAll.disabled = true;
+            btnAll.setAttribute('data-kt-indicator', 'on');
+            let chain = Promise.resolve();
+            cards.forEach(function (card) {
+                const collected = collectParams(card);
+                if (collected.needsDates && !collected.hasDates) {
+                    // Tarih gereken servis — atla, kullanıcı elle çalıştırsın.
+                    setStatus(card, 'warning', '—');
+                    const box = card.querySelector('.sim-result');
+                    box.className = 'sim-result text-muted fs-8 py-3 text-center';
+                    box.textContent = I18N.needDates;
+                    return;
+                }
+                chain = chain.then(function () { return runService(card); });
+            });
+            chain.finally(function () {
+                btnAll.disabled = false;
+                btnAll.removeAttribute('data-kt-indicator');
+            });
+        });
+    }
+})();
+</script>
+{% endblock %}
