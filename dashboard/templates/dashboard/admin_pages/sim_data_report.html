@@ -12,10 +12,20 @@
     #rep-table th { white-space: nowrap; font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; }
     #rep-table td { white-space: nowrap; }
     .cell-val { font-weight: 600; color: var(--bs-gray-800); }
-    /* Sorunlu (geçersiz) hücre — arka planı boyanır; geçerli hücrelere dokunulmaz */
-    #rep-table td.sim-bad { background-color: rgba(241, 65, 108, .13); cursor: help; }
-    #rep-table td.sim-bad .cell-val { color: var(--bs-danger); }
-    [data-bs-theme="dark"] #rep-table td.sim-bad { background-color: rgba(241, 65, 108, .22); }
+    /* Status boyama: yalnız "VeriGeçerli" (kod 1) sade kalır; diğer TÜM statüler
+       (yıkama/purge/bakım + geçersizler) boyanır. Metin rengi arka plana göre
+       kontrastlı (açık temada koyu, koyu temada açık).
+         sim-bad → geçersiz/sorunlu (kırmızı)
+         sim-op  → geçerli ama operasyonel: yıkama, purge, bakım vb. (amber) */
+    #rep-table td.sim-bad { background-color: rgba(241, 65, 108, .14); cursor: help; }
+    #rep-table td.sim-bad .cell-val { color: #a01138; }
+    [data-bs-theme="dark"] #rep-table td.sim-bad { background-color: rgba(241, 65, 108, .26); }
+    [data-bs-theme="dark"] #rep-table td.sim-bad .cell-val { color: #ff9bb1; }
+
+    #rep-table td.sim-op { background-color: rgba(255, 199, 0, .20); cursor: help; }
+    #rep-table td.sim-op .cell-val { color: #7a5d00; }
+    [data-bs-theme="dark"] #rep-table td.sim-op { background-color: rgba(255, 199, 0, .20); }
+    [data-bs-theme="dark"] #rep-table td.sim-op .cell-val { color: #ffd75e; }
     .stat-pill { border-radius: .65rem; padding: .6rem .9rem; background: var(--bs-gray-100); height: 100%; }
     .stat-pill .v { font-size: 1.45rem; font-weight: 700; line-height: 1.1; }
     .stat-pill .l { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--bs-gray-500); }
@@ -282,9 +292,11 @@
         const order = (raw === -9999 || raw == null) ? -1e15 : (typeof raw === 'number' ? raw : 0);
         const valDisp = (num === null) ? '—' : esc(num);
         const html = '<span class="cell-val">' + valDisp + '</span>';
-        // Geçerli veri → sade (hiçbir işaret yok). Sorunlu → hücre boyanır + tooltip.
-        if (st.valid) return { html: html, order: order, bad: false, tip: '' };
-        return { html: html, order: order, bad: true, tip: esc(st.name + ' — ' + st.desc + ' (kod ' + code + ')') };
+        // Yalnız "VeriGeçerli" (kod 1) sade kalır. Diğer tüm statüler boyanır:
+        //   geçerli-ama-operasyonel (yıkama/purge/bakım) → sim-op, geçersiz → sim-bad.
+        if (code === 1) return { html: html, order: order, cls: '', tip: '' };
+        const cls = st.valid ? 'sim-op' : 'sim-bad';
+        return { html: html, order: order, cls: cls, tip: esc(st.name + ' — ' + st.desc + ' (kod ' + code + ')') };
     }
 
     function rowIsBad(row) {
@@ -319,7 +331,7 @@
             tbody += '<tr><td data-order="' + esc(rt) + '" class="fw-bold">' + esc(disp) + '</td>';
             params.forEach(function (p) {
                 const c = cellHtml(r, p.key);
-                const attrs = c.bad ? (' class="sim-bad" title="' + c.tip + '"') : '';
+                const attrs = c.cls ? (' class="' + c.cls + '" title="' + c.tip + '"') : '';
                 tbody += '<td data-order="' + c.order + '"' + attrs + '>' + c.html + '</td>';
             });
             tbody += '</tr>';
