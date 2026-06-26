@@ -209,6 +209,7 @@
 
     const URL_REPORT = "{% url 'dashboard:api_sim_data_report' %}";
     const URL_VALID = "{% url 'dashboard:api_sim_valid_ratio' %}";
+    const URL_RECOMPUTE = "{% url 'dashboard:api_sim_valid_recompute' %}";
     const TODAY = "{{ today }}";
     const THRESH = 80;   // aylık geçerli veri eşiği (%)
     const MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
@@ -431,11 +432,18 @@
     const stMonthSub = document.getElementById('st-month-sub');
     const stMonthLabel = document.getElementById('st-month-label');
     function applyMonth(d) {
-        if (!d || !d.ok) { stMonth.textContent = '—'; stMonth.className = 'v'; stMonthSub.textContent = d && d.error ? '{% trans "hata" %}' : ''; return; }
+        if (!d || !d.ok) { stMonth.textContent = '—'; stMonth.className = 'v'; stMonthSub.textContent = ''; return; }
+        if (!d.computed || d.valid_pct === null) {
+            stMonth.textContent = '—'; stMonth.className = 'v text-muted';
+            stMonthSub.innerHTML = '<span class="text-muted">{% trans "Hesaplanmadı — yenile" %}</span>';
+            return;
+        }
         stMonth.textContent = d.valid_pct + '%';
         stMonth.className = 'v ' + (d.valid_pct >= THRESH ? 'text-success' : 'text-danger');
-        stMonthSub.textContent = '%' + THRESH + ' {% trans "eşik" %} · ' + d.received + '/' + d.expected;
+        stMonthSub.textContent = '%' + THRESH + ' {% trans "eşik" %} · ' + d.days_covered + ' {% trans "gün" %}'
+            + (d.updated_at ? (' · ' + d.updated_at) : '');
     }
+    // Aylık kart Bakanlık'a GİTMEZ — günde 1 çalışan job'un DB'ye yazdığını okur.
     function loadMonth(month, force) {
         const cab = cabinetId(); if (!cab) return;
         stMonthLabel.textContent = monthName(month);
@@ -445,6 +453,27 @@
         postJSON(URL_VALID, { cabinet_id: cab, month: month })
             .then(function (d) { monthCache[key] = d; applyMonth(d); })
             .catch(function () { stMonth.textContent = '—'; });
+    }
+    // "Yeniden hesapla": job'u tetikle (SİM sorgusu worker'da), sonra DB'yi periyodik oku.
+    function recomputeMonth() {
+        const cab = cabinetId(); if (!cab) return;
+        const month = monthOf(dateEl.value || TODAY);
+        const key = cab + '|' + month;
+        delete monthCache[key];
+        stMonth.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; stMonth.className = 'v';
+        stMonthSub.textContent = '{% trans "hesaplanıyor…" %}';
+        postJSON(URL_RECOMPUTE, { cabinet_id: cab, month: month }).then(function () {
+            let tries = 0;
+            (function poll() {
+                tries++;
+                postJSON(URL_VALID, { cabinet_id: cab, month: month }).then(function (d) {
+                    monthCache[key] = d;
+                    if (d.ok && d.computed) { applyMonth(d); }
+                    else if (tries < 12) { setTimeout(poll, 5000); }
+                    else { applyMonth(d); }
+                });
+            })();
+        });
     }
 
     function shiftDay(delta) {
@@ -460,7 +489,7 @@
     document.getElementById('btn-refresh').addEventListener('click', function () { loadDay(dateEl.value || TODAY, true); });
     document.getElementById('btn-prev-day').addEventListener('click', function () { shiftDay(-1); });
     document.getElementById('btn-next-day').addEventListener('click', function () { shiftDay(1); });
-    document.getElementById('btn-month-refresh').addEventListener('click', function () { loadMonth(monthOf(dateEl.value || TODAY), true); });
+    document.getElementById('btn-month-refresh').addEventListener('click', recomputeMonth);
     dateEl.addEventListener('change', function () { loadDay(dateEl.value || TODAY, false); });
     periodEl.addEventListener('change', function () { loadDay(dateEl.value || TODAY, false); });
 

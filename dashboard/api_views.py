@@ -3740,124 +3740,14 @@ def sim_service_call(request):
 # (veya Getir'e basınca) tek bir GetDataByBetweenTwoDate isteği gider; frontend
 # çekilen günleri cache'ler.
 
-# Bakanlık veri durum kodları (GetDataStatusDescription çıktısı ile birebir).
-# Legend + hücre status rozetlerini decode etmek için. Bakanlık'tan canlı
-# çekmek yerine sabit tutuluyor — ekstra istek atmamak için (kodlar stabil).
-SIM_DATA_STATUS_CODES = [
-    {"code": 0, "name": "VeriYok", "desc": "Veri Yok", "valid": False},
-    {"code": 1, "name": "VeriGecerli", "desc": "Veri Geçerli", "valid": True},
-    {"code": 4, "name": "Gecersiz", "desc": "Geçersiz", "valid": False},
-    {"code": 7, "name": "KalLimitDisi", "desc": "Kalibrasyon Limit Dışı", "valid": False},
-    {"code": 8, "name": "IletisimHatasi", "desc": "İletişim Hatası", "valid": False},
-    {"code": 9, "name": "SistemKal", "desc": "Sistem Kalibrasyon", "valid": False},
-    {"code": 12, "name": "Alarm", "desc": "Alarm", "valid": False},
-    {"code": 15, "name": "Purge", "desc": "Purge", "valid": True},
-    {"code": 19, "name": "KalHatasi", "desc": "Kalibrasyon Hatası", "valid": False},
-    {"code": 21, "name": "AkisYok", "desc": "Akış ölçerde hata var", "valid": False},
-    {"code": 22, "name": "DesarjYok", "desc": "Deşarj Yok", "valid": False},
-    {"code": 23, "name": "Yikama", "desc": "Yıkama", "valid": True},
-    {"code": 24, "name": "HaftalikYikama", "desc": "Haftalık Yıkama", "valid": True},
-    {"code": 25, "name": "IstasyonBakimda", "desc": "İstasyon Bakımda", "valid": False},
-    {"code": 26, "name": "TesisBakimda", "desc": "Tesis Bakımda", "valid": False},
-    {"code": 30, "name": "Cihaz Bakımda", "desc": "Cihaz Bakımda", "valid": False},
-    {"code": 31, "name": "Debi Arızası", "desc": "Debi Arızası", "valid": True},
-    {"code": 35, "name": "Nokta1Kalibrasyon", "desc": "1. Nokta Kalibrasyonu", "valid": False},
-    {"code": 36, "name": "Nokta2Kalibrasyon", "desc": "2. Nokta Kalibrasyonu", "valid": False},
-    {"code": 39, "name": "OlcumAraligiDisinda", "desc": "Ölçüm aralığı dışında", "valid": False},
-    {"code": 200, "name": "Eksik/Geçersiz Yıkama", "desc": "Eksik veya Geçersiz Yıkama", "valid": False},
-    {"code": 201, "name": "Eksik/Geçersiz Haftalık Yıkama", "desc": "Eksik veya Geçersiz Haftalık Yıkama", "valid": False},
-    {"code": 202, "name": "Geçersiz/Eksik Aylık Kalibrasyon", "desc": "Geçersiz veya Eksik Aylık Kalibrasyon", "valid": False},
-    {"code": 203, "name": "Geçersiz Akış Hızı", "desc": "Geçersiz Akış Hızı Değeri", "valid": False},
-    {"code": 204, "name": "Geçersiz Debi", "desc": "Geçersiz Debi Değeri", "valid": False},
-    {"code": 205, "name": "Tekrar Veri", "desc": "Tekrar Veri", "valid": False},
-    {"code": 206, "name": "Geçersiz Birim", "desc": "Geçersiz Birim", "valid": False},
-]
-
-# Bakanlık parametre anahtarı → (görünen ad, birim). Bilinmeyen anahtar key adıyla
-# gösterilir. Doküman §6.1 parametre/birim tablosu ile uyumlu.
-SIM_PARAM_META = {
-    "AKM": ("AKM", "mg/l"),
-    "CozunmusOksijen": ("Çözünmüş Oksijen", "mg/l"),
-    "Debi": ("Debi", "m³/dk"),
-    "KOi": ("KOİ", "mg/l"),
-    "KOI": ("KOİ", "mg/l"),
-    "pH": ("pH", "--"),
-    "Sicaklik": ("Sıcaklık", "°C"),
-    "Iletkenlik": ("İletkenlik", "mS/cm"),
-    "AkisHizi": ("Akış Hızı", "m/sn"),
-    "HariciDebi": ("Harici Debi", "m³/dk"),
-    "DesarjDebi": ("Deşarj Debi", "m³/dk"),
-}
-
-# Veri satırındaki ölçüm-dışı (audit/meta) anahtarlar — parametre tespitinde + slim'de atlanır.
-_SIM_DATA_META_KEYS = {
-    "id", "created", "createdby", "changed", "changedby",
-    "Stationid", "StationId", "SoftwareVersion",
-}
-
-
-_SIM_STATUS_BY_CODE = {s["code"]: s for s in SIM_DATA_STATUS_CODES}
-
-
-def _sim_valid_stats(rows, expected_minutes):
-    """Validasyon (``_N``) status'larına göre geçerli veri oranını hesaplar.
-
-    Her parametre için ``valid_count / expected_minutes`` oranı bulunur; genel
-    oran bunların ortalamasıdır (parametre bazlı %80 kuralına yakın bir tek
-    gösterge). Eksik dakikalar geçersiz sayılır (oranı düşürür). ``_N_Status``
-    yoksa ham ``_Status`` kullanılır."""
-    params = _detect_sim_params(rows)
-    if expected_minutes <= 0:
-        expected_minutes = max(len(rows), 1)
-    if not params:
-        return {"valid_pct": 0.0, "received": len(rows),
-                "expected": expected_minutes, "per_param": {}}
-    counts = {p: 0 for p in params}
-    for r in rows:
-        if not isinstance(r, dict):
-            continue
-        for p in params:
-            nkey = p + "_N_Status"
-            skey = nkey if nkey in r else (p + "_Status")
-            st = _SIM_STATUS_BY_CODE.get(r.get(skey))
-            if st and st["valid"]:
-                counts[p] += 1
-    per_param = {p: round(min(100.0, counts[p] / expected_minutes * 100), 1) for p in params}
-    valid_pct = round(min(100.0, sum(per_param.values()) / len(per_param)), 1)
-    return {"valid_pct": valid_pct, "received": len(rows),
-            "expected": expected_minutes, "per_param": per_param}
-
-
-def _detect_sim_params(rows):
-    """Veri satırlarından temel parametre anahtarlarını sıralı tespit eder.
-
-    `{Param}` (taban) anahtarlarını döndürür; `_Status`, `_N`, `_N_Status` ve
-    meta/audit anahtarları hariç. Sıra ilk satırın anahtar sırasını korur."""
-    params = []
-    seen = set()
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        for k in row.keys():
-            if k in _SIM_DATA_META_KEYS:
-                continue
-            if k in ("ReadTime", "Period"):
-                continue
-            if k.endswith("_Status") or k.endswith("_N"):
-                continue
-            if k not in seen:
-                seen.add(k)
-                params.append(k)
-        if params:
-            break
-    return params
-
-
-def _slim_sim_row(row):
-    """Audit/meta alanlarını atıp ReadTime/Period + tüm parametre/status anahtarlarını korur."""
-    if not isinstance(row, dict):
-        return {}
-    return {k: v for k, v in row.items() if k not in _SIM_DATA_META_KEYS}
+# Status kataloğu + parametre meta + doğrulanmış-veri sayım mantığı tek kaynak:
+# ``sais_domain.sim_report`` (job ile ortak; dashboard'a bağımlı değil).
+from sais_domain.sim_report import (  # noqa: E402
+    SIM_DATA_STATUS_CODES,
+    SIM_PARAM_META,
+    detect_params as _detect_sim_params,
+    slim_row as _slim_sim_row,
+)
 
 
 @login_required
@@ -3955,19 +3845,16 @@ def sim_data_report(request):
 
 @login_required
 def sim_valid_ratio(request):
-    """Aylık geçerli veri oranı — bir ay için tek `GetDataByBetweenTwoDate`.
+    """Aylık geçerli veri oranı — **DB'den** (canlı Bakanlık sorgusu YOK).
 
-    POST JSON {cabinet_id, month (YYYY-MM)}. Ayın başından (geçerli ay ise) şu ana
-    veya (geçmiş ay ise) ay sonuna kadar dakikalık veriyi (period=1) **tek** istekle
-    çeker, validasyon (``_N``) status'larına göre geçerli veri yüzdesini hesaplar.
-    SİM'e yalnız bu tek istek gider; frontend ay-bazlı cache'ler. SAIS kabini aylık
-    en az %80 geçerli veri sağlamalıdır — kart bu eşiğe göre renklenir."""
+    POST JSON {cabinet_id, month (YYYY-MM)}. Günde 1 kez çalışan job
+    (``sais_domain.tasks.compute_sim_valid_stats``) ayın günlerini gün gün çekip
+    ``SimValidDay``'e damgalar; bu uç o satırların toplamından geçerli veri
+    yüzdesini hesaplar. Geçerlilik yalnız doğrulanmış (``_N``) status'a dayanır.
+
+    Hiç hesaplanmamışsa ``computed=False`` döner (kullanıcı "yeniden hesapla" ile
+    job'u tetikleyebilir)."""
     import json
-    from calendar import monthrange
-    from datetime import datetime
-    from urllib.parse import urlencode
-
-    from django.utils import timezone
 
     denied = _require_operator(request)
     if denied:
@@ -3975,7 +3862,9 @@ def sim_valid_ratio(request):
     if request.method != "POST":
         return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
 
-    from sais_domain.clients.exceptions import SaisAuthError, SaisResponseError
+    from datetime import date as _date
+
+    from sais_domain.models import SaisCabinet, SimValidDay
 
     try:
         data = json.loads(request.body or "{}")
@@ -3985,66 +3874,91 @@ def sim_valid_ratio(request):
     month_str = (data.get("month") or "").strip()
     try:
         year, mon = (int(x) for x in month_str.split("-"))
-        month_start = datetime(year, mon, 1, 0, 0, 0)
+        first = _date(year, mon, 1)
     except (ValueError, TypeError):
         return JsonResponse({"ok": False, "error": "Geçersiz ay (YYYY-MM)."}, status=400)
 
-    now = timezone.localtime().replace(tzinfo=None)
-    last_day = monthrange(year, mon)[1]
-    if (year, mon) == (now.year, now.month):
-        end_dt = now.replace(second=59, microsecond=0)
-    else:
-        end_dt = datetime(year, mon, last_day, 23, 59, 59)
-    if end_dt < month_start:
-        return JsonResponse({"ok": False, "error": "Gelecek ay sorgulanamaz."}, status=400)
+    cab = SaisCabinet.objects.filter(pk=data.get("cabinet_id")).first()
+    if cab is None:
+        return JsonResponse({"ok": False, "error": "Kabin bulunamadı."}, status=404)
 
-    expected_minutes = int((end_dt - month_start).total_seconds() // 60) + 1
-    start_str = month_start.strftime("%Y-%m-%d %H:%M:%S")
-    end_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+    from calendar import monthrange
+    last = _date(year, mon, monthrange(year, mon)[1])
+    days = list(SimValidDay.objects.filter(cabinet=cab, day__gte=first, day__lte=last))
 
-    cab, client, err = _sim_client_for(data.get("cabinet_id"))
-    if err:
-        status = 404 if cab is None else 400
-        return JsonResponse({"ok": False, "error": err}, status=status)
-
-    request_url = (
-        f"{client.base_url}/SAIS/GetDataByBetweenTwoDate?"
-        + urlencode({
-            "stationId": cab.device_id, "period": 1,
-            "startDate": start_str, "endDate": end_str,
-        })
-    )
-
-    try:
-        objects = client.get_data_between(
-            period=1, start_date=start_str, end_date=end_str,
-            triggered_by=request.user,
-        )
-    except SaisAuthError as exc:
-        return JsonResponse({"ok": False, "request_url": request_url,
-                             "error": f"Bakanlık girişi başarısız: {exc}"}, status=502)
-    except SaisResponseError as exc:
+    if not days:
         return JsonResponse({
-            "ok": False, "request_url": request_url,
-            "error": f"Bakanlık yanıt hatası: {exc}",
-            "detail": (exc.response_text or "")[:2000], "status_code": exc.status_code,
-        }, status=502)
-    except Exception as exc:  # noqa: BLE001
-        return JsonResponse({"ok": False, "request_url": request_url,
-                             "error": f"Sorgu başarısız: {exc}"}, status=502)
-    finally:
-        client.close()
+            "ok": True, "month": month_str, "computed": False,
+            "valid_pct": None, "received": 0, "expected": 0,
+            "days_covered": 0, "per_param": {}, "updated_at": None,
+        })
 
-    rows = objects if isinstance(objects, list) else []
-    stats = _sim_valid_stats(rows, expected_minutes)
+    total_valid = sum(d.valid_cells() for d in days)
+    total_cells = sum(d.total_cells() for d in days)
+    total_expected = sum(d.expected for d in days)
+    total_received = sum(d.received for d in days)
+    valid_pct = round(min(100.0, total_valid / total_cells * 100), 1) if total_cells else 0.0
+
+    # Parametre bazlı oran (toplam geçerli / toplam beklenen dakika).
+    per_param_valid = {}
+    for d in days:
+        for p, c in (d.param_valid or {}).items():
+            per_param_valid[p] = per_param_valid.get(p, 0) + c
+    per_param = {
+        p: round(min(100.0, v / total_expected * 100), 1) if total_expected else 0.0
+        for p, v in per_param_valid.items()
+    }
+    last_updated = max(d.updated_at for d in days)
+
     return JsonResponse({
         "ok": True,
         "month": month_str,
-        "valid_pct": stats["valid_pct"],
-        "received": stats["received"],
-        "expected": stats["expected"],
-        "per_param": stats["per_param"],
-        "request_url": request_url,
+        "computed": True,
+        "valid_pct": valid_pct,
+        "received": total_received,
+        "expected": total_expected,
+        "days_covered": len(days),
+        "per_param": per_param,
+        "updated_at": timezone.localtime(last_updated).strftime("%d.%m.%Y %H:%M"),
     })
+
+
+@login_required
+def sim_valid_recompute(request):
+    """Aylık geçerli veri istatistiğini **yeniden hesaplat** (job'u tetikle).
+
+    POST JSON {cabinet_id, month (YYYY-MM)}. Bakanlık sorgularını (gün gün) Celery
+    worker'da yapan ``compute_sim_valid_stats`` task'ını enqueue eder; HTTP isteği
+    beklemez. Frontend sonra ``sim_valid_ratio``'yu (DB) periyodik okuyup günceller
+    — yani tarayıcı SİM'e gitmez, yalnız worker gider."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    from sais_domain.models import SaisCabinet
+    from sais_domain.tasks import compute_sim_valid_stats
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    month_str = (data.get("month") or "").strip() or None
+    cab = SaisCabinet.objects.filter(pk=data.get("cabinet_id")).first()
+    if cab is None:
+        return JsonResponse({"ok": False, "error": "Kabin bulunamadı."}, status=404)
+
+    try:
+        compute_sim_valid_stats.delay(cabinet_id=cab.id, month=month_str)
+        queued = True
+    except Exception:  # noqa: BLE001 — broker yoksa (dev) senkron çalıştır
+        compute_sim_valid_stats(cabinet_id=cab.id, month=month_str)
+        queued = False
+
+    return JsonResponse({"ok": True, "queued": queued})
 
 

@@ -56,6 +56,8 @@ CRONTAB_TASKS = [
     ("sais_domain.tasks.run_scenarios",       "*",   "*", "*", "*", "*"),
     # Bakanlık'ın eksik bildirdiği verileri yeniden gönder (GetMissingDates) — 6 saatte bir.
     ("sais_domain.tasks.resend_missing_data", "0",   "*/6", "*", "*", "*"),
+    # Geçerli veri istatistiği (günlük/aylık) — günde 1 kez, gün gün GetDataByBetweenTwoDate.
+    ("sais_domain.tasks.compute_sim_valid_stats", "30", "1", "*", "*", "*"),  # her gece 01:30
 ]
 
 # DB yedekleme — tek task (`backup_database_run`) farklı tier kwargs'ı ile.

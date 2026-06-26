@@ -23,7 +23,8 @@ from django.conf import settings
 from django.utils import timezone
 
 from .clients import EnvisoftClient, SaisClientError, SaisSimClient
-from .models import SaisCabinet, SystemSwitch
+from .models import SaisCabinet, SimValidDay, SystemSwitch
+from .sim_report import detect_params, valid_counts
 from .services import (
     build_envisoft_rows,
     build_sim_payload,
@@ -334,3 +335,122 @@ def _publish_envisoft(cabinet: SaisCabinet, readtime, *, force_status: int | Non
             "Envisoft SendData hata (cabinet=%s)", cabinet.id,
         )
         return {"sent": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+# ---------------------------------------------------------------------------
+# Geçerli veri istatistiği — günde 1 kez, gün gün (kısım kısım) hesaplama
+# ---------------------------------------------------------------------------
+# Aylık geçerli veri oranını dashboard'da göstermek için ayın tamamını tek
+# istekle çekmek yerine (31 gün ≈ 44k kayıt — ağır), bu job ayın her gününü
+# AYRI ``GetDataByBetweenTwoDate`` (period=1) ile çeker ve ``SimValidDay``'e
+# damgalar. Geçmiş günler bir kez hesaplanıp ``finalized`` edilir; yalnız bugün
+# her run'da güncellenir. Dashboard aylık kartı bu satırların DB toplamından
+# beslenir → SİM'e canlı ay-sorgusu YOK. Geçerlilik **yalnız doğrulanmış
+# (``_N``) status** üzerinden sayılır.
+
+
+def _expected_minutes_for_day(day, now):
+    """O güne ait beklenen dakika sayısı: geçmiş gün=1440, bugün=o ana kadar."""
+    if day < now.date():
+        return 1440
+    if day == now.date():
+        midnight = datetime(day.year, day.month, day.day)
+        return max(1, min(1440, int((now - midnight).total_seconds() // 60) + 1))
+    return 0  # gelecek
+
+
+def _compute_cabinet_day(cabinet, day, client, *, finalize, now):
+    """Tek kabin + tek gün → Bakanlık'a TEK istek; SimValidDay upsert eder."""
+    start = f"{day.isoformat()} 00:00:00"
+    if day == now.date():
+        end = now.strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        end = f"{day.isoformat()} 23:59:59"
+    objects = client.get_data_between(period=1, start_date=start, end_date=end)
+    rows = objects if isinstance(objects, list) else []
+    params = detect_params(rows)
+    counts = valid_counts(rows, params)
+    SimValidDay.objects.update_or_create(
+        cabinet=cabinet, day=day,
+        defaults={
+            "expected": _expected_minutes_for_day(day, now),
+            "received": len(rows),
+            "param_valid": counts,
+            "param_count": len(params),
+            "finalized": finalize,
+        },
+    )
+    return len(rows)
+
+
+@shared_task(name="sais_domain.tasks.compute_sim_valid_stats")
+def compute_sim_valid_stats(cabinet_id=None, month=None) -> dict:
+    """Aktif kabinler için bir ayın günlük geçerli-veri istatistiğini hesaplar.
+
+    Gün gün (kısım kısım) çeker; geçmiş + finalize edilmiş günleri atlar, bugünü
+    yeniden hesaplar. ``cabinet_id`` verilirse yalnız o kabin; ``month`` (YYYY-MM)
+    verilirse o ay (yoksa geçerli ay) — manuel yeniden hesaplama/backfill için.
+    """
+    from calendar import monthrange
+    from datetime import date
+
+    from api.licensing import license_active
+    if not license_active():
+        return {"skipped": "license_inactive"}
+
+    now = timezone.localtime().replace(tzinfo=None)
+    if month:
+        try:
+            year, mon = (int(x) for x in str(month).split("-"))
+        except (ValueError, TypeError):
+            return {"error": "bad_month"}
+    else:
+        year, mon = now.year, now.month
+
+    today = now.date()
+    first = date(year, mon, 1)
+    end_day = min(date(year, mon, monthrange(year, mon)[1]), today)
+    if end_day < first:
+        return {"skipped": "future_month", "month": f"{year:04d}-{mon:02d}"}
+
+    cabs = SaisCabinet.objects.filter(station__active=True)
+    if cabinet_id:
+        cabs = cabs.filter(id=cabinet_id)
+    cabs = list(cabs)
+
+    computed = 0
+    for cabinet in cabs:
+        existing = {
+            d.day: d for d in SimValidDay.objects.filter(
+                cabinet=cabinet, day__gte=first, day__lte=end_day,
+            )
+        }
+        client = SaisSimClient(cabinet)
+        try:
+            day = first
+            while day <= end_day:
+                rec = existing.get(day)
+                # Geçmiş + zaten kesinleşmiş gün → atla (tekrar SİM'e gitme).
+                if rec and rec.finalized and day < today:
+                    day += timedelta(days=1)
+                    continue
+                try:
+                    _compute_cabinet_day(
+                        cabinet, day, client,
+                        finalize=(day < today), now=now,
+                    )
+                    computed += 1
+                except Exception as exc:  # noqa: BLE001 — bir gün patlasa diğerleri sürsün
+                    logger.warning(
+                        "compute_sim_valid_stats hata cab=%s day=%s: %s",
+                        cabinet.id, day, exc,
+                    )
+                day += timedelta(days=1)
+        finally:
+            client.close()
+
+    return {
+        "cabinets": len(cabs),
+        "days_computed": computed,
+        "month": f"{year:04d}-{mon:02d}",
+    }

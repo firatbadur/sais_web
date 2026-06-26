@@ -419,6 +419,7 @@ Tüm periyodik iş Celery beat'in DB'de tuttuğu `PeriodicTask` kayıtlarıyla y
 | `sais_domain.tasks.publish_minute_data` | `* * * * *` | Aktif kabinler için SIM + Envisoft `SendData` fan-out |
 | `sais_domain.tasks.run_scenarios` | `* * * * *` | Aktif numune senaryolarını değerlendir + açık run'ları ilerlet |
 | `sais_domain.tasks.resend_missing_data` | `0 */6 * * *` | Bakanlık `GetMissingDates` → eksik dakikaları `Reading`'den backfill → `SendData` (lisans + `sim_enabled` gate'li) |
+| `sais_domain.tasks.compute_sim_valid_stats` | `30 1 * * *` | Geçerli veri istatistiği: ayın günlerini **gün gün** (kısım kısım) `GetDataByBetweenTwoDate` ile çekip `SimValidDay`'e damgalar (Dinamik Veri Raporu aylık geçerli kartı bunu DB'den okur — canlı ay-sorgusu yok) |
 
 Yönetim:
 - Admin panelinden (`/admin/django_celery_beat/periodictask/`) bireysel task'lar enable/disable edilebilir veya periyot değiştirilebilir.

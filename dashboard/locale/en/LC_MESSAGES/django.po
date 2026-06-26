@@ -3375,3 +3375,12 @@ msgstr "error"
 
 msgid "eşik"
 msgstr "threshold"
+
+msgid "Hesaplanmadı — yenile"
+msgstr "Not computed — refresh"
+
+msgid "hesaplanıyor…"
+msgstr "computing…"
+
+msgid "gün"
+msgstr "days"

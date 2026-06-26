@@ -68,6 +68,69 @@ class SaisCabinet(models.Model):
         return f"{self.station} / {self.device_id}"
 
 
+class SimValidDay(models.Model):
+    """Bir kabin için bir günün **geçerli veri** istatistiği (job ile doldurulur).
+
+    Aylık geçerli veri oranı bu günlük kayıtların toplamından hesaplanır; böylece
+    dashboard Bakanlık'a **canlı ay-sorgusu atmaz**. Günde 1 kez çalışan job
+    (``sais_domain.tasks.compute_sim_valid_stats``) ayın her gününü **tek**
+    ``GetDataByBetweenTwoDate`` (period=1) ile **gün gün (kısım kısım)** çekip
+    burada damgalar. Geçerlilik **yalnız doğrulanmış (``_N``) status** üzerinden
+    hesaplanır (bkz. ``sim_report.valid_counts``).
+
+    ``finalized=True`` → gün kapandı (geçmiş), bir daha hesaplanmaz; bugünün
+    kaydı her job run'ında güncellenir (kısmi).
+    """
+
+    cabinet = models.ForeignKey(
+        SaisCabinet, on_delete=models.CASCADE, related_name="valid_days",
+        verbose_name="Kabin",
+    )
+    day = models.DateField(db_index=True, verbose_name="Gün")
+    expected = models.IntegerField(
+        default=0, verbose_name="Beklenen Dakika",
+        help_text="O güne ait beklenen kayıt sayısı (geçmiş gün=1440, bugün=o ana kadar).",
+    )
+    received = models.IntegerField(default=0, verbose_name="Gelen Kayıt")
+    param_valid = models.JSONField(
+        default=dict, blank=True, verbose_name="Parametre Geçerli Sayıları",
+        help_text="{parametre: doğrulanmış geçerli kayıt sayısı}",
+    )
+    param_count = models.IntegerField(default=0, verbose_name="Parametre Sayısı")
+    finalized = models.BooleanField(
+        default=False, verbose_name="Kesinleşti",
+        help_text="Geçmiş gün; yeniden hesaplanmaz.",
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Son Güncelleme")
+
+    class Meta:
+        db_table = "sais_valid_day"
+        verbose_name = "Günlük Geçerli Veri"
+        verbose_name_plural = "Günlük Geçerli Veriler"
+        ordering = ["-day"]
+        constraints = [
+            models.UniqueConstraint(fields=["cabinet", "day"], name="sais_valid_day_unique"),
+        ]
+
+    def __str__(self):
+        return f"{self.cabinet_id} / {self.day} — %{self.valid_pct()}"
+
+    def valid_cells(self):
+        """Toplam doğrulanmış geçerli hücre (parametre×dakika)."""
+        return sum((self.param_valid or {}).values())
+
+    def total_cells(self):
+        """Beklenen toplam hücre (beklenen dakika × parametre sayısı)."""
+        return self.expected * self.param_count
+
+    def valid_pct(self):
+        """Günün geçerli veri oranı (%, doğrulanmış status'a göre)."""
+        total = self.total_cells()
+        if not total:
+            return 0.0
+        return round(min(100.0, self.valid_cells() / total * 100), 1)
+
+
 class EnvisoftChannel(models.Model):
     """`api.Parameter` ↔ Envisoft kanal ID eşlemesi."""
 
