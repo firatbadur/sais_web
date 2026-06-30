@@ -2,6 +2,14 @@
 
 Bu dosya Claude Code için proje rehberidir. Geliştirmeye başlamadan önce okunması önerilir.
 
+> **CLAUDE.md'yi güncel tut (ZORUNLU).** Sisteme **yeni bir özellik**, **mimari değişiklik** veya
+> önemli/somut bir şey (yeni model, app, Celery task, protokol, dashboard sayfası, çalıştırma
+> davranışı, env ayarı, dağıtım/installer adımı vb.) eklendiğinde — değişiklikle **aynı turda** —
+> bu dosyaya kısa bir özet işle. İlgili bölüme (mimari, "Önemli çalıştırma davranışları", periyodik
+> task tablosu, proje yapısı ağacı, kod düzenleme kuralları, bilinen sınırlamalar...) ekle; uygun
+> bölüm yoksa yeni bir `##` başlık aç. Özet **niyeti + tek doğruluk kaynağını** (model/dosya/komut)
+> versin, satır satır diff değil. Sadece kozmetik/küçük düzeltmeler için güncelleme gerekmez.
+
 > **Ürün/marka adı: "Envisoft WebX".** Kullanıcı-görünür her yerde (dashboard UI, admin başlıkları,
 > Windows installer, masaüstü/başlat menüsü kısayolları, kurulum dizini `C:\EnvisoftWebX`, Windows
 > servisi `EnvisoftWebX`) bu ad kullanılır. **Kod adı `sais_web` ve iç tanımlayıcılar (app `sais_domain`,
