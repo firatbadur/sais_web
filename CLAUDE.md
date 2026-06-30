@@ -621,11 +621,14 @@ Tamamen dashboard arayüzüne özgü → `dashboard/`.
   `login_required`, sadece id+ad+şablon bayrağı) AJAX ile dolar; [header.html](dashboard/templates/dashboard/partials/header.html)
   içindeki IIFE doldurur. Operatör/normal kullanıcı SCADA/HMI ekranlarını buradan izler (galeri +
   CRUD admin'de kalır).
-- **Viewer = gerçek HMI deneyimi:** Açılışta **otomatik canlı mod** (manuel checkbox/simülasyon
-  gerekmez) — `mimic_tags`'ı 4 sn'de bir poll'layıp animasyonları **gerçek sensör (tag) değerleriyle**
-  sürer. Editördeki kareli ızgara arka planı YOK (tasarımın kendi `background` rengiyle seamless dolu);
-  canlı modda manuel etiket sürgü paneli gizli (`body.live-mode`). "Düzenle" butonu yalnız admin'e
-  (`user|has_role:"1"`).
+- **Viewer = gerçek HMI deneyimi (her zaman canlı):** Simülasyon/otomatik/canlı seçimi YOK — açılışta
+  doğrudan `mimic_tags`'ı 4 sn'de bir poll'layıp animasyonları **gerçek sensör (tag) değerleriyle**
+  sürer. Üst bar sade: ekran adı + **canlı durum rozeti** (yeşil "Canlı" pulse / kırmızı "Bağlantı yok",
+  poll başarısında güncellenir) + **saat** + Sığdır + **Tam Ekran** + (yalnız admin) Düzenle.
+  **Izgara fix'i (kritik):** editör tuval arka planını kareli **grid Pattern** olarak kaydeder
+  (`canvas.toJSON` → `data.background`); viewer `loadFromJSON` sonrası `canvas.setBackgroundColor`
+  ile düz tasarım rengine **zorlar** → HMI'da ızgara görünmez (yalnız `.v-body` CSS'i yetmez, çünkü
+  grid canvas içinde). Eski logo ikonu üst bardan kaldırıldı.
 - **API** [dashboard/api_views.py](dashboard/api_views.py): galeri/CRUD `mimic_screen_list/get/save/delete`
   (`_require_admin`, CSRF'li POST) → `/dashboard/api/mimic/{list,get,save,delete}/`. Canlı veri
   `mimic_tags` + header listesi `mimic_menu` ise **tüm rollere açık** (`login_required`) — viewer her

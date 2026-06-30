@@ -3483,3 +3483,24 @@ msgstr "Could not load list."
 
 msgid "Canlı (gerçek değerler)"
 msgstr "Live (real values)"
+
+msgid "Bağlanıyor…"
+msgstr "Connecting…"
+
+msgid "Canlı veri durumu"
+msgstr "Live data status"
+
+msgid "Canlı"
+msgstr "Live"
+
+msgid "Veri yok"
+msgstr "No data"
+
+msgid "Bağlantı yok"
+msgstr "No connection"
+
+msgid "Tam Ekran"
+msgstr "Fullscreen"
+
+msgid "Çık"
+msgstr "Exit"

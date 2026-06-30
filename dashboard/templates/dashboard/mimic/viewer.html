@@ -31,46 +31,39 @@
         .v-btn { background: var(--mx-bg); border: 1px solid var(--mx-border); color: var(--mx-text); border-radius: 6px;
             padding: 7px 12px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
         .v-btn:hover { background: var(--mx-border); color: var(--mx-head); }
-        .v-btn.run { background: #2fb574; border-color: #2fb574; color: #fff; }
-        .v-btn.run.on { background: #e4544c; border-color: #e4544c; }
-        .v-check { display: inline-flex; align-items: center; gap: 6px; color: var(--mx-muted); font-size: 12px; cursor: pointer; }
+        /* Canlı veri durum göstergesi (yeşil = akıyor, kırmızı = bağlantı yok) */
+        .v-ind { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--mx-muted);
+            padding: 5px 11px; border: 1px solid var(--mx-border); border-radius: 20px; background: var(--mx-bg); }
+        .v-ind .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--mx-muted); }
+        .v-ind.ok { color: #2fb574; border-color: rgba(47,181,116,.4); }
+        .v-ind.ok .dot { background: #2fb574; box-shadow: 0 0 0 0 rgba(47,181,116,.6); animation: vpulse 1.8s infinite; }
+        .v-ind.err { color: #e4544c; border-color: rgba(228,84,76,.4); }
+        .v-ind.err .dot { background: #e4544c; }
+        @keyframes vpulse { 0% { box-shadow: 0 0 0 0 rgba(47,181,116,.55); } 70% { box-shadow: 0 0 0 7px rgba(47,181,116,0); } 100% { box-shadow: 0 0 0 0 rgba(47,181,116,0); } }
+        .v-clock { font-size: 13px; font-weight: 600; color: var(--mx-head); font-variant-numeric: tabular-nums; min-width: 64px; text-align: center; }
         /* Gerçek HMI: editördeki kareli ızgara YOK — tasarımın kendi arka plan rengiyle dolu, seamless tuval */
         .v-body { flex: 1; position: relative; min-height: 0; background: var(--mx-canvas-bg, var(--mx-bg)); }
         #v-wrap { position: absolute; inset: 0; }
-        #v-panel { position: absolute; right: 14px; top: 14px; width: 260px; max-height: 78%; background: var(--mx-panel);
-            border: 1px solid var(--mx-border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.25); display: none; flex-direction: column; }
-        body.run-mode #v-panel { display: flex; }
-        /* Canlı (gerçek SCADA) modda manuel etiket paneli gizlenir — temiz HMI görünümü */
-        body.live-mode #v-panel { display: none; }
-        #v-panel .h { padding: 10px 12px; border-bottom: 1px solid var(--mx-border); color: var(--mx-head); font-weight: 600; font-size: 13px; }
-        #v-tags { overflow-y: auto; padding: 6px; }
-        .vt-row { display: grid; grid-template-columns: 64px 1fr 32px 34px; gap: 6px; align-items: center; padding: 5px 6px; font-size: 11px; }
-        .vt-row label { color: var(--mx-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .vt-row .v { text-align: right; color: var(--mx-accent); font-weight: 600; }
-        .vt-row button { background: var(--mx-bg); border: 1px solid var(--mx-border); color: var(--mx-text); border-radius: 4px; font-size: 9px; cursor: pointer; }
         ::-webkit-scrollbar { width: 9px; } ::-webkit-scrollbar-thumb { background: var(--mx-border); border-radius: 5px; }
     </style>
 </head>
 <body>
 <div class="v-top">
-    <i class="ki-duotone ki-abstract-26 fs-2" style="color:var(--mx-accent)"><span class="path1"></span><span class="path2"></span></i>
     <span class="name">{{ screen.name }}</span>
     {% if screen.description %}<span class="desc">— {{ screen.description }}</span>{% endif %}
     <span style="flex:1"></span>
-    <label class="v-check"><input type="checkbox" id="v-live"> {% trans "Canlı (gerçek değerler)" %}</label>
-    <label class="v-check"><input type="checkbox" id="v-auto"> {% trans "Otomatik değerler" %}</label>
+    <span class="v-ind" id="v-ind" title="{% trans 'Canlı veri durumu' %}">
+        <span class="dot"></span><span id="v-ind-txt">{% trans "Bağlanıyor…" %}</span>
+    </span>
+    <span class="v-clock" id="v-clock"></span>
     <button class="v-btn" id="v-fit"><i class="ki-duotone ki-maximize"><span class="path1"></span><span class="path2"></span></i> {% trans "Sığdır" %}</button>
-    <button class="v-btn run" id="v-run"><i class="ki-duotone ki-play"><span class="path1"></span><span class="path2"></span></i> {% trans "Simülasyonu Başlat" %}</button>
+    <button class="v-btn" id="v-full"><i class="ki-duotone ki-screen"><span class="path1"></span><span class="path2"></span></i> {% trans "Tam Ekran" %}</button>
     {% if user|has_role:"1" %}
     <a class="v-btn" href="{% url 'dashboard:mimic_editor_edit' screen.id %}"><i class="ki-duotone ki-pencil"><span class="path1"></span><span class="path2"></span></i> {% trans "Düzenle" %}</a>
     {% endif %}
 </div>
 <div class="v-body">
     <div id="v-wrap"><canvas id="v-canvas"></canvas></div>
-    <div id="v-panel">
-        <div class="h">{% trans "Etiketler" %}</div>
-        <div id="v-tags"></div>
-    </div>
 </div>
 
 {{ screen.data|json_script:"v-data" }}
@@ -88,11 +81,18 @@ window.V_CFG = {
     var $ = function (id) { return document.getElementById(id); };
     var CFG = window.V_CFG;
     var data = JSON.parse($("v-data").textContent || "{}");
+    var LOCALE = "{{ LANGUAGE_CODE|default:'tr' }}" === "en" ? "en-US" : "tr-TR";
+    var I18N = {
+        live:    "{% trans 'Canlı' %}",
+        nodata:  "{% trans 'Veri yok' %}",
+        offline: "{% trans 'Bağlantı yok' %}",
+        full:    "{% trans 'Tam Ekran' %}",
+        exit:    "{% trans 'Çık' %}"
+    };
 
     document.addEventListener("contextmenu", function (e) { e.preventDefault(); }, true);
     var canvas = new fabric.Canvas("v-canvas", { selection: false, backgroundColor: CFG.background, renderOnAddRemove: false, fireMiddleClick: true });
     var runtime = window.MimicRuntime(canvas);
-    var autoTimer = null, running = false;
 
     function resize() { var w = $("v-wrap"); canvas.setWidth(w.clientWidth); canvas.setHeight(w.clientHeight); fit(); }
     function fit() {
@@ -110,26 +110,30 @@ window.V_CFG = {
             o.evented = !!o.isButton;          // butonlar tıklanabilir
             if (o.isButton) o.hoverCursor = "pointer";
         });
-        canvas.requestRenderAll();
-        resize();
-        // Gerçek SCADA HMI deneyimi: açılışta canlı modu otomatik başlat —
-        // animasyonlar gerçek sensör (tag) değerleriyle hemen canlanır.
-        $("v-live").checked = true;
-        $("v-live").dispatchEvent(new Event("change"));
+        // Editör tuvalin arka planını kareli "grid" Pattern olarak kaydeder
+        // (toJSON → data.background). Gerçek HMI'da ızgara olmasın: yüklemeden
+        // sonra düz tasarım rengine ZORLA (pattern'ı ezer).
+        canvas.setBackgroundColor(CFG.background || "#0f1420", function () {
+            canvas.requestRenderAll();
+            resize();
+            // Her zaman canlı: simülasyon/seçim yok — motor + gerçek değer poll'u başlasın.
+            runtime.start();
+            startLive();
+        });
     });
 
-    // Buton tıklama (yalnız simülasyon çalışırken etiketi etkiler)
+    // HMI butonu tıklama — etiketi anlık sürer (görsel geri besleme; canlı poll ezer).
     canvas.on("mouse:down", function (opt) {
-        if (running && opt.target && opt.target.isButton) {
+        if (opt.target && opt.target.isButton) {
             runtime.pressButton(opt.target); opt.target._op = opt.target.opacity; opt.target.set("opacity", 0.7);
-            canvas.requestRenderAll(); buildTagsSync(); return;
+            canvas.requestRenderAll(); return;
         }
         if (opt.e.button === 1) { panning = true; lastPan = { x: opt.e.clientX, y: opt.e.clientY }; opt.e.preventDefault(); }
     });
     canvas.on("mouse:up", function (opt) {
-        if (running && opt.target && opt.target.isButton) {
+        if (opt.target && opt.target.isButton) {
             runtime.releaseButton(opt.target); opt.target.set("opacity", opt.target._op == null ? 1 : opt.target._op);
-            canvas.requestRenderAll(); buildTagsSync();
+            canvas.requestRenderAll();
         }
         panning = false; lastPan = null;
     });
@@ -150,80 +154,42 @@ window.V_CFG = {
         opt.e.preventDefault(); opt.e.stopPropagation();
     });
 
-    function buildTags() {
-        var host = $("v-tags"); host.innerHTML = "";
-        var tags = runtime.tagList();
-        if (!tags.length) { host.innerHTML = '<div style="color:var(--mx-muted);padding:12px;font-size:11px;">Animasyon bağlı etiket yok.</div>'; return; }
-        tags.forEach(function (t) {
-            var row = document.createElement("div");
-            row.className = "vt-row";
-            row.innerHTML = '<label title="' + t + '">' + t + '</label><input type="range" min="0" max="100" value="0">' +
-                '<span class="v">0</span><button>0/1</button>';
-            var rng = row.querySelector("input"), val = row.querySelector(".v");
-            rng.addEventListener("input", function () { runtime.setTag(t, rng.value); val.textContent = rng.value; });
-            row.querySelector("button").addEventListener("click", function () {
-                var nv = Number(rng.value) > 0 ? 0 : 100; rng.value = nv; runtime.setTag(t, nv); val.textContent = nv;
-            });
-            host.appendChild(row);
-        });
+    // --- Canlı veri: gerçek sensör (tag) değerlerini periyodik çek ---
+    var ind = $("v-ind"), indTxt = $("v-ind-txt"), liveTimer = null;
+    function setInd(state, txt) { ind.className = "v-ind " + state; indTxt.textContent = txt; }
+    function clockStr() {
+        try { return new Date().toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
+        catch (e) { return ""; }
     }
-    function startAuto() {
-        stopAuto();
-        autoTimer = setInterval(function () {
-            runtime.tagList().forEach(function (t) {
-                var v = Math.round(Math.random() * 100); runtime.setTag(t, v);
-                document.querySelectorAll("#v-tags .vt-row").forEach(function () {});
-            });
-            buildTagsSync();
-        }, 1500);
-    }
-    function buildTagsSync() {
-        var rows = $("v-tags").querySelectorAll(".vt-row"), tags = runtime.tagList(), vals = runtime.getTags();
-        rows.forEach(function (r, i) {
-            var t = tags[i]; if (t == null) return;
-            r.querySelector("input").value = vals[t] || 0;
-            r.querySelector(".v").textContent = Math.round(vals[t] || 0);
-        });
-    }
-    function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
-
-    $("v-run").addEventListener("click", function () {
-        running = !running;
-        var b = $("v-run");
-        if (running) {
-            document.body.classList.add("run-mode"); runtime.start(); buildTags();
-            b.classList.add("on"); b.innerHTML = '<i class="ki-duotone ki-cross-square"></i> {% trans "Durdur" %}';
-            if ($("v-auto").checked) startAuto();
-        } else {
-            document.body.classList.remove("run-mode"); runtime.stop(); stopAuto();
-            b.classList.remove("on"); b.innerHTML = '<i class="ki-duotone ki-play"><span class="path1"></span><span class="path2"></span></i> {% trans "Simülasyonu Başlat" %}';
-        }
-    });
-    $("v-auto").addEventListener("change", function (e) {
-        if (e.target.checked) { $("v-live").checked = false; stopLive(); }
-        if (running) { e.target.checked ? startAuto() : stopAuto(); }
-    });
-
-    // Canlı mod — gerçek sensör değerlerini periyodik çek
-    var liveTimer = null;
     function pollLive() {
-        fetch(V_CFG.tagsUrl, { headers: { "X-Requested-With": "XMLHttpRequest" } })
-            .then(function (r) { return r.json(); })
+        fetch(CFG.tagsUrl, { credentials: "same-origin", headers: { "X-Requested-With": "XMLHttpRequest" } })
+            .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
             .then(function (d) {
-                if (!d || !d.values) return;
-                Object.keys(d.values).forEach(function (t) { runtime.setTag(t, d.values[t]); });
-                if (running) buildTagsSync();
-            }).catch(function () {});
+                var vals = (d && d.values) || {};
+                Object.keys(vals).forEach(function (t) { runtime.setTag(t, vals[t]); });
+                setInd("ok", I18N.live);
+                $("v-clock").textContent = clockStr();
+            })
+            .catch(function () { setInd("err", I18N.offline); });
     }
-    function startLive() { stopLive(); pollLive(); liveTimer = setInterval(pollLive, 4000); }
+    function startLive() { stopLive(); document.body.classList.add("live-mode"); pollLive(); liveTimer = setInterval(pollLive, 4000); }
     function stopLive() { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
-    $("v-live").addEventListener("change", function (e) {
-        if (e.target.checked) {
-            $("v-auto").checked = false; stopAuto();
-            document.body.classList.add("live-mode");   // manuel etiket panelini gizle (temiz HMI)
-            if (!running) $("v-run").click();   // animasyon için motoru başlat
-            startLive();
-        } else { document.body.classList.remove("live-mode"); stopLive(); }
+
+    // Saat — her saniye ilerlesin (poll 4 sn'de bir; saat sürekli aksın).
+    setInterval(function () { $("v-clock").textContent = clockStr(); }, 1000);
+    $("v-clock").textContent = clockStr();
+
+    // --- Tam ekran ---
+    function fsActive() { return document.fullscreenElement || document.webkitFullscreenElement; }
+    $("v-full").addEventListener("click", function () {
+        var el = document.documentElement;
+        if (!fsActive()) { (el.requestFullscreen || el.webkitRequestFullscreen).call(el); }
+        else { (document.exitFullscreen || document.webkitExitFullscreen).call(document); }
+    });
+    document.addEventListener("fullscreenchange", function () {
+        var b = $("v-full"), on = !!fsActive();
+        b.lastChild.textContent = " " + (on ? I18N.exit : I18N.full);
+        setTimeout(resize, 60);
     });
 
     $("v-fit").addEventListener("click", fit);
