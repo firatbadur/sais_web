@@ -1,4 +1,4 @@
-{% load static i18n %}
+{% load static i18n dashboard_extras %}
 <!DOCTYPE html>
 <html lang="{{ LANGUAGE_CODE|default:'tr' }}">
 <head>
@@ -8,6 +8,7 @@
     <link rel="shortcut icon" href="{% static 'images/logo/icon.png' %}">
     <link href="{% static 'dashboard/plugins/global/plugins.bundle.css' %}" rel="stylesheet">
     <link href="{% static 'dashboard/css/style.bundle.css' %}" rel="stylesheet">
+    <style>:root { --mx-canvas-bg: {{ screen.background|default:'#0f1420' }}; }</style>
     <script>
         (function () {
             var t = localStorage.getItem("data-bs-theme") || "light";
@@ -33,11 +34,14 @@
         .v-btn.run { background: #2fb574; border-color: #2fb574; color: #fff; }
         .v-btn.run.on { background: #e4544c; border-color: #e4544c; }
         .v-check { display: inline-flex; align-items: center; gap: 6px; color: var(--mx-muted); font-size: 12px; cursor: pointer; }
-        .v-body { flex: 1; position: relative; min-height: 0; background: repeating-conic-gradient(var(--mx-cv-a) 0% 25%, var(--mx-cv-b) 0% 50%) 50% / 26px 26px; }
+        /* Gerçek HMI: editördeki kareli ızgara YOK — tasarımın kendi arka plan rengiyle dolu, seamless tuval */
+        .v-body { flex: 1; position: relative; min-height: 0; background: var(--mx-canvas-bg, var(--mx-bg)); }
         #v-wrap { position: absolute; inset: 0; }
         #v-panel { position: absolute; right: 14px; top: 14px; width: 260px; max-height: 78%; background: var(--mx-panel);
             border: 1px solid var(--mx-border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.25); display: none; flex-direction: column; }
         body.run-mode #v-panel { display: flex; }
+        /* Canlı (gerçek SCADA) modda manuel etiket paneli gizlenir — temiz HMI görünümü */
+        body.live-mode #v-panel { display: none; }
         #v-panel .h { padding: 10px 12px; border-bottom: 1px solid var(--mx-border); color: var(--mx-head); font-weight: 600; font-size: 13px; }
         #v-tags { overflow-y: auto; padding: 6px; }
         .vt-row { display: grid; grid-template-columns: 64px 1fr 32px 34px; gap: 6px; align-items: center; padding: 5px 6px; font-size: 11px; }
@@ -57,7 +61,9 @@
     <label class="v-check"><input type="checkbox" id="v-auto"> {% trans "Otomatik değerler" %}</label>
     <button class="v-btn" id="v-fit"><i class="ki-duotone ki-maximize"><span class="path1"></span><span class="path2"></span></i> {% trans "Sığdır" %}</button>
     <button class="v-btn run" id="v-run"><i class="ki-duotone ki-play"><span class="path1"></span><span class="path2"></span></i> {% trans "Simülasyonu Başlat" %}</button>
+    {% if user|has_role:"1" %}
     <a class="v-btn" href="{% url 'dashboard:mimic_editor_edit' screen.id %}"><i class="ki-duotone ki-pencil"><span class="path1"></span><span class="path2"></span></i> {% trans "Düzenle" %}</a>
+    {% endif %}
 </div>
 <div class="v-body">
     <div id="v-wrap"><canvas id="v-canvas"></canvas></div>
@@ -106,6 +112,10 @@ window.V_CFG = {
         });
         canvas.requestRenderAll();
         resize();
+        // Gerçek SCADA HMI deneyimi: açılışta canlı modu otomatik başlat —
+        // animasyonlar gerçek sensör (tag) değerleriyle hemen canlanır.
+        $("v-live").checked = true;
+        $("v-live").dispatchEvent(new Event("change"));
     });
 
     // Buton tıklama (yalnız simülasyon çalışırken etiketi etkiler)
@@ -210,9 +220,10 @@ window.V_CFG = {
     $("v-live").addEventListener("change", function (e) {
         if (e.target.checked) {
             $("v-auto").checked = false; stopAuto();
+            document.body.classList.add("live-mode");   // manuel etiket panelini gizle (temiz HMI)
             if (!running) $("v-run").click();   // animasyon için motoru başlat
             startLive();
-        } else { stopLive(); }
+        } else { document.body.classList.remove("live-mode"); stopLive(); }
     });
 
     $("v-fit").addEventListener("click", fit);

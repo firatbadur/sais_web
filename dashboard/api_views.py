@@ -3271,17 +3271,36 @@ def mimic_screen_delete(request):
 
 
 @login_required
+def mimic_menu(request):
+    """Header 'Mimik' menüsü — tüm rollerin görüntüleyebileceği hafif liste.
+
+    Yalnız ``id`` + ``name`` + ``is_template`` döner (thumbnail/CRUD yok); her
+    satır görüntüleyiciyi (``mimic_viewer``) yeni sekmede açar. Galeri + CRUD
+    endpoint'lerinden (``mimic_screen_*``, admin-gate'li) ayrıdır; SCADA/HMI
+    mimikleri her dashboard kullanıcısı izleyebilsin diye salt ``login_required``.
+    """
+    from dashboard.models import MimicScreen
+
+    items = [{
+        "id": m.id,
+        "name": m.name,
+        "is_template": m.is_template,
+    } for m in MimicScreen.objects.order_by("is_template", "name")]
+    return JsonResponse({"ok": True, "results": items})
+
+
+@login_required
 def mimic_tags(request):
     """Mimik bağlama için gerçek SCADA etiketleri + canlı değerleri.
 
     Her aktif sensörün otomatik `tag`'i, okunabilir etiketi, birimi, tipi ve
     `SensorLatest` anlık değeri döner. Editör tag dropdown'unu ve görüntüleyici
     canlı modunu besler. `values` haritası tag→değer (canlı poll için).
-    """
-    denied = _require_admin(request)
-    if denied:
-        return denied
 
+    Salt-okuma sensör değerleri (home snapshot gibi) → tüm rollere açık
+    (`login_required`): viewer her rol tarafından izlenebildiğinden canlı veri
+    de admin-dışı kullanıcılarda çalışmalı.
+    """
     sensors = (
         Sensor.objects.filter(is_active=True)
         .exclude(tag="")

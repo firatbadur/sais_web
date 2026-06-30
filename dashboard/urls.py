@@ -126,6 +126,7 @@ urlpatterns = [
     path("api/mimic/state/", api_views.mimic_state, name="api_mimic_state"),
 
     # --- AJAX API (Mimik Tasarım Editörü) ---
+    path("api/mimic/menu/", api_views.mimic_menu, name="api_mimic_menu"),
     path("api/mimic/list/", api_views.mimic_screen_list, name="api_mimic_list"),
     path("api/mimic/get/", api_views.mimic_screen_get, name="api_mimic_get"),
     path("api/mimic/save/", api_views.mimic_screen_save, name="api_mimic_save"),

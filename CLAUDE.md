@@ -611,12 +611,26 @@ Tamamen dashboard arayüzüne özgü → `dashboard/`.
   şablonunu (`is_template=True`) tohumlar — eski "Kabin İzleme" demo'sunun mimik editörü formatındaki
   karşılığı (pompalar/akış hücresi/analizör paneli/yıkama tankı/debimetre/durum lambaları; Fabric JSON
   primitive + `symbolKey` ile üretilir, etiketler SAIS parametre kodlarıyla hizalı, "auto" animasyonlu).
-- **View'lar** [dashboard/views.py](dashboard/views.py): `MimicDashboardView` (galeri, ListView),
-  `MimicEditorView` (standalone editör — `mimic/editor.html`), `MimicViewerView` (standalone
-  salt-okunur görüntüleyici/simülatör — `mimic/viewer.html`). Galeri kartları/butonları editör ve
-  viewer'ı `target="_blank"` ile açar.
-- **API** [dashboard/api_views.py](dashboard/api_views.py) (hepsi `_require_admin`, CSRF'li POST):
-  `mimic_screen_list/get/save/delete` → `/dashboard/api/mimic/{list,get,save,delete}/`.
+- **View'lar** [dashboard/views.py](dashboard/views.py): `MimicDashboardView` (galeri, ListView,
+  admin), `MimicEditorView` (standalone editör — `mimic/editor.html`, admin), `MimicViewerView`
+  (standalone salt-okunur **canlı HMI görüntüleyici** — `mimic/viewer.html`, `RoleRequiredMixin` →
+  **her rol**). Galeri kartları/butonları editör ve viewer'ı `target="_blank"` ile açar.
+- **Header "Mimik" menüsü (tüm roller):** Dashboard header'ında (dil seçicinin yanında, ikon
+  `ki-abstract-26`) bir dropdown — kayıtlı mimik ekranlarını listeler; her satır viewer'ı **yeni
+  sekmede** açar. Liste hafif `mimic_menu` endpoint'inden (`/dashboard/api/mimic/menu/`,
+  `login_required`, sadece id+ad+şablon bayrağı) AJAX ile dolar; [header.html](dashboard/templates/dashboard/partials/header.html)
+  içindeki IIFE doldurur. Operatör/normal kullanıcı SCADA/HMI ekranlarını buradan izler (galeri +
+  CRUD admin'de kalır).
+- **Viewer = gerçek HMI deneyimi:** Açılışta **otomatik canlı mod** (manuel checkbox/simülasyon
+  gerekmez) — `mimic_tags`'ı 4 sn'de bir poll'layıp animasyonları **gerçek sensör (tag) değerleriyle**
+  sürer. Editördeki kareli ızgara arka planı YOK (tasarımın kendi `background` rengiyle seamless dolu);
+  canlı modda manuel etiket sürgü paneli gizli (`body.live-mode`). "Düzenle" butonu yalnız admin'e
+  (`user|has_role:"1"`).
+- **API** [dashboard/api_views.py](dashboard/api_views.py): galeri/CRUD `mimic_screen_list/get/save/delete`
+  (`_require_admin`, CSRF'li POST) → `/dashboard/api/mimic/{list,get,save,delete}/`. Canlı veri
+  `mimic_tags` + header listesi `mimic_menu` ise **tüm rollere açık** (`login_required`) — viewer her
+  rolde izlenebildiğinden canlı değerler de admin-dışı kullanıcılarda çalışmalı (salt-okuma sensör
+  değerleri, home snapshot gibi).
 - **Frontend** ([dashboard/static/dashboard/js/](dashboard/static/dashboard/js/)):
   - `mimic_symbols.js` — kategorize SCADA sembol kütüphanesi (vana/pompa/motor/tank/enstrüman/
     boru/proses/elektrik SVG'leri); `window.MIMIC_SYMBOLS`.

@@ -52,6 +52,29 @@
                     </div>
                 </div>
 
+                <!-- Mimik ekranları (SCADA/HMI) — yeni sekmede canlı görüntüleyici -->
+                <div class="app-navbar-item ms-1 ms-md-3">
+                    <div class="btn btn-icon btn-custom btn-color-gray-500 btn-active-color-primary w-35px h-35px w-md-40px h-md-40px"
+                         id="mimic-menu-toggle"
+                         data-kt-menu-trigger="click"
+                         data-kt-menu-attach="parent"
+                         data-kt-menu-placement="bottom-end"
+                         title="{% trans 'Mimik Ekranları' %}">
+                        <i class="ki-outline ki-abstract-26 fs-1"></i>
+                    </div>
+                    <div class="menu menu-sub menu-sub-dropdown menu-column menu-rounded w-275px" data-kt-menu="true">
+                        <div class="d-flex flex-column rounded-top">
+                            <h3 class="text-gray-900 fw-semibold px-7 pt-5 pb-3 mb-0">
+                                {% trans "Mimik Ekranları" %}
+                            </h3>
+                            <div class="separator"></div>
+                        </div>
+                        <div class="scroll-y mh-300px my-2 px-2" id="mimic-menu-list">
+                            <div class="text-muted text-center py-6 fs-7">{% trans "Yükleniyor..." %}</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Language switcher -->
                 <div class="app-navbar-item ms-1 ms-md-3">
                     <div class="btn btn-icon btn-custom btn-color-gray-500 btn-active-color-primary w-35px h-35px w-md-40px h-md-40px"
@@ -272,5 +295,64 @@
 
     refresh();
     setInterval(refresh, POLL_MS);
+})();
+</script>
+
+<!-- Mimik ekranları menüsü — listeyi AJAX ile doldurur, viewer yeni sekmede açılır -->
+<script>
+(function () {
+    "use strict";
+    var listEl = document.getElementById('mimic-menu-list');
+    var toggle = document.getElementById('mimic-menu-toggle');
+    if (!listEl || !toggle) return;
+
+    var MENU_URL = "{% url 'dashboard:api_mimic_menu' %}";
+    // viewer/0/ reverse'ünden gerçek id'yi yerine koyarız (URL deseni sabit).
+    var VIEWER_BASE = "{% url 'dashboard:mimic_viewer' 0 %}";
+    var I18N = {
+        empty:    "{% trans 'Henüz mimik ekranı yok.' %}",
+        template: "{% trans 'Şablon' %}",
+        err:      "{% trans 'Liste alınamadı.' %}"
+    };
+
+    function esc(s) {
+        if (s == null) return '';
+        return String(s).replace(/[&<>"']/g, function (c) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+    }
+    function info(msg) {
+        return '<div class="text-muted text-center py-6 fs-7">' + msg + '</div>';
+    }
+
+    function render(items) {
+        if (!items.length) { listEl.innerHTML = info(I18N.empty); return; }
+        listEl.innerHTML = items.map(function (m) {
+            var url = VIEWER_BASE.replace(/0\/$/, m.id + '/');
+            var badge = m.is_template
+                ? '<span class="badge badge-light-info fs-9 ms-2">' + I18N.template + '</span>' : '';
+            return '<div class="menu-item">'
+                + '<a href="' + url + '" target="_blank" rel="noopener" '
+                + 'class="menu-link px-3 py-2 d-flex align-items-center">'
+                + '<i class="ki-outline ki-abstract-26 fs-4 me-3 text-primary"></i>'
+                + '<span class="flex-grow-1 text-gray-800 text-truncate">' + esc(m.name) + '</span>'
+                + badge + '</a></div>';
+        }).join('');
+    }
+
+    var loaded = false;
+    function load() {
+        fetch(MENU_URL, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d && d.results) { render(d.results); loaded = true; }
+                else { listEl.innerHTML = info(I18N.err); }
+            })
+            .catch(function () { listEl.innerHTML = info(I18N.err); });
+    }
+
+    // Açılışta bir kez yükle; menü tekrar açıldığında taze liste için yenile.
+    toggle.addEventListener('click', function () { load(); });
+    load();
 })();
 </script>

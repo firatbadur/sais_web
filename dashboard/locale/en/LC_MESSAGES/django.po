@@ -3468,3 +3468,18 @@ msgstr "Notified the configured number of days before the software license expir
 
 msgid "Aylık kalibrasyon zorunludur. Son kalibrasyondan, (aralık − uyarı) gün geçtiğinde bildirilir (günlük kontrol)."
 msgstr "Monthly calibration is mandatory. Notified when (interval − warn) days have passed since the last calibration (checked daily)."
+
+msgid "Mimik Ekranları"
+msgstr "Mimic Screens"
+
+msgid "Henüz mimik ekranı yok."
+msgstr "No mimic screens yet."
+
+msgid "Şablon"
+msgstr "Template"
+
+msgid "Liste alınamadı."
+msgstr "Could not load list."
+
+msgid "Canlı (gerçek değerler)"
+msgstr "Live (real values)"
