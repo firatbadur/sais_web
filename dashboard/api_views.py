@@ -3962,3 +3962,92 @@ def sim_valid_recompute(request):
     return JsonResponse({"ok": True, "queued": queued})
 
 
+
+
+# --------------------------------------------------------------------------- #
+# Sistem Kontrol → Sistem Alarmları (toggle + ayar + canlı durum)
+# --------------------------------------------------------------------------- #
+def _alarm_settings_dict(s):
+    """SystemAlarmSettings → JSON-safe sözlük."""
+    return {
+        "data_error_enabled": s.data_error_enabled,
+        "data_error_codes": list(s.data_error_codes or []),
+        "data_error_persist_minutes": s.data_error_persist_minutes,
+        "data_error_cooldown_minutes": s.data_error_cooldown_minutes,
+        "ssl_enabled": s.ssl_enabled,
+        "ssl_warn_days": s.ssl_warn_days,
+        "calibration_enabled": s.calibration_enabled,
+        "calibration_interval_days": s.calibration_interval_days,
+        "calibration_warn_days": s.calibration_warn_days,
+        "license_enabled": s.license_enabled,
+        "license_warn_days": s.license_warn_days,
+        "poweroff_enabled": s.poweroff_enabled,
+        "poweroff_min_minutes": s.poweroff_min_minutes,
+        "notify_sms": s.notify_sms,
+        "notify_email": s.notify_email,
+    }
+
+
+@login_required
+def system_alarms_save(request):
+    """Sistem alarm ayarlarını kaydeder. POST JSON (tüm alanlar)."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    from sais_domain.models import SystemAlarmSettings
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    def as_int(key, default, lo=0, hi=100000):
+        try:
+            return max(lo, min(hi, int(data.get(key, default))))
+        except (ValueError, TypeError):
+            return default
+
+    s = SystemAlarmSettings.load()
+    s.data_error_enabled = bool(data.get("data_error_enabled"))
+    codes = data.get("data_error_codes") or []
+    try:
+        s.data_error_codes = sorted({int(c) for c in codes})
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz hata kodu listesi."}, status=400)
+    s.data_error_persist_minutes = as_int("data_error_persist_minutes", 5, 1, 60)
+    s.data_error_cooldown_minutes = as_int("data_error_cooldown_minutes", 60, 5, 10080)
+    s.ssl_enabled = bool(data.get("ssl_enabled"))
+    s.ssl_warn_days = as_int("ssl_warn_days", 3, 1, 90)
+    s.calibration_enabled = bool(data.get("calibration_enabled"))
+    s.calibration_interval_days = as_int("calibration_interval_days", 30, 1, 365)
+    s.calibration_warn_days = as_int("calibration_warn_days", 1, 0, 90)
+    s.license_enabled = bool(data.get("license_enabled"))
+    s.license_warn_days = as_int("license_warn_days", 7, 1, 90)
+    s.poweroff_enabled = bool(data.get("poweroff_enabled"))
+    s.poweroff_min_minutes = as_int("poweroff_min_minutes", 5, 1, 1440)
+    s.notify_sms = bool(data.get("notify_sms"))
+    s.notify_email = bool(data.get("notify_email"))
+    s.updated_by = request.user if request.user.is_authenticated else None
+    s.save()
+    return JsonResponse({"ok": True, "settings": _alarm_settings_dict(s)})
+
+
+@login_required
+def system_alarms_status(request):
+    """Sistem Alarmları sekmesi canlı durum (SSL/lisans/kalibrasyon/son bildirimler).
+
+    SSL Let's Encrypt modunda canlı TLS kontrolü yapabilir (birkaç sn) — bu yüzden
+    sayfa render'ında değil, sekme açılınca AJAX ile çağrılır."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    from sais_domain.system_alarms import current_status
+    try:
+        return JsonResponse({"ok": True, "status": current_status()})
+    except Exception as exc:  # noqa: BLE001
+        return JsonResponse({"ok": False, "error": str(exc)}, status=500)

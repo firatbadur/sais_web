@@ -30,6 +30,11 @@
             <i class="ki-outline ki-filter fs-4 me-1"></i>{% trans "SIM Status Filtresi" %}
         </a>
     </li>
+    <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#tab-alarms">
+            <i class="ki-outline ki-notification-status fs-4 me-1"></i>{% trans "Sistem Alarmları" %}
+        </a>
+    </li>
 </ul>
 
 <div class="tab-content">
@@ -823,6 +828,220 @@
 </div>
 </div>{# /tab-sim #}
 
+{# ================================================================== #}
+{#  SEKME: Sistem Alarmları                                           #}
+{# ================================================================== #}
+<div class="tab-pane fade" id="tab-alarms" role="tabpanel">
+    {{ alarm_settings|json_script:"alarm-settings" }}
+    {{ alarm_status_codes|json_script:"alarm-status-codes" }}
+
+    <div class="alert alert-primary d-flex align-items-center mb-5">
+        <i class="ki-outline ki-information-5 fs-2 text-primary me-3"></i>
+        <div class="fs-7">
+            {% trans "Bu uyarılar, bildirim tercihi açık aktif kullanıcılara SMS/e-posta gönderir. Aynı durum için tekrar bildirim, ayarlanan aralıkla sınırlanır (kullanıcı boğulmaz)." %}
+        </div>
+    </div>
+
+    {# Kanallar #}
+    <div class="card card-flush mb-5">
+        <div class="card-body py-4 d-flex flex-wrap align-items-center gap-6">
+            <span class="fw-bold text-gray-800">{% trans "Bildirim Kanalları" %}:</span>
+            <label class="form-check form-switch form-check-custom form-check-solid">
+                <input class="form-check-input" type="checkbox" id="al-notify_sms">
+                <span class="form-check-label fw-semibold">{% trans "SMS" %}</span>
+            </label>
+            <label class="form-check form-switch form-check-custom form-check-solid">
+                <input class="form-check-input" type="checkbox" id="al-notify_email">
+                <span class="form-check-label fw-semibold">{% trans "E-posta" %}</span>
+            </label>
+            <a href="{% url 'dashboard:admin_notifications' %}" class="text-primary fs-8 ms-auto">
+                <i class="ki-outline ki-setting-2 fs-6 me-1"></i>{% trans "SMS/E-posta sağlayıcı ayarları" %}
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-5">
+        {# 1) Bakanlık veri hatası #}
+        <div class="col-xl-6">
+            <div class="card card-flush h-100">
+                <div class="card-header min-h-45px">
+                    <h3 class="card-title fs-6 fw-bold">
+                        <i class="ki-outline ki-data fs-3 text-danger me-2"></i>{% trans "Bakanlık Veri Hatası" %}
+                    </h3>
+                    <div class="card-toolbar">
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            <input class="form-check-input" type="checkbox" id="al-data_error_enabled">
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body pt-2">
+                    <div class="text-muted fs-8 mb-3">
+                        {% trans "Son 10 dakikalık Bakanlık verisi (GetDataByBetweenTwoDate) çekilir; seçili hata durumları tekrar eşiğini aşarsa bildirilir. 10 dakikada bir çalışır." %}
+                    </div>
+                    <label class="form-label fs-8 text-muted mb-1">{% trans "İzlenecek Hata Durumları" %}</label>
+                    <select class="form-select form-select-sm mb-3" id="al-data_error_codes" multiple
+                            data-control="select2" data-placeholder="{% trans 'Durum kodları' %}">
+                        {% for s in alarm_status_codes %}
+                        <option value="{{ s.code }}">{{ s.code }} — {{ s.desc }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label fs-8 text-muted mb-1">{% trans "Tekrar Eşiği (dk)" %}</label>
+                            <input type="number" class="form-control form-control-sm" id="al-data_error_persist_minutes" min="1" max="60">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fs-8 text-muted mb-1">{% trans "Tekrar Bildirim Aralığı (dk)" %}</label>
+                            <input type="number" class="form-control form-control-sm" id="al-data_error_cooldown_minutes" min="5" max="10080">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# 5) Kesinti (PowerOff) #}
+        <div class="col-xl-6">
+            <div class="card card-flush h-100">
+                <div class="card-header min-h-45px">
+                    <h3 class="card-title fs-6 fw-bold">
+                        <i class="ki-outline ki-electricity fs-3 text-warning me-2"></i>{% trans "Enerji / Bağlantı Kesintisi" %}
+                    </h3>
+                    <div class="card-toolbar">
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            <input class="form-check-input" type="checkbox" id="al-poweroff_enabled">
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body pt-2">
+                    <div class="text-muted fs-8 mb-3">
+                        {% trans "İstasyonun kapalı kaldığı (enerji/PC veya bağlantı kesintisi) kayıtları. Belirlenen süreden uzun her kesinti bir kez bildirilir." %}
+                    </div>
+                    <label class="form-label fs-8 text-muted mb-1">{% trans "Asgari Kesinti Süresi (dk)" %}</label>
+                    <input type="number" class="form-control form-control-sm" id="al-poweroff_min_minutes" min="1" max="1440">
+                </div>
+            </div>
+        </div>
+
+        {# 2) SSL #}
+        <div class="col-xl-6">
+            <div class="card card-flush h-100">
+                <div class="card-header min-h-45px">
+                    <h3 class="card-title fs-6 fw-bold">
+                        <i class="ki-outline ki-shield-tick fs-3 text-success me-2"></i>{% trans "SSL Sertifikası" %}
+                    </h3>
+                    <div class="card-toolbar">
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            <input class="form-check-input" type="checkbox" id="al-ssl_enabled">
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body pt-2">
+                    <div class="text-muted fs-8 mb-3">
+                        {% trans "SSL sertifikasının bitişine belirlenen gün kala bildirilir (günlük kontrol)." %}
+                    </div>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-6">
+                            <label class="form-label fs-8 text-muted mb-1">{% trans "Uyarı (gün kala)" %}</label>
+                            <input type="number" class="form-control form-control-sm" id="al-ssl_warn_days" min="1" max="90">
+                        </div>
+                        <div class="col-6">
+                            <div class="fs-8 text-muted">{% trans "Mevcut durum" %}</div>
+                            <div class="fw-bold" id="al-ssl-status">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# 4) Lisans #}
+        <div class="col-xl-6">
+            <div class="card card-flush h-100">
+                <div class="card-header min-h-45px">
+                    <h3 class="card-title fs-6 fw-bold">
+                        <i class="ki-outline ki-key fs-3 text-primary me-2"></i>{% trans "Lisans" %}
+                    </h3>
+                    <div class="card-toolbar">
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            <input class="form-check-input" type="checkbox" id="al-license_enabled">
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body pt-2">
+                    <div class="text-muted fs-8 mb-3">
+                        {% trans "Yazılım lisansının bitişine belirlenen gün kala bildirilir (günlük kontrol)." %}
+                    </div>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-6">
+                            <label class="form-label fs-8 text-muted mb-1">{% trans "Uyarı (gün kala)" %}</label>
+                            <input type="number" class="form-control form-control-sm" id="al-license_warn_days" min="1" max="90">
+                        </div>
+                        <div class="col-6">
+                            <div class="fs-8 text-muted">{% trans "Kalan" %}</div>
+                            <div class="fw-bold" id="al-license-status">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# 3) Kalibrasyon #}
+        <div class="col-xl-12">
+            <div class="card card-flush">
+                <div class="card-header min-h-45px">
+                    <h3 class="card-title fs-6 fw-bold">
+                        <i class="ki-outline ki-test-tubes fs-3 text-info me-2"></i>{% trans "Kalibrasyon Hatırlatma" %}
+                    </h3>
+                    <div class="card-toolbar">
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            <input class="form-check-input" type="checkbox" id="al-calibration_enabled">
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body pt-2">
+                    <div class="text-muted fs-8 mb-3">
+                        {% trans "Aylık kalibrasyon zorunludur. Son kalibrasyondan, (aralık − uyarı) gün geçtiğinde bildirilir (günlük kontrol)." %}
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fs-8 text-muted mb-1">{% trans "Kalibrasyon Aralığı (gün)" %}</label>
+                            <input type="number" class="form-control form-control-sm" id="al-calibration_interval_days" min="1" max="365">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fs-8 text-muted mb-1">{% trans "Uyarı (gün kala)" %}</label>
+                            <input type="number" class="form-control form-control-sm" id="al-calibration_warn_days" min="0" max="90">
+                        </div>
+                        <div class="col-md-6">
+                            <div class="fs-8 text-muted mb-1">{% trans "İstasyon son kalibrasyonları" %}</div>
+                            <div id="al-calibration-status" class="fs-8 text-gray-700">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Kaydet + son bildirimler #}
+    <div class="d-flex justify-content-between align-items-center mt-5">
+        <div class="text-muted fs-8" id="al-save-info"></div>
+        <button type="button" class="btn btn-primary" id="al-save">
+            <span class="indicator-label"><i class="ki-outline ki-check fs-4"></i>{% trans "Ayarları Kaydet" %}</span>
+            <span class="indicator-progress">{% trans "Kaydediliyor..." %}
+                <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
+        </button>
+    </div>
+
+    <div class="card card-flush mt-5">
+        <div class="card-header min-h-45px">
+            <h3 class="card-title fs-6 fw-bold">
+                <i class="ki-outline ki-time fs-3 text-primary me-2"></i>{% trans "Son Bildirimler" %}
+            </h3>
+        </div>
+        <div class="card-body pt-2">
+            <div id="al-events" class="text-muted fs-8">—</div>
+        </div>
+    </div>
+</div>
+
 </div>{# /tab-content #}
 {% endblock %}
 
@@ -1229,5 +1448,107 @@
             });
         });
     })();
+</script>
+
+<script>
+// ===================== Sistem Alarmları sekmesi =====================
+(function () {
+    "use strict";
+    const settingsEl = document.getElementById('alarm-settings');
+    if (!settingsEl) return;
+    const SETTINGS = JSON.parse(settingsEl.textContent || '{}');
+    const SAVE_URL = "{% url 'dashboard:api_system_alarms_save' %}";
+    const STATUS_URL = "{% url 'dashboard:api_system_alarms_status' %}";
+    const I18N = {
+        saved: "{% trans 'Kaydedildi' %}", err: "{% trans 'İşlem başarısız' %}",
+        none: "{% trans 'Bildirim yok.' %}", days: "{% trans 'gün' %}",
+        noCert: "{% trans 'Sertifika/domain yok' %}", never: "{% trans 'Hiç' %}",
+    };
+
+    function csrf() { const el = document.querySelector('[name=csrfmiddlewaretoken]'); return el ? el.value : ''; }
+    function postJSON(url, body) {
+        return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() }, body: JSON.stringify(body || {}) })
+            .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'HTTP ' + r.status }; }); });
+    }
+    function getJSON(url) { return fetch(url).then(function (r) { return r.json().catch(function () { return { ok: false }; }); }); }
+    function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    const $id = function (k) { return document.getElementById('al-' + k); };
+
+    const BOOLS = ['data_error_enabled', 'ssl_enabled', 'calibration_enabled', 'license_enabled', 'poweroff_enabled', 'notify_sms', 'notify_email'];
+    const NUMS = ['data_error_persist_minutes', 'data_error_cooldown_minutes', 'ssl_warn_days', 'calibration_interval_days', 'calibration_warn_days', 'license_warn_days', 'poweroff_min_minutes'];
+
+    // --- Formu doldur ---
+    BOOLS.forEach(function (k) { const el = $id(k); if (el) el.checked = !!SETTINGS[k]; });
+    NUMS.forEach(function (k) { const el = $id(k); if (el && SETTINGS[k] != null) el.value = SETTINGS[k]; });
+    (function fillCodes() {
+        const sel = $id('data_error_codes');
+        if (!sel) return;
+        const chosen = (SETTINGS.data_error_codes || []).map(String);
+        Array.prototype.forEach.call(sel.options, function (o) { o.selected = chosen.indexOf(o.value) !== -1; });
+        if (window.jQuery && jQuery(sel).hasClass('select2-hidden-accessible')) jQuery(sel).trigger('change');
+    })();
+
+    // --- Kaydet ---
+    const btn = document.getElementById('al-save');
+    btn.addEventListener('click', function () {
+        const payload = {};
+        BOOLS.forEach(function (k) { const el = $id(k); payload[k] = !!(el && el.checked); });
+        NUMS.forEach(function (k) { const el = $id(k); payload[k] = el ? el.value : null; });
+        const sel = $id('data_error_codes');
+        payload.data_error_codes = sel ? Array.prototype.map.call(sel.selectedOptions, function (o) { return parseInt(o.value, 10); }) : [];
+
+        btn.setAttribute('data-kt-indicator', 'on'); btn.disabled = true;
+        const info = document.getElementById('al-save-info');
+        postJSON(SAVE_URL, payload).then(function (d) {
+            btn.removeAttribute('data-kt-indicator'); btn.disabled = false;
+            if (d.ok) { info.innerHTML = '<span class="text-success">' + esc(I18N.saved) + '</span>'; }
+            else { info.innerHTML = '<span class="text-danger">' + esc(d.error || I18N.err) + '</span>'; }
+        }).catch(function () {
+            btn.removeAttribute('data-kt-indicator'); btn.disabled = false;
+            info.innerHTML = '<span class="text-danger">' + esc(I18N.err) + '</span>';
+        });
+    });
+
+    // --- Canlı durum (sekme ilk açılışında) ---
+    let statusLoaded = false;
+    function loadStatus() {
+        if (statusLoaded) return; statusLoaded = true;
+        getJSON(STATUS_URL).then(function (d) {
+            if (!d.ok) return;
+            const st = d.status || {};
+            // SSL
+            const sslEl = document.getElementById('al-ssl-status');
+            if (st.ssl && st.ssl.days != null) {
+                const cls = st.ssl.days <= (SETTINGS.ssl_warn_days || 3) ? 'text-danger' : 'text-success';
+                sslEl.innerHTML = '<span class="' + cls + '">' + st.ssl.days + ' ' + esc(I18N.days) + ' (' + esc(st.ssl.expiry) + ')</span>';
+            } else { sslEl.textContent = I18N.noCert; }
+            // Lisans
+            const licEl = document.getElementById('al-license-status');
+            if (st.license && st.license.days != null) {
+                const cls = st.license.days <= (SETTINGS.license_warn_days || 7) ? 'text-danger' : 'text-success';
+                licEl.innerHTML = '<span class="' + cls + '">' + st.license.days + ' ' + esc(I18N.days)
+                    + (st.license.valid_until ? (' (' + esc(st.license.valid_until) + ')') : '') + '</span>';
+            } else { licEl.textContent = '—'; }
+            // Kalibrasyon
+            const calEl = document.getElementById('al-calibration-status');
+            if (st.calibration && st.calibration.length) {
+                calEl.innerHTML = st.calibration.map(function (c) {
+                    const v = c.last ? (esc(c.last) + ' · ' + c.days + ' ' + esc(I18N.days)) : ('<span class="text-danger">' + esc(I18N.never) + '</span>');
+                    return '<div><b>' + esc(c.station) + ':</b> ' + v + '</div>';
+                }).join('');
+            } else { calEl.textContent = '—'; }
+            // Son bildirimler
+            const evEl = document.getElementById('al-events');
+            if (st.events && st.events.length) {
+                evEl.innerHTML = st.events.map(function (e) {
+                    return '<div class="border-bottom border-gray-200 py-1"><span class="badge badge-light-secondary me-2">' + esc(e.type) + '</span>'
+                        + esc(e.detail || e.ref) + ' <span class="text-muted">· ' + esc(e.at) + '</span></div>';
+                }).join('');
+            } else { evEl.textContent = I18N.none; }
+        });
+    }
+    const alarmTabLink = document.querySelector('[href="#tab-alarms"]');
+    if (alarmTabLink) alarmTabLink.addEventListener('shown.bs.tab', loadStatus);
+})();
 </script>
 {% endblock %}

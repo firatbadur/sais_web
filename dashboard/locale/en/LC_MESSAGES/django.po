@@ -3384,3 +3384,87 @@ msgstr "computing…"
 
 msgid "gün"
 msgstr "days"
+
+msgid "Sistem Alarmları"
+msgstr "System Alarms"
+
+msgid "Bildirim Kanalları"
+msgstr "Notification Channels"
+
+msgid "SMS"
+msgstr "SMS"
+
+msgid "SMS/E-posta sağlayıcı ayarları"
+msgstr "SMS/Email provider settings"
+
+msgid "Bakanlık Veri Hatası"
+msgstr "Ministry Data Error"
+
+msgid "İzlenecek Hata Durumları"
+msgstr "Monitored Error Statuses"
+
+msgid "Durum kodları"
+msgstr "Status codes"
+
+msgid "Tekrar Eşiği (dk)"
+msgstr "Repeat Threshold (min)"
+
+msgid "Tekrar Bildirim Aralığı (dk)"
+msgstr "Re-notify Interval (min)"
+
+msgid "Enerji / Bağlantı Kesintisi"
+msgstr "Power / Connection Outage"
+
+msgid "Asgari Kesinti Süresi (dk)"
+msgstr "Minimum Outage Duration (min)"
+
+msgid "SSL Sertifikası"
+msgstr "SSL Certificate"
+
+msgid "Uyarı (gün kala)"
+msgstr "Warn (days before)"
+
+msgid "Mevcut durum"
+msgstr "Current status"
+
+msgid "Kalibrasyon Hatırlatma"
+msgstr "Calibration Reminder"
+
+msgid "Kalibrasyon Aralığı (gün)"
+msgstr "Calibration Interval (days)"
+
+msgid "İstasyon son kalibrasyonları"
+msgstr "Station last calibrations"
+
+msgid "Ayarları Kaydet"
+msgstr "Save Settings"
+
+msgid "Son Bildirimler"
+msgstr "Recent Notifications"
+
+msgid "Bildirim yok."
+msgstr "No notifications."
+
+msgid "Sertifika/domain yok"
+msgstr "No certificate/domain"
+
+msgid "Hiç"
+msgstr "Never"
+
+msgid "Bu uyarılar, bildirim tercihi açık aktif kullanıcılara SMS/e-posta gönderir. Aynı durum için tekrar bildirim, ayarlanan aralıkla sınırlanır (kullanıcı boğulmaz)."
+msgstr "These alerts send SMS/email to active users who opted in. Re-notification for the same condition is rate-limited by the configured interval (so users aren't flooded)."
+
+msgid "Son 10 dakikalık Bakanlık verisi (GetDataByBetweenTwoDate) çekilir; seçili hata durumları tekrar eşiğini aşarsa bildirilir. 10 dakikada bir çalışır."
+msgstr "The last 10 minutes of Ministry data (GetDataByBetweenTwoDate) is fetched; if selected error statuses exceed the repeat threshold, a notification is sent. Runs every 10 minutes."
+
+msgid "İstasyonun kapalı kaldığı (enerji/PC veya bağlantı kesintisi) kayıtları. Belirlenen süreden uzun her kesinti bir kez bildirilir."
+msgstr "Records of station downtime (power/PC or connection outage). Each outage longer than the configured duration is notified once."
+
+msgid "SSL sertifikasının bitişine belirlenen gün kala bildirilir (günlük kontrol)."
+msgstr "Notified the configured number of days before the SSL certificate expires (checked daily)."
+
+msgid "Yazılım lisansının bitişine belirlenen gün kala bildirilir (günlük kontrol)."
+msgstr "Notified the configured number of days before the software license expires (checked daily)."
+
+msgid "Aylık kalibrasyon zorunludur. Son kalibrasyondan, (aralık − uyarı) gün geçtiğinde bildirilir (günlük kontrol)."
+msgstr "Monthly calibration is mandatory. Notified when (interval − warn) days have passed since the last calibration (checked daily)."

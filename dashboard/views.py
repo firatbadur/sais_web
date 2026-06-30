@@ -1416,6 +1416,15 @@ class SystemControlView(OperatorRequiredMixin, TemplateView):
         ctx["sim_policy"] = policy
         ctx["sim_status_rows"] = rows
         ctx["sim_fallback_choices"] = status_codes
+
+        # --- Sistem Alarmları sekmesi ---
+        from sais_domain.models import SystemAlarmSettings
+        from sais_domain.sim_report import SIM_DATA_STATUS_CODES
+
+        from .api_views import _alarm_settings_dict
+        ctx["alarm_settings"] = _alarm_settings_dict(SystemAlarmSettings.load())
+        # Hata kodu seçimi için tüm Bakanlık kodları (geçerli olmayanlar öne çıkar).
+        ctx["alarm_status_codes"] = SIM_DATA_STATUS_CODES
         return ctx
 
     def post(self, request, *args, **kwargs):

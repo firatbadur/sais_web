@@ -68,6 +68,140 @@ class SaisCabinet(models.Model):
         return f"{self.station} / {self.device_id}"
 
 
+def _default_data_error_codes():
+    """Bakanlık veri hatası alarmı için varsayılan izlenecek hata kodları.
+
+    200–206: Eksik/Geçersiz Yıkama, Eksik/Geçersiz Haftalık Yıkama,
+    Geçersiz/Eksik Aylık Kalibrasyon, Geçersiz Akış Hızı, Geçersiz Debi,
+    Tekrar Veri, Geçersiz Birim. Kullanıcı Sistem Kontrol → Sistem
+    Alarmları'ndan değiştirebilir."""
+    return [200, 201, 202, 203, 204, 205, 206]
+
+
+class SystemAlarmSettings(models.Model):
+    """Sistem uyarı mekanizmaları ayarı — singleton (pk=1).
+
+    Sistem Kontrol → **Sistem Alarmları** sekmesinden yönetilir. Beş kategori,
+    her biri toggle + kendi ayarlarıyla:
+
+    1. **Bakanlık veri hatası** — son 10 dk `GetDataByBetweenTwoDate`; seçili hata
+       status'ları `persist` dakikadan uzun tekrarlıysa operatöre bildir (anlık
+       tek-sefer hatalar boğmasın). 10 dakikada bir çalışır.
+    2. **SSL** — sertifika bitişine `ssl_warn_days` kala (günlük kontrol).
+    3. **Kalibrasyon** — aylık zorunlu; son kalibrasyondan `interval-warn` gün
+       geçince (1 gün kala) bildir (günlük).
+    4. **Lisans** — bitişe `license_warn_days` kala (günlük).
+    5. **Açılma/kapanma (PowerOff)** — `poweroff_min_minutes`'tan uzun
+       enerji/PC kesintisi olunca bildir (her kayıt için bir kez).
+    """
+
+    # --- Bakanlık veri hatası ---
+    data_error_enabled = models.BooleanField(default=False, verbose_name="Bakanlık Veri Hatası Alarmı")
+    data_error_codes = models.JSONField(
+        default=_default_data_error_codes, blank=True,
+        verbose_name="İzlenen Hata Kodları",
+        help_text="Bu Bakanlık status kodları tekrarlı görülürse bildir.",
+    )
+    data_error_persist_minutes = models.IntegerField(
+        default=5, verbose_name="Tekrar Eşiği (dk)",
+        help_text="Hata bu kadar dakikadan uzun tekrarlıysa bildir (anlık tek-sefer atlanır).",
+    )
+    data_error_cooldown_minutes = models.IntegerField(
+        default=60, verbose_name="Tekrar Bildirim Aralığı (dk)",
+        help_text="Aynı hata için iki bildirim arası asgari süre.",
+    )
+
+    # --- SSL ---
+    ssl_enabled = models.BooleanField(default=True, verbose_name="SSL Bitiş Uyarısı")
+    ssl_warn_days = models.IntegerField(default=3, verbose_name="SSL Uyarı (gün kala)")
+
+    # --- Kalibrasyon ---
+    calibration_enabled = models.BooleanField(default=True, verbose_name="Kalibrasyon Hatırlatma")
+    calibration_interval_days = models.IntegerField(
+        default=30, verbose_name="Kalibrasyon Aralığı (gün)",
+        help_text="Ayda 1 zorunlu → 30 gün.",
+    )
+    calibration_warn_days = models.IntegerField(
+        default=1, verbose_name="Kalibrasyon Uyarı (gün kala)",
+    )
+
+    # --- Lisans ---
+    license_enabled = models.BooleanField(default=True, verbose_name="Lisans Bitiş Uyarısı")
+    license_warn_days = models.IntegerField(default=7, verbose_name="Lisans Uyarı (gün kala)")
+
+    # --- PowerOff (enerji/internet kesintisi) ---
+    poweroff_enabled = models.BooleanField(default=True, verbose_name="Kesinti (Açılma/Kapanma) Uyarısı")
+    poweroff_min_minutes = models.IntegerField(
+        default=5, verbose_name="Asgari Kesinti Süresi (dk)",
+        help_text="Bu süreden kısa kesintiler bildirilmez.",
+    )
+
+    # --- Kanallar ---
+    notify_sms = models.BooleanField(default=True, verbose_name="SMS ile Bildir")
+    notify_email = models.BooleanField(default=True, verbose_name="E-posta ile Bildir")
+
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Son Güncelleme")
+    updated_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+", verbose_name="Güncelleyen",
+    )
+
+    class Meta:
+        db_table = "sais_system_alarm_settings"
+        verbose_name = "Sistem Alarm Ayarı"
+        verbose_name_plural = "Sistem Alarm Ayarları"
+
+    def __str__(self):
+        return "Sistem Alarm Ayarları"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass
+
+    @classmethod
+    def load(cls):
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def channels(self):
+        """Aktif bildirim kanalları (send_bulk için)."""
+        ch = []
+        if self.notify_sms:
+            ch.append("sms")
+        if self.notify_email:
+            ch.append("email")
+        return ch
+
+
+class SystemAlarmState(models.Model):
+    """Sistem alarmı tekrar-bildirim throttle state'i.
+
+    Her ``(alarm_type, ref_key)`` için son bildirim zamanını tutar; tekrar
+    bildirimi cooldown ile sınırlar (kullanıcıyı boğmamak için). PowerOff gibi
+    tek-sefer alarmlar için kayıt varlığı yeterlidir (yeniden bildirilmez).
+    """
+
+    alarm_type = models.CharField(max_length=30, verbose_name="Alarm Tipi")
+    ref_key = models.CharField(max_length=120, verbose_name="Referans")
+    last_notified_at = models.DateTimeField(verbose_name="Son Bildirim")
+    detail = models.CharField(max_length=300, blank=True, default="", verbose_name="Detay")
+
+    class Meta:
+        db_table = "sais_system_alarm_state"
+        verbose_name = "Sistem Alarm Durumu"
+        verbose_name_plural = "Sistem Alarm Durumları"
+        ordering = ["-last_notified_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["alarm_type", "ref_key"], name="sais_alarm_state_unique"),
+        ]
+
+    def __str__(self):
+        return f"{self.alarm_type}/{self.ref_key} @ {self.last_notified_at:%Y-%m-%d %H:%M}"
+
+
 class SimValidDay(models.Model):
     """Bir kabin için bir günün **geçerli veri** istatistiği (job ile doldurulur).
 

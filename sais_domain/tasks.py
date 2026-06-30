@@ -454,3 +454,26 @@ def compute_sim_valid_stats(cabinet_id=None, month=None) -> dict:
         "days_computed": computed,
         "month": f"{year:04d}-{mon:02d}",
     }
+
+
+# ---------------------------------------------------------------------------
+# Sistem uyarı mekanizmaları (SSL / lisans / kalibrasyon / kesinti / veri hatası)
+# ---------------------------------------------------------------------------
+# Sistem Kontrol → Sistem Alarmları'ndan toggle'lı. İki beat:
+#   check_system_alarms       (her 10 dk)  → Bakanlık veri hatası + kesinti
+#   check_system_alarms_daily (günde 1)    → SSL + lisans + kalibrasyon
+# Motor sais_domain.system_alarms; bildirim send_bulk(kind="alarm").
+
+
+@shared_task(name="sais_domain.tasks.check_system_alarms")
+def check_system_alarms() -> dict:
+    """10 dakikada bir: Bakanlık veri hatası (son 10 dk) + kesinti kontrolü."""
+    from .system_alarms import run_realtime
+    return run_realtime()
+
+
+@shared_task(name="sais_domain.tasks.check_system_alarms_daily")
+def check_system_alarms_daily() -> dict:
+    """Günde bir: SSL bitiş + lisans bitiş + kalibrasyon hatırlatma."""
+    from .system_alarms import run_daily
+    return run_daily()
