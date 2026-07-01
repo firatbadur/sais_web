@@ -9,6 +9,10 @@
     <div class="card-header align-items-center">
         <h3 class="card-title">{% trans "Bağlantılar" %}</h3>
         <div class="card-toolbar">
+            <button type="button" class="btn btn-sm btn-light-success me-2"
+                    data-bs-toggle="modal" data-bs-target="#import-connection-modal">
+                <i class="ki-outline ki-file-up fs-5 me-1"></i>{% trans "İçe Aktar" %}
+            </button>
             <a href="{% url 'dashboard:sensorcfg_connection_create' %}" class="btn btn-sm btn-primary">
                 <i class="ki-outline ki-plus fs-5 me-1"></i>{% trans "Yeni Bağlantı" %}
             </a>
@@ -51,6 +55,9 @@
                                 <a href="{% url 'dashboard:sensorcfg_connection_edit' c.pk %}" class="btn btn-sm btn-light-primary" title="{% trans 'Düzenle / Sihirbaz' %}">
                                     <i class="ki-outline ki-setting-3 fs-5 me-1"></i>{% trans "Yapılandır" %}
                                 </a>
+                                <a href="{% url 'dashboard:sensorcfg_connection_export' c.pk %}" class="btn btn-sm btn-light-info btn-icon" title="{% trans 'Dışa Aktar (scan grupları + sensörler)' %}">
+                                    <i class="ki-outline ki-file-down fs-5"></i>
+                                </a>
                                 <a href="{% url 'dashboard:sensorcfg_connection_delete' c.pk %}" class="btn btn-sm btn-light-danger btn-icon" title="{% trans 'Sil' %}">
                                     <i class="ki-outline ki-trash fs-5"></i>
                                 </a>
@@ -65,4 +72,101 @@
         {% include "dashboard/partials/pagination.html" %}
     </div>
 </div>
+
+<!-- İçe Aktar modal -->
+<div class="modal fade" id="import-connection-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">{% trans "Bağlantı İçe Aktar" %}</h3>
+                <div class="btn btn-icon btn-sm btn-active-light-primary ms-2" data-bs-dismiss="modal">
+                    <i class="ki-outline ki-cross fs-1"></i>
+                </div>
+            </div>
+            <form id="import-connection-form">
+                <div class="modal-body">
+                    <div class="alert alert-light-info d-flex align-items-center mb-6">
+                        <i class="ki-outline ki-information fs-2 text-info me-3"></i>
+                        <div class="text-gray-700 fs-7">
+                            {% trans "Başka bir kurulumdan dışa aktarılmış bir bağlantı dosyasını (.json) seçtiğiniz tesise yükler; scan grupları, sensörler ve gerekli parametreler birlikte oluşturulur." %}
+                        </div>
+                    </div>
+                    <div class="mb-5">
+                        <label class="form-label required">{% trans "Hedef Tesis" %}</label>
+                        <select name="station" class="form-select" data-control="select2"
+                                data-placeholder="{% trans 'Tesis seçin' %}" required>
+                            <option></option>
+                            {% for s in stations %}
+                                <option value="{{ s.pk }}">{{ s.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-5">
+                        <label class="form-label">{% trans "Yeni Bağlantı Adı (opsiyonel)" %}</label>
+                        <input type="text" name="name" class="form-control"
+                               placeholder="{% trans 'Boş bırakılırsa dosyadaki ad kullanılır' %}">
+                        <div class="form-text">{% trans "Aynı isim tesiste varsa otomatik son ek eklenir." %}</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label required">{% trans "Dosya (.json)" %}</label>
+                        <input type="file" name="file" accept=".json,application/json" class="form-control" required>
+                    </div>
+                    <div id="import-alert" class="alert alert-danger d-none mt-4"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">{% trans "İptal" %}</button>
+                    <button type="submit" class="btn btn-primary" id="import-submit-btn">
+                        <span class="indicator-label">{% trans "İçe Aktar" %}</span>
+                        <span class="indicator-progress">{% trans "Yükleniyor..." %}
+                            <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    function csrf() {
+        const m = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
+        return m ? m.pop() : '';
+    }
+    const form = document.getElementById('import-connection-form');
+    if (!form) return;
+    const alertBox = document.getElementById('import-alert');
+    const btn = document.getElementById('import-submit-btn');
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        alertBox.classList.add('d-none');
+        alertBox.textContent = '';
+        btn.setAttribute('data-kt-indicator', 'on');
+        btn.disabled = true;
+
+        fetch("{% url 'dashboard:api_sensorcfg_connection_import' %}", {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrf() },
+            body: new FormData(form),
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) {
+                window.location.href = "{% url 'dashboard:sensorcfg_connection_edit' 0 %}".replace('/0/', '/' + d.id + '/');
+            } else {
+                alertBox.textContent = d.error || "{% trans 'İçe aktarım başarısız.' %}";
+                alertBox.classList.remove('d-none');
+                btn.removeAttribute('data-kt-indicator');
+                btn.disabled = false;
+            }
+        })
+        .catch(() => {
+            alertBox.textContent = "{% trans 'Sunucuya bağlanılamadı.' %}";
+            alertBox.classList.remove('d-none');
+            btn.removeAttribute('data-kt-indicator');
+            btn.disabled = false;
+        });
+    });
+})();
+</script>
 {% endblock %}

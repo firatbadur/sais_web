@@ -2761,6 +2761,76 @@ def connection_save(request):
 
 
 @login_required
+def connection_import(request):
+    """Dışa aktarılmış bir bağlantı ağacını (JSON) hedef tesise yükler. POST multipart.
+
+    Alanlar: `file` (yüklenen .json), `station` (hedef tesis id), opsiyonel `name`
+    (yeni bağlantı adı). Döner: {ok, id, name, scan_groups, sensors} veya
+    {ok:false, error}.
+    """
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from api.connection_io import ImportError_, import_connection
+    from api.models import Station
+
+    upload = request.FILES.get("file")
+    if upload is None:
+        return JsonResponse({"ok": False, "error": "Dosya seçilmedi."}, status=400)
+    if upload.size and upload.size > 10 * 1024 * 1024:
+        return JsonResponse({"ok": False, "error": "Dosya çok büyük (max 10 MB)."}, status=400)
+
+    try:
+        raw = upload.read().decode("utf-8")
+        data = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON dosyası."}, status=400)
+
+    try:
+        station_id = int(request.POST.get("station") or 0) or None
+    except (TypeError, ValueError):
+        station_id = None
+    if not station_id:
+        return JsonResponse({"ok": False, "error": "Hedef tesis seçilmedi."}, status=400)
+    station = Station.objects.filter(pk=station_id).first()
+    if station is None:
+        return JsonResponse({"ok": False, "error": "Tesis bulunamadı."}, status=404)
+
+    name = (request.POST.get("name") or "").strip() or None
+
+    try:
+        conn = import_connection(data, station, name=name)
+    except ImportError_ as exc:
+        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+    except Exception as exc:  # noqa: BLE001 — import UI'yı kırmasın
+        return JsonResponse(
+            {"ok": False, "error": f"İçe aktarım başarısız: {exc}"}, status=400
+        )
+
+    sg_count = conn.scan_groups.count()
+    sensor_count = conn.sensors.count()
+    log_event(
+        EventType.CONFIG,
+        f"Bağlantı içe aktarıldı: {conn} "
+        f"({sg_count} scan grubu, {sensor_count} sensör)",
+        severity="warning", request=request,
+    )
+    return JsonResponse({
+        "ok": True,
+        "id": conn.id,
+        "name": conn.name,
+        "station": station.name,
+        "scan_groups": sg_count,
+        "sensors": sensor_count,
+    })
+
+
+@login_required
 def connection_detail(request):
     """Bir bağlantının düzenlenebilir alanları (sihirbaz step 1 prefill). GET ?connection="""
     denied = _require_operator(request)

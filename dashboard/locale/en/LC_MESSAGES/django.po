@@ -3504,3 +3504,39 @@ msgstr "Fullscreen"
 
 msgid "Çık"
 msgstr "Exit"
+
+msgid "İçe Aktar"
+msgstr "Import"
+
+msgid "Dışa Aktar (scan grupları + sensörler)"
+msgstr "Export (scan groups + sensors)"
+
+msgid "Bağlantı İçe Aktar"
+msgstr "Import Connection"
+
+msgid "Başka bir kurulumdan dışa aktarılmış bir bağlantı dosyasını (.json) seçtiğiniz tesise yükler; scan grupları, sensörler ve gerekli parametreler birlikte oluşturulur."
+msgstr "Loads a connection file (.json) exported from another installation into the selected facility; scan groups, sensors and required parameters are created together."
+
+msgid "Hedef Tesis"
+msgstr "Target Facility"
+
+msgid "Tesis seçin"
+msgstr "Select facility"
+
+msgid "Yeni Bağlantı Adı (opsiyonel)"
+msgstr "New Connection Name (optional)"
+
+msgid "Boş bırakılırsa dosyadaki ad kullanılır"
+msgstr "If left blank, the name from the file is used"
+
+msgid "Aynı isim tesiste varsa otomatik son ek eklenir."
+msgstr "If the name already exists in the facility, a suffix is added automatically."
+
+msgid "Dosya (.json)"
+msgstr "File (.json)"
+
+msgid "İçe aktarım başarısız."
+msgstr "Import failed."
+
+msgid "Sunucuya bağlanılamadı."
+msgstr "Could not connect to the server."

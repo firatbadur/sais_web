@@ -5,6 +5,7 @@ içerik (filter form'ları, tablo verileri) adım adım eklenecek.
 """
 from __future__ import annotations
 
+import re
 import secrets
 import string
 from datetime import datetime, timedelta
@@ -971,6 +972,11 @@ class ConnectionConfigListView(OperatorRequiredMixin, ListView):
             .order_by("station__name", "name")
         )
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["stations"] = Station.objects.order_by("name")
+        return ctx
+
 
 class ScanGroupWizardView(OperatorRequiredMixin, TemplateView):
     """Üç adımlı kurulum sihirbazı: Bağlantı → Scan Grupları → Sensörler.
@@ -1021,6 +1027,37 @@ class ConnectionConfigDeleteView(OperatorRequiredMixin, DeleteView):
             EventType.CONFIG,
             f"Bağlantı silindi: {label}",
             severity="warning", request=self.request,
+        )
+        return response
+
+
+class ConnectionExportView(OperatorRequiredMixin, View):
+    """Bir bağlantının tüm ağacını (scan grupları + sensörler + parametreler)
+    taşınabilir JSON dosyası olarak indirir."""
+
+    def get(self, request, pk):
+        from django.http import Http404, JsonResponse
+
+        from api.connection_io import export_connection
+
+        conn = (
+            Connection.objects.select_related("station")
+            .filter(pk=pk)
+            .first()
+        )
+        if conn is None:
+            raise Http404
+
+        payload = export_connection(conn)
+        slug = re.sub(r"[^0-9A-Za-z_-]+", "_", conn.name or f"connection-{pk}").strip("_")
+        filename = f"connection-{slug or pk}.json"
+
+        response = JsonResponse(payload, json_dumps_params={"ensure_ascii": False, "indent": 2})
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        log_event(
+            EventType.CONFIG,
+            f"Bağlantı dışa aktarıldı: {conn}",
+            request=request,
         )
         return response
 
