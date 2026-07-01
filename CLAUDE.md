@@ -340,6 +340,16 @@ Dış erişim (`https://sais-tesis1.envisoft.com.tr` gibi) bir **Caddy** servisi
 - **ALLOWED_HOSTS/CSRF**: fleet-wide `.env`'de **wildcard** (`.envisoft.com.tr` /
   `https://*.envisoft.com.tr`) → panelden subdomain değişince **Django restart gerekmez**. Caddy tek-domain
   gatekeeper; prod'da web host'a publish edilmez (`expose: 8000`), ingress yalnızca Caddy.
+  **TUZAK (saha deneyimi):** panelden (WebSettings) domain eklemek Caddy'yi yönlendirir ama
+  **Django `ALLOWED_HOSTS`'u güncellemez** (o `.env`/settings'ten okunur). `.env`'de domain (veya
+  wildcard) yoksa Django o Host'a **400 DisallowedHost** verir → kurulumda domain girilmeli (wildcard
+  `.env`'e yazılsın); girilmediyse sonradan `DJANGO_ALLOWED_HOSTS` + `DJANGO_CSRF_TRUSTED_ORIGINS`'e
+  elle eklenip web recreate edilmeli.
+- **CDN/Cloudflare önde ise (saha deneyimi):** Cloudflare **"Flexible" SSL** modu origin'e HTTP ile
+  gelir; Caddy otomatik HTTP→HTTPS yönlendirdiğinden **sonsuz redirect döngüsü** olur. Doğrusu:
+  Cloudflare kaydını **"DNS only" (gri bulut)** yap (Caddy kendi LE cert'ini alır) **veya** turuncu
+  bulut kalacaksa Cloudflare SSL modunu **"Full (strict)"** yap (origin'de geçerli LE cert doğrulanır).
+  Turuncu bulutta bile Caddy HTTP-01 challenge'ı geçirilebildiği için cert alınabilir; asıl sorun SSL modu.
 - **Compose**: `caddy` servisi (Watchtower label'sız → pinned, db/redis gibi) + `caddy_config_init`
   (busybox `chmod 0777`, web non-root yazsın) + `caddy_config`/`caddy_data` volume (cert kalıcılığı →
   Let's Encrypt rate-limit). Cert dosya izinleri: `key.pem` 0o600 / `cert.pem` 0o644.

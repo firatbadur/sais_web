@@ -91,7 +91,7 @@ echo    "Kurulum dizini: $INSTALL_DIR"
 # GHCR kullanıcı/token gömülüyse (müşteri sürümü) SORULMAZ. ask_secret zaten
 # değişken doluysa atlar — yani token yalnız geliştirici repo sürümünde sorulur.
 step "Kurulum bilgileri"
-ask        DOMAIN      "Alan adı (SSL'i sonra dashboard'dan ayarlayacaksınız; boş bırakılabilir)" ""
+ask        DOMAIN      "Alan adı (ör. demo.envisoft.com.tr) — SSL'i sonra dashboard'dan açsan bile ALLOWED_HOSTS için GİR; boş geçersen domain'i sonradan .env'e elle eklemen gerekir" ""
 ask        ADMIN_USER  "Yönetici (admin) kullanıcı adı" "admin"
 ask_secret ADMIN_PASS  "Yönetici şifresi"
 ask        ADMIN_EMAIL "Yönetici e-postası" ""
@@ -471,6 +471,15 @@ echo -e "\nSonraki adımlar:"
 echo    "  1) Tarayıcıdan http://${SERVER_IP}/dashboard/ ile giriş yapın."
 echo    "  2) Yönetici → Web Erişim Ayarları'ndan domain + SSL'i açın."
 echo    "  3) Admin panelinden Station / Connection / Sensor / SaisCabinet kayıtlarını girin."
+if [[ -z "$DOMAIN" ]]; then
+    echo -e "\n${c_yellow}UYARI:${c_reset} Domain boş geçildi. Sonradan domain kullanacaksan .env'e EKLE (yoksa Django 400 verir):"
+    echo    "  sed -i '/^DJANGO_ALLOWED_HOSTS=/ s/\$/,.SENIN.DOMAIN.tr/' $INSTALL_DIR/.env"
+    echo    "  sed -i '/^DJANGO_CSRF_TRUSTED_ORIGINS=/ s#\$#,https://*.SENIN.DOMAIN.tr#' $INSTALL_DIR/.env"
+    echo    "  cd $INSTALL_DIR && docker compose -f $COMPOSE_FILE --env-file .env up -d"
+fi
+if [[ -n "$DOMAIN" ]]; then
+    echo -e "\n${c_yellow}NOT:${c_reset} Domain önünde Cloudflare/CDN varsa SSL modunu 'Full (strict)' yap (Flexible → redirect döngüsü)."
+fi
 echo -e "\nYönetim komutları:"
 echo    "  cd ${INSTALL_DIR}"
 echo    "  ${DOCKER_BIN} compose -f ${COMPOSE_FILE} --env-file .env ps       # durum"
