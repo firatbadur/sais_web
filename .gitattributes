@@ -1,2 +1,6 @@
 # Shell scriptleri her zaman LF olmalı — CRLF olursa Linux'ta çalışmaz
 *.sh text eol=lf
+
+# Üretilen kılavuz dosyaları binary (satır sonu/diff munging olmasın)
+*.docx binary
+*.pdf binary

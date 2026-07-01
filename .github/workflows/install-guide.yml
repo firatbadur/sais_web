@@ -1,0 +1,56 @@
+name: install-guide
+
+# Kurulum kılavuzunu (docs/) otomatik güncel tutar. Installer davranışı ya da
+# kılavuz üreticisi değiştiğinde docx'i python-docx ile yeniden üretir, PDF'i
+# LibreOffice ile türetir ve değişmişse repo'ya geri commit'ler.
+#
+# Döngü yok: tetikleyici path'ler installer/** + üretici script; bot yalnız
+# docs/*.docx + *.pdf commit'ler (bunlar path filtresinde DEĞİL).
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "installer/**"
+      - "docs/generate_install_guide.py"
+      - ".github/workflows/install-guide.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --quiet python-docx
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libreoffice-writer fonts-dejavu
+
+      - name: Generate DOCX
+        run: python docs/generate_install_guide.py docs/Envisoft-WebX-Kurulum-Kilavuzu.docx
+
+      - name: Convert to PDF (LibreOffice)
+        run: soffice --headless --convert-to pdf --outdir docs docs/Envisoft-WebX-Kurulum-Kilavuzu.docx
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/Envisoft-WebX-Kurulum-Kilavuzu.docx docs/Envisoft-WebX-Kurulum-Kilavuzu.pdf
+          if git diff --cached --quiet; then
+            echo "Kılavuzda değişiklik yok."
+          else
+            git commit -m "docs: kurulum kılavuzu otomatik güncellendi (installer değişikliği)"
+            git push
+          fi

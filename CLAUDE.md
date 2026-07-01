@@ -417,6 +417,22 @@ yok (Linux'ta Docker native çalışır), servis NSSM/scheduled-task yerine **sy
   tutulmalı** (prod compose değişince bu heredoc da güncellenmeli). Satır sonları **LF** olmalı (CRLF →
   Linux'ta `bash` patlar).
 
+## Kurulum kılavuzu (docs/ — otomatik üretilen)
+
+Windows + Linux kurulumu, kurulum öncesi kontroller (sanallaştırma/nested, Windows sürümü, port/DNS)
+ve karşılaşılabilecek hatalar tek bir kullanıcı kılavuzunda toplanır (kurulum ekibi/müşteri için).
+
+- **Tek doğruluk kaynağı**: [docs/generate_install_guide.py](docs/generate_install_guide.py) (python-docx).
+  Metin bu script'te; çalıştırınca `docs/Envisoft-WebX-Kurulum-Kilavuzu.docx` üretir. PDF docx'ten
+  türetilir (yerelde Word COM veya `docx2pdf`; CI'da LibreOffice `soffice --convert-to pdf`). Üretilen
+  `docs/*.docx` + `docs/*.pdf` repo'ya commit'lenir (`.gitattributes`'ta `binary`).
+- **Otomatik güncelleme**: [.github/workflows/install-guide.yml](.github/workflows/install-guide.yml)
+  `installer/**` veya üretici script değişince docx+pdf'i yeniden üretip repo'ya geri commit'ler.
+  Döngü yok (bot yalnız `docs/*.docx|pdf` yazar, bunlar tetikleyici path'lerde değil).
+- **Kural**: kurulum davranışı değişince (installer script, ön koşul, yeni hata/çözüm) kılavuz
+  metnini `generate_install_guide.py` içinde güncelle; docx/pdf CI'da (veya elle
+  `python docs/generate_install_guide.py` + PDF dönüştürme) yenilenir.
+
 ## Önemli çalıştırma davranışları
 
 - **Yapılandırma:** Tüm ayarlar `.env` üzerinden okunur (`python-dotenv`). Sırları asla koda commitlemeyin. Ek env'ler: `API_LOG_*`, `READING_RETENTION_*_DAYS`, `CELERY_BROKER_URL` (default `redis://localhost:6379/2`), `CELERY_RESULT_BACKEND` (default `django-db`).
