@@ -379,6 +379,29 @@ başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows ser
   image gizliliği değil. `nssm.exe` build'de [nssm.cc](https://nssm.cc)'den çekilir (repo'ya commitlenmez).
 - **Test**: dev ortamında doğrulanamaz; temiz Windows VM'de manuel (bkz. [installer/README.md](installer/README.md)).
 
+## Linux tek-komut kurulum (Windows installer'ın karşılığı)
+
+Windows dışı sahalar (bulut/kiralık Ubuntu/Debian sunucular, ör. Server 2019 gibi WSL2'siz
+Windows'a alternatif) için [installer/install-linux.sh](installer/install-linux.sh) — **self-contained
+tek script**. Windows installer'ının yaptığı işin aynısını yapar; Windows'takinden farkı: WSL2 katmanı
+yok (Linux'ta Docker native çalışır), servis NSSM/scheduled-task yerine **systemd**.
+
+- **Kullanım**: dosyayı sunucuya kopyala → `sudo bash install-linux.sh` (interaktif, soru sorar) veya
+  unattended env ile (`DOMAIN`/`ADMIN_USER`/`ADMIN_PASS`/`GHCR_USER`/`GHCR_TOKEN`...). Repoya ihtiyaç
+  yok — `docker-compose.prod.yml`'yi kendisi (embedded heredoc) yazar.
+- **Akış (6 adım)**: Docker CE kur (`get.docker.com`) → `.env` üret (`DJANGO_SECRET_KEY` +
+  `POSTGRES_PASSWORD` + `WATCHTOWER_API_TOKEN` rastgele; domain'den wildcard ALLOWED_HOSTS/CSRF türet) →
+  GHCR login (`--password-stdin`) → `pull` + `up -d` → migration bekle + `seed_initial_data`/
+  `seed_sais_data`/`seed_admin_user` (retry'li) → systemd unit `envisoft-webx.service`
+  (`enable`, açılışta `compose up -d`).
+- **Domain/SSL**: script yalnız ALLOWED_HOSTS/CSRF wildcard'ını `.env`'e yazar; Caddy'ye domain
+  **yazmaz** (WebSettings bootstrap yok) — SSL/domain sonradan dashboard → Web Erişim Ayarları'ndan
+  açılır. Kurulum dizini varsayılan `/opt/envisoft`.
+- **Lisans**: `LICENSE_KEY` verilmezse `LICENSE_ENFORCE=0` (kilitlenmesin); verilirse `=1`.
+- **DRY notu**: embedded compose, [docker-compose.prod.yml](docker-compose.prod.yml) ile **elle senkron
+  tutulmalı** (prod compose değişince bu heredoc da güncellenmeli). Satır sonları **LF** olmalı (CRLF →
+  Linux'ta `bash` patlar).
+
 ## Önemli çalıştırma davranışları
 
 - **Yapılandırma:** Tüm ayarlar `.env` üzerinden okunur (`python-dotenv`). Sırları asla koda commitlemeyin. Ek env'ler: `API_LOG_*`, `READING_RETENTION_*_DAYS`, `CELERY_BROKER_URL` (default `redis://localhost:6379/2`), `CELERY_RESULT_BACKEND` (default `django-db`).
