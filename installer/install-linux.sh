@@ -455,6 +455,12 @@ systemctl daemon-reload
 systemctl enable "$SERVICE_NAME" >/dev/null 2>&1
 ok "Servis kaydedildi — sunucu her açıldığında yığın otomatik kalkar."
 
+# Caddy, web container Caddyfile'ı üretmeden başlamış olabilir → --watch her zaman
+# tetiklenmeyince stok config'i sunar (dashboard 404). Bir kez restart ile rendered
+# config'i (localhost + IP catch-all :80) yüklet. Non-fatal.
+$COMPOSE restart caddy >/dev/null 2>&1 && ok "Caddy yeniden başlatıldı (config yüklendi)." \
+    || warn "Caddy restart atlandı; 404 alırsan: $COMPOSE restart caddy"
+
 # ── Özet ──────────────────────────────────────────────────────────────────────
 echo -e "\n${c_green}==== KURULUM TAMAMLANDI ====${c_reset}"
 echo    "Dashboard (IP)   : http://${SERVER_IP}/dashboard/"
