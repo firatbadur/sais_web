@@ -118,3 +118,37 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: installer/dist/EnvisoftWebX-Setup-${{ github.ref_name }}.exe
+
+  # Linux "tek-komut" installer (Windows installer'ın karşılığı). GHCR image
+  # private olduğundan read:packages token'ı build-time script'e gömülür (aynı
+  # INSTALLER_GHCR_TOKEN secret'ı) → müşteri token GİRMEZ. Release asset'i private
+  # repo'da yalnız yetkili indirir; asıl kullanım gate'i Ed25519 lisans.
+  linux-installer:
+    needs: build-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Embed GHCR creds into install-linux.sh
+        env:
+          GHCR_TOKEN: ${{ secrets.INSTALLER_GHCR_TOKEN }}
+        run: |
+          # Placeholder'ları gerçek değerlerle değiştir. Token alfanümerik (ghp_/
+          # github_pat_) → sed '#' ayıracı ve '&' ile çakışmaz.
+          sed -i \
+            -e "s#__GHCR_USER__#${{ github.repository_owner }}#g" \
+            -e "s#__GHCR_IMAGE__#ghcr.io/${{ github.repository }}#g" \
+            -e "s#__GHCR_TOKEN__#${GHCR_TOKEN}#g" \
+            installer/install-linux.sh
+          # Gömüldüğünü doğrula (placeholder kalmamalı; token'ı log'a basma).
+          if grep -q "__GHCR_TOKEN__" installer/install-linux.sh; then
+            echo "HATA: token gömülemedi (placeholder duruyor)."; exit 1
+          fi
+
+      - name: Attach Linux installer to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/install-linux.sh

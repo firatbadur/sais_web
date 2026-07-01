@@ -28,10 +28,25 @@ set -euo pipefail
 
 # ── Ayarlanabilir varsayılanlar (env ile override edilebilir) ────────────────
 INSTALL_DIR="${INSTALL_DIR:-/opt/envisoft}"
-GHCR_IMAGE="${GHCR_IMAGE:-ghcr.io/firatbadur/sais_web}"
 IMAGE_TAG="${IMAGE_TAG:-stable}"
 SERVICE_NAME="${SERVICE_NAME:-envisoft-webx}"
 COMPOSE_FILE="docker-compose.prod.yml"
+
+# ── Build-time gömülü GHCR kimliği (release.yml doldurur) ─────────────────────
+# MÜŞTERİYE dağıtılan sürümde bu placeholder'lar CI'da gerçek değerlerle değiştirilir
+# (Windows installer'daki gömülü token'ın karşılığı) → müşteri GHCR/GitHub token
+# GİRMEZ, sadece `bash install-linux.sh` çalıştırır. Repo'dan (geliştirici) çalışınca
+# placeholder kalır → aşağıda boşa sayılır → yalnız o zaman interaktif sorulur.
+EMBED_GHCR_USER='__GHCR_USER__'
+EMBED_GHCR_TOKEN='__GHCR_TOKEN__'
+EMBED_GHCR_IMAGE='__GHCR_IMAGE__'
+case "$EMBED_GHCR_USER"  in *__GHCR_USER__*)  EMBED_GHCR_USER="";;  esac
+case "$EMBED_GHCR_TOKEN" in *__GHCR_TOKEN__*) EMBED_GHCR_TOKEN="";; esac
+case "$EMBED_GHCR_IMAGE" in *__GHCR_IMAGE__*) EMBED_GHCR_IMAGE="";; esac
+
+GHCR_IMAGE="${GHCR_IMAGE:-${EMBED_GHCR_IMAGE:-ghcr.io/firatbadur/sais_web}}"
+GHCR_USER="${GHCR_USER:-${EMBED_GHCR_USER:-firatbadur}}"
+GHCR_TOKEN="${GHCR_TOKEN:-$EMBED_GHCR_TOKEN}"
 
 # ── Renkli çıktı yardımcıları ────────────────────────────────────────────────
 c_reset='\033[0m'; c_cyan='\033[36m'; c_green='\033[32m'; c_yellow='\033[33m'; c_red='\033[31m'
@@ -41,7 +56,9 @@ warn() { echo -e "   ${c_yellow}[!]${c_reset} $*"; }
 die()  { echo -e "\n${c_red}[HATA]${c_reset} $*" >&2; exit 1; }
 
 # ── Rastgele secret üretici (harf/rakam + birkaç sembol) ─────────────────────
-gen_secret() { LC_ALL=C tr -dc 'A-Za-z0-9!@%^_=+-' </dev/urandom | head -c "${1:-50}"; }
+# NOT: `head -c N` boruyu erken kapatır → `tr`'ye SIGPIPE (141) → pipefail+set -e
+# script'i öldürür. `|| true` ile pipeline'ın SIGPIPE çıkışını yut (çıktı zaten alındı).
+gen_secret() { LC_ALL=C tr -dc 'A-Za-z0-9!@%^_=+-' </dev/urandom 2>/dev/null | head -c "${1:-50}" || true; }
 
 # ── Root kontrolü ─────────────────────────────────────────────────────────────
 [[ $EUID -eq 0 ]] || die "Bu script root olarak çalışmalı. 'sudo bash install-linux.sh' deneyin."
@@ -71,17 +88,19 @@ echo -e "${c_cyan}==== Envisoft WebX — Linux Kurulum ====${c_reset}"
 echo    "Kurulum dizini: $INSTALL_DIR"
 
 # ── Kurulum sorularını topla ─────────────────────────────────────────────────
+# GHCR kullanıcı/token gömülüyse (müşteri sürümü) SORULMAZ. ask_secret zaten
+# değişken doluysa atlar — yani token yalnız geliştirici repo sürümünde sorulur.
 step "Kurulum bilgileri"
 ask        DOMAIN      "Alan adı (SSL'i sonra dashboard'dan ayarlayacaksınız; boş bırakılabilir)" ""
-ask        GHCR_USER   "GHCR (GitHub) kullanıcı adı" "firatbadur"
-ask_secret GHCR_TOKEN  "GHCR token (read:packages yetkili PAT)"
 ask        ADMIN_USER  "Yönetici (admin) kullanıcı adı" "admin"
 ask_secret ADMIN_PASS  "Yönetici şifresi"
 ask        ADMIN_EMAIL "Yönetici e-postası" ""
 ask        LICENSE_KEY "Lisans anahtarı (yoksa boş geçin — lisans zorlaması kapalı kalır)" ""
 ask        LICENSE_URL "Lisans manifest URL'i (yoksa boş geçin)" ""
+# GHCR token yalnız gömülü DEĞİLSE (geliştirici) sorulur:
+ask_secret GHCR_TOKEN  "GHCR token (read:packages yetkili PAT)"
 
-[[ -n "${GHCR_TOKEN:-}" ]] || die "GHCR token boş olamaz."
+[[ -n "${GHCR_TOKEN:-}" ]] || die "GHCR token bulunamadı (gömülü değil ve girilmedi)."
 [[ -n "${ADMIN_PASS:-}"  ]] || die "Yönetici şifresi boş olamaz."
 
 # ── Adım 1: Docker CE ─────────────────────────────────────────────────────────

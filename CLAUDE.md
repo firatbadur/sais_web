@@ -387,8 +387,13 @@ tek script**. Windows installer'ının yaptığı işin aynısını yapar; Windo
 yok (Linux'ta Docker native çalışır), servis NSSM/scheduled-task yerine **systemd**.
 
 - **Kullanım**: dosyayı sunucuya kopyala → `sudo bash install-linux.sh` (interaktif, soru sorar) veya
-  unattended env ile (`DOMAIN`/`ADMIN_USER`/`ADMIN_PASS`/`GHCR_USER`/`GHCR_TOKEN`...). Repoya ihtiyaç
-  yok — `docker-compose.prod.yml`'yi kendisi (embedded heredoc) yazar.
+  unattended env ile (`DOMAIN`/`ADMIN_USER`/`ADMIN_PASS`...). Repoya ihtiyaç yok —
+  `docker-compose.prod.yml`'yi kendisi (embedded heredoc) yazar.
+- **GHCR token gömülü (müşteri token GİRMEZ)**: Windows installer'daki gibi read:packages token'ı
+  **build-time** script'e gömülür — [release.yml](.github/workflows/release.yml) `linux-installer` job'ı
+  `__GHCR_USER__`/`__GHCR_TOKEN__`/`__GHCR_IMAGE__` placeholder'larını `INSTALLER_GHCR_TOKEN` secret'ıyla
+  `sed`'ler ve script'i release asset'i olarak ekler. Script placeholder'ları değişmemişse (repo/dev)
+  boş sayar → token yalnız geliştiriciye sorulur; müşteri sürümünde gömülü olduğundan hiç sorulmaz.
 - **Akış (6 adım)**: Docker CE kur (`get.docker.com`) → `.env` üret (`DJANGO_SECRET_KEY` +
   `POSTGRES_PASSWORD` + `WATCHTOWER_API_TOKEN` rastgele; domain'den wildcard ALLOWED_HOSTS/CSRF türet) →
   GHCR login (`--password-stdin`) → `pull` + `up -d` → migration bekle + `seed_initial_data`/
