@@ -390,7 +390,15 @@ ok "GHCR login başarılı."
 
 # ── Adım 4: Pull + up ─────────────────────────────────────────────────────────
 step "[4/6] Image'lar çekiliyor + yığın başlatılıyor (birkaç dakika sürebilir)"
-$COMPOSE pull
+# Ağ (özellikle IPv6) GHCR pull'unu koparabilir ("connection reset by peer").
+# Docker inen katmanları önbelleğe aldığından her deneme kaldığı yerden sürer.
+pull_ok=0
+for attempt in 1 2 3 4 5; do
+    if $COMPOSE pull; then pull_ok=1; break; fi
+    warn "Image çekimi koptu (deneme $attempt/5) — ağ olabilir, tekrar deneniyor..."
+    sleep 5
+done
+[[ $pull_ok -eq 1 ]] || die "Image'lar çekilemedi (ağ). Tekrar: cd $INSTALL_DIR && docker compose -f $COMPOSE_FILE --env-file .env pull"
 $COMPOSE up -d
 ok "Container'lar başlatıldı."
 
