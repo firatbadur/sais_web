@@ -6,6 +6,8 @@ kullanılmaya uygun, alan-özel kavramlardan arındırılmış temel modelleri
 içerir. Atıksu (SAIS), Envisoft gibi alan-özel uzantılar ayrı bir
 uygulamada (`sais_domain`) tanımlıdır.
 """
+import datetime
+
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -2153,3 +2155,315 @@ class Reminder(models.Model):
 
     def __str__(self):
         return f"{self.title} @ {self.remind_at:%d.%m.%Y %H:%M}"
+
+
+# ---------------------------------------------------------------------------
+# Rapor Stüdyosu — blok tabanlı rapor şablonları + zamanlama + üretim geçmişi
+# ---------------------------------------------------------------------------
+
+class ReportTemplate(models.Model):
+    """Blok tabanlı rapor şablonu (Rapor Stüdyosu).
+
+    `blocks` sıralı bir blok listesi tutar; her blok bir dict:
+    ``{"id", "type", ...}``. Blok tipleri: heading / text / kpi_cards /
+    table / chart / page_break / spacer. Veri blokları (kpi_cards, table,
+    chart) kendi veri bağlamasını taşır: istasyon + parametre(ler) +
+    zaman penceresi (`window`: relative anahtar veya sabit tarih) + bucket
+    (raw/15min/hourly/daily) + kolon seçimi. Göreli pencereler üretim
+    anındaki `reference_time`'a göre çözülür — zamanlanmış raporlar bu
+    sayede her çalıştırmada güncel dönemi kapsar. Üretim: api/reporting.py.
+    """
+
+    PAGE_SIZE_CHOICES = (("A4", "A4"), ("A3", "A3"))
+    ORIENTATION_CHOICES = (("portrait", "Dikey"), ("landscape", "Yatay"))
+
+    name = models.CharField(max_length=150, verbose_name="Rapor Adı")
+    description = models.TextField(blank=True, default="", verbose_name="Açıklama")
+    blocks = models.JSONField(
+        default=list, blank=True, verbose_name="Blok Tanımları",
+        help_text="Sıralı blok listesi — editör tarafından yazılır (JSON).",
+    )
+
+    page_size = models.CharField(
+        max_length=8, choices=PAGE_SIZE_CHOICES, default="A4", verbose_name="Sayfa Boyutu",
+    )
+    orientation = models.CharField(
+        max_length=12, choices=ORIENTATION_CHOICES, default="portrait",
+        verbose_name="Yönlendirme",
+    )
+    header_text = models.CharField(
+        max_length=200, blank=True, default="", verbose_name="Üst Bilgi",
+    )
+    footer_text = models.CharField(
+        max_length=200, blank=True, default="", verbose_name="Alt Bilgi",
+    )
+    show_logo = models.BooleanField(default=True, verbose_name="Logo Göster")
+
+    is_template = models.BooleanField(
+        default=False, verbose_name="Yerleşik Şablon",
+        help_text="Yerleşik (seed) şablonlar silinemez.",
+    )
+    created_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="report_templates", verbose_name="Oluşturan",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Oluşturma")
+    updated_at = models.DateTimeField(auto_now=True, db_index=True, verbose_name="Güncelleme")
+
+    class Meta:
+        db_table = "report_template"
+        verbose_name = "Rapor Şablonu"
+        verbose_name_plural = "Rapor Şablonları"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return self.name
+
+
+class ReportSchedule(models.Model):
+    """Bir rapor şablonunun zamanlanmış üretim + e-posta dağıtım ayarı.
+
+    Beat'te schedule başına PeriodicTask AÇILMAZ; tek dispatcher task
+    (`api.tasks.dispatch_report_schedules`, her 60 sn) `next_run_at <= now`
+    olan etkin kayıtları kuyruğa atar ve `next_run_at`'ı bir sonraki periyoda
+    ilerletir (dispatch_polls deseni — kullanıcı zamanlama düzenledikçe
+    django_celery_beat kaydı üretilmez).
+    """
+
+    PERIOD_CHOICES = (
+        ("daily", "Günlük"),
+        ("weekly", "Haftalık"),
+        ("monthly", "Aylık"),
+    )
+    WEEKDAY_CHOICES = (
+        (0, "Pazartesi"), (1, "Salı"), (2, "Çarşamba"), (3, "Perşembe"),
+        (4, "Cuma"), (5, "Cumartesi"), (6, "Pazar"),
+    )
+
+    template = models.ForeignKey(
+        ReportTemplate, on_delete=models.CASCADE, related_name="schedules",
+        verbose_name="Rapor Şablonu",
+    )
+    enabled = models.BooleanField(default=True, verbose_name="Etkin")
+    period = models.CharField(
+        max_length=10, choices=PERIOD_CHOICES, default="daily", verbose_name="Periyot",
+    )
+    time_of_day = models.TimeField(default=datetime.time(7, 0), verbose_name="Çalışma Saati")
+    weekday = models.PositiveSmallIntegerField(
+        choices=WEEKDAY_CHOICES, blank=True, null=True, verbose_name="Haftanın Günü",
+        help_text="Haftalık periyot için (0=Pazartesi).",
+    )
+    day_of_month = models.PositiveSmallIntegerField(
+        blank=True, null=True, verbose_name="Ayın Günü",
+        help_text="Aylık periyot için (1-28).",
+    )
+
+    output_pdf = models.BooleanField(default=True, verbose_name="PDF Üret")
+    output_excel = models.BooleanField(default=False, verbose_name="Excel Üret")
+
+    email_enabled = models.BooleanField(default=False, verbose_name="E-posta Gönder")
+    recipients = models.TextField(
+        blank=True, default="", verbose_name="Alıcılar",
+        help_text="Virgül veya satır ile ayrılmış e-posta adresleri.",
+    )
+    email_subject = models.CharField(
+        max_length=200, default="{report_name} - {date}", verbose_name="E-posta Konusu",
+        help_text="Placeholder: {report_name}, {date}",
+    )
+    email_body = models.TextField(
+        blank=True, default="", verbose_name="E-posta Gövdesi",
+        help_text="Placeholder: {report_name}, {date}. Boşsa varsayılan gövde kullanılır.",
+    )
+
+    next_run_at = models.DateTimeField(
+        blank=True, null=True, db_index=True, verbose_name="Sonraki Çalışma",
+    )
+    last_run_at = models.DateTimeField(blank=True, null=True, verbose_name="Son Çalışma")
+    last_status = models.CharField(
+        max_length=16, blank=True, default="", verbose_name="Son Durum",
+    )
+
+    created_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="+", verbose_name="Oluşturan",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Oluşturma")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Güncelleme")
+
+    class Meta:
+        db_table = "report_schedule"
+        verbose_name = "Rapor Zamanlaması"
+        verbose_name_plural = "Rapor Zamanlamaları"
+        ordering = ["template__name", "id"]
+
+    def __str__(self):
+        return f"{self.template} · {self.period_summary}"
+
+    @property
+    def period_summary(self):
+        """UI'da gösterilecek okunur periyot özeti."""
+        saat = self.time_of_day.strftime("%H:%M") if self.time_of_day else "--:--"
+        if self.period == "weekly":
+            gun = dict(self.WEEKDAY_CHOICES).get(self.weekday, "?")
+            return f"Her {gun} {saat}"
+        if self.period == "monthly":
+            return f"Her ayın {self.day_of_month or 1}. günü {saat}"
+        return f"Her gün {saat}"
+
+    def compute_next_run(self, from_dt=None):
+        """`from_dt`'den (default: şimdi) SONRAKİ çalışma zamanını döndürür.
+
+        Yerel saat diliminde hesaplanır (kullanıcı 07:00 dediyse yerel 07:00);
+        dönen değer TZ-aware'dır.
+        """
+        from django.utils import timezone as dj_tz
+
+        now = from_dt or dj_tz.now()
+        local_now = dj_tz.localtime(now)
+        run_time = self.time_of_day or datetime.time(7, 0)
+
+        def _candidate(day):
+            naive = datetime.datetime.combine(day, run_time)
+            return dj_tz.make_aware(naive, dj_tz.get_current_timezone())
+
+        if self.period == "daily":
+            cand = _candidate(local_now.date())
+            if cand <= now:
+                cand = _candidate(local_now.date() + datetime.timedelta(days=1))
+            return cand
+
+        if self.period == "weekly":
+            target_wd = self.weekday if self.weekday is not None else 0
+            days_ahead = (target_wd - local_now.weekday()) % 7
+            cand = _candidate(local_now.date() + datetime.timedelta(days=days_ahead))
+            if cand <= now:
+                cand = _candidate(local_now.date() + datetime.timedelta(days=days_ahead + 7))
+            return cand
+
+        # monthly
+        target_dom = min(max(self.day_of_month or 1, 1), 28)
+        year, month = local_now.year, local_now.month
+        cand = _candidate(datetime.date(year, month, target_dom))
+        if cand <= now:
+            month += 1
+            if month > 12:
+                month, year = 1, year + 1
+            cand = _candidate(datetime.date(year, month, target_dom))
+        return cand
+
+    def save(self, *args, **kwargs):
+        # Etkinleştirilirken next_run_at boşsa hesapla; devre dışı bırakılınca
+        # temizle (dispatcher hiç görmesin). Zamanlama alanları değiştiğinde
+        # yeniden hesap, kaydeden endpoint'in sorumluluğundadır
+        # (next_run_at=None ver → burada tazelenir).
+        if self.enabled and not self.next_run_at:
+            self.next_run_at = self.compute_next_run()
+        elif not self.enabled:
+            self.next_run_at = None
+        super().save(*args, **kwargs)
+
+
+class GeneratedReport(models.Model):
+    """Üretilmiş bir raporun kaydı — iş geçmişi + dosya + e-posta durumu.
+
+    DatabaseBackup deseni: status running→success/failed, tetikleyici audit,
+    dosyalar `settings.REPORTS_DIR` altında çıplak dosya adıyla tutulur
+    (path-traversal'a kapalı indirme için).
+    """
+
+    STATUS_CHOICES = (
+        ("running", "Üretiliyor"),
+        ("success", "Başarılı"),
+        ("failed", "Başarısız"),
+    )
+    TRIGGER_CHOICES = (
+        ("auto", "Otomatik"),
+        ("manual", "Manuel"),
+    )
+    EMAIL_STATUS_CHOICES = (
+        ("", "—"),
+        ("sent", "Gönderildi"),
+        ("partial", "Kısmen Gönderildi"),
+        ("failed", "Gönderilemedi"),
+    )
+
+    template = models.ForeignKey(
+        ReportTemplate, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="generated_reports", verbose_name="Rapor Şablonu",
+    )
+    template_name = models.CharField(
+        max_length=150, verbose_name="Şablon Adı",
+        help_text="Üretim anındaki ad (şablon silinse de geçmişte kalır).",
+    )
+    schedule = models.ForeignKey(
+        ReportSchedule, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="generated_reports", verbose_name="Zamanlama",
+    )
+
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, default="running",
+        db_index=True, verbose_name="Durum",
+    )
+    trigger = models.CharField(
+        max_length=10, choices=TRIGGER_CHOICES, default="manual", verbose_name="Tetikleyici",
+    )
+    triggered_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="+", verbose_name="Tetikleyen Kullanıcı",
+    )
+    reference_time = models.DateTimeField(
+        verbose_name="Referans Zamanı",
+        help_text="Göreli zaman pencerelerinin çözüldüğü 'şimdi'.",
+    )
+
+    pdf_file = models.CharField(
+        max_length=255, blank=True, default="", verbose_name="PDF Dosyası",
+        help_text="REPORTS_DIR altındaki çıplak dosya adı.",
+    )
+    xlsx_file = models.CharField(
+        max_length=255, blank=True, default="", verbose_name="Excel Dosyası",
+    )
+    pdf_size = models.BigIntegerField(default=0, verbose_name="PDF Boyutu (byte)")
+    xlsx_size = models.BigIntegerField(default=0, verbose_name="Excel Boyutu (byte)")
+
+    started_at = models.DateTimeField(auto_now_add=True, verbose_name="Başlangıç")
+    finished_at = models.DateTimeField(blank=True, null=True, verbose_name="Bitiş")
+    error = models.TextField(blank=True, default="", verbose_name="Hata / Uyarı")
+
+    email_status = models.CharField(
+        max_length=10, choices=EMAIL_STATUS_CHOICES, blank=True, default="",
+        verbose_name="E-posta Durumu",
+    )
+    email_info = models.TextField(blank=True, default="", verbose_name="E-posta Detayı")
+
+    class Meta:
+        db_table = "generated_report"
+        verbose_name = "Üretilen Rapor"
+        verbose_name_plural = "Üretilen Raporlar"
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"{self.template_name} [{self.status}]"
+
+    def file_paths(self):
+        """Diskteki mevcut dosya yollarını döndürür (REPORTS_DIR altı)."""
+        import os
+        from django.conf import settings as dj_settings
+
+        paths = []
+        for fname in (self.pdf_file, self.xlsx_file):
+            if fname:
+                paths.append(os.path.join(dj_settings.REPORTS_DIR, fname))
+        return paths
+
+    def delete(self, *args, **kwargs):
+        # Kayıt silinince üretilen dosyalar da diskten kaldırılır.
+        import os
+
+        for path in self.file_paths():
+            try:
+                if os.path.isfile(path):
+                    os.remove(path)
+            except OSError:
+                pass
+        super().delete(*args, **kwargs)

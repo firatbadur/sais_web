@@ -16,6 +16,7 @@ Bu komut beat scheduler'ın okuyacağı periyodik task'ları DB'ye yazar:
   - api.tasks.prune_readings_task            (cron: 30 2 * * *)  — her gece 02:30
   - api.tasks.prune_api_logs_task            (cron: 0 3 * * *)   — her gece 03:00
   - api.tasks.record_public_ip_task          (cron: 17 * * * *)  — public IP değişimini izle
+  - api.tasks.dispatch_report_schedules      (her 60 sn)  — vadesi gelen rapor zamanlamalarını üretime gönder
   - sais_domain.tasks.publish_minute_data    (cron: * * * * *)   — her dakika SIM + Envisoft gönderimi
   - sais_domain.tasks.run_scenarios          (cron: * * * * *)   — her dakika numune senaryosu değerlendirme
   - sais_domain.tasks.resend_missing_data    (cron: 0 */6 * * *) — eksik veri yeniden gönderimi
@@ -36,6 +37,8 @@ INTERVAL_TASKS = [
     ("api.tasks.run_alarms", 60),
     # Sistem canlılık damgası — PC kapanma tespiti (detect_power_off) buna dayanır.
     ("api.tasks.heartbeat_task", 60),
+    # Rapor Stüdyosu — vadesi gelen zamanlanmış raporları üretime gönder.
+    ("api.tasks.dispatch_report_schedules", 60),
 ]
 
 CRONTAB_TASKS = [

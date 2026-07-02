@@ -32,6 +32,13 @@ requests>=2.32,<3.0
 # Lisans imza doğrulama (Ed25519) — api/licensing.py + scripts/license_tool.py
 cryptography>=43,<44
 
+# Raporlama — PDF/Excel üretimi (api/reporting.py)
+# WeasyPrint HTML→PDF (Linux/Docker'da pango/cairo apt paketleri gerekir; Windows
+# dev'de GTK DLL'leri yoksa import hatası zarifçe yakalanır, PDF devre dışı kalır).
+weasyprint>=63,<67
+matplotlib>=3.9,<4.0
+openpyxl>=3.1,<4.0
+
 # Caching / Queue
 redis>=5.2,<6.0
 django-redis>=5.4,<6.0

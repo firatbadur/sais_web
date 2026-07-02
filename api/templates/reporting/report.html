@@ -1,0 +1,201 @@
+{# Rapor Stüdyosu çıktı şablonu — hem editör önizlemesi (iframe) hem WeasyPrint PDF girdisi. #}
+{# Context: report (ReportTemplate), blocks (çözülmüş blok listesi), generated_at, logo_uri, for_pdf #}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>{{ report.name }}</title>
+<style>
+    @page {
+        size: {{ report.page_size }} {{ report.orientation }};
+        margin: 18mm 14mm 20mm 14mm;
+        @top-center {
+            content: "{{ report.header_text|cut:'"' }}";
+            font-size: 8pt; color: #7e8299;
+            font-family: "DejaVu Sans", Arial, sans-serif;
+        }
+        @bottom-left {
+            content: "{{ report.footer_text|cut:'"' }}";
+            font-size: 8pt; color: #7e8299;
+            font-family: "DejaVu Sans", Arial, sans-serif;
+        }
+        @bottom-right {
+            content: "Sayfa " counter(page) " / " counter(pages);
+            font-size: 8pt; color: #7e8299;
+            font-family: "DejaVu Sans", Arial, sans-serif;
+        }
+    }
+
+    * { box-sizing: border-box; }
+    body {
+        font-family: "DejaVu Sans", Arial, "Segoe UI", sans-serif;
+        color: #181c32;
+        font-size: 10pt;
+        margin: 0;
+        {% if not for_pdf %}padding: 24px; background: #f5f8fa;{% endif %}
+    }
+    {% if not for_pdf %}
+    .page-wrap {
+        background: #fff; max-width: 860px; margin: 0 auto;
+        padding: 40px 44px; border: 1px solid #e4e6ef; border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,.05);
+    }
+    {% else %}
+    .page-wrap { }
+    {% endif %}
+
+    .rep-head {
+        display: flex; align-items: center; justify-content: space-between;
+        border-bottom: 2px solid #009ef7; padding-bottom: 10px; margin-bottom: 18px;
+    }
+    .rep-head .title { font-size: 18pt; font-weight: 700; }
+    .rep-head .meta { font-size: 8pt; color: #7e8299; text-align: right; }
+    .rep-head img.logo { height: 42px; }
+
+    h1.blk { font-size: 15pt; margin: 16px 0 6px; }
+    h2.blk { font-size: 12.5pt; margin: 14px 0 5px; }
+    h3.blk { font-size: 11pt; margin: 12px 0 4px; }
+    p.blk-text { line-height: 1.55; margin: 6px 0 10px; white-space: pre-wrap; }
+
+    .kpi-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 14px; }
+    .kpi-card {
+        flex: 1 1 150px; min-width: 140px;
+        border: 1px solid #e4e6ef; border-left: 4px solid #009ef7;
+        border-radius: 5px; padding: 9px 12px;
+        page-break-inside: avoid;
+    }
+    .kpi-card .lbl { font-size: 8pt; color: #7e8299; margin-bottom: 3px; }
+    .kpi-card .val { font-size: 15pt; font-weight: 700; }
+    .kpi-card .val small { font-size: 8.5pt; font-weight: 400; color: #7e8299; margin-left: 3px; }
+    .kpi-card .sub { font-size: 7.5pt; color: #a1a5b7; margin-top: 2px; }
+
+    .blk-section { margin: 14px 0; page-break-inside: avoid; }
+    .blk-section.allow-break { page-break-inside: auto; }
+    .blk-title { font-size: 11pt; font-weight: 700; margin-bottom: 2px; }
+    .blk-sub { font-size: 8pt; color: #7e8299; margin-bottom: 6px; }
+
+    img.chart { width: 100%; }
+
+    table.data {
+        width: 100%; border-collapse: collapse; font-size: 8.2pt;
+    }
+    table.data th {
+        background: #3f4254; color: #fff; text-align: left;
+        padding: 5px 7px; font-weight: 600;
+    }
+    table.data td {
+        padding: 4px 7px; border-bottom: 1px solid #eff2f5;
+        font-variant-numeric: tabular-nums;
+    }
+    table.data tr:nth-child(even) td { background: #f9fafb; }
+    table.data tr { page-break-inside: avoid; }
+    thead { display: table-header-group; }
+
+    .empty-note {
+        border: 1px dashed #d8d8e5; border-radius: 5px; color: #a1a5b7;
+        font-size: 9pt; padding: 14px; text-align: center;
+    }
+    .err-note {
+        border: 1px solid #f1416c; background: #fff5f8; color: #f1416c;
+        border-radius: 5px; font-size: 9pt; padding: 10px 12px;
+    }
+    .spacer { height: 22px; }
+    .page-break { page-break-before: always; }
+    {% if not for_pdf %}
+    .page-break {
+        border-top: 2px dashed #d8d8e5; margin: 22px 0; position: relative;
+    }
+    .page-break::after {
+        content: "sayfa sonu"; position: absolute; top: -9px; left: 50%;
+        transform: translateX(-50%); background: #fff; color: #a1a5b7;
+        font-size: 7.5pt; padding: 0 8px;
+    }
+    {% endif %}
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+    <div class="rep-head">
+        <div>
+            <div class="title">{{ report.name }}</div>
+            {% if report.description %}<div style="font-size:9pt;color:#7e8299;margin-top:2px">{{ report.description }}</div>{% endif %}
+        </div>
+        <div style="display:flex;align-items:center;gap:14px">
+            {% if logo_uri %}<img class="logo" src="{{ logo_uri }}" alt="logo">{% endif %}
+            <div class="meta">
+                Üretim: {{ generated_at|date:"d.m.Y H:i" }}<br>
+                Envisoft WebX {{ app_version }}
+            </div>
+        </div>
+    </div>
+
+    {% for b in blocks %}
+        {% if b.type == "heading" %}
+            {% if b.level == 1 %}<h1 class="blk">{{ b.text }}</h1>
+            {% elif b.level == 2 %}<h2 class="blk">{{ b.text }}</h2>
+            {% else %}<h3 class="blk">{{ b.text }}</h3>{% endif %}
+
+        {% elif b.type == "text" %}
+            <p class="blk-text">{{ b.text }}</p>
+
+        {% elif b.type == "kpi_cards" %}
+            <div class="kpi-row">
+                {% for c in b.cards %}
+                <div class="kpi-card">
+                    <div class="lbl">{{ c.label }}</div>
+                    <div class="val">{{ c.value_str }}{% if c.unit %}<small>{{ c.unit }}</small>{% endif %}</div>
+                    {% if c.sub %}<div class="sub">{{ c.sub }}</div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+        {% elif b.type == "chart" %}
+            <div class="blk-section">
+                <div class="blk-title">{{ b.title }}</div>
+                <div class="blk-sub">{{ b.subtitle }}</div>
+                {% if b.img %}
+                    <img class="chart" src="{{ b.img }}" alt="{{ b.title }}">
+                {% elif not b.charts_available %}
+                    <div class="empty-note">Grafik motoru (matplotlib) bu sunucuda kullanılamıyor.</div>
+                {% else %}
+                    <div class="empty-note">Seçilen aralıkta veri bulunamadı.</div>
+                {% endif %}
+            </div>
+
+        {% elif b.type == "table" %}
+            <div class="blk-section allow-break">
+                <div class="blk-title">{{ b.title }}</div>
+                <div class="blk-sub">{{ b.subtitle }} · {{ b.row_count }} satır</div>
+                {% if b.rows %}
+                <table class="data">
+                    <thead>
+                        <tr>{% for col in b.columns %}<th>{{ col }}</th>{% endfor %}</tr>
+                    </thead>
+                    <tbody>
+                        {% for row in b.rows %}
+                        <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-note">Seçilen aralıkta veri bulunamadı.</div>
+                {% endif %}
+            </div>
+
+        {% elif b.type == "spacer" %}
+            <div class="spacer"></div>
+
+        {% elif b.type == "page_break" %}
+            <div class="page-break"></div>
+
+        {% elif b.type == "error" %}
+            <div class="err-note">{{ b.message }}</div>
+        {% endif %}
+    {% empty %}
+        <div class="empty-note">Bu raporda henüz blok yok. Editörden blok ekleyin.</div>
+    {% endfor %}
+
+</div>
+</body>
+</html>

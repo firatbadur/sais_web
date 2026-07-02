@@ -53,6 +53,8 @@ RUN apt-get update \
         > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends postgresql-client-16 \
+        libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
+        shared-mime-info fonts-dejavu-core \
     && apt-get purge -y --auto-remove curl gnupg \
     && rm -rf /var/lib/apt/lists/* \
     && addgroup --system app \
@@ -71,8 +73,10 @@ COPY --chown=app:app . /app
 # app sahipliğiyle oluşturursak, ilk mount'ta named volume bu sahipliği devralır
 # → non-root app kullanıcısı pg_dump çıktısını yazabilir (ayrı chmod sidecar'ı
 # gerekmez).
-RUN mkdir -p /app/staticfiles_root /app/media /backups \
-    && chown -R app:app /app /backups
+# /reports: report_files named volume (Rapor Stüdyosu PDF/Excel çıktıları) —
+# /backups ile aynı sahiplik mantığı.
+RUN mkdir -p /app/staticfiles_root /app/media /backups /reports \
+    && chown -R app:app /app /backups /reports
 
 USER app
 

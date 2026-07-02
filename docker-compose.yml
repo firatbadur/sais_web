@@ -52,6 +52,7 @@ services:
       REDIS_URL: redis://redis:6379/1
       CELERY_BROKER_URL: redis://redis:6379/2
       CELERY_RESULT_BACKEND: django-db
+      REPORTS_DIR: /reports
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,web}
     depends_on:
       db:
@@ -64,6 +65,7 @@ services:
       - media_data:/app/media
       - static_data:/app/staticfiles_root
       - pg_backups:/backups
+      - report_files:/reports
       - caddy_config:/etc/caddy
     # Dev'de doğrudan erişim için web :8000 publish KORUNUR; Caddy ayrıca 80/443'te.
     ports:
@@ -108,6 +110,7 @@ services:
       REDIS_URL: redis://redis:6379/1
       CELERY_BROKER_URL: redis://redis:6379/2
       CELERY_RESULT_BACKEND: django-db
+      REPORTS_DIR: /reports
     depends_on:
       db:
         condition: service_healthy
@@ -117,6 +120,7 @@ services:
         condition: service_started
     volumes:
       - pg_backups:/backups
+      - report_files:/reports
     command: celery -A sais_web worker -l info --concurrency=4
 
   celery_beat:
@@ -143,6 +147,7 @@ services:
 volumes:
   pg_data:
   pg_backups:
+  report_files:
   redis_data:
   media_data:
   static_data:

@@ -10,6 +10,7 @@ from .models import (
     Calibration,
     Command,
     Connection,
+    GeneratedReport,
     LogType,
     MessageTemplate,
     NotificationLog,
@@ -21,6 +22,8 @@ from .models import (
     ReadingFifteenMin,
     ReadingHourly,
     Reminder,
+    ReportSchedule,
+    ReportTemplate,
     RequestType,
     ScanGroup,
     Sensor,
@@ -550,6 +553,41 @@ class ReminderAdmin(admin.ModelAdmin):
     date_hierarchy = "remind_at"
     autocomplete_fields = ("station",)
     readonly_fields = ("created_at", "updated_at", "done_at")
+
+
+# ---------------------------------------------------------------------------
+# Rapor Stüdyosu — şablon/zamanlama/üretim geçmişi (yönetim dashboard'dan;
+# admin kayıtları çoğunlukla salt-inceleme içindir)
+# ---------------------------------------------------------------------------
+
+@admin.register(ReportTemplate)
+class ReportTemplateAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "page_size", "orientation", "is_template", "created_by", "updated_at")
+    list_filter = ("is_template", "page_size", "orientation")
+    search_fields = ("name", "description")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(ReportSchedule)
+class ReportScheduleAdmin(admin.ModelAdmin):
+    list_display = ("id", "template", "period", "time_of_day", "enabled",
+                    "output_pdf", "output_excel", "email_enabled", "next_run_at", "last_status")
+    list_filter = ("enabled", "period", "email_enabled")
+    search_fields = ("template__name", "recipients")
+    readonly_fields = ("next_run_at", "last_run_at", "last_status", "created_at", "updated_at")
+
+
+@admin.register(GeneratedReport)
+class GeneratedReportAdmin(admin.ModelAdmin):
+    list_display = ("id", "template_name", "status", "trigger", "reference_time",
+                    "pdf_file", "xlsx_file", "email_status", "started_at", "finished_at")
+    list_filter = ("status", "trigger", "email_status")
+    search_fields = ("template_name", "error")
+    readonly_fields = [f.name for f in GeneratedReport._meta.fields]
+    date_hierarchy = "started_at"
+
+    def has_add_permission(self, request):
+        return False
 
 
 # ---------------------------------------------------------------------------

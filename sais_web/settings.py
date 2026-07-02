@@ -47,6 +47,11 @@ APP_VERSION = os.getenv("APP_VERSION", "dev")
 # container çalıştırır; db container'a mount şart değil).
 BACKUP_DIR = os.getenv("BACKUP_DIR", "/backups")
 
+# Üretilen rapor dosyalarının (PDF/Excel — Rapor Stüdyosu) yazılacağı dizin.
+# Docker'da web + celery_worker'a mount edilen report_files volume (/reports);
+# dev'de media/reports altına düşer.
+REPORTS_DIR = os.getenv("REPORTS_DIR", str(BASE_DIR / "media" / "reports"))
+
 # ---- Web erişim / Caddy reverse proxy ----
 # WebSettings → api.web_proxy bu yolları kullanarak Caddyfile + manuel cert
 # dosyalarını üretir. caddy_config volume'ü web + caddy container'larına ortak

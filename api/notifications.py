@@ -138,8 +138,13 @@ def build_branded_html(message: str, *, title: str = "SAİS Mail Bildirim Servis
 
 
 def send_email(to: str, subject: str, html_body: str, *, text_body: str | None = None,
-               triggered_by=None, kind: str = "test") -> tuple[bool, str]:
-    """Tek e-posta gönderir. (ok, info) döner ve NotificationLog yazar."""
+               triggered_by=None, kind: str = "test",
+               attachments: list[tuple[str, bytes, str]] | None = None) -> tuple[bool, str]:
+    """Tek e-posta gönderir. (ok, info) döner ve NotificationLog yazar.
+
+    attachments: [(dosya_adı, içerik_bytes, mimetype)] — rapor PDF/Excel ekleri
+    gibi ikili dosyalar için (Rapor Stüdyosu `kind="report"` kullanır).
+    """
     s = NotificationSettings.load()
     to = (to or "").strip()
 
@@ -171,6 +176,8 @@ def send_email(to: str, subject: str, html_body: str, *, text_body: str | None =
             s.mail_from, [to], connection=conn,
         )
         msg.attach_alternative(html_body, "text/html")
+        for att_name, att_content, att_mimetype in (attachments or []):
+            msg.attach(att_name, att_content, att_mimetype)
         msg.send()
     except Exception as exc:  # noqa: BLE001
         info = f"SMTP hatası: {exc}"

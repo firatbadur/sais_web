@@ -114,6 +114,50 @@ def restore_database_run(backup_id, run_migrate=True, user_id=None):
     )
 
 
+@shared_task(name="api.tasks.dispatch_report_schedules")
+def dispatch_report_schedules():
+    """Rapor zamanlamalarını kontrol eder; vadesi gelenleri kuyruğa atar (beat: 60 sn).
+
+    dispatch_polls deseni: schedule başına PeriodicTask yerine tek dispatcher —
+    `next_run_at <= now` olan etkin kayıtlar üretime gönderilir ve `next_run_at`
+    kuyruklamadan ÖNCE bir sonraki periyoda ilerletilir (çift tetik koruması;
+    beat tek instance olduğundan yarış yok).
+    """
+    from django.utils import timezone
+
+    from api.licensing import license_active
+    if not license_active():
+        return {"skipped": "license_inactive"}
+
+    from api.models import ReportSchedule
+
+    now = timezone.now()
+    due = list(ReportSchedule.objects.filter(enabled=True, next_run_at__lte=now))
+    for sched in due:
+        sched.next_run_at = sched.compute_next_run(from_dt=now)
+        sched.save(update_fields=["next_run_at"])
+        generate_report_run.delay(
+            sched.template_id, schedule_id=sched.id, trigger="auto",
+        )
+    return {"dispatched": len(due)}
+
+
+@shared_task(name="api.tasks.generate_report_run")
+def generate_report_run(template_id, schedule_id=None, trigger="manual",
+                        user_id=None, formats=None):
+    """Bir rapor şablonundan PDF/Excel üretir (+ zamanlamada e-posta dağıtır).
+
+    Asıl iş `api.reporting.generate_report`'ta; hata kayda düşer, task patlamaz.
+    """
+    from api import reporting
+
+    rep = reporting.generate_report(
+        template_id, schedule_id=schedule_id, trigger=trigger,
+        user_id=user_id, formats=formats,
+    )
+    return {"id": rep.id, "status": rep.status}
+
+
 @shared_task(name="api.tasks.license_refresh_task")
 def license_refresh_task():
     """Lisans manifest'ini uzaktan çekip doğrular ve uygular (beat: her 6 saat).
