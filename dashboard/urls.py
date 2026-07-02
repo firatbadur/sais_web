@@ -135,6 +135,7 @@ urlpatterns = [
     path("api/mimic/delete/", api_views.mimic_screen_delete, name="api_mimic_delete"),
     path("api/mimic/tags/", api_views.mimic_tags, name="api_mimic_tags"),
     path("api/mimic/control/", api_views.mimic_control, name="api_mimic_control"),
+    path("api/mimic/report/", api_views.mimic_report_data, name="api_mimic_report"),
 
     # --- AJAX API (raporlar) ---
     path("api/parameters/", api_views.station_parameters, name="api_station_parameters"),

@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ screen.name }} · {% trans "Mimik Görüntüleyici" %}</title>
     <link rel="shortcut icon" href="{% static 'images/logo/icon.png' %}">
+    <link href="{% static 'dashboard/plugins/custom/datatables/datatables.bundle.css' %}" rel="stylesheet">
     <link href="{% static 'dashboard/plugins/global/plugins.bundle.css' %}" rel="stylesheet">
     <link href="{% static 'dashboard/css/style.bundle.css' %}" rel="stylesheet">
     <style>:root { --mx-canvas-bg: {{ screen.background|default:'#0f1420' }}; }</style>
@@ -84,6 +85,20 @@
         .vm-note.ok { color: #2fb574; } .vm-note.err { color: #e4544c; }
         .vm-close { background: var(--mx-bg); border: 1px solid var(--mx-border); color: var(--mx-text);
             border-radius: 7px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+        /* Rapor modal (tablo + export) */
+        .vm-rdialog { width: 1000px; max-width: 96vw; max-height: 90vh; background: var(--mx-panel);
+            border: 1px solid var(--mx-border); border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.45);
+            display: flex; flex-direction: column; overflow: hidden; }
+        .vm-rhead { padding: 13px 16px; border-bottom: 1px solid var(--mx-border); display: flex;
+            align-items: center; gap: 10px; }
+        .vm-rhead .t { font-weight: 700; color: var(--mx-head); }
+        .vm-rhead .t small { font-weight: 500; color: var(--mx-muted); margin-left: 6px; }
+        .vm-rbody { padding: 14px 16px; overflow: auto; }
+        .vm-rbody .dt-buttons { margin-bottom: 10px; }
+        .vm-rbody table { width: 100% !important; }
+        #vm-rloading { color: var(--mx-muted); padding: 30px; text-align: center; }
+        .vm-x { margin-left: auto; background: var(--mx-bg); border: 1px solid var(--mx-border); color: var(--mx-text);
+            border-radius: 7px; width: 32px; height: 32px; cursor: pointer; font-size: 15px; line-height: 1; }
     </style>
 </head>
 <body>
@@ -130,17 +145,33 @@
     </div>
 </div>
 
+<!-- Rapor modal (tablo + export) -->
+<div class="vm-overlay" id="vm-rovl">
+    <div class="vm-rdialog">
+        <div class="vm-rhead">
+            <span class="t" id="vm-rtitle"></span>
+            <button class="vm-x" id="vm-rclose" title="{% trans 'Kapat' %}">✕</button>
+        </div>
+        <div class="vm-rbody">
+            <div id="vm-rloading">{% trans "Yükleniyor…" %}</div>
+            <table id="vm-rtable" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-2 w-100" style="display:none;"></table>
+        </div>
+    </div>
+</div>
+
 {{ screen.data|json_script:"v-data" }}
 <script>
 window.V_CFG = {
     width: {{ screen.width }}, height: {{ screen.height }}, background: "{{ screen.background|escapejs }}",
     tagsUrl: "{% url 'dashboard:api_mimic_tags' %}",
-    reportUrl: "{% url 'dashboard:reports_readings' %}",
+    reportDataUrl: "{% url 'dashboard:api_mimic_report' %}",
     controlUrl: "{% url 'dashboard:api_mimic_control' %}",
     csrf: "{{ csrf_token }}",
     canControl: {% if user|has_role:"1" or user|has_role:"2" %}true{% else %}false{% endif %}
 };
 </script>
+<script src="{% static 'dashboard/plugins/global/plugins.bundle.js' %}"></script>
+<script src="{% static 'dashboard/plugins/custom/datatables/datatables.bundle.js' %}"></script>
 <script src="{% static 'dashboard/plugins/custom/fabric/fabric.min.js' %}"></script>
 <script src="{% static 'dashboard/js/mimic_runtime.js' %}"></script>
 <script>
@@ -251,17 +282,6 @@ window.V_CFG = {
     // ------------------------------------------------------------------ //
     var TAGMETA = {};                 // tag -> {sensor_id, station_id, parameter_id, is_output, ...}
     var menuEl = $("vm-menu");
-
-    function reportLink(meta, interval, chart) {
-        var qs = "?submitted=1&interval=" + interval;
-        if (meta && meta.station_id) qs += "&station=" + meta.station_id;
-        if (meta && meta.parameter_id) qs += "&parameter=" + meta.parameter_id;
-        if (chart) qs += "&chart=1";
-        return CFG.reportUrl + qs;
-    }
-    function openReport(meta, interval, chart) {
-        window.open(reportLink(meta, interval, chart), "_blank");
-    }
     function hideMenu() { menuEl.classList.remove("show"); }
 
     function openMenu(obj, x, y) {
@@ -269,9 +289,9 @@ window.V_CFG = {
         var meta = TAGMETA[tag] || {};
         var label = meta.label || tag;
         var rows = [];
-        if (mn.historic) rows.push({ ic: "📈", txt: I18N.historic, fn: function () { openReport(meta, "1min", true); } });
-        if (mn.report)   rows.push({ ic: "📋", txt: I18N.report,   fn: function () { openReport(meta, "1min", false); } });
-        if (mn.daily)    rows.push({ ic: "📊", txt: I18N.daily,    fn: function () { openReport(meta, "daily", true); } });
+        if (mn.historic) rows.push({ ic: "📈", txt: I18N.historic, fn: function () { openDataReport(tag, "hourly", I18N.historic); } });
+        if (mn.report)   rows.push({ ic: "📋", txt: I18N.report,   fn: function () { openDataReport(tag, "raw", I18N.report); } });
+        if (mn.daily)    rows.push({ ic: "📊", txt: I18N.daily,    fn: function () { openDataReport(tag, "daily", I18N.daily); } });
         // Kontrol yalnız operatör/admin + dijital çıkış etiketinde; öncesine ayraç.
         if (mn.control && CFG.canControl) {
             rows.push({ ic: "⚙️", txt: I18N.control, sep: rows.length > 0, fn: function () { openControl(tag, meta); } });
@@ -298,6 +318,91 @@ window.V_CFG = {
     document.addEventListener("mousedown", function (e) {
         if (menuEl.classList.contains("show") && !menuEl.contains(e.target)) hideMenu();
     });
+
+    // ------------------------------------------------------------------ //
+    // Rapor modal (tablo + kopya/CSV/Excel/PDF/yazdır) → mimic_report endpoint
+    // ------------------------------------------------------------------ //
+    var dt = null;   // DataTables örneği
+    var DT_L10N = {
+        search: "{% trans 'Ara' %}:",
+        lengthMenu: "_MENU_ {% trans 'kayıt göster' %}",
+        info: "_TOTAL_ {% trans 'kayıttan _START_ – _END_' %}",
+        infoEmpty: "{% trans '0 kayıt' %}",
+        zeroRecords: "{% trans 'Kayıt bulunamadı' %}",
+        emptyTable: "{% trans 'Veri yok' %}",
+        paginate: { first: "«", last: "»", next: "›", previous: "‹" }
+    };
+    function openDataReport(tag, kind, title) {
+        var meta = TAGMETA[tag] || {};
+        $("vm-rtitle").innerHTML = esc(title) + ' <small>' + esc(meta.label || tag) +
+            (meta.station ? " · " + esc(meta.station) : "") + '</small>';
+        $("vm-rloading").style.display = "block";
+        $("vm-rloading").textContent = "{% trans 'Yükleniyor…' %}";
+        var tbl = $("vm-rtable");
+        tbl.style.display = "none";
+        if (dt) { dt.destroy(); tbl.innerHTML = ""; dt = null; }
+        $("vm-rovl").classList.add("show");
+
+        var url = CFG.reportDataUrl + "?tag=" + encodeURIComponent(tag) + "&kind=" + encodeURIComponent(kind);
+        fetch(url, { credentials: "same-origin", headers: { "X-Requested-With": "XMLHttpRequest" } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d || !d.ok) { $("vm-rloading").textContent = (d && d.error) || "{% trans 'Hata' %}"; return; }
+                buildReportTable(d);
+            })
+            .catch(function () { $("vm-rloading").textContent = "{% trans 'Sunucuya ulaşılamadı.' %}"; });
+    }
+    function buildReportTable(d) {
+        var unit = d.unit ? " (" + d.unit + ")" : "";
+        var cols = d.columns.slice();
+        // Değer/Ortalama/Min/Max başlıklarına birim ekle
+        var head = "<thead><tr>";
+        cols.forEach(function (c, i) {
+            var lbl = c;
+            if (unit && (c === "Değer" || c === "Ortalama" || c === "Min" || c === "Max")) lbl = c + unit;
+            head += "<th>" + esc(lbl) + "</th>";
+        });
+        head += "</tr></thead>";
+        // rows: [display, ts, v1, v2, ...] — 2. eleman (ts) sıralama için, tabloda gösterilmez
+        var body = "<tbody>";
+        d.rows.forEach(function (row) {
+            body += "<tr>";
+            body += '<td data-order="' + row[1] + '">' + esc(row[0]) + "</td>";
+            for (var i = 2; i < row.length; i++) {
+                var v = row[i];
+                body += "<td>" + (v == null ? "" : esc(v)) + "</td>";
+            }
+            body += "</tr>";
+        });
+        body += "</tbody>";
+        var tbl = $("vm-rtable");
+        tbl.innerHTML = head + body;
+        $("vm-rloading").style.display = "none";
+        tbl.style.display = "";
+
+        var fname = (d.label || "rapor") + "_" + d.kind;
+        dt = window.jQuery(tbl).DataTable({
+            dom: "<'row'<'col-sm-6'B><'col-sm-6'f>>t<'row'<'col-sm-5'i><'col-sm-7'p>>",
+            order: [[0, "desc"]],
+            pageLength: 25,
+            lengthChange: false,
+            language: DT_L10N,
+            buttons: [
+                { extend: "copyHtml5", text: "{% trans 'Kopyala' %}", className: "btn btn-sm btn-light-primary" },
+                { extend: "csvHtml5", text: "CSV", filename: fname, className: "btn btn-sm btn-light-primary" },
+                { extend: "excelHtml5", text: "Excel", filename: fname, className: "btn btn-sm btn-light-success" },
+                { extend: "pdfHtml5", text: "PDF", filename: fname, orientation: "landscape", className: "btn btn-sm btn-light-danger" },
+                { extend: "print", text: "{% trans 'Yazdır' %}", className: "btn btn-sm btn-light-info" },
+                { extend: "colvis", text: "{% trans 'Sütunlar' %}", className: "btn btn-sm btn-light" }
+            ]
+        });
+    }
+    function closeReport() {
+        $("vm-rovl").classList.remove("show");
+        if (dt) { dt.destroy(); $("vm-rtable").innerHTML = ""; dt = null; }
+    }
+    $("vm-rclose").addEventListener("click", closeReport);
+    $("vm-rovl").addEventListener("click", function (e) { if (e.target === $("vm-rovl")) closeReport(); });
 
     // ------------------------------------------------------------------ //
     // Kontrol diyalogu (aktif/pasif + değer ata) → mimic_control endpoint

@@ -692,13 +692,16 @@ Tamamen dashboard arayüzüne özgü → `dashboard/`.
 - **Tıklama aksiyon menüsü (viewer):** Bir objeye editörde `obj.scada.menu = {enabled, historic,
   report, daily, control}` (Animasyon sekmesi → "Etkileşim Menüsü") atanır — **varsayılan kapalı**.
   Viewer'da bir obje yalnız **etiketi (tag) VE `menu.enabled`** varsa tıklanabilir (`evented`);
-  tıklanınca konumlu bir menü açılır: **Historik Trend / Veri Raporu / Günlük Özet** → sensörün
-  istasyon+parametresiyle `reports_readings`'e yeni sekmede gider (`?station=&parameter=&interval=&chart=`);
-  **Kontrol** (yalnız operatör/admin `canControl` + dijital çıkış sensörü) → aktif/pasif + değer
-  ata diyalogu. Kontrol `mimic_control` endpoint'ine POST'lar → `Command` (source=operator,
-  idempotency `mimic_control:{sensor}:{val}:{bucket}`), `digital_output_command` ile aynı akış.
-  `mimic_tags` artık `sensor_id/station_id/parameter_id/is_output` da döndürür (menü navigasyon +
-  kontrol için). Butonlar (`isButton`) menü açmaz — kendi press/release toggle'ını korur.
+  tıklanınca konumlu bir menü açılır: **Historik Trend (saatlik) / Veri Raporu (ham) / Günlük Özet
+  (günlük)** → **viewer içinde bir modal** açar (rapor sayfasına gitmez, filtre inputu yok): salt
+  tablo + DataTables export (kopyala/CSV/Excel/PDF/yazdır/sütun-seç). Veri `mimic_report_data`
+  endpoint'inden gelir (`?tag=&kind=raw|15min|hourly|daily`; raw→`Reading`, diğerleri aggregate
+  tabloları; salt-okuma, tüm roller). **Kontrol** (yalnız operatör/admin `canControl` + dijital
+  çıkış sensörü) → aktif/pasif + değer ata diyalogu → `mimic_control` endpoint'ine POST → `Command`
+  (source=operator, idempotency `mimic_control:{sensor}:{val}:{bucket}`), `digital_output_command`
+  ile aynı akış. `mimic_tags` artık `sensor_id/station_id/parameter_id/is_output` da döndürür.
+  Viewer DataTables için `plugins.bundle.js` + `datatables.bundle.js`'i ayrıca yükler. Butonlar
+  (`isButton`) menü açmaz — kendi press/release toggle'ını korur.
 - **Frontend** ([dashboard/static/dashboard/js/](dashboard/static/dashboard/js/)):
   - `mimic_symbols.js` — kategorize SCADA sembol kütüphanesi (vana/pompa/motor/tank/enstrüman/
     boru/proses/elektrik SVG'leri); `window.MIMIC_SYMBOLS`.

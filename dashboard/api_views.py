@@ -3403,6 +3403,87 @@ def mimic_tags(request):
     return JsonResponse({"ok": True, "results": items, "values": values})
 
 
+@login_required
+def mimic_report_data(request):
+    """Mimik viewer tıklama menüsü → rapor modal'ı için tablo verisi.
+
+    GET: ``tag`` (zorunlu), ``kind`` (raw|hourly|daily|15min), ``limit``.
+    Raw → ham Reading okumaları [zaman, değer, kalite, durum]; aggregate →
+    [zaman, ort, min, max, adet]. Salt-okuma → tüm rollere açık (mimic_tags gibi).
+
+    Yanıt: ``{ok, kind, label, unit, station, columns, rows}``.
+    """
+    from api.models import Reading, ReadingDaily, ReadingFifteenMin, ReadingHourly
+
+    tag = (request.GET.get("tag") or "").strip()
+    kind = request.GET.get("kind") or "raw"
+    if kind not in ("raw", "15min", "hourly", "daily"):
+        kind = "raw"
+    defaults = {"raw": 1000, "15min": 672, "hourly": 720, "daily": 365}
+    try:
+        limit = int(request.GET.get("limit") or 0) or defaults[kind]
+    except (TypeError, ValueError):
+        limit = defaults[kind]
+    limit = max(1, min(limit, 5000))
+
+    if not tag:
+        return JsonResponse({"ok": False, "error": "Etiket (tag) gerekli."}, status=400)
+
+    sensor = (
+        Sensor.objects.select_related("parameter", "connection__station")
+        .filter(is_active=True)
+        .exclude(tag="")
+        .filter(tag=tag)
+        .first()
+    )
+    if sensor is None:
+        return JsonResponse({"ok": False, "error": "Etiket bulunamadı."}, status=404)
+
+    param = sensor.parameter
+    dec = sensor.decimals if sensor.decimals is not None else 3
+
+    def rnd(v):
+        return round(float(v), dec) if v is not None else None
+
+    def fmt(dt):
+        if not dt:
+            return ["", 0]
+        loc = timezone.localtime(dt)
+        return [loc.strftime("%d.%m.%Y %H:%M:%S"), int(loc.timestamp() * 1000)]
+
+    rows = []
+    if kind == "raw":
+        columns = ["Zaman", "Değer", "Kalite", "Durum"]
+        qs = (
+            Reading.objects.filter(sensor=sensor)
+            .select_related("status")
+            .order_by("-time_iso")[:limit]
+        )
+        for x in qs:
+            t = fmt(x.time_iso)
+            rows.append([t[0], t[1], rnd(x.value), x.quality or "",
+                         str(x.status) if x.status_id else ""])
+    else:
+        columns = ["Zaman", "Ortalama", "Min", "Max", "Adet"]
+        model = {"15min": ReadingFifteenMin, "hourly": ReadingHourly, "daily": ReadingDaily}[kind]
+        qs = model.objects.filter(sensor=sensor).order_by("-bucket_start")[:limit]
+        for x in qs:
+            t = fmt(x.bucket_start)
+            rows.append([t[0], t[1], rnd(x.avg_value), rnd(x.min_value),
+                         rnd(x.max_value), x.count])
+
+    return JsonResponse({
+        "ok": True,
+        "kind": kind,
+        "label": (param.display_name if param else None) or sensor.tag,
+        "unit": (param.unit_txt or param.unit or "") if param else "",
+        "station": sensor.connection.station.name
+        if (sensor.connection_id and sensor.connection.station_id) else "",
+        "columns": columns,
+        "rows": rows,
+    })
+
+
 def mimic_control(request):
     """Mimik görüntüleyici tıklama menüsü → "Kontrol" aksiyonu.
 
