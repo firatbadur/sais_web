@@ -3469,6 +3469,9 @@ msgstr "Notified the configured number of days before the software license expir
 msgid "Aylık kalibrasyon zorunludur. Son kalibrasyondan, (aralık − uyarı) gün geçtiğinde bildirilir (günlük kontrol)."
 msgstr "Monthly calibration is mandatory. Notified when (interval − warn) days have passed since the last calibration (checked daily)."
 
+msgid "Mimik Editörü"
+msgstr "Mimic Editor"
+
 msgid "Mimik Ekranları"
 msgstr "Mimic Screens"
 

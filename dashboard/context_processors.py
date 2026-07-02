@@ -106,13 +106,17 @@ MENU = [
         "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
     },
     {
+        "label": _("Mimik Editörü"),
+        "url_name": "dashboard:admin_mimic",
+        "icon": "ki-picture",
+        "roles": (ROLE_ADMIN,),
+    },
+    {
         "label": _("Yönetici"),
         "menu_key": "admin",
         "icon": "ki-shield-tick",
         "roles": (ROLE_ADMIN,),
         "children": [
-            {"label": _("Mimik Tasarımları"), "url_name": "dashboard:admin_mimic",
-             "roles": (ROLE_ADMIN,)},
             {"label": _("Lisans"), "url_name": "dashboard:admin_license",
              "roles": (ROLE_ADMIN,)},
             {"label": _("Web Erişim Ayarları"), "url_name": "dashboard:admin_web_settings",
