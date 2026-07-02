@@ -439,6 +439,16 @@
             setVal("p-text", o.text);
             setVal("p-fontsize", o.fontSize);
             if ($("p-fontcolor")) $("p-fontcolor").value = (typeof o.fill === "string") ? o.fill : "#181c32";
+            if ($("p-fontfamily")) $("p-fontfamily").value = o.fontFamily || "Inter, Arial, sans-serif";
+            if ($("p-fontweight")) $("p-fontweight").value = String(o.fontWeight || "normal");
+            setVal("p-lineheight", o.lineHeight == null ? 1.2 : o.lineHeight);
+            var isBold = o.fontWeight === "bold" || parseInt(o.fontWeight) >= 600;
+            document.querySelector("#p-bold") && $("p-bold").classList.toggle("active", !!isBold);
+            document.querySelector("#p-italic") && $("p-italic").classList.toggle("active", o.fontStyle === "italic");
+            document.querySelector("#p-underline") && $("p-underline").classList.toggle("active", !!o.underline);
+            document.querySelectorAll("[data-talign]").forEach(function (b) {
+                b.classList.toggle("active", (o.textAlign || "left") === b.dataset.talign);
+            });
         }
         // radius
         document.body.classList.toggle("sel-rect", o.type === "rect");
@@ -499,6 +509,31 @@
     bindInput("p-text", function (v) { var o = activeObj(); if (o && /text/i.test(o.type)) { o.set("text", v); canvas.requestRenderAll(); } });
     bindInput("p-fontsize", function (v) { var o = activeObj(); if (o && /text/i.test(o.type)) { o.set("fontSize", parseFloat(v) || 12); canvas.requestRenderAll(); } });
     bindInput("p-fontcolor", function (v) { var o = activeObj(); if (o && /text/i.test(o.type)) { o.set("fill", v); canvas.requestRenderAll(); } });
+    // Metin: yazı tipi / kalınlık / satır aralığı / stil / hizalama
+    function txtSet(prop, val) {
+        var o = activeObj(); if (!o || !/text/i.test(o.type)) return;
+        o.set(prop, val); if (o.initDimensions) o.initDimensions();
+        o.setCoords(); canvas.requestRenderAll(); syncProps(); markDirty();
+    }
+    bindInput("p-fontfamily", function (v) { txtSet("fontFamily", v); });
+    bindInput("p-fontweight", function (v) { txtSet("fontWeight", /^\d+$/.test(v) ? parseInt(v) : v); });
+    bindInput("p-lineheight", function (v) { txtSet("lineHeight", parseFloat(v) || 1.2); });
+    on("p-bold", "click", function () {
+        var o = activeObj(); if (!o || !/text/i.test(o.type)) return;
+        var bold = !(o.fontWeight === "bold" || parseInt(o.fontWeight) >= 600);
+        txtSet("fontWeight", bold ? "bold" : "normal");
+    });
+    on("p-italic", "click", function () {
+        var o = activeObj(); if (!o || !/text/i.test(o.type)) return;
+        txtSet("fontStyle", o.fontStyle === "italic" ? "normal" : "italic");
+    });
+    on("p-underline", "click", function () {
+        var o = activeObj(); if (!o || !/text/i.test(o.type)) return;
+        txtSet("underline", !o.underline);
+    });
+    document.querySelectorAll("[data-talign]").forEach(function (b) {
+        b.addEventListener("click", function () { txtSet("textAlign", b.dataset.talign); });
+    });
     var noFill = $("p-fill-none");
     if (noFill) noFill.addEventListener("change", function () { applyProp("fill", noFill.checked ? "" : ($("p-fill").value || "#c2ccd6")); });
 

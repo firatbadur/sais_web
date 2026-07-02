@@ -165,6 +165,14 @@
         body.sel-rect .sel-rect-only { display: block; }
         body.sel-button .sel-button-only { display: block; }
         .mx-check { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--mx-text); cursor: pointer; }
+        .txt-btns { display: flex; align-items: center; gap: 3px; }
+        .txt-btn { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+            background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-text); border-radius: 6px;
+            cursor: pointer; font-size: 14px; }
+        .txt-btn:hover { background: var(--mx-hover); color: var(--mx-head); }
+        .txt-btn.active { background: var(--mx-accent); border-color: var(--mx-accent); color: #fff; }
+        .txt-btn i { font-size: 15px; }
+        .txt-gap { width: 8px; }
 
         /* layers */
         .layer-row { display: flex; align-items: center; gap: 7px; padding: 7px 10px; cursor: pointer;
@@ -475,10 +483,47 @@
                 </div>
                 <div class="prop-sec sel-text-only">
                     <h6>{% trans "Metin" %}</h6>
-                    <div class="prop-field" style="margin-bottom:7px;"><label>{% trans "İçerik" %}</label><input type="text" id="p-text"></div>
+                    <div class="prop-field" style="margin-bottom:7px;"><label>{% trans "İçerik" %}</label><textarea id="p-text" rows="2"></textarea></div>
+                    <div class="prop-field" style="margin-bottom:7px;"><label>{% trans "Yazı Tipi" %}</label>
+                        <select id="p-fontfamily">
+                            <option value="Inter, Arial, sans-serif">Inter</option>
+                            <option value="Arial, sans-serif">Arial</option>
+                            <option value="Helvetica, Arial, sans-serif">Helvetica</option>
+                            <option value="'Times New Roman', serif">Times New Roman</option>
+                            <option value="Georgia, serif">Georgia</option>
+                            <option value="Verdana, sans-serif">Verdana</option>
+                            <option value="Tahoma, sans-serif">Tahoma</option>
+                            <option value="'Courier New', monospace">Courier New</option>
+                            <option value="monospace">Monospace</option>
+                        </select>
+                    </div>
                     <div class="prop-row">
+                        <div class="prop-field"><label>{% trans "Kalınlık" %}</label>
+                            <select id="p-fontweight">
+                                <option value="300">{% trans "İnce" %}</option>
+                                <option value="normal">{% trans "Normal" %}</option>
+                                <option value="500">{% trans "Orta" %}</option>
+                                <option value="600">{% trans "Yarı Kalın" %}</option>
+                                <option value="bold">{% trans "Kalın" %}</option>
+                                <option value="800">{% trans "Çok Kalın" %}</option>
+                            </select>
+                        </div>
                         <div class="prop-field"><label>{% trans "Punto" %}</label><input type="number" id="p-fontsize" min="6"></div>
+                    </div>
+                    <div class="prop-row">
                         <div class="prop-field"><label>{% trans "Renk" %}</label><input type="color" id="p-fontcolor"></div>
+                        <div class="prop-field"><label>{% trans "Satır Aralığı" %}</label><input type="number" id="p-lineheight" step="0.1" min="0.5" value="1.2"></div>
+                    </div>
+                    <div class="prop-field"><label>{% trans "Stil & Hizalama" %}</label>
+                        <div class="txt-btns">
+                            <button class="txt-btn" id="p-bold" title="{% trans 'Kalın' %}"><b>B</b></button>
+                            <button class="txt-btn" id="p-italic" title="{% trans 'İtalik' %}"><i>I</i></button>
+                            <button class="txt-btn" id="p-underline" title="{% trans 'Altı Çizili' %}"><span style="text-decoration:underline">U</span></button>
+                            <span class="txt-gap"></span>
+                            <button class="txt-btn" data-talign="left" title="{% trans 'Sola' %}"><i class="ki-duotone ki-text-align-left"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i></button>
+                            <button class="txt-btn" data-talign="center" title="{% trans 'Ortala' %}"><i class="ki-duotone ki-text-align-center"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i></button>
+                            <button class="txt-btn" data-talign="right" title="{% trans 'Sağa' %}"><i class="ki-duotone ki-text-align-right"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i></button>
+                        </div>
                     </div>
                 </div>
             </div>
