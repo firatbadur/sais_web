@@ -593,17 +593,20 @@
         var o = activeObj(); if (!o) return;
         o.scada = o.scada || {}; o.scada.showUnit = $("b-showunit").checked; markDirty();
     });
-    // Gerçek sensör tag'i seçilince birimi otomatik doldur (birim alanı boşsa).
-    on("b-tag", "input", function () {
+    // Gerçek sensör tag'i seçilince birimi otomatik doldur.
+    function applyTagUnit() {
         var o = activeObj(); if (!o) return;
-        var info = TAGMAP[$("b-tag").value.trim()];
-        if (info && info.unit && !($("b-unit").value || "").trim()) {
-            $("b-unit").value = info.unit;
-            o.scada = o.scada || {}; o.scada.unit = info.unit;
-            if (o.scada.showUnit == null) { o.scada.showUnit = true; if ($("b-showunit")) $("b-showunit").checked = true; }
-            markDirty();
-        }
-    });
+        var info = TAGMAP[($("b-tag").value || "").trim()];
+        if (!info || !info.unit) return;
+        if ($("b-unit")) $("b-unit").value = info.unit;
+        o.scada = o.scada || {};
+        o.scada.unit = info.unit;
+        if (o.scada.showUnit == null) o.scada.showUnit = true;
+        if ($("b-showunit")) $("b-showunit").checked = o.scada.showUnit !== false;
+        markDirty();
+    }
+    on("b-tag", "input", applyTagUnit);
+    on("b-tag", "change", applyTagUnit);
 
     // ----------------------------------------------------------------- //
     // Katmanlar
