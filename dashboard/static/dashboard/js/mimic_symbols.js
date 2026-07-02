@@ -245,7 +245,6 @@
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 120">' +
               '<rect x="6" y="6" width="98" height="108" rx="6" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="3"/>' +
               '<rect x="16" y="16" width="78" height="36" rx="3" fill="'+DARK+'" data-dyn="1"/>' +
-              '<text x="55" y="40" font-size="18" font-weight="bold" fill="'+GREEN+'" font-family="monospace" text-anchor="middle">7.21</text>' +
               '<circle cx="26" cy="70" r="6" fill="'+GREEN+'"/><circle cx="46" cy="70" r="6" fill="'+AMBER+'"/><circle cx="66" cy="70" r="6" fill="'+METAL+'"/>' +
               '<rect x="16" y="86" width="78" height="20" rx="3" fill="'+STEEL+'" stroke="'+EDGE+'" stroke-width="2"/></svg>'),
             S("plc", "PLC / Kontrolör", 90, 110,
@@ -401,8 +400,7 @@
               '<text x="45" y="72" font-size="12" font-weight="bold" fill="'+DARK+'" text-anchor="middle">UPS</text></svg>'),
             S("value_display", "Değer Göstergesi", 110, 50,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 50">' +
-              '<rect x="2" y="2" width="106" height="46" rx="5" fill="'+DARK+'" stroke="'+EDGE+'" stroke-width="2"/>' +
-              '<text x="55" y="34" font-size="24" font-weight="bold" font-family="monospace" fill="'+GREEN+'" text-anchor="middle">0.00</text></svg>'),
+              '<rect x="2" y="2" width="106" height="46" rx="5" fill="'+DARK+'" stroke="'+EDGE+'" stroke-width="2"/></svg>'),
             S("generator", "Jeneratör", 80, 80,
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">' +
               '<circle cx="40" cy="40" r="34" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="3" data-dyn="1"/>' +
