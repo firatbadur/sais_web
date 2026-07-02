@@ -23,6 +23,89 @@
     function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 
     // --------------------------------------------------------------------- //
+    // Güvenli ifade değerlendirici (çoklu sensör bağlama).
+    //   Örn: "Pompa1 || Pompa2"  ·  "pH > 8 && pH < 9"  ·  "(A + B) / 2"
+    // Sadece sayı, etiket adı ve şu operatörler: || && ! > < >= <= == != + - * / ( )
+    // eval YOK → keyfi JS çalıştırılamaz. Sonuç sayı (doğru=1 / yanlış=0).
+    // --------------------------------------------------------------------- //
+    var PREC = { "!": 7, "*": 6, "/": 6, "+": 5, "-": 5, ">": 4, "<": 4, ">=": 4, "<=": 4, "==": 3, "!=": 3, "&&": 2, "||": 1 };
+    var EXPR_CACHE = {};
+    function tokenize(s) {
+        var toks = [], i = 0, n = s.length, two, c;
+        var two2 = { ">=": 1, "<=": 1, "==": 1, "!=": 1, "&&": 1, "||": 1 };
+        while (i < n) {
+            c = s.charAt(i);
+            if (c === " " || c === "\t") { i++; continue; }
+            two = s.substr(i, 2);
+            if (two2[two]) { toks.push({ t: "op", v: two }); i += 2; continue; }
+            if ("()!+-*/><".indexOf(c) >= 0) { toks.push({ t: "op", v: c }); i++; continue; }
+            if ((c >= "0" && c <= "9") || c === ".") {
+                var j = i; while (j < n && ((s.charAt(j) >= "0" && s.charAt(j) <= "9") || s.charAt(j) === ".")) j++;
+                toks.push({ t: "num", v: parseFloat(s.slice(i, j)) }); i = j; continue;
+            }
+            if (/[A-Za-z_]/.test(c)) {
+                var k = i; while (k < n && /[A-Za-z0-9_]/.test(s.charAt(k))) k++;
+                toks.push({ t: "id", v: s.slice(i, k) }); i = k; continue;
+            }
+            i++;
+        }
+        return toks;
+    }
+    function compileExpr(expr) {
+        if (EXPR_CACHE[expr] !== undefined) return EXPR_CACHE[expr];
+        var toks = tokenize(expr), out = [], ops = [], idx, tk, top;
+        try {
+            for (idx = 0; idx < toks.length; idx++) {
+                tk = toks[idx];
+                if (tk.t === "num" || tk.t === "id") out.push(tk);
+                else if (tk.v === "(") ops.push(tk);
+                else if (tk.v === ")") {
+                    while (ops.length && ops[ops.length - 1].v !== "(") out.push(ops.pop());
+                    ops.pop();
+                } else {
+                    while (ops.length) {
+                        top = ops[ops.length - 1];
+                        if (top.v === "(") break;
+                        if (PREC[top.v] > PREC[tk.v] || (PREC[top.v] === PREC[tk.v] && tk.v !== "!")) out.push(ops.pop());
+                        else break;
+                    }
+                    ops.push(tk);
+                }
+            }
+            while (ops.length) out.push(ops.pop());
+        } catch (e) { out = null; }
+        EXPR_CACHE[expr] = out;
+        return out;
+    }
+    function evalExpr(expr, tags) {
+        var rpn = compileExpr(expr); if (!rpn) return 0;
+        var st = [], i, tk, a, b, op, r;
+        for (i = 0; i < rpn.length; i++) {
+            tk = rpn[i];
+            if (tk.t === "num") { st.push(tk.v); continue; }
+            if (tk.t === "id") { var v = Number(tags[tk.v]); st.push(isNaN(v) ? 0 : v); continue; }
+            op = tk.v;
+            if (op === "!") { a = st.pop() || 0; st.push(a == 0 ? 1 : 0); continue; }
+            b = st.pop() || 0; a = st.pop() || 0;
+            switch (op) {
+                case "+": r = a + b; break; case "-": r = a - b; break;
+                case "*": r = a * b; break; case "/": r = b === 0 ? 0 : a / b; break;
+                case ">": r = a > b ? 1 : 0; break; case "<": r = a < b ? 1 : 0; break;
+                case ">=": r = a >= b ? 1 : 0; break; case "<=": r = a <= b ? 1 : 0; break;
+                case "==": r = a == b ? 1 : 0; break; case "!=": r = a != b ? 1 : 0; break;
+                case "&&": r = (a != 0 && b != 0) ? 1 : 0; break;
+                case "||": r = (a != 0 || b != 0) ? 1 : 0; break;
+                default: r = 0;
+            }
+            st.push(r);
+        }
+        return st.length ? st[st.length - 1] : 0;
+    }
+    function exprTags(expr) {
+        return tokenize(expr).filter(function (t) { return t.t === "id"; }).map(function (t) { return t.v; });
+    }
+
+    // --------------------------------------------------------------------- //
     // Sembole özel ("auto") animasyon sınıflandırması — symbolKey'e göre.
     //   water   : tank/havuz → seviye + dalga overlay
     //   aeration: su + yükselen kabarcıklar
@@ -270,6 +353,11 @@
                 return o.scada && o.scada.anim && o.scada.anim !== "none";
             });
         }
+        // Objenin sürücü değeri: ifade (çoklu sensör) varsa onu değerlendir,
+        // yoksa tek etiketin değeri.
+        function valueOf(sc) {
+            return (sc.expr && sc.expr.trim()) ? evalExpr(sc.expr, tags) : num(tags[sc.tag], 0);
+        }
 
         function snapshot(obj) {
             var leafFills = [];
@@ -308,8 +396,7 @@
             bound().forEach(function (obj) {
                 var sc = obj.scada, s = snaps.get(obj);
                 if (!s) { snapshot(obj); s = snaps.get(obj); }
-                var val = Number(tags[sc.tag]);
-                if (isNaN(val)) val = 0;
+                var val = valueOf(sc);
                 var thr = sc.threshold == null ? 1 : Number(sc.threshold);
                 var mn = sc.min == null ? 0 : Number(sc.min);
                 var mx = sc.max == null ? 100 : Number(sc.max);
@@ -390,7 +477,7 @@
                 if (sc.anim !== "auto") return;
                 var ak = autoKind(o);
                 if (!OVERLAY_KINDS[ak]) return;
-                var val = num(tags[sc.tag], 0);
+                var val = valueOf(sc);
                 var ratio = ratioOf(val, num(sc.min, 0), num(sc.max, 100));
                 var r = o.getBoundingRect(true, true);
                 var wshape = o._objects ? WATER_SHAPES[o.symbolKey] : null;
@@ -445,7 +532,11 @@
             getTags: function () { return tags; },
             tagList: function () {
                 var set = {};
-                bound().forEach(function (o) { if (o.scada.tag) set[o.scada.tag] = true; });
+                bound().forEach(function (o) {
+                    var sc = o.scada;
+                    if (sc.expr && sc.expr.trim()) exprTags(sc.expr).forEach(function (t) { set[t] = true; });
+                    else if (sc.tag) set[sc.tag] = true;
+                });
                 return Object.keys(set);
             }
         };

@@ -553,6 +553,7 @@
         var o = activeObj(); if (!o) return;
         var sc = o.scada || (o.scada = { tag: "", anim: "none" });
         setVal("b-tag", sc.tag || "");
+        setVal("b-expr", sc.expr || "");
         if ($("b-anim")) $("b-anim").value = sc.anim || "none";
         setVal("b-min", sc.min == null ? 0 : sc.min);
         setVal("b-max", sc.max == null ? 100 : sc.max);
@@ -574,6 +575,7 @@
         });
     }
     bindScada("b-tag", "tag");
+    bindScada("b-expr", "expr");
     bindScada("b-anim", "anim");
     bindScada("b-min", "min", true);
     bindScada("b-max", "max", true);

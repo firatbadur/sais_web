@@ -541,6 +541,16 @@
                                placeholder="{% trans 'Sensör tag’i seçin veya yazın' %}">
                         <datalist id="tag-options"></datalist>
                     </div>
+                    <div class="prop-field" style="margin-bottom:7px;">
+                        <label>{% trans "İfade (çoklu sensör — isteğe bağlı)" %}</label>
+                        <input type="text" id="b-expr" autocomplete="off"
+                               placeholder="Pompa1 || Pompa2">
+                        <div style="color:var(--mx-muted);font-size:10px;margin-top:3px;line-height:1.35;">
+                            {% trans "Birden çok sensör: || (veya), && (ve), ! (değil), > < >= <= == != ile birleştir. Örn:" %}
+                            <b>Pompa1 || Pompa2</b> · <b>pH &gt; 8 &amp;&amp; pH &lt; 9</b> · <b>(A + B) / 2</b>.
+                            {% trans "Doluysa tek etiketin yerine geçer; sonuç sayı (doğru=1)." %}
+                        </div>
+                    </div>
                     <div class="prop-field">
                         <label>{% trans "Animasyon Tipi" %}</label>
                         <select id="b-anim">
