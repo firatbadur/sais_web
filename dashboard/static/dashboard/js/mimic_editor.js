@@ -1115,14 +1115,22 @@
         else if (meta && e.key.toLowerCase() === "g") { e.preventDefault(); e.shiftKey ? ungroupActive() : groupActive(); }
         else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); delActive(); }
         else if (e.key === "Escape") { canvas.discardActiveObject(); canvas.requestRenderAll(); }
-        else if (e.key.startsWith("Arrow")) {
-            var o = activeObj(); if (o) {
-                var d = e.shiftKey ? 10 : 1;
-                if (e.key === "ArrowLeft") o.left -= d;
-                if (e.key === "ArrowRight") o.left += d;
-                if (e.key === "ArrowUp") o.top -= d;
-                if (e.key === "ArrowDown") o.top += d;
-                o.setCoords(); canvas.requestRenderAll(); e.preventDefault();
+        else {
+            // Yön tuşları VEYA WASD ile seçili nesneyi taşı (Shift = 10px adım).
+            var k = e.key.toLowerCase();
+            var dx = 0, dy = 0;
+            if (e.key === "ArrowLeft" || k === "a") dx = -1;
+            else if (e.key === "ArrowRight" || k === "d") dx = 1;
+            else if (e.key === "ArrowUp" || k === "w") dy = -1;
+            else if (e.key === "ArrowDown" || k === "s") dy = 1;
+            if (dx || dy) {
+                var o = activeObj();
+                if (o) {
+                    var step = e.shiftKey ? 10 : 1;
+                    o.left += dx * step; o.top += dy * step;
+                    o.setCoords(); canvas.requestRenderAll(); syncProps();
+                    e.preventDefault();
+                }
             }
         }
     });
