@@ -294,7 +294,8 @@
         g.scada = { tag: "", anim: "none", action: "toggle",
                     pressValue: 100, releaseValue: 0, setValue: 100,
                     onColor: "#3fbf6f", offColor: "#e4544c", min: 0, max: 100, threshold: 1,
-                    speed: 1, unit: "", decimals: 1, moveRange: 60 };
+                    speed: 1, unit: "", decimals: 1, moveRange: 60,
+                    linkTarget: "", linkMode: "modal" };
         return g;
     }
 
@@ -469,10 +470,17 @@
             if ($("bt-fg")) $("bt-fg").value = (l && typeof l.fill === "string") ? l.fill : "#ffffff";
             setVal("bt-radius", r ? (r.rx || 0) : 0);
             setVal("bt-fontsize", l ? l.fontSize : 18);
-            if ($("bt-action")) $("bt-action").value = (o.scada && o.scada.action) || "toggle";
+            var act = (o.scada && o.scada.action) || "toggle";
+            if ($("bt-action")) $("bt-action").value = act;
             setVal("bt-setvalue", (o.scada && o.scada.setValue != null) ? o.scada.setValue : 100);
+            if ($("bt-link-target")) $("bt-link-target").value = (o.scada && o.scada.linkTarget) || "";
+            if ($("bt-link-mode")) $("bt-link-mode").value = (o.scada && o.scada.linkMode) || "modal";
+            toggleLinkFields(act === "openMimic");
         }
         syncBindings();
+    }
+    function toggleLinkFields(on) {
+        var el = $("bt-link-fields"); if (el) el.style.display = on ? "block" : "none";
     }
 
     // Buton özellik güncelleyicileri
@@ -549,8 +557,10 @@
     bindInput("bt-fg", function (v) { btnSet(function (o, r, l) { if (l) l.set("fill", v); }); });
     bindInput("bt-radius", function (v) { btnSet(function (o, r) { if (r) r.set({ rx: parseFloat(v) || 0, ry: parseFloat(v) || 0 }); }); });
     bindInput("bt-fontsize", function (v) { btnSet(function (o, r, l) { if (l) l.set("fontSize", parseFloat(v) || 14); }); });
-    bindInput("bt-action", function (v) { var o = activeObj(); if (o && o.isButton) { o.scada = o.scada || {}; o.scada.action = v; markDirty(); } });
+    bindInput("bt-action", function (v) { var o = activeObj(); if (o && o.isButton) { o.scada = o.scada || {}; o.scada.action = v; toggleLinkFields(v === "openMimic"); markDirty(); } });
     bindInput("bt-setvalue", function (v) { var o = activeObj(); if (o && o.isButton) { o.scada = o.scada || {}; o.scada.setValue = parseFloat(v) || 0; markDirty(); } });
+    bindInput("bt-link-target", function (v) { var o = activeObj(); if (o && o.isButton) { o.scada = o.scada || {}; o.scada.linkTarget = v; markDirty(); } });
+    bindInput("bt-link-mode", function (v) { var o = activeObj(); if (o && o.isButton) { o.scada = o.scada || {}; o.scada.linkMode = v; markDirty(); } });
 
     // ----------------------------------------------------------------- //
     // Bağlama (animasyon) paneli
@@ -1274,6 +1284,24 @@
         if (!it) return "";
         return it.label + (it.unit ? " · " + it.unit : "") + " — son değer: " + it.value;
     }
+    // "Başka Mimik Aç" butonu için kayıtlı mimik listesini dropdown'a doldur.
+    function loadMimicList() {
+        var sel = $("bt-link-target");
+        if (!sel || !CFG.urls || !CFG.urls.list) return;
+        fetch(CFG.urls.list, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                var cur = sel.value;
+                sel.innerHTML = '<option value="">—</option>';
+                (d.results || []).forEach(function (m) {
+                    if (String(m.id) === String(state.screenId)) return;   // kendine link anlamsız
+                    var opt = document.createElement("option");
+                    opt.value = m.id; opt.textContent = m.name;
+                    sel.appendChild(opt);
+                });
+                sel.value = cur;
+            }).catch(function () {});
+    }
 
     // ----------------------------------------------------------------- //
     // Sağ-tık menüsü — hızlı tag + animasyon ataması
@@ -1355,6 +1383,7 @@
         resizeCanvas();
         buildPalette("");
         loadTags();
+        loadMimicList();
         if ($("mimic-name")) $("mimic-name").value = state.name;
         if ($("cfg-width")) $("cfg-width").value = state.width;
         if ($("cfg-height")) $("cfg-height").value = state.height;

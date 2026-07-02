@@ -704,6 +704,13 @@ Tamamen dashboard arayüzüne özgü → `dashboard/`.
   ile aynı akış. `mimic_tags` artık `sensor_id/station_id/parameter_id/is_output` da döndürür.
   Viewer DataTables için `plugins.bundle.js` + `datatables.bundle.js`'i ayrıca yükler. Butonlar
   (`isButton`) menü açmaz — kendi press/release toggle'ını korur.
+- **Mimik→mimik gezinme (buton):** Buton "Tıklama Davranışı" olarak **"Başka Mimik Aç"**
+  (`scada.action="openMimic"`) seçilebilir; `scada.linkTarget` (hedef `MimicScreen` id, editörde
+  kayıtlı mimik dropdown'u — `mimic_screen_list`'ten) + `scada.linkMode` (`modal`|`newtab`|`same`).
+  Viewer'da bu butona tıklanınca hedef mimik: **sayfa içi modal** (hedef viewer'ı `<iframe>` ile —
+  same-origin, `X_FRAME_OPTIONS=SAMEORIGIN`), **yeni sekme** veya **aynı sekme**de açılır. Hedef URL
+  `viewerTpl` (`mimic_viewer` id=0 reverse'ü) placeholder değişimiyle kurulur. openMimic butonu
+  etikete press/release yapmaz.
 - **Frontend** ([dashboard/static/dashboard/js/](dashboard/static/dashboard/js/)):
   - `mimic_symbols.js` — kategorize SCADA sembol kütüphanesi (vana/pompa/motor/tank/enstrüman/
     boru/proses/elektrik SVG'leri); `window.MIMIC_SYMBOLS`.

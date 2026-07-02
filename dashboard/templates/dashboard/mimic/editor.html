@@ -474,9 +474,24 @@
                             <option value="toggle">{% trans "Aç/Kapa (0↔100)" %}</option>
                             <option value="momentary">{% trans "Bas-Çek (basılıyken aktif)" %}</option>
                             <option value="set">{% trans "Değer Ata" %}</option>
+                            <option value="openMimic">{% trans "Başka Mimik Aç" %}</option>
                         </select>
                     </div>
                     <div class="prop-field"><label>{% trans "Atanacak Değer (Değer Ata)" %}</label><input type="number" id="bt-setvalue"></div>
+                    <div id="bt-link-fields" style="display:none;">
+                        <div class="prop-field" style="margin-bottom:7px;">
+                            <label>{% trans "Açılacak Mimik" %}</label>
+                            <select id="bt-link-target"><option value="">—</option></select>
+                        </div>
+                        <div class="prop-field">
+                            <label>{% trans "Açılış Şekli" %}</label>
+                            <select id="bt-link-mode">
+                                <option value="modal">{% trans "Sayfa içi modal" %}</option>
+                                <option value="newtab">{% trans "Yeni sekme" %}</option>
+                                <option value="same">{% trans "Aynı sekme" %}</option>
+                            </select>
+                        </div>
+                    </div>
                     <div style="color:var(--mx-muted);font-size:10.5px;margin-top:6px;">
                         {% trans "Butonun hangi etikete etki edeceğini Animasyon sekmesindeki 'Etiket Adı' alanından belirleyin. Simülasyonda butona tıklayarak test edin." %}
                     </div>

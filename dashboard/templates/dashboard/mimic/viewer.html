@@ -100,6 +100,12 @@
         #vm-rloading { color: var(--mx-muted); padding: 30px; text-align: center; }
         .vm-x { margin-left: auto; background: var(--mx-bg); border: 1px solid var(--mx-border); color: var(--mx-text);
             border-radius: 7px; width: 32px; height: 32px; cursor: pointer; font-size: 15px; line-height: 1; }
+        /* Başka mimik → sayfa içi modal (iframe) */
+        .vm-mdialog { width: 92vw; height: 92vh; background: var(--mx-panel); border: 1px solid var(--mx-border);
+            border-radius: 12px; box-shadow: 0 24px 60px rgba(0,0,0,.5); display: flex; flex-direction: column; overflow: hidden; }
+        .vm-mhead { padding: 9px 14px; border-bottom: 1px solid var(--mx-border); display: flex; align-items: center;
+            gap: 10px; font-weight: 700; color: var(--mx-head); flex: 0 0 auto; }
+        .vm-miframe { flex: 1; width: 100%; border: 0; background: var(--mx-bg); }
     </style>
 </head>
 <body>
@@ -161,6 +167,18 @@
     </div>
 </div>
 
+<!-- Başka mimik → sayfa içi modal (iframe) -->
+<div class="vm-overlay" id="vm-movl">
+    <div class="vm-mdialog">
+        <div class="vm-mhead">
+            <i class="ki-duotone ki-abstract-26"><span class="path1"></span><span class="path2"></span></i>
+            <span id="vm-mtitle">{% trans "Mimik" %}</span>
+            <button class="vm-x" id="vm-mclose" title="{% trans 'Kapat' %}" style="margin-left:auto;">✕</button>
+        </div>
+        <iframe class="vm-miframe" id="vm-miframe" title="{% trans 'Mimik' %}"></iframe>
+    </div>
+</div>
+
 {{ screen.data|json_script:"v-data" }}
 <script>
 window.V_CFG = {
@@ -168,6 +186,8 @@ window.V_CFG = {
     tagsUrl: "{% url 'dashboard:api_mimic_tags' %}",
     reportDataUrl: "{% url 'dashboard:api_mimic_report' %}",
     controlUrl: "{% url 'dashboard:api_mimic_control' %}",
+    viewerTpl: "{% url 'dashboard:mimic_viewer' 0 %}",
+    embedded: (window.self !== window.top),
     csrf: "{{ csrf_token }}",
     canControl: {% if user|has_role:"1" or user|has_role:"2" %}true{% else %}false{% endif %}
 };
@@ -240,8 +260,11 @@ window.V_CFG = {
     var downPt = null, downTarget = null;
     canvas.on("mouse:down", function (opt) {
         if (opt.target && opt.target.isButton) {
-            runtime.pressButton(opt.target); opt.target._op = opt.target.opacity; opt.target.set("opacity", 0.7);
-            canvas.requestRenderAll(); return;
+            var bsc = opt.target.scada || {};
+            opt.target._op = opt.target.opacity; opt.target.set("opacity", 0.7); canvas.requestRenderAll();
+            // "Başka Mimik Aç" butonu etikete etki etmez → press yapma (mouse:up'ta gezinir).
+            if ((bsc.action || "") !== "openMimic") runtime.pressButton(opt.target);
+            return;
         }
         if (opt.e.button === 1) { panning = true; lastPan = { x: opt.e.clientX, y: opt.e.clientY }; opt.e.preventDefault(); return; }
         // Sol tıkla etkileşimli nesne → mouse:up'ta menü aç (sürükleme değilse).
@@ -251,8 +274,11 @@ window.V_CFG = {
     });
     canvas.on("mouse:up", function (opt) {
         if (opt.target && opt.target.isButton) {
-            runtime.releaseButton(opt.target); opt.target.set("opacity", opt.target._op == null ? 1 : opt.target._op);
+            opt.target.set("opacity", opt.target._op == null ? 1 : opt.target._op);
             canvas.requestRenderAll();
+            var bsc = opt.target.scada || {};
+            if ((bsc.action || "") === "openMimic") openMimicLink(bsc);
+            else runtime.releaseButton(opt.target);
         }
         // Tıklama (kayda değer sürükleme yok) + etkileşimli hedef → menü
         if (downTarget && opt.target === downTarget && downPt) {
@@ -524,6 +550,22 @@ window.V_CFG = {
 
     function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
         return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+    // ------------------------------------------------------------------ //
+    // "Başka Mimik Aç" butonu → modal (iframe) / yeni sekme / aynı sekme
+    // ------------------------------------------------------------------ //
+    function openMimicLink(sc) {
+        var id = sc && sc.linkTarget;
+        if (!id) return;
+        var url = CFG.viewerTpl.replace(/\/0\/$/, "/" + id + "/");
+        var mode = sc.linkMode || "modal";
+        if (mode === "newtab") window.open(url, "_blank");
+        else if (mode === "same") window.location.href = url;
+        else { $("vm-miframe").src = url; $("vm-movl").classList.add("show"); }
+    }
+    function closeMimicModal() { $("vm-movl").classList.remove("show"); $("vm-miframe").src = "about:blank"; }
+    $("vm-mclose").addEventListener("click", closeMimicModal);
+    $("vm-movl").addEventListener("click", function (e) { if (e.target === $("vm-movl")) closeMimicModal(); });
 
     // --- Canlı veri: gerçek sensör (tag) değerlerini periyodik çek ---
     var ind = $("v-ind"), indTxt = $("v-ind-txt"), liveTimer = null;
