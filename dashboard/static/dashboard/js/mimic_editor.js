@@ -29,6 +29,8 @@
     fabric.Object.prototype.cornerSize = 9;
     fabric.Object.prototype.transparentCorners = false;
     fabric.Object.prototype.objectCaching = false;
+    // Çoklu seçim: Shift'in yanında Ctrl (ve Mac'te Cmd) ile de nesne eklenebilsin.
+    canvas.selectionKey = ["shiftKey", "ctrlKey", "metaKey"];
 
     var state = {
         screenId: CFG.screenId || null,
