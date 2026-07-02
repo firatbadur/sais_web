@@ -94,7 +94,8 @@
         .vm-rhead .t { font-weight: 700; color: var(--mx-head); }
         .vm-rhead .t small { font-weight: 500; color: var(--mx-muted); margin-left: 6px; }
         .vm-rbody { padding: 14px 16px; overflow: auto; }
-        .vm-rbody .dt-buttons { margin-bottom: 10px; }
+        .vm-rbody .dt-buttons { margin-bottom: 10px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+        .vm-rbody .dt-chartbtn { margin-left: auto; }
         .vm-rbody table { width: 100% !important; }
         #vm-rloading { color: var(--mx-muted); padding: 30px; text-align: center; }
         .vm-x { margin-left: auto; background: var(--mx-bg); border: 1px solid var(--mx-border); color: var(--mx-text);
@@ -150,8 +151,7 @@
     <div class="vm-rdialog">
         <div class="vm-rhead">
             <span class="t" id="vm-rtitle"></span>
-            <button class="v-btn" id="vm-rchart-btn" style="margin-left:auto;"><i class="ki-duotone ki-chart-line-up"><span class="path1"></span><span class="path2"></span></i> <span id="vm-rchart-lbl">{% trans "Grafik" %}</span></button>
-            <button class="vm-x" id="vm-rclose" title="{% trans 'Kapat' %}">✕</button>
+            <button class="vm-x" id="vm-rclose" title="{% trans 'Kapat' %}" style="margin-left:auto;">✕</button>
         </div>
         <div class="vm-rbody">
             <div id="vm-rloading">{% trans "Yükleniyor…" %}</div>
@@ -328,6 +328,7 @@ window.V_CFG = {
     var rChart = null;        // ApexCharts örneği
     var lastReport = null;    // son yüklenen rapor verisi (grafik için)
     var chartOn = false;
+    var chartBtnNode = null;  // buton çubuğundaki Grafik/Tablo düğmesi
     var DT_L10N = {
         info: "_TOTAL_ {% trans 'kayıttan _START_ – _END_' %}",
         infoEmpty: "{% trans '0 kayıt' %}",
@@ -399,18 +400,32 @@ window.V_CFG = {
                 { extend: "csvHtml5", text: "CSV", filename: fname, className: "btn btn-sm btn-light-primary" },
                 { extend: "excelHtml5", text: "Excel", filename: fname, className: "btn btn-sm btn-light-success" },
                 { extend: "pdfHtml5", text: "PDF", filename: fname, orientation: "landscape", className: "btn btn-sm btn-light-danger" },
-                { extend: "print", text: "{% trans 'Yazdır' %}", className: "btn btn-sm btn-light-info" }
+                { extend: "print", text: "{% trans 'Yazdır' %}", className: "btn btn-sm btn-light-info" },
+                // Buton sırasının en sağı (CSS margin-left:auto) → Grafik/Tablo geçişi
+                { text: "{% trans 'Grafik' %}", className: "btn btn-sm btn-light-info dt-chartbtn",
+                  action: function () { toggleChart(); } }
             ]
         });
+        chartBtnNode = document.querySelector("#vm-rtable_wrapper .dt-chartbtn");
+        updateChartBtnLabel();
     }
 
     // --- Grafik görünümü (rapor sayfasındaki ApexCharts deseni) ---
+    // Tablo + sayfalama gizlenir; buton çubuğu (Grafik/Tablo dahil) görünür kalır.
     function showChart(on) {
         chartOn = on;
-        var tblWrap = document.getElementById("vm-rtable_wrapper");
-        if (tblWrap) tblWrap.style.display = on ? "none" : "";
+        var w = document.getElementById("vm-rtable_wrapper");
+        if (w) {
+            for (var i = 0; i < w.children.length; i++) {
+                if (i === 0) continue;                 // 0 = buton çubuğu → hep görünür
+                w.children[i].style.display = on ? "none" : "";
+            }
+        }
         $("vm-rchartwrap").style.display = on ? "block" : "none";
-        $("vm-rchart-lbl").textContent = on ? "{% trans 'Tablo' %}" : "{% trans 'Grafik' %}";
+        updateChartBtnLabel();
+    }
+    function updateChartBtnLabel() {
+        if (chartBtnNode) chartBtnNode.textContent = chartOn ? "{% trans 'Tablo' %}" : "{% trans 'Grafik' %}";
     }
     function toggleChart() {
         if (!lastReport) return;
@@ -451,13 +466,12 @@ window.V_CFG = {
         });
         rChart.render();
     }
-    $("vm-rchart-btn").addEventListener("click", toggleChart);
 
     function closeReport() {
         $("vm-rovl").classList.remove("show");
         if (dt) { dt.destroy(); $("vm-rtable").innerHTML = ""; dt = null; }
         if (rChart) { rChart.destroy(); rChart = null; }
-        lastReport = null; chartOn = false;
+        lastReport = null; chartOn = false; chartBtnNode = null;
     }
     $("vm-rclose").addEventListener("click", closeReport);
     $("vm-rovl").addEventListener("click", function (e) { if (e.target === $("vm-rovl")) closeReport(); });
