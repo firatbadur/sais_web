@@ -442,7 +442,8 @@
                     case "text":
                         if (obj.set && obj.type && /text/i.test(obj.type)) {
                             var dec = sc.decimals == null ? 1 : sc.decimals;
-                            obj.set("text", val.toFixed(dec) + (sc.unit ? " " + sc.unit : ""));
+                            var suffix = (sc.showUnit !== false && sc.unit) ? " " + sc.unit : "";
+                            obj.set("text", val.toFixed(dec) + suffix);
                         }
                         break;
                     case "auto": {

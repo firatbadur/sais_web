@@ -563,6 +563,7 @@
         setVal("b-speed", sc.speed == null ? 1 : sc.speed);
         setVal("b-unit", sc.unit || "");
         setVal("b-decimals", sc.decimals == null ? 1 : sc.decimals);
+        if ($("b-showunit")) $("b-showunit").checked = sc.showUnit !== false;
         setVal("b-moverange", sc.moveRange == null ? 60 : sc.moveRange);
     }
     function bindScada(id, key, isNumber) {
@@ -586,6 +587,21 @@
     bindScada("b-unit", "unit");
     bindScada("b-decimals", "decimals", true);
     bindScada("b-moverange", "moveRange", true);
+    on("b-showunit", "change", function () {
+        var o = activeObj(); if (!o) return;
+        o.scada = o.scada || {}; o.scada.showUnit = $("b-showunit").checked; markDirty();
+    });
+    // Gerçek sensör tag'i seçilince birimi otomatik doldur (birim alanı boşsa).
+    on("b-tag", "input", function () {
+        var o = activeObj(); if (!o) return;
+        var info = TAGMAP[$("b-tag").value.trim()];
+        if (info && info.unit && !($("b-unit").value || "").trim()) {
+            $("b-unit").value = info.unit;
+            o.scada = o.scada || {}; o.scada.unit = info.unit;
+            if (o.scada.showUnit == null) { o.scada.showUnit = true; if ($("b-showunit")) $("b-showunit").checked = true; }
+            markDirty();
+        }
+    });
 
     // ----------------------------------------------------------------- //
     // Katmanlar
