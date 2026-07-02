@@ -121,7 +121,7 @@
         beacon: "blink", alarm_horn: "blink", emergency_stop: "blink",
         gas_detector: "blink", lamp: "tint", value_display: "tint",
         flow_cell: "water", sample_cell: "water", sample_fridge: "carousel",
-        wash_bar: "washbar"
+        wash_bar: "washbar", door: "door"
     };
     function autoKind(o) {
         var k = o.symbolKey || "";
@@ -132,7 +132,7 @@
         if (/^(valve|solenoid|lamp|pushbutton|switch|ups|plc|cabinet|hmi|rtu|breaker|vfd|generator|solar|energy|level_switch|float)/.test(k)) return "tint";
         return "tint";
     }
-    var OVERLAY_KINDS = { water: 1, aeration: 1, spin: 1, gauge: 1, flow: 1, carousel: 1, washbar: 1 };
+    var OVERLAY_KINDS = { water: 1, aeration: 1, spin: 1, gauge: 1, flow: 1, carousel: 1, washbar: 1, door: 1 };
 
     // --------------------------------------------------------------------- //
     // Overlay çizimleri (sahne koordinatında; viewport transform uygulanmış halde)
@@ -267,6 +267,31 @@
             }
         }
         ctx.globalAlpha = 1;
+    }
+    // Sürgülü çift kanatlı kapı — ratio 0 = kapalı (kanatlar ortada birleşik),
+    // ratio 1 = tam açık (kanatlar iki yana çekilmiş, karanlık boşluk görünür).
+    // Boşluk bölgesi sembol viewBox'ına (90x120) göre normalize edildi.
+    function drawDoor(ctx, r, ratio) {
+        var ox = r.left + r.width * 0.133, oy = r.top + r.height * 0.083;
+        var ow = r.width * 0.734, oh = r.height * 0.834;
+        var rt = clamp(ratio, 0, 1);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(ox, oy, ow, oh); ctx.clip();
+        ctx.fillStyle = "#1e2630"; ctx.fillRect(ox, oy, ow, oh);   // karanlık boşluk
+        var half = ow / 2, lw = half * (1 - rt);
+        if (lw > 0.6) {
+            ctx.fillStyle = "#c2ccd6"; ctx.strokeStyle = "#5e6b7a";
+            ctx.lineWidth = Math.max(1, r.width * 0.018);
+            ctx.fillRect(ox, oy, lw, oh);
+            ctx.strokeRect(ox + 0.5, oy + 0.5, lw - 1, oh - 1);
+            ctx.fillRect(ox + ow - lw, oy, lw, oh);
+            ctx.strokeRect(ox + ow - lw + 0.5, oy + 0.5, lw - 1, oh - 1);
+            var hOff = Math.min(6, lw * 0.35);
+            ctx.fillStyle = "#37414d";
+            ctx.beginPath(); ctx.arc(ox + lw - hOff, oy + oh * 0.5, 2.4, 0, 2 * Math.PI); ctx.fill();
+            ctx.beginPath(); ctx.arc(ox + ow - lw + hOff, oy + oh * 0.5, 2.4, 0, 2 * Math.PI); ctx.fill();
+        }
+        ctx.restore();
     }
     function drawGauge(ctx, r, ratio) {
         var cx = r.left + r.width / 2, cy = r.top + r.height * 0.52;
@@ -487,6 +512,7 @@
                 else if (ak === "spin") drawSpin(ctx, r, t, (val >= num(sc.threshold, 1) && val > 0) ? num(sc.speed, 1) : 0);
                 else if (ak === "carousel") drawCarousel(ctx, r, t, (val >= num(sc.threshold, 1) && val > 0) ? num(sc.speed, 1) : 0);
                 else if (ak === "washbar") drawWashBar(ctx, r, t, (val >= num(sc.threshold, 1) && val > 0) ? num(sc.speed, 1) : 0);
+                else if (ak === "door") drawDoor(ctx, r, ratio);
                 else if (ak === "gauge") drawGauge(ctx, r, ratio);
                 else if (ak === "flow") {
                     if (val > 0) {
@@ -530,6 +556,9 @@
             },
             setTag: function (name, val) { tags[name] = Number(val); },
             setTags: function (obj) { tags = Object.assign({}, obj); },
+            // Etiket değerlerini sıfırla — her yeni simülasyon eski değerlerle
+            // başlamasın (temiz başlangıç).
+            reset: function () { tags = {}; },
             getTags: function () { return tags; },
             tagList: function () {
                 var set = {};

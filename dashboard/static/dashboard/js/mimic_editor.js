@@ -417,7 +417,11 @@
     // Özellik paneli
     // ----------------------------------------------------------------- //
     function activeObj() { return canvas.getActiveObject(); }
-    function setVal(id, v) { var el = $(id); if (el && document.activeElement !== el) el.value = (v == null ? "" : v); }
+    // forceSync: seçim değiştiğinde (bir objeden diğerine tıklama) panel alanları
+    // odakta olsalar bile güncellensin. Normalde (drag/scale sırasında) odaktaki
+    // alan korunur ki kullanıcının yazdığı değeri ezmesin.
+    var forceSync = false;
+    function setVal(id, v) { var el = $(id); if (el && (forceSync || document.activeElement !== el)) el.value = (v == null ? "" : v); }
 
     function syncProps() {
         var o = activeObj();
@@ -939,6 +943,7 @@
     function startSim() {
         document.body.classList.add("sim-mode");
         canvas.discardActiveObject();
+        runtime.reset();   // her simülasyon temiz başlasın (eski etiket değerleri kalmasın)
         // Diğer objeler kilitli; butonlar tıklanabilir kalır (etiket aksiyonu).
         canvas.forEachObject(function (o) {
             o.selectable = false;
@@ -1050,8 +1055,9 @@
     // ----------------------------------------------------------------- //
     // Olaylar / wiring
     // ----------------------------------------------------------------- //
-    canvas.on("selection:created", function () { syncProps(); refreshLayers(); });
-    canvas.on("selection:updated", function () { syncProps(); refreshLayers(); });
+    function syncPropsForced() { forceSync = true; try { syncProps(); } finally { forceSync = false; } }
+    canvas.on("selection:created", function () { syncPropsForced(); refreshLayers(); });
+    canvas.on("selection:updated", function () { syncPropsForced(); refreshLayers(); });
     canvas.on("selection:cleared", function () { syncProps(); refreshLayers(); });
     canvas.on("object:modified", syncProps);
     canvas.on("object:scaling", syncProps);

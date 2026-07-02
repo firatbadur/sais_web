@@ -692,6 +692,16 @@
               '<circle cx="32" cy="32" r="30" fill="'+AMBER+'" stroke="'+EDGE+'" stroke-width="3"/>' +
               '<circle cx="32" cy="32" r="20" fill="'+RED+'" stroke="'+DARK+'" stroke-width="2" data-dyn="1"/>' +
               '<text x="32" y="37" font-size="9" font-weight="bold" fill="'+WHITE+'" text-anchor="middle">STOP</text></svg>'),
+            // Sürgülü çift kanatlı kapı — animasyon (auto) aktifken değere göre
+            // kanatlar ortadan iki yana açılır/kapanır (overlay "door"). SVG
+            // varsayılanı kapalı kapı gösterir (simülasyon dışı statik görünüm).
+            S("door", "Kapı (Aç/Kapa)", 90, 120,
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 120">' +
+              '<rect x="3" y="3" width="84" height="114" rx="4" fill="'+EDGE+'" stroke="'+DARK+'" stroke-width="2"/>' +
+              '<rect x="12" y="10" width="66" height="100" fill="#1e2630"/>' +
+              '<rect x="12" y="10" width="33" height="100" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="1.5"/>' +
+              '<rect x="45" y="10" width="33" height="100" fill="'+BODY+'" stroke="'+EDGE+'" stroke-width="1.5"/>' +
+              '<circle cx="40" cy="60" r="2.6" fill="'+DARK+'"/><circle cx="50" cy="60" r="2.6" fill="'+DARK+'"/></svg>'),
         ]},
 
         // ----------------------------------------------------------------- //
