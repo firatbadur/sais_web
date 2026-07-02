@@ -368,6 +368,13 @@
                !(typeof f === "object");
     }
 
+    // "Gösterge tint'i" — bu sembollerde tüm gövde değil, YALNIZ durum
+    // göstergesi (yeşil/kırmızı/amber orijinal dolgulu parça) renk değiştirir.
+    // Örn: UPS'in içindeki durum karesi renk değişir, kutu gövdesi kalır.
+    var INDICATOR_TINT = { ups: 1 };
+    var STATUS_FILLS = { "#3fbf6f": 1, "#e4544c": 1, "#f1b44c": 1 };  // yeşil/kırmızı/amber
+    function isStatusFill(f) { return typeof f === "string" && !!STATUS_FILLS[f.toLowerCase()]; }
+
     function MimicRuntime(canvas) {
         var raf = null, running = false, lastT = 0;
         var snaps = new Map();       // obj -> snapshot
@@ -386,7 +393,7 @@
 
         function snapshot(obj) {
             var leafFills = [];
-            eachLeaf(obj, function (l) { leafFills.push([l, l.fill]); });
+            eachLeaf(obj, function (l) { leafFills.push([l, l.fill]); l._mimicOrig = l.fill; });
             snaps.set(obj, {
                 angle: obj.angle || 0,
                 top: obj.top, left: obj.left,
@@ -401,7 +408,13 @@
         }
 
         function applyColor(obj, color) {
-            eachLeaf(obj, function (l) { if (isFillable(l)) l.set("fill", color); });
+            var indicator = INDICATOR_TINT[obj.symbolKey];
+            eachLeaf(obj, function (l) {
+                if (!isFillable(l)) return;
+                // Gösterge tint'inde yalnız durum (yeşil/kırmızı/amber) parçası boyanır.
+                if (indicator && !isStatusFill(l._mimicOrig != null ? l._mimicOrig : l.fill)) return;
+                l.set("fill", color);
+            });
         }
 
         function restore(obj) {
