@@ -949,6 +949,80 @@ class MimicViewerView(RoleRequiredMixin, TemplateView):
 
 
 # --------------------------------------------------------------------------- #
+# Rapor Stüdyosu — blok tabanlı rapor şablonları + zamanlama + üretim geçmişi
+# --------------------------------------------------------------------------- #
+
+class ReportStudioView(OperatorRequiredMixin, TemplateView):
+    """Rapor Stüdyosu ana sayfası — 3 kart: Şablonlar / Zamanlamalar / Üretilenler.
+
+    Operatör (rol 1-2) görüntüler + "Şimdi Üret" + indirir; şablon/zamanlama
+    düzenleme butonları yalnız admin'e (rol=1) gösterilir (`has_role`).
+    Çalışan üretim varken sayfa `api_report_generated_status`'ı poll'lar
+    (Yedekleme sayfası deseni).
+    """
+    template_name = "dashboard/report_studio/studio.html"
+
+    def get_context_data(self, **kwargs):
+        from api.models import GeneratedReport, ReportSchedule, ReportTemplate
+        from api.reporting import PDF_AVAILABLE
+
+        ctx = super().get_context_data(**kwargs)
+        ctx["templates"] = (
+            ReportTemplate.objects.select_related("created_by")
+            .prefetch_related("schedules")
+            .order_by("-updated_at")
+        )
+        ctx["schedules"] = (
+            ReportSchedule.objects.select_related("template")
+            .order_by("template__name", "id")
+        )
+        ctx["generated"] = (
+            GeneratedReport.objects.select_related("triggered_by")
+            .order_by("-started_at")[:50]
+        )
+        ctx["running"] = GeneratedReport.objects.filter(status="running").exists()
+        ctx["pdf_available"] = PDF_AVAILABLE
+        return ctx
+
+
+class ReportEditorView(AdminRequiredMixin, TemplateView):
+    """Blok tabanlı rapor şablonu editörü (rol=1).
+
+    Mimik editörünün aksine dashboard iskeleti İÇİNDE çalışır (form-tabanlı
+    kurucu; canvas değil). Sol: blok listesi + palet, orta: canlı önizleme
+    (iframe srcdoc — `api_report_preview`), sağ: seçili blok ayarları
+    (istasyon/parametre select2 = `api_station_parameters` deseni).
+    """
+    template_name = "dashboard/report_studio/editor.html"
+
+    def get_context_data(self, **kwargs):
+        import json
+
+        from api.models import ReportTemplate, Station
+        from api.reporting import WINDOW_KEYS
+
+        ctx = super().get_context_data(**kwargs)
+        pk = self.kwargs.get("pk")
+        tpl = ReportTemplate.objects.filter(pk=pk).first() if pk else None
+        ctx["tpl"] = tpl
+        ctx["tpl_json"] = json.dumps({
+            "id": tpl.pk,
+            "name": tpl.name,
+            "description": tpl.description,
+            "page_size": tpl.page_size,
+            "orientation": tpl.orientation,
+            "header_text": tpl.header_text,
+            "footer_text": tpl.footer_text,
+            "show_logo": tpl.show_logo,
+            "is_template": tpl.is_template,
+            "blocks": tpl.blocks or [],
+        } if tpl else None)
+        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        ctx["window_keys"] = WINDOW_KEYS
+        return ctx
+
+
+# --------------------------------------------------------------------------- #
 # Sensör Ayarları (operatör + yönetici): Scan Grubu + Sensör CRUD + Canlı Test
 # --------------------------------------------------------------------------- #
 

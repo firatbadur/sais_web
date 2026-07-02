@@ -104,6 +104,12 @@ urlpatterns = [
     path("admin-pages/sim-data-report/", views.SimDataReportView.as_view(),
          name="admin_sim_data_report"),
 
+    # --- Rapor Stüdyosu (operatör görüntüler/üretir; şablon+zamanlama düzenleme rol=1) ---
+    path("report-studio/", views.ReportStudioView.as_view(), name="report_studio"),
+    path("report-studio/editor/", views.ReportEditorView.as_view(), name="report_editor_new"),
+    path("report-studio/editor/<int:pk>/", views.ReportEditorView.as_view(),
+         name="report_editor_edit"),
+
     # --- License lock screen (menüsüz; middleware buraya yönlendirir) ---
     path("license-expired/", views.LicenseExpiredView.as_view(), name="license_expired"),
 
@@ -139,6 +145,30 @@ urlpatterns = [
 
     # --- AJAX API (raporlar) ---
     path("api/parameters/", api_views.station_parameters, name="api_station_parameters"),
+
+    # --- AJAX API (Rapor Stüdyosu) ---
+    path("api/report-studio/templates/list/", api_views.report_tpl_list,
+         name="api_report_tpl_list"),
+    path("api/report-studio/templates/get/", api_views.report_tpl_get,
+         name="api_report_tpl_get"),
+    path("api/report-studio/templates/save/", api_views.report_tpl_save,
+         name="api_report_tpl_save"),
+    path("api/report-studio/templates/delete/", api_views.report_tpl_delete,
+         name="api_report_tpl_delete"),
+    path("api/report-studio/preview/", api_views.report_preview,
+         name="api_report_preview"),
+    path("api/report-studio/schedules/save/", api_views.report_sched_save,
+         name="api_report_sched_save"),
+    path("api/report-studio/schedules/delete/", api_views.report_sched_delete,
+         name="api_report_sched_delete"),
+    path("api/report-studio/run-now/", api_views.report_run_now,
+         name="api_report_run_now"),
+    path("api/report-studio/generated/status/", api_views.report_generated_status,
+         name="api_report_generated_status"),
+    path("api/report-studio/generated/<int:pk>/download/", api_views.report_download,
+         name="api_report_download"),
+    path("api/report-studio/generated/delete/", api_views.report_generated_delete,
+         name="api_report_generated_delete"),
 
     # --- AJAX API (Sensör Ayarları / test) ---
     path("api/sensor-config/scangroups/", api_views.connection_scangroups,

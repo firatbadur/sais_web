@@ -112,6 +112,12 @@ MENU = [
         "roles": (ROLE_ADMIN,),
     },
     {
+        "label": _("Rapor Stüdyosu"),
+        "url_name": "dashboard:report_studio",
+        "icon": "ki-document",
+        "roles": (ROLE_ADMIN, ROLE_OPERATOR),
+    },
+    {
         "label": _("Yönetici"),
         "menu_key": "admin",
         "icon": "ki-shield-tick",

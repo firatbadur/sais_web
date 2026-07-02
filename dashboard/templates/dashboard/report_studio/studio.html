@@ -1,0 +1,634 @@
+{% extends "dashboard/base.html" %}
+{% load i18n static dashboard_extras %}
+
+{% block title %}{% trans "Rapor Stüdyosu" %}{% endblock %}
+{% block page_title %}{% trans "Rapor Stüdyosu" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .tpl-card { transition: box-shadow .15s ease, transform .15s ease; }
+    .tpl-card:hover { box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.12); transform: translateY(-2px); }
+    .tpl-head {
+        height: 92px; border-radius: .65rem .65rem 0 0;
+        background: linear-gradient(135deg, var(--bs-primary) 0%, #0072c6 100%);
+        display: flex; align-items: center; justify-content: center; color: #fff;
+    }
+    .new-card {
+        border: 2px dashed var(--bs-gray-300); border-radius: .85rem; min-height: 220px;
+        display: flex; align-items: center; justify-content: center; cursor: pointer;
+        transition: border-color .15s, background .15s;
+    }
+    .new-card:hover { border-color: var(--bs-primary); background: rgba(0,158,247,.06); }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Başlık kartı -->
+<div class="card mb-6">
+    <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-4">
+        <div class="d-flex align-items-center">
+            <span class="symbol symbol-50px me-4">
+                <span class="symbol-label bg-light-primary">
+                    <i class="ki-duotone ki-document fs-1 text-primary"><span class="path1"></span><span class="path2"></span></i>
+                </span>
+            </span>
+            <div>
+                <h2 class="fw-bold mb-1">{% trans "Rapor Tasarım Stüdyosu" %}</h2>
+                <div class="text-muted fs-7">
+                    {% trans "Blok tabanlı rapor şablonları tasarlayın; zamanlanmış üretim ve e-posta dağıtımı yapılandırın. Raporlar PDF/Excel olarak üretilir." %}
+                </div>
+            </div>
+        </div>
+        {% if user|has_role:"1" %}
+        <a href="{% url 'dashboard:report_editor_new' %}" class="btn btn-primary">
+            <i class="ki-duotone ki-plus fs-2"></i>{% trans "Yeni Rapor Şablonu" %}
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+{% if not pdf_available %}
+<div class="alert alert-warning d-flex align-items-center mb-6">
+    <i class="ki-duotone ki-information-5 fs-2x text-warning me-3"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+    <div>{% trans "PDF üretimi bu sunucuda kullanılamıyor (WeasyPrint/GTK kütüphaneleri eksik). Excel üretimi ve önizleme çalışır; Docker kurulumunda PDF otomatik etkindir." %}</div>
+</div>
+{% endif %}
+
+<!-- ŞABLONLAR -->
+<div class="row g-6 mb-8" id="tpl-grid">
+    {% if user|has_role:"1" %}
+    <div class="col-md-6 col-lg-4 col-xl-3">
+        <a href="{% url 'dashboard:report_editor_new' %}" class="new-card text-decoration-none">
+            <div class="text-center">
+                <i class="ki-duotone ki-plus-square fs-3x text-primary mb-3"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                <div class="fw-semibold text-gray-700">{% trans "Boş şablonla başla" %}</div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
+    {% for t in templates %}
+    <div class="col-md-6 col-lg-4 col-xl-3" data-tpl-card="{{ t.id }}">
+        <div class="card tpl-card h-100">
+            <div class="tpl-head">
+                <i class="ki-duotone ki-document fs-3x"><span class="path1"></span><span class="path2"></span></i>
+            </div>
+            <div class="card-body p-4 d-flex flex-column">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div class="me-2 overflow-hidden">
+                        <span class="fw-bold text-gray-900 d-block text-truncate">{{ t.name }}</span>
+                        <div class="text-muted fs-8 mt-1">
+                            {{ t.blocks|length }} {% trans "blok" %} · {{ t.updated_at|date:"d.m.Y H:i" }}
+                            {% if t.is_template %}<span class="badge badge-light-info ms-1">{% trans "Yerleşik" %}</span>{% endif %}
+                        </div>
+                        {% if t.description %}<div class="text-muted fs-8 text-truncate mt-1">{{ t.description }}</div>{% endif %}
+                    </div>
+                    {% if user|has_role:"1" %}
+                    <div class="dropdown">
+                        <button class="btn btn-icon btn-sm btn-light-secondary" data-bs-toggle="dropdown">
+                            <i class="ki-duotone ki-dots-vertical fs-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end fs-7">
+                            <a class="dropdown-item" href="{% url 'dashboard:report_editor_edit' t.id %}">
+                                <i class="ki-duotone ki-pencil fs-5 me-2"><span class="path1"></span><span class="path2"></span></i>{% trans "Düzenle" %}</a>
+                            <a class="dropdown-item js-sched-add" href="#" data-tpl="{{ t.id }}" data-name="{{ t.name }}">
+                                <i class="ki-duotone ki-time fs-5 me-2"><span class="path1"></span><span class="path2"></span></i>{% trans "Zamanlama Ekle" %}</a>
+                            <div class="separator my-2"></div>
+                            <a class="dropdown-item text-danger js-tpl-delete" href="#"
+                               data-id="{{ t.id }}" data-name="{{ t.name }}" {% if t.is_template %}data-template="1"{% endif %}>
+                                <i class="ki-duotone ki-trash fs-5 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>{% trans "Sil" %}</a>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="d-flex gap-2 mt-auto pt-4">
+                    <button type="button" class="btn btn-sm btn-light-success flex-grow-1 js-run-now"
+                            data-tpl="{{ t.id }}" data-name="{{ t.name }}">
+                        <i class="ki-duotone ki-flash fs-4"><span class="path1"></span><span class="path2"></span></i>{% trans "Şimdi Üret" %}
+                    </button>
+                    {% if user|has_role:"1" %}
+                    <a href="{% url 'dashboard:report_editor_edit' t.id %}" class="btn btn-sm btn-light-primary">
+                        <i class="ki-duotone ki-pencil fs-4"><span class="path1"></span><span class="path2"></span></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    {% if not user|has_role:"1" %}
+    <div class="col-12 text-center text-muted py-10">
+        {% trans "Henüz rapor şablonu yok." %}
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+
+<div class="row g-6">
+    <!-- ZAMANLAMALAR -->
+    <div class="col-xl-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-duotone ki-time fs-2 me-2 text-primary"><span class="path1"></span><span class="path2"></span></i>
+                    {% trans "Zamanlamalar" %}
+                </h3>
+            </div>
+            <div class="card-body pt-4">
+                {% if schedules %}
+                <div class="table-responsive">
+                    <table class="table table-row-bordered align-middle gs-2 gy-3 fs-7">
+                        <thead>
+                            <tr class="fw-bold text-muted">
+                                <th>{% trans "Şablon" %}</th>
+                                <th>{% trans "Periyot" %}</th>
+                                <th>{% trans "Format" %}</th>
+                                <th>{% trans "E-posta" %}</th>
+                                <th>{% trans "Sonraki" %}</th>
+                                <th>{% trans "Durum" %}</th>
+                                {% if user|has_role:"1" %}<th class="text-end">{% trans "İşlem" %}</th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in schedules %}
+                            <tr data-sched-row="{{ s.id }}">
+                                <td class="fw-semibold">{{ s.template.name }}</td>
+                                <td>{{ s.period_summary }}</td>
+                                <td>
+                                    {% if s.output_pdf %}<span class="badge badge-light-danger">PDF</span>{% endif %}
+                                    {% if s.output_excel %}<span class="badge badge-light-success">Excel</span>{% endif %}
+                                </td>
+                                <td>
+                                    {% if s.email_enabled %}
+                                        <span class="badge badge-light-primary" title="{{ s.recipients }}">
+                                            <i class="ki-duotone ki-sms fs-6 me-1"><span class="path1"></span><span class="path2"></span></i>{% trans "Açık" %}
+                                        </span>
+                                    {% else %}<span class="text-muted">—</span>{% endif %}
+                                </td>
+                                <td class="text-muted">
+                                    {% if s.enabled and s.next_run_at %}{{ s.next_run_at|date:"d.m.Y H:i" }}{% else %}—{% endif %}
+                                </td>
+                                <td>
+                                    {% if s.enabled %}
+                                        <span class="badge badge-light-success">{% trans "Etkin" %}</span>
+                                    {% else %}
+                                        <span class="badge badge-light">{% trans "Kapalı" %}</span>
+                                    {% endif %}
+                                    {% if s.last_status %}
+                                        <span class="badge badge-light-{% if s.last_status == 'success' %}success{% else %}danger{% endif %} ms-1"
+                                              title="{% trans 'Son çalışma' %}: {{ s.last_run_at|date:'d.m.Y H:i' }}">
+                                            {{ s.last_status }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                {% if user|has_role:"1" %}
+                                <td class="text-end">
+                                    <button class="btn btn-icon btn-sm btn-light-primary js-sched-edit"
+                                            data-sched='{"id": {{ s.id }}, "template_id": {{ s.template_id }}, "enabled": {{ s.enabled|yesno:"true,false" }}, "period": "{{ s.period }}", "time_of_day": "{{ s.time_of_day|time:"H:i" }}", "weekday": {{ s.weekday|default_if_none:"null" }}, "day_of_month": {{ s.day_of_month|default_if_none:"null" }}, "output_pdf": {{ s.output_pdf|yesno:"true,false" }}, "output_excel": {{ s.output_excel|yesno:"true,false" }}, "email_enabled": {{ s.email_enabled|yesno:"true,false" }}}'
+                                            data-recipients="{{ s.recipients }}"
+                                            data-subject="{{ s.email_subject }}"
+                                            data-body="{{ s.email_body }}">
+                                        <i class="ki-duotone ki-pencil fs-4"><span class="path1"></span><span class="path2"></span></i>
+                                    </button>
+                                    <button class="btn btn-icon btn-sm btn-light-danger js-sched-delete" data-id="{{ s.id }}">
+                                        <i class="ki-duotone ki-trash fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>
+                                    </button>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-8">
+                    {% trans "Henüz zamanlama yok." %}
+                    {% if user|has_role:"1" %}{% trans "Şablon kartındaki menüden “Zamanlama Ekle” ile oluşturun." %}{% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ÜRETİLEN RAPORLAR -->
+    <div class="col-xl-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-duotone ki-folder-down fs-2 me-2 text-primary"><span class="path1"></span><span class="path2"></span></i>
+                    {% trans "Üretilen Raporlar" %}
+                </h3>
+                <div class="card-toolbar">
+                    <span id="running-badge" class="badge badge-light-warning {% if not running %}d-none{% endif %}">
+                        <span class="spinner-border spinner-border-sm me-1"></span>{% trans "Üretiliyor..." %}
+                    </span>
+                </div>
+            </div>
+            <div class="card-body pt-4">
+                {% if generated %}
+                <div class="table-responsive">
+                    <table class="table table-row-bordered align-middle gs-2 gy-3 fs-7">
+                        <thead>
+                            <tr class="fw-bold text-muted">
+                                <th>{% trans "Rapor" %}</th>
+                                <th>{% trans "Tetik" %}</th>
+                                <th>{% trans "Durum" %}</th>
+                                <th>{% trans "Zaman" %}</th>
+                                <th>{% trans "E-posta" %}</th>
+                                <th class="text-end">{% trans "İndir" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for g in generated %}
+                            <tr data-gen-row="{{ g.id }}">
+                                <td class="fw-semibold" title="{{ g.error }}">{{ g.template_name }}</td>
+                                <td>
+                                    {% if g.trigger == "auto" %}
+                                        <span class="badge badge-light-info">{% trans "Otomatik" %}</span>
+                                    {% else %}
+                                        <span class="badge badge-light" title="{{ g.triggered_by|default:'' }}">{% trans "Manuel" %}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if g.status == "success" %}<span class="badge badge-light-success">{% trans "Başarılı" %}</span>
+                                    {% elif g.status == "running" %}<span class="badge badge-light-warning">{% trans "Üretiliyor" %}</span>
+                                    {% else %}<span class="badge badge-light-danger" title="{{ g.error }}">{% trans "Başarısız" %}</span>{% endif %}
+                                </td>
+                                <td class="text-muted">{{ g.started_at|date:"d.m.Y H:i" }}</td>
+                                <td>
+                                    {% if g.email_status == "sent" %}<span class="badge badge-light-success">{% trans "Gönderildi" %}</span>
+                                    {% elif g.email_status == "partial" %}<span class="badge badge-light-warning" title="{{ g.email_info }}">{% trans "Kısmen" %}</span>
+                                    {% elif g.email_status == "failed" %}<span class="badge badge-light-danger" title="{{ g.email_info }}">{% trans "Hata" %}</span>
+                                    {% else %}<span class="text-muted">—</span>{% endif %}
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    {% if g.pdf_file and g.status == "success" %}
+                                    <a class="btn btn-icon btn-sm btn-light-danger" title="PDF ({{ g.pdf_size|filesizeformat }})"
+                                       href="{% url 'dashboard:api_report_download' g.id %}?fmt=pdf">
+                                        <i class="ki-duotone ki-file-down fs-4"><span class="path1"></span><span class="path2"></span></i>
+                                    </a>
+                                    {% endif %}
+                                    {% if g.xlsx_file and g.status == "success" %}
+                                    <a class="btn btn-icon btn-sm btn-light-success" title="Excel ({{ g.xlsx_size|filesizeformat }})"
+                                       href="{% url 'dashboard:api_report_download' g.id %}?fmt=xlsx">
+                                        <i class="ki-duotone ki-document fs-4"><span class="path1"></span><span class="path2"></span></i>
+                                    </a>
+                                    {% endif %}
+                                    {% if user|has_role:"1" %}
+                                    <button class="btn btn-icon btn-sm btn-light js-gen-delete" data-id="{{ g.id }}">
+                                        <i class="ki-duotone ki-trash fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-8">{% trans "Henüz üretilmiş rapor yok. Bir şablonda “Şimdi Üret” deneyin." %}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ŞİMDİ ÜRET modalı -->
+<div class="modal fade" id="run-now-modal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-4">
+                <h4 class="modal-title">{% trans "Rapor Üret" %} — <span id="rn-name"></span></h4>
+                <button type="button" class="btn btn-icon btn-sm btn-light" data-bs-dismiss="modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="fw-semibold mb-3">{% trans "Çıktı formatları" %}</div>
+                <label class="form-check form-check-custom mb-3">
+                    <input class="form-check-input" type="checkbox" id="rn-pdf" {% if pdf_available %}checked{% else %}disabled{% endif %}>
+                    <span class="form-check-label">PDF{% if not pdf_available %} <span class="text-muted fs-8">({% trans "bu sunucuda kapalı" %})</span>{% endif %}</span>
+                </label>
+                <label class="form-check form-check-custom">
+                    <input class="form-check-input" type="checkbox" id="rn-excel" {% if not pdf_available %}checked{% endif %}>
+                    <span class="form-check-label">Excel</span>
+                </label>
+                <div class="alert alert-danger d-none mt-4 py-2" id="rn-error"></div>
+            </div>
+            <div class="modal-footer py-4">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">{% trans "Vazgeç" %}</button>
+                <button type="button" class="btn btn-primary" id="rn-submit">
+                    <i class="ki-duotone ki-flash fs-3"><span class="path1"></span><span class="path2"></span></i>{% trans "Üret" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if user|has_role:"1" %}
+<!-- ZAMANLAMA modalı -->
+<div class="modal fade" id="sched-modal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header py-4">
+                <h4 class="modal-title" id="sched-title">{% trans "Zamanlama" %}</h4>
+                <button type="button" class="btn btn-icon btn-sm btn-light" data-bs-dismiss="modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="sc-id">
+                <input type="hidden" id="sc-template">
+                <div class="row g-5">
+                    <div class="col-md-4">
+                        <label class="form-label required">{% trans "Periyot" %}</label>
+                        <select class="form-select" id="sc-period">
+                            <option value="daily">{% trans "Günlük" %}</option>
+                            <option value="weekly">{% trans "Haftalık" %}</option>
+                            <option value="monthly">{% trans "Aylık" %}</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4" id="sc-weekday-wrap" style="display:none">
+                        <label class="form-label">{% trans "Haftanın Günü" %}</label>
+                        <select class="form-select" id="sc-weekday">
+                            <option value="0">{% trans "Pazartesi" %}</option>
+                            <option value="1">{% trans "Salı" %}</option>
+                            <option value="2">{% trans "Çarşamba" %}</option>
+                            <option value="3">{% trans "Perşembe" %}</option>
+                            <option value="4">{% trans "Cuma" %}</option>
+                            <option value="5">{% trans "Cumartesi" %}</option>
+                            <option value="6">{% trans "Pazar" %}</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4" id="sc-dom-wrap" style="display:none">
+                        <label class="form-label">{% trans "Ayın Günü (1-28)" %}</label>
+                        <input type="number" class="form-control" id="sc-dom" min="1" max="28" value="1">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label required">{% trans "Saat" %}</label>
+                        <input type="time" class="form-control" id="sc-time" value="07:00">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <label class="form-check form-switch form-check-custom">
+                            <input class="form-check-input" type="checkbox" id="sc-enabled" checked>
+                            <span class="form-check-label">{% trans "Etkin" %}</span>
+                        </label>
+                    </div>
+                    <div class="col-12"><div class="separator"></div></div>
+                    <div class="col-md-6">
+                        <div class="fw-semibold mb-3">{% trans "Çıktı formatları" %}</div>
+                        <label class="form-check form-check-custom mb-2">
+                            <input class="form-check-input" type="checkbox" id="sc-pdf" checked>
+                            <span class="form-check-label">PDF</span>
+                        </label>
+                        <label class="form-check form-check-custom">
+                            <input class="form-check-input" type="checkbox" id="sc-excel">
+                            <span class="form-check-label">Excel</span>
+                        </label>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-check form-switch form-check-custom mb-3">
+                            <input class="form-check-input" type="checkbox" id="sc-email">
+                            <span class="form-check-label fw-semibold">{% trans "E-posta ile gönder" %}</span>
+                        </label>
+                        <div id="sc-email-fields" style="display:none">
+                            <label class="form-label">{% trans "Alıcılar (virgül/satır ile ayırın)" %}</label>
+                            <textarea class="form-control form-control-sm" id="sc-recipients" rows="2"
+                                      placeholder="ornek@firma.com, mudur@firma.com"></textarea>
+                        </div>
+                    </div>
+                    <div class="col-12" id="sc-email-extra" style="display:none">
+                        <div class="row g-5">
+                            <div class="col-md-6">
+                                <label class="form-label">{% trans "E-posta Konusu" %}</label>
+                                <input type="text" class="form-control form-control-sm" id="sc-subject"
+                                       value="{report_name} - {date}">
+                                <div class="form-text">{% trans "Placeholder" %}: {report_name}, {date}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">{% trans "E-posta Gövdesi" %}</label>
+                                <textarea class="form-control form-control-sm" id="sc-body" rows="3"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-danger d-none mt-4 py-2" id="sc-error"></div>
+            </div>
+            <div class="modal-footer py-4">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">{% trans "Vazgeç" %}</button>
+                <button type="button" class="btn btn-primary" id="sc-submit">{% trans "Kaydet" %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    function getCookie(name) {
+        const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+        return v ? v.pop() : '';
+    }
+    const CSRF = getCookie('csrftoken');
+    const URLS = {
+        runNow: '{% url "dashboard:api_report_run_now" %}',
+        status: '{% url "dashboard:api_report_generated_status" %}',
+        tplDelete: '{% url "dashboard:api_report_tpl_delete" %}',
+        schedSave: '{% url "dashboard:api_report_sched_save" %}',
+        schedDelete: '{% url "dashboard:api_report_sched_delete" %}',
+        genDelete: '{% url "dashboard:api_report_generated_delete" %}',
+    };
+    const I18N = {
+        confirmTplDelete: '{% trans "Bu rapor şablonunu silmek istediğinize emin misiniz?" %}',
+        confirmSchedDelete: '{% trans "Bu zamanlamayı silmek istediğinize emin misiniz?" %}',
+        confirmGenDelete: '{% trans "Bu üretilen raporu ve dosyalarını silmek istediğinize emin misiniz?" %}',
+        builtinNoDelete: '{% trans "Yerleşik şablon silinemez." %}',
+        pickFormat: '{% trans "En az bir format seçin." %}',
+        genError: '{% trans "İşlem başarısız." %}',
+    };
+
+    function postJSON(url, payload) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify(payload || {}),
+        }).then(r => r.json());
+    }
+
+    /* ---------- Şimdi Üret ---------- */
+    let runTplId = null;
+    const rnModalEl = document.getElementById('run-now-modal');
+    const rnModal = rnModalEl ? new bootstrap.Modal(rnModalEl) : null;
+
+    document.querySelectorAll('.js-run-now').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            runTplId = btn.dataset.tpl;
+            document.getElementById('rn-name').textContent = btn.dataset.name || '';
+            document.getElementById('rn-error').classList.add('d-none');
+            rnModal && rnModal.show();
+        });
+    });
+
+    const rnSubmit = document.getElementById('rn-submit');
+    rnSubmit && rnSubmit.addEventListener('click', function () {
+        const formats = [];
+        if (document.getElementById('rn-pdf').checked) formats.push('pdf');
+        if (document.getElementById('rn-excel').checked) formats.push('excel');
+        const errBox = document.getElementById('rn-error');
+        if (!formats.length) {
+            errBox.textContent = I18N.pickFormat;
+            errBox.classList.remove('d-none');
+            return;
+        }
+        postJSON(URLS.runNow, { template_id: runTplId, formats: formats }).then(function (d) {
+            if (!d.ok) {
+                errBox.textContent = d.error || I18N.genError;
+                errBox.classList.remove('d-none');
+                return;
+            }
+            rnModal && rnModal.hide();
+            document.getElementById('running-badge').classList.remove('d-none');
+            startPolling(true);
+        });
+    });
+
+    /* ---------- Durum poll (Yedekleme deseni) ---------- */
+    let pollTimer = null;
+    let wasRunning = {{ running|yesno:"true,false" }};
+
+    function startPolling(force) {
+        if (pollTimer) return;
+        if (!wasRunning && !force) return;
+        pollTimer = setInterval(function () {
+            fetch(URLS.status).then(r => r.json()).then(function (d) {
+                if (!d.ok) return;
+                if (d.running) { wasRunning = true; return; }
+                if (wasRunning || force) location.reload();
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }).catch(function () {});
+        }, 5000);
+    }
+    startPolling(false);
+
+    /* ---------- Şablon sil ---------- */
+    document.querySelectorAll('.js-tpl-delete').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (a.dataset.template) { alert(I18N.builtinNoDelete); return; }
+            if (!confirm(I18N.confirmTplDelete + '\n\n' + (a.dataset.name || ''))) return;
+            postJSON(URLS.tplDelete, { id: a.dataset.id }).then(function (d) {
+                if (!d.ok) { alert(d.error || I18N.genError); return; }
+                const card = document.querySelector('[data-tpl-card="' + a.dataset.id + '"]');
+                if (card) card.remove();
+            });
+        });
+    });
+
+    /* ---------- Üretilen rapor sil ---------- */
+    document.querySelectorAll('.js-gen-delete').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (!confirm(I18N.confirmGenDelete)) return;
+            postJSON(URLS.genDelete, { id: btn.dataset.id }).then(function (d) {
+                if (!d.ok) { alert(d.error || I18N.genError); return; }
+                const row = document.querySelector('[data-gen-row="' + btn.dataset.id + '"]');
+                if (row) row.remove();
+            });
+        });
+    });
+
+    /* ---------- Zamanlama modalı ---------- */
+    const scModalEl = document.getElementById('sched-modal');
+    if (!scModalEl) return;  // operatör görünümü — düzenleme yok
+    const scModal = new bootstrap.Modal(scModalEl);
+
+    function scTogglePeriodFields() {
+        const p = document.getElementById('sc-period').value;
+        document.getElementById('sc-weekday-wrap').style.display = (p === 'weekly') ? '' : 'none';
+        document.getElementById('sc-dom-wrap').style.display = (p === 'monthly') ? '' : 'none';
+    }
+    function scToggleEmailFields() {
+        const on = document.getElementById('sc-email').checked;
+        document.getElementById('sc-email-fields').style.display = on ? '' : 'none';
+        document.getElementById('sc-email-extra').style.display = on ? '' : 'none';
+    }
+    document.getElementById('sc-period').addEventListener('change', scTogglePeriodFields);
+    document.getElementById('sc-email').addEventListener('change', scToggleEmailFields);
+
+    function openSchedModal(data, recipients, subject, body, titleName) {
+        document.getElementById('sc-id').value = data.id || '';
+        document.getElementById('sc-template').value = data.template_id;
+        document.getElementById('sc-period').value = data.period || 'daily';
+        document.getElementById('sc-time').value = data.time_of_day || '07:00';
+        document.getElementById('sc-weekday').value = (data.weekday === null || data.weekday === undefined) ? '0' : String(data.weekday);
+        document.getElementById('sc-dom').value = data.day_of_month || 1;
+        document.getElementById('sc-enabled').checked = data.enabled !== false;
+        document.getElementById('sc-pdf').checked = data.output_pdf !== false;
+        document.getElementById('sc-excel').checked = !!data.output_excel;
+        document.getElementById('sc-email').checked = !!data.email_enabled;
+        document.getElementById('sc-recipients').value = recipients || '';
+        document.getElementById('sc-subject').value = subject || '{report_name} - {date}';
+        document.getElementById('sc-body').value = body || '';
+        document.getElementById('sched-title').textContent =
+            (data.id ? '{% trans "Zamanlama Düzenle" %}' : '{% trans "Zamanlama Ekle" %}') +
+            (titleName ? ' — ' + titleName : '');
+        document.getElementById('sc-error').classList.add('d-none');
+        scTogglePeriodFields();
+        scToggleEmailFields();
+        scModal.show();
+    }
+
+    document.querySelectorAll('.js-sched-add').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+            e.preventDefault();
+            openSchedModal({ template_id: a.dataset.tpl }, '', '', '', a.dataset.name);
+        });
+    });
+
+    document.querySelectorAll('.js-sched-edit').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            let data = {};
+            try { data = JSON.parse(btn.dataset.sched); } catch (e) { return; }
+            openSchedModal(data, btn.dataset.recipients, btn.dataset.subject, btn.dataset.body, '');
+        });
+    });
+
+    document.querySelectorAll('.js-sched-delete').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (!confirm(I18N.confirmSchedDelete)) return;
+            postJSON(URLS.schedDelete, { id: btn.dataset.id }).then(function (d) {
+                if (!d.ok) { alert(d.error || I18N.genError); return; }
+                const row = document.querySelector('[data-sched-row="' + btn.dataset.id + '"]');
+                if (row) row.remove();
+            });
+        });
+    });
+
+    document.getElementById('sc-submit').addEventListener('click', function () {
+        const payload = {
+            id: document.getElementById('sc-id').value || null,
+            template_id: document.getElementById('sc-template').value,
+            enabled: document.getElementById('sc-enabled').checked,
+            period: document.getElementById('sc-period').value,
+            time_of_day: document.getElementById('sc-time').value,
+            weekday: parseInt(document.getElementById('sc-weekday').value, 10),
+            day_of_month: parseInt(document.getElementById('sc-dom').value, 10),
+            output_pdf: document.getElementById('sc-pdf').checked,
+            output_excel: document.getElementById('sc-excel').checked,
+            email_enabled: document.getElementById('sc-email').checked,
+            recipients: document.getElementById('sc-recipients').value,
+            email_subject: document.getElementById('sc-subject').value,
+            email_body: document.getElementById('sc-body').value,
+        };
+        postJSON(URLS.schedSave, payload).then(function (d) {
+            const errBox = document.getElementById('sc-error');
+            if (!d.ok) {
+                errBox.textContent = d.error || I18N.genError;
+                errBox.classList.remove('d-none');
+                return;
+            }
+            scModal.hide();
+            location.reload();
+        });
+    });
+})();
+</script>
+{% endblock %}

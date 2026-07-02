@@ -1,0 +1,251 @@
+{% extends "dashboard/base.html" %}
+{% load i18n static dashboard_extras %}
+
+{% block title %}{% trans "Rapor Şablonu Editörü" %}{% endblock %}
+{% block page_title %}{% trans "Rapor Şablonu Editörü" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .blk-item {
+        display: flex; align-items: center; gap: 8px;
+        border: 1px solid var(--bs-gray-300); border-radius: .5rem;
+        padding: 8px 10px; margin-bottom: 6px; cursor: pointer;
+        background: var(--bs-body-bg); transition: border-color .12s, background .12s;
+    }
+    .blk-item:hover { border-color: var(--bs-primary); }
+    .blk-item.active { border-color: var(--bs-primary); background: rgba(0,158,247,.07); }
+    .blk-item .drag-handle { cursor: grab; color: var(--bs-gray-500); }
+    .blk-item .blk-label { flex: 1; min-width: 0; }
+    .blk-item .blk-label .t { font-weight: 600; font-size: .95rem; }
+    .blk-item .blk-label .s {
+        font-size: .75rem; color: var(--bs-gray-600);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .blk-item.sortable-ghost { opacity: .4; }
+    #preview-frame {
+        width: 100%; height: calc(100vh - 320px); min-height: 480px;
+        border: 1px solid var(--bs-gray-300); border-radius: .5rem; background: #f5f8fa;
+    }
+    #settings-panel .form-label { font-size: .85rem; margin-bottom: .25rem; }
+    .kpi-card-row {
+        border: 1px solid var(--bs-gray-300); border-radius: .5rem;
+        padding: 8px; margin-bottom: 8px;
+    }
+    #preview-loading {
+        position: absolute; inset: 0; display: none;
+        align-items: center; justify-content: center;
+        background: rgba(255,255,255,.6); border-radius: .5rem; z-index: 5;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Üst araç çubuğu -->
+<div class="card mb-5">
+    <div class="card-body py-4">
+        <div class="row g-4 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label required">{% trans "Rapor Adı" %}</label>
+                <input type="text" class="form-control" id="rpt-name" placeholder="{% trans 'Örn. Günlük Tesis Özeti' %}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">{% trans "Açıklama" %}</label>
+                <input type="text" class="form-control" id="rpt-desc">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label">{% trans "Sayfa" %}</label>
+                <select class="form-select" id="rpt-size">
+                    <option value="A4">A4</option>
+                    <option value="A3">A3</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">{% trans "Yönlendirme" %}</label>
+                <select class="form-select" id="rpt-orient">
+                    <option value="portrait">{% trans "Dikey" %}</option>
+                    <option value="landscape">{% trans "Yatay" %}</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2 justify-content-end">
+                <a href="{% url 'dashboard:report_studio' %}" class="btn btn-light">
+                    <i class="ki-duotone ki-arrow-left fs-3"><span class="path1"></span><span class="path2"></span></i>{% trans "Stüdyo" %}
+                </a>
+                <button type="button" class="btn btn-light-info" id="btn-preview">
+                    <i class="ki-duotone ki-eye fs-3"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>{% trans "Önizle" %}
+                </button>
+                <button type="button" class="btn btn-primary" id="btn-save">
+                    <i class="ki-duotone ki-check fs-3"></i>{% trans "Kaydet" %}
+                </button>
+            </div>
+        </div>
+        <div class="row g-4 mt-0">
+            <div class="col-md-3">
+                <label class="form-label">{% trans "Üst Bilgi (PDF)" %}</label>
+                <input type="text" class="form-control form-control-sm" id="rpt-header">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">{% trans "Alt Bilgi (PDF)" %}</label>
+                <input type="text" class="form-control form-control-sm" id="rpt-footer">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <label class="form-check form-switch form-check-custom">
+                    <input class="form-check-input" type="checkbox" id="rpt-logo" checked>
+                    <span class="form-check-label">{% trans "Logo Göster" %}</span>
+                </label>
+            </div>
+            <div class="col-md-4 d-flex align-items-end justify-content-end">
+                <span class="text-muted fs-8" id="save-state"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-5">
+    <!-- SOL: blok listesi -->
+    <div class="col-lg-3">
+        <div class="card">
+            <div class="card-header min-h-50px">
+                <h3 class="card-title fs-5">{% trans "Bloklar" %}</h3>
+                <div class="card-toolbar">
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="dropdown">
+                            <i class="ki-duotone ki-plus fs-4"></i>{% trans "Ekle" %}
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end fs-7" id="add-block-menu">
+                            <a class="dropdown-item" href="#" data-add="heading">
+                                <i class="ki-duotone ki-text fs-5 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i>{% trans "Başlık" %}</a>
+                            <a class="dropdown-item" href="#" data-add="text">
+                                <i class="ki-duotone ki-notepad fs-5 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>{% trans "Metin" %}</a>
+                            <a class="dropdown-item" href="#" data-add="kpi_cards">
+                                <i class="ki-duotone ki-element-11 fs-5 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i>{% trans "KPI Kartları" %}</a>
+                            <a class="dropdown-item" href="#" data-add="chart">
+                                <i class="ki-duotone ki-chart-line fs-5 me-2"><span class="path1"></span><span class="path2"></span></i>{% trans "Grafik" %}</a>
+                            <a class="dropdown-item" href="#" data-add="table">
+                                <i class="ki-duotone ki-row-horizontal fs-5 me-2"><span class="path1"></span><span class="path2"></span></i>{% trans "Veri Tablosu" %}</a>
+                            <div class="separator my-2"></div>
+                            <a class="dropdown-item" href="#" data-add="spacer">
+                                <i class="ki-duotone ki-arrow-up-down fs-5 me-2"><span class="path1"></span><span class="path2"></span></i>{% trans "Boşluk" %}</a>
+                            <a class="dropdown-item" href="#" data-add="page_break">
+                                <i class="ki-duotone ki-scissor fs-5 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>{% trans "Sayfa Sonu" %}</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body pt-3" id="block-list">
+                <!-- JS doldurur -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ORTA: önizleme -->
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header min-h-50px">
+                <h3 class="card-title fs-5">{% trans "Canlı Önizleme" %}</h3>
+                <div class="card-toolbar">
+                    <span class="text-muted fs-8">{% trans "gerçek veriyle render edilir" %}</span>
+                </div>
+            </div>
+            <div class="card-body pt-3 position-relative">
+                <div id="preview-loading"><span class="spinner-border text-primary"></span></div>
+                <iframe id="preview-frame" sandbox="allow-same-origin"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- SAĞ: blok ayarları -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header min-h-50px">
+                <h3 class="card-title fs-5">{% trans "Blok Ayarları" %}</h3>
+                <div class="card-toolbar">
+                    <button type="button" class="btn btn-sm btn-light-danger d-none" id="btn-del-block">
+                        <i class="ki-duotone ki-trash fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>{% trans "Bloğu Sil" %}
+                    </button>
+                </div>
+            </div>
+            <div class="card-body pt-3" id="settings-panel">
+                <div class="text-muted text-center py-8" id="settings-empty">
+                    {% trans "Düzenlemek için soldan bir blok seçin veya yeni blok ekleyin." %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'dashboard/plugins/custom/sortablejs/sortable.min.js' %}"></script>
+<script>
+window.RPT_CFG = {
+    csrf: '{{ csrf_token }}',
+    initial: {{ tpl_json|default:"null"|safe }},
+    urls: {
+        save: '{% url "dashboard:api_report_tpl_save" %}',
+        preview: '{% url "dashboard:api_report_preview" %}',
+        stationParams: '{% url "dashboard:api_station_parameters" %}',
+        studio: '{% url "dashboard:report_studio" %}',
+        editBase: '{% url "dashboard:report_editor_new" %}',
+    },
+    stations: [
+        {% for st in stations %}{ id: {{ st.id }}, name: '{{ st.name|escapejs }}' },{% endfor %}
+    ],
+    windows: [
+        {% for key, label in window_keys.items %}{ key: '{{ key }}', label: '{{ label|escapejs }}' },{% endfor %}
+    ],
+    i18n: {
+        heading: '{% trans "Başlık" %}',
+        text: '{% trans "Metin" %}',
+        kpi_cards: '{% trans "KPI Kartları" %}',
+        chart: '{% trans "Grafik" %}',
+        table: '{% trans "Veri Tablosu" %}',
+        spacer: '{% trans "Boşluk" %}',
+        page_break: '{% trans "Sayfa Sonu" %}',
+        nameRequired: '{% trans "Rapor adı zorunlu." %}',
+        saved: '{% trans "Kaydedildi" %}',
+        saveError: '{% trans "Kaydetme başarısız" %}',
+        unsaved: '{% trans "kaydedilmemiş değişiklik" %}',
+        confirmDelBlock: '{% trans "Bu bloğu silmek istediğinize emin misiniz?" %}',
+        station: '{% trans "İstasyon" %}',
+        parameters: '{% trans "Parametreler (Ctrl ile çoklu seçim)" %}',
+        parameter: '{% trans "Parametre" %}',
+        window: '{% trans "Zaman Penceresi" %}',
+        bucket: '{% trans "Veri Aralığı" %}',
+        columns: '{% trans "Kolonlar" %}',
+        titleLbl: '{% trans "Blok Başlığı" %}',
+        headingText: '{% trans "Başlık Metni" %}',
+        level: '{% trans "Seviye" %}',
+        textContent: '{% trans "Metin İçeriği" %}',
+        chartType: '{% trans "Grafik Tipi" %}',
+        line: '{% trans "Çizgi" %}',
+        bar: '{% trans "Sütun" %}',
+        maxRows: '{% trans "Maks. Satır" %}',
+        fixedStart: '{% trans "Başlangıç (YYYY-AA-GGTSS:DD)" %}',
+        fixedEnd: '{% trans "Bitiş" %}',
+        fixedDates: '{% trans "Sabit Tarih Aralığı" %}',
+        cards: '{% trans "Kartlar" %}',
+        addCard: '{% trans "Kart Ekle" %}',
+        removeCard: '{% trans "Kaldır" %}',
+        cardLabel: '{% trans "Etiket (boş = parametre adı)" %}',
+        aggFn: '{% trans "Değer" %}',
+        aggLast: '{% trans "Anlık (son değer)" %}',
+        aggAvg: '{% trans "Ortalama" %}',
+        aggMin: '{% trans "Minimum" %}',
+        aggMax: '{% trans "Maksimum" %}',
+        chooseStation: '{% trans "İstasyon seçin..." %}',
+        noParams: '{% trans "Bu istasyonda parametre yok" %}',
+        noBlockNote: '{% trans "Bu blok tipinin ek ayarı yok." %}',
+        raw: '{% trans "Ham Veri" %}',
+        b15: '{% trans "15 Dakikalık" %}',
+        hourly: '{% trans "Saatlik" %}',
+        daily: '{% trans "Günlük" %}',
+        colAvg: '{% trans "Ortalama" %}',
+        colMin: '{% trans "Min" %}',
+        colMax: '{% trans "Max" %}',
+        colCount: '{% trans "Okuma Sayısı" %}',
+        colBad: '{% trans "Hatalı Sayısı" %}',
+    },
+};
+</script>
+<script src="{% static 'dashboard/js/report_editor.js' %}"></script>
+{% endblock %}

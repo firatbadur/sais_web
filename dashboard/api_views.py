@@ -4333,3 +4333,407 @@ def system_alarms_status(request):
         return JsonResponse({"ok": True, "status": current_status()})
     except Exception as exc:  # noqa: BLE001
         return JsonResponse({"ok": False, "error": str(exc)}, status=500)
+
+
+# --------------------------------------------------------------------------- #
+# Rapor Stüdyosu — şablon CRUD + önizleme + zamanlama + üretim geçmişi
+# (mimic_screen_* + backup_status/download desenleri)
+# --------------------------------------------------------------------------- #
+
+def _report_tpl_payload_apply(tpl, payload):
+    """save/preview endpoint'lerinde ortak alan ataması (yeni/mevcut/in-memory şablon)."""
+    tpl.name = (payload.get("name") or "").strip()
+    tpl.description = (payload.get("description") or "").strip()
+    tpl.blocks = payload.get("blocks") or []
+    if payload.get("page_size") in ("A4", "A3"):
+        tpl.page_size = payload["page_size"]
+    if payload.get("orientation") in ("portrait", "landscape"):
+        tpl.orientation = payload["orientation"]
+    tpl.header_text = (payload.get("header_text") or "").strip()[:200]
+    tpl.footer_text = (payload.get("footer_text") or "").strip()[:200]
+    tpl.show_logo = bool(payload.get("show_logo", True))
+
+
+@login_required
+def report_tpl_list(request):
+    """Şablon listesi (stüdyo galerisi + editör 'Aç' diyaloğu)."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    from api.models import ReportTemplate
+
+    items = [{
+        "id": t.id,
+        "name": t.name,
+        "description": t.description,
+        "block_count": len(t.blocks or []),
+        "schedule_count": t.schedules.count(),
+        "is_template": t.is_template,
+        "updated_at": timezone.localtime(t.updated_at).strftime("%d.%m.%Y %H:%M"),
+        "created_by": (t.created_by.get_username() if t.created_by else None),
+    } for t in ReportTemplate.objects.select_related("created_by")
+        .prefetch_related("schedules").order_by("-updated_at")]
+    return JsonResponse({"ok": True, "results": items})
+
+
+@login_required
+def report_tpl_get(request):
+    """Tek şablonun tam tanımı (bloklar dahil) — editör yüklemesi."""
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    from api.models import ReportTemplate
+
+    t = ReportTemplate.objects.filter(pk=request.GET.get("id")).first()
+    if t is None:
+        return JsonResponse({"ok": False, "error": "Şablon bulunamadı."}, status=404)
+    return JsonResponse({"ok": True, "template": {
+        "id": t.id, "name": t.name, "description": t.description,
+        "page_size": t.page_size, "orientation": t.orientation,
+        "header_text": t.header_text, "footer_text": t.footer_text,
+        "show_logo": t.show_logo, "is_template": t.is_template,
+        "blocks": t.blocks or [],
+    }})
+
+
+@login_required
+def report_tpl_save(request):
+    """Şablon oluştur/güncelle (blok JSON'u ile) — editör kaydet."""
+    import json
+
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from api.models import ReportTemplate
+
+    try:
+        payload = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    if not (payload.get("name") or "").strip():
+        return JsonResponse({"ok": False, "error": "Rapor adı zorunlu."}, status=400)
+    if not isinstance(payload.get("blocks"), list):
+        return JsonResponse({"ok": False, "error": "Geçersiz blok listesi."}, status=400)
+
+    t_id = payload.get("id")
+    if t_id:
+        tpl = ReportTemplate.objects.filter(pk=t_id).first()
+        if tpl is None:
+            return JsonResponse({"ok": False, "error": "Şablon bulunamadı."}, status=404)
+    else:
+        tpl = ReportTemplate(created_by=request.user)
+
+    _report_tpl_payload_apply(tpl, payload)
+    tpl.save()
+    return JsonResponse({"ok": True, "id": tpl.pk})
+
+
+@login_required
+def report_tpl_delete(request):
+    """Şablon sil — yerleşik şablonlar silinemez."""
+    import json
+
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from api.models import ReportTemplate
+
+    try:
+        t_id = json.loads(request.body or "{}").get("id")
+    except (ValueError, TypeError):
+        t_id = None
+
+    tpl = ReportTemplate.objects.filter(pk=t_id).first()
+    if tpl is None:
+        return JsonResponse({"ok": False, "error": "Şablon bulunamadı."}, status=404)
+    if tpl.is_template:
+        return JsonResponse({"ok": False, "error": "Yerleşik şablon silinemez."}, status=400)
+    tpl.delete()
+    return JsonResponse({"ok": True})
+
+
+@login_required
+def report_preview(request):
+    """Kaydedilmemiş şablon tanımını gerçek veriyle HTML'e render eder.
+
+    Editörün orta panelindeki canlı önizleme (iframe srcdoc) bu HTML'i basar.
+    Kayıt GEREKMEZ — in-memory ReportTemplate ile çalışır.
+    """
+    import json
+
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from django.http import HttpResponse
+
+    from api.models import ReportTemplate
+    from api.reporting import render_report_html
+
+    try:
+        payload = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    tpl = ReportTemplate(
+        name=(payload.get("name") or "Adsız Rapor").strip() or "Adsız Rapor",
+        created_by=request.user,
+    )
+    _report_tpl_payload_apply(tpl, {**payload, "name": tpl.name})
+
+    try:
+        html = render_report_html(tpl, timezone.now(), for_pdf=False)
+    except Exception as exc:  # noqa: BLE001 — önizleme hatası editöre bildirilir
+        return JsonResponse({"ok": False, "error": f"Önizleme üretilemedi: {exc}"}, status=500)
+    return HttpResponse(html)
+
+
+@login_required
+def report_sched_save(request):
+    """Zamanlama oluştur/güncelle — next_run_at yeniden hesaplanır."""
+    import json
+
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    import datetime as _dt
+
+    from api.models import ReportSchedule, ReportTemplate
+
+    try:
+        payload = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    tpl = ReportTemplate.objects.filter(pk=payload.get("template_id")).first()
+    if tpl is None:
+        return JsonResponse({"ok": False, "error": "Şablon bulunamadı."}, status=404)
+
+    period = payload.get("period")
+    if period not in ("daily", "weekly", "monthly"):
+        return JsonResponse({"ok": False, "error": "Geçersiz periyot."}, status=400)
+
+    try:
+        hh, mm = str(payload.get("time_of_day") or "07:00").split(":")[:2]
+        tod = _dt.time(int(hh), int(mm))
+    except (TypeError, ValueError):
+        return JsonResponse({"ok": False, "error": "Geçersiz saat (SS:DD bekleniyor)."}, status=400)
+
+    output_pdf = bool(payload.get("output_pdf"))
+    output_excel = bool(payload.get("output_excel"))
+    if not (output_pdf or output_excel):
+        return JsonResponse({"ok": False, "error": "En az bir çıktı formatı seçin."}, status=400)
+
+    email_enabled = bool(payload.get("email_enabled"))
+    recipients = (payload.get("recipients") or "").strip()
+    if email_enabled:
+        from api.reporting import _parse_recipients
+        if not _parse_recipients(recipients):
+            return JsonResponse(
+                {"ok": False, "error": "E-posta açıkken en az bir geçerli alıcı girin."},
+                status=400,
+            )
+
+    s_id = payload.get("id")
+    if s_id:
+        sched = ReportSchedule.objects.filter(pk=s_id).first()
+        if sched is None:
+            return JsonResponse({"ok": False, "error": "Zamanlama bulunamadı."}, status=404)
+    else:
+        sched = ReportSchedule(created_by=request.user)
+
+    sched.template = tpl
+    sched.enabled = bool(payload.get("enabled", True))
+    sched.period = period
+    sched.time_of_day = tod
+    try:
+        sched.weekday = int(payload["weekday"]) if period == "weekly" else None
+    except (KeyError, TypeError, ValueError):
+        sched.weekday = 0 if period == "weekly" else None
+    try:
+        dom = int(payload["day_of_month"]) if period == "monthly" else None
+        sched.day_of_month = min(max(dom, 1), 28) if dom else None
+    except (KeyError, TypeError, ValueError):
+        sched.day_of_month = 1 if period == "monthly" else None
+    sched.output_pdf = output_pdf
+    sched.output_excel = output_excel
+    sched.email_enabled = email_enabled
+    sched.recipients = recipients
+    sched.email_subject = (payload.get("email_subject") or "{report_name} - {date}").strip()[:200]
+    sched.email_body = (payload.get("email_body") or "").strip()
+    # Zamanlama alanları değişti — sonraki çalışma yeniden hesaplansın
+    sched.next_run_at = None
+    sched.save()
+    return JsonResponse({
+        "ok": True, "id": sched.pk,
+        "next_run_at": (
+            timezone.localtime(sched.next_run_at).strftime("%d.%m.%Y %H:%M")
+            if sched.next_run_at else None
+        ),
+    })
+
+
+@login_required
+def report_sched_delete(request):
+    """Zamanlama sil."""
+    import json
+
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from api.models import ReportSchedule
+
+    try:
+        s_id = json.loads(request.body or "{}").get("id")
+    except (ValueError, TypeError):
+        s_id = None
+
+    sched = ReportSchedule.objects.filter(pk=s_id).first()
+    if sched is None:
+        return JsonResponse({"ok": False, "error": "Zamanlama bulunamadı."}, status=404)
+    sched.delete()
+    return JsonResponse({"ok": True})
+
+
+@login_required
+def report_run_now(request):
+    """'Şimdi Üret' — Celery worker'a üretim gönderir (operatör)."""
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from api.events import EventType, log_event
+    from api.models import ReportTemplate
+    from api.tasks import generate_report_run
+
+    try:
+        payload = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    tpl = ReportTemplate.objects.filter(pk=payload.get("template_id")).first()
+    if tpl is None:
+        return JsonResponse({"ok": False, "error": "Şablon bulunamadı."}, status=404)
+
+    formats = [f for f in (payload.get("formats") or []) if f in ("pdf", "excel")]
+    if not formats:
+        return JsonResponse({"ok": False, "error": "En az bir format seçin."}, status=400)
+
+    generate_report_run.delay(
+        tpl.pk, trigger="manual", user_id=request.user.id, formats=formats,
+    )
+    log_event(
+        EventType.SYSTEM,
+        f"Manuel rapor üretimi tetiklendi: {tpl.name} ({', '.join(formats)})",
+        request=request,
+    )
+    return JsonResponse({"ok": True})
+
+
+@login_required
+def report_generated_status(request):
+    """Üretim durumu poll endpoint'i — stüdyo sayfası 5 sn'de bir çağırır."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    from api.models import GeneratedReport
+
+    running = GeneratedReport.objects.filter(status="running").exists()
+    last = GeneratedReport.objects.order_by("-started_at").first()
+    return JsonResponse({
+        "ok": True,
+        "running": running,
+        "last": {
+            "id": last.id,
+            "template_name": last.template_name,
+            "status": last.status,
+            "started_at": timezone.localtime(last.started_at).strftime("%d.%m.%Y %H:%M:%S"),
+        } if last else None,
+    })
+
+
+@login_required
+def report_download(request, pk):
+    """Üretilen rapor dosyasını indirir (?fmt=pdf|xlsx). Path-traversal korumalı."""
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    import os
+
+    from django.conf import settings as dj_settings
+    from django.http import FileResponse, Http404
+
+    from api.models import GeneratedReport
+
+    rep = GeneratedReport.objects.filter(pk=pk, status="success").first()
+    if rep is None:
+        raise Http404("Rapor bulunamadı.")
+
+    fmt = request.GET.get("fmt", "pdf")
+    fname = rep.pdf_file if fmt == "pdf" else rep.xlsx_file
+    if not fname:
+        raise Http404("Bu formatta dosya üretilmemiş.")
+
+    # Güvenlik: yalnız REPORTS_DIR altındaki, DB kaydıyla eşleşen dosya.
+    reports_dir = os.path.realpath(dj_settings.REPORTS_DIR)
+    full = os.path.realpath(os.path.join(reports_dir, os.path.basename(fname)))
+    if not full.startswith(reports_dir + os.sep) or not os.path.exists(full):
+        raise Http404("Dosya erişilemez.")
+
+    ext = "pdf" if fmt == "pdf" else "xlsx"
+    content_type = (
+        "application/pdf" if fmt == "pdf"
+        else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    return FileResponse(
+        open(full, "rb"), as_attachment=True,
+        filename=f"{rep.template_name}_{timezone.localtime(rep.started_at):%Y%m%d_%H%M}.{ext}",
+        content_type=content_type,
+    )
+
+
+@login_required
+def report_generated_delete(request):
+    """Üretilen rapor kaydını + dosyalarını sil (admin)."""
+    import json
+
+    denied = _require_admin(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from api.models import GeneratedReport
+
+    try:
+        r_id = json.loads(request.body or "{}").get("id")
+    except (ValueError, TypeError):
+        r_id = None
+
+    rep = GeneratedReport.objects.filter(pk=r_id).first()
+    if rep is None:
+        return JsonResponse({"ok": False, "error": "Kayıt bulunamadı."}, status=404)
+    rep.delete()  # dosyaları da diskten kaldırır
+    return JsonResponse({"ok": True})
+
