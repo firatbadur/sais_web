@@ -953,17 +953,17 @@ class MimicViewerView(RoleRequiredMixin, TemplateView):
 # --------------------------------------------------------------------------- #
 
 class ReportStudioView(OperatorRequiredMixin, TemplateView):
-    """Rapor Stüdyosu ana sayfası — 3 kart: Şablonlar / Zamanlamalar / Üretilenler.
+    """Rapor Stüdyosu ana sayfası — 2 sekme: Şablonlar / Üretilen Raporlar.
 
-    Operatör (rol 1-2) görüntüler + "Şimdi Üret" + indirir; şablon/zamanlama
-    düzenleme butonları yalnız admin'e (rol=1) gösterilir (`has_role`).
-    Çalışan üretim varken sayfa `api_report_generated_status`'ı poll'lar
-    (Yedekleme sayfası deseni).
+    Operatör (rol 1-2) görüntüler + "Şimdi Üret" + indirir; şablon düzenleme
+    butonları yalnız admin'e (rol=1) gösterilir (`has_role`). Zamanlamalar
+    editörün "Zamanlama" sekmesinden yönetilir. Çalışan üretim varken sayfa
+    `api_report_generated_status`'ı poll'lar (Yedekleme sayfası deseni).
     """
     template_name = "dashboard/report_studio/studio.html"
 
     def get_context_data(self, **kwargs):
-        from api.models import GeneratedReport, ReportSchedule, ReportTemplate
+        from api.models import GeneratedReport, ReportTemplate
         from api.reporting import PDF_AVAILABLE
 
         ctx = super().get_context_data(**kwargs)
@@ -971,10 +971,6 @@ class ReportStudioView(OperatorRequiredMixin, TemplateView):
             ReportTemplate.objects.select_related("created_by")
             .prefetch_related("schedules")
             .order_by("-updated_at")
-        )
-        ctx["schedules"] = (
-            ReportSchedule.objects.select_related("template")
-            .order_by("template__name", "id")
         )
         ctx["generated"] = (
             GeneratedReport.objects.select_related("triggered_by")
@@ -986,12 +982,13 @@ class ReportStudioView(OperatorRequiredMixin, TemplateView):
 
 
 class ReportEditorView(AdminRequiredMixin, TemplateView):
-    """Blok tabanlı rapor şablonu editörü (rol=1).
+    """Standalone tam-ekran rapor şablonu editörü (rol=1) — mimik editörü deseni.
 
-    Mimik editörünün aksine dashboard iskeleti İÇİNDE çalışır (form-tabanlı
-    kurucu; canvas değil). Sol: blok listesi + palet, orta: canlı önizleme
-    (iframe srcdoc — `api_report_preview`), sağ: seçili blok ayarları
-    (istasyon/parametre select2 = `api_station_parameters` deseni).
+    Dashboard iskeleti OLMADAN kendi chrome'uyla render edilir; stüdyoden yeni
+    sekmede açılır. Üst header (ad + Önizle/Kaydet/Stüdyo/tema), sol blok
+    listesi (SortableJS), orta canlı önizleme (iframe srcdoc —
+    `api_report_preview`), sağ 3 sekme: Blok Ayarları / Sayfa / Zamanlama
+    (zamanlama + e-posta alıcıları — SCADA kullanıcı listesi — buradan yönetilir).
     """
     template_name = "dashboard/report_studio/editor.html"
 

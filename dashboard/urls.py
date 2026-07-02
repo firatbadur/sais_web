@@ -157,6 +157,8 @@ urlpatterns = [
          name="api_report_tpl_delete"),
     path("api/report-studio/preview/", api_views.report_preview,
          name="api_report_preview"),
+    path("api/report-studio/schedules/list/", api_views.report_sched_list,
+         name="api_report_sched_list"),
     path("api/report-studio/schedules/save/", api_views.report_sched_save,
          name="api_report_sched_save"),
     path("api/report-studio/schedules/delete/", api_views.report_sched_delete,

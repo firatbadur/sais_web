@@ -1,180 +1,287 @@
-{% extends "dashboard/base.html" %}
-{% load i18n static dashboard_extras %}
+{% load static i18n %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'tr' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% if tpl %}{{ tpl.name }}{% else %}{% trans "Yeni Rapor" %}{% endif %} · {% trans "Rapor Editörü" %}</title>
+    <link rel="shortcut icon" href="{% static 'images/logo/icon.png' %}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700">
+    <link href="{% static 'dashboard/plugins/global/plugins.bundle.css' %}" rel="stylesheet">
+    <link href="{% static 'dashboard/css/style.bundle.css' %}" rel="stylesheet">
+    <script>
+        // Tema seçimini dashboard ile paylaş (localStorage 'data-bs-theme'); varsayılan açık.
+        (function () {
+            var t = localStorage.getItem("data-bs-theme") || "light";
+            if (t === "system") t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            document.documentElement.setAttribute("data-bs-theme", t);
+        })();
+    </script>
+    <style>
+        /* ===================== TEMA DEĞİŞKENLERİ (mimik editörüyle aynı) ===================== */
+        :root, [data-bs-theme="dark"] {
+            --mx-bg:#1b1f27; --mx-panel:#232834; --mx-panel-2:#2b313d; --mx-border:#353c4a;
+            --mx-text:#c5ccd6; --mx-head:#ffffff; --mx-muted:#7e8794; --mx-accent:#009ef7;
+            --mx-cv-a:#20242d; --mx-cv-b:#1b1f27; --mx-hover:#333b49;
+        }
+        [data-bs-theme="light"] {
+            --mx-bg:#eceff3; --mx-panel:#ffffff; --mx-panel-2:#f3f6f9; --mx-border:#dde2ea;
+            --mx-text:#4b5057; --mx-head:#181c32; --mx-muted:#9aa2af; --mx-accent:#009ef7;
+            --mx-cv-a:#e7ebf1; --mx-cv-b:#dce1e9; --mx-hover:#eaeef3;
+        }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; overflow: hidden; font-family: Inter, sans-serif; }
+        body { background: var(--mx-bg); color: var(--mx-text); display: flex; flex-direction: column; font-size: 13px; }
 
-{% block title %}{% trans "Rapor Şablonu Editörü" %}{% endblock %}
-{% block page_title %}{% trans "Rapor Şablonu Editörü" %}{% endblock %}
+        /* ===================== ÜST HEADER ===================== */
+        .mx-tier1 { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--mx-panel);
+            border-bottom: 1px solid var(--mx-border); flex: 0 0 auto; z-index: 31; }
+        .mx-brand { display: flex; align-items: center; gap: 9px; font-weight: 700; color: var(--mx-head); white-space: nowrap; }
+        .mx-brand i { color: var(--mx-accent); font-size: 26px !important; }
+        .mx-name { background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-head);
+            border-radius: 8px; padding: 0 12px; height: 40px; min-width: 260px; font-weight: 600; font-size: 14px; }
+        .mx-name:focus { outline: none; border-color: var(--mx-accent); }
+        .mx-spacer { flex: 1; }
+        #save-state { font-size: 12px; color: var(--mx-muted); white-space: nowrap; }
+        #save-state.err { color: #e4544c; }
+        .mx-btn { background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-text);
+            border-radius: 8px; padding: 0 15px; height: 40px; font-size: 14px; font-weight: 600; cursor: pointer;
+            display: inline-flex; align-items: center; gap: 7px; line-height: 1; transition: .12s;
+            white-space: nowrap; text-decoration: none; }
+        .mx-btn:hover { background: var(--mx-hover); color: var(--mx-head); }
+        .mx-btn i { font-size: 22px !important; }
+        .mx-btn.primary { background: var(--mx-accent); border-color: var(--mx-accent); color: #fff; }
+        .mx-btn.primary:hover { background: #0089d6; }
+        .mx-btn.primary i { color: #fff; }
 
-{% block extra_head %}
-<style>
-    .blk-item {
-        display: flex; align-items: center; gap: 8px;
-        border: 1px solid var(--bs-gray-300); border-radius: .5rem;
-        padding: 8px 10px; margin-bottom: 6px; cursor: pointer;
-        background: var(--bs-body-bg); transition: border-color .12s, background .12s;
-    }
-    .blk-item:hover { border-color: var(--bs-primary); }
-    .blk-item.active { border-color: var(--bs-primary); background: rgba(0,158,247,.07); }
-    .blk-item .drag-handle { cursor: grab; color: var(--bs-gray-500); }
-    .blk-item .blk-label { flex: 1; min-width: 0; }
-    .blk-item .blk-label .t { font-weight: 600; font-size: .95rem; }
-    .blk-item .blk-label .s {
-        font-size: .75rem; color: var(--bs-gray-600);
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .blk-item.sortable-ghost { opacity: .4; }
-    #preview-frame {
-        width: 100%; height: calc(100vh - 320px); min-height: 480px;
-        border: 1px solid var(--bs-gray-300); border-radius: .5rem; background: #f5f8fa;
-    }
-    #settings-panel .form-label { font-size: .85rem; margin-bottom: .25rem; }
-    .kpi-card-row {
-        border: 1px solid var(--bs-gray-300); border-radius: .5rem;
-        padding: 8px; margin-bottom: 8px;
-    }
-    #preview-loading {
-        position: absolute; inset: 0; display: none;
-        align-items: center; justify-content: center;
-        background: rgba(255,255,255,.6); border-radius: .5rem; z-index: 5;
-    }
-</style>
-{% endblock %}
+        /* ===================== GÖVDE ===================== */
+        .mx-body { flex: 1; display: flex; min-height: 0; }
+        .mx-left { width: 260px; flex: 0 0 auto; background: var(--mx-panel); border-right: 1px solid var(--mx-border);
+            display: flex; flex-direction: column; min-height: 0; }
+        .mx-right { width: 330px; flex: 0 0 auto; background: var(--mx-panel); border-left: 1px solid var(--mx-border);
+            display: flex; flex-direction: column; min-height: 0; }
+        .mx-center { flex: 1; min-width: 0; position: relative; overflow: hidden;
+            background: repeating-conic-gradient(var(--mx-cv-a) 0% 25%, var(--mx-cv-b) 0% 50%) 50% / 26px 26px;
+            display: flex; flex-direction: column; }
+        .lp-head { padding: 9px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+            color: var(--mx-muted); border-bottom: 1px solid var(--mx-border); display: flex; align-items: center;
+            justify-content: space-between; flex: 0 0 auto; }
+        .panel-scroll { flex: 1; overflow-y: auto; padding: 10px 12px; min-height: 0; }
 
-{% block content %}
-<!-- Üst araç çubuğu -->
-<div class="card mb-5">
-    <div class="card-body py-4">
-        <div class="row g-4 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label required">{% trans "Rapor Adı" %}</label>
-                <input type="text" class="form-control" id="rpt-name" placeholder="{% trans 'Örn. Günlük Tesis Özeti' %}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">{% trans "Açıklama" %}</label>
-                <input type="text" class="form-control" id="rpt-desc">
-            </div>
-            <div class="col-md-1">
-                <label class="form-label">{% trans "Sayfa" %}</label>
-                <select class="form-select" id="rpt-size">
-                    <option value="A4">A4</option>
-                    <option value="A3">A3</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">{% trans "Yönlendirme" %}</label>
-                <select class="form-select" id="rpt-orient">
-                    <option value="portrait">{% trans "Dikey" %}</option>
-                    <option value="landscape">{% trans "Yatay" %}</option>
-                </select>
-            </div>
-            <div class="col-md-3 d-flex gap-2 justify-content-end">
-                <a href="{% url 'dashboard:report_studio' %}" class="btn btn-light">
-                    <i class="ki-duotone ki-arrow-left fs-3"><span class="path1"></span><span class="path2"></span></i>{% trans "Stüdyo" %}
-                </a>
-                <button type="button" class="btn btn-light-info" id="btn-preview">
-                    <i class="ki-duotone ki-eye fs-3"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>{% trans "Önizle" %}
-                </button>
-                <button type="button" class="btn btn-primary" id="btn-save">
-                    <i class="ki-duotone ki-check fs-3"></i>{% trans "Kaydet" %}
-                </button>
-            </div>
-        </div>
-        <div class="row g-4 mt-0">
-            <div class="col-md-3">
-                <label class="form-label">{% trans "Üst Bilgi (PDF)" %}</label>
-                <input type="text" class="form-control form-control-sm" id="rpt-header">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">{% trans "Alt Bilgi (PDF)" %}</label>
-                <input type="text" class="form-control form-control-sm" id="rpt-footer">
-            </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <label class="form-check form-switch form-check-custom">
-                    <input class="form-check-input" type="checkbox" id="rpt-logo" checked>
-                    <span class="form-check-label">{% trans "Logo Göster" %}</span>
-                </label>
-            </div>
-            <div class="col-md-4 d-flex align-items-end justify-content-end">
-                <span class="text-muted fs-8" id="save-state"></span>
-            </div>
-        </div>
+        /* sağ panel sekmeleri */
+        .mx-tabs { display: flex; border-bottom: 1px solid var(--mx-border); flex: 0 0 auto; }
+        .rp-tab { flex: 1; text-align: center; padding: 9px 4px; font-size: 12px; font-weight: 600;
+            color: var(--mx-muted); cursor: pointer; border-bottom: 2px solid transparent; user-select: none; }
+        .rp-tab.active { color: var(--mx-head); border-bottom-color: var(--mx-accent); background: var(--mx-panel-2); }
+        .rp-pane { display: none; }
+        .rp-pane.active { display: block; }
+
+        /* Blok Ekle açılır menüsü (custom — bootstrap JS yok) */
+        .r-menu { position: relative; }
+        .r-menu-list { position: absolute; top: 100%; right: 0; margin-top: 4px; min-width: 200px; background: var(--mx-panel);
+            border: 1px solid var(--mx-border); border-radius: 9px; box-shadow: 0 10px 28px rgba(0,0,0,.2);
+            padding: 6px; display: none; z-index: 50; }
+        .r-menu.open .r-menu-list { display: block; }
+        .menu-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent;
+            border: none; color: var(--mx-text); padding: 8px 11px; border-radius: 6px; font-size: 13px;
+            font-weight: 500; cursor: pointer; text-decoration: none; }
+        .menu-item:hover { background: var(--mx-panel-2); color: var(--mx-head); }
+        .menu-item i { font-size: 20px; color: var(--mx-accent); }
+        .menu-sep { height: 1px; background: var(--mx-border); margin: 5px 4px; }
+        .mini-btn { background: var(--mx-accent); border: none; color: #fff; border-radius: 7px;
+            padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
+            display: inline-flex; align-items: center; gap: 4px; }
+        .mini-btn:hover { background: #0089d6; }
+        .mini-btn.danger { background: #e4544c; }
+        .mini-btn.danger:hover { background: #cc463f; }
+
+        /* blok listesi */
+        .blk-item { display: flex; align-items: center; gap: 8px; border: 1px solid var(--mx-border);
+            border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer;
+            background: var(--mx-panel-2); transition: border-color .12s, background .12s; }
+        .blk-item:hover { border-color: var(--mx-accent); }
+        .blk-item.active { border-color: var(--mx-accent); background: rgba(0,158,247,.10); }
+        .blk-item .drag-handle { cursor: grab; color: var(--mx-muted); display: flex; }
+        .blk-item .drag-handle i { font-size: 18px; }
+        .blk-item > i { font-size: 20px; color: var(--mx-accent); }
+        .blk-item .blk-label { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .blk-item .blk-label .t { font-weight: 600; font-size: 12.5px; color: var(--mx-head); }
+        .blk-item .blk-label .s { font-size: 10.5px; color: var(--mx-muted);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .blk-item.sortable-ghost { opacity: .4; }
+
+        /* önizleme */
+        .pv-bar { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+            background: color-mix(in srgb, var(--mx-panel) 82%, transparent);
+            border-bottom: 1px solid var(--mx-border); flex: 0 0 auto; font-size: 11.5px; color: var(--mx-muted); }
+        #preview-frame { flex: 1; width: 100%; border: 0; background: transparent; }
+        #preview-loading { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+            background: rgba(0,0,0,.12); z-index: 5; }
+
+        /* form elemanları — panel içi (Metronic sınıfları mx temasına uyarlanır) */
+        .mx-right .form-label { font-size: 11.5px; font-weight: 600; color: var(--mx-muted); margin-bottom: 3px; }
+        .mx-right .form-control, .mx-right .form-select, .mx-right textarea {
+            background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-head);
+            border-radius: 7px; font-size: 12.5px; padding: 6px 10px; width: 100%; }
+        .mx-right .form-control:focus, .mx-right .form-select:focus { border-color: var(--mx-accent); box-shadow: none; }
+        .mx-right select[multiple] { padding: 4px; }
+        .mx-right select[multiple] option { padding: 4px 8px; border-radius: 4px; }
+        .mx-right optgroup { color: var(--mx-muted); font-size: 11px; }
+        .mx-right .form-check-label { font-size: 12px; color: var(--mx-text); }
+        .mx-right .form-check-input { background-color: var(--mx-panel-2); border-color: var(--mx-border); }
+        .mx-right .form-check-input:checked { background-color: var(--mx-accent); border-color: var(--mx-accent); }
+        .mb-4 { margin-bottom: 12px !important; }
+        .kpi-card-row { border: 1px solid var(--mx-border); border-radius: 8px; padding: 9px; margin-bottom: 9px;
+            background: var(--mx-panel-2); }
+        .kpi-card-row .form-control, .kpi-card-row .form-select { background: var(--mx-panel); }
+        #btn-del-block { display: none; }
+        .settings-head { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px;
+            color: var(--mx-head); margin-bottom: 12px; }
+        .settings-head i { font-size: 20px; color: var(--mx-accent); }
+        .empty-note { color: var(--mx-muted); text-align: center; padding: 32px 8px; font-size: 12.5px; }
+
+        /* sayfa ayarları paneli */
+        .pg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .pg-grid .full { grid-column: 1 / -1; }
+
+        ::-webkit-scrollbar { width: 9px; height: 9px; }
+        ::-webkit-scrollbar-thumb { background: var(--mx-border); border-radius: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+    </style>
+</head>
+<body>
+
+<!-- ===================== ÜST HEADER ===================== -->
+<div class="mx-tier1">
+    <div class="mx-brand">
+        <i class="ki-duotone ki-document"><span class="path1"></span><span class="path2"></span></i>
+        <span>{% trans "Rapor Editörü" %}</span>
     </div>
+    <input type="text" class="mx-name" id="rpt-name" placeholder="{% trans 'Rapor adı...' %}" maxlength="150">
+    <span id="save-state"></span>
+    <div class="mx-spacer"></div>
+    <button type="button" class="mx-btn" id="btn-theme" title="{% trans 'Açık/Koyu tema' %}">
+        <i class="ki-duotone ki-night-day"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span><span class="path6"></span><span class="path7"></span><span class="path8"></span><span class="path9"></span><span class="path10"></span></i>
+    </button>
+    <a href="{% url 'dashboard:report_studio' %}" class="mx-btn">
+        <i class="ki-duotone ki-exit-left"><span class="path1"></span><span class="path2"></span></i>{% trans "Stüdyo" %}
+    </a>
+    <button type="button" class="mx-btn" id="btn-preview">
+        <i class="ki-duotone ki-arrows-circle"><span class="path1"></span><span class="path2"></span></i>{% trans "Önizle" %}
+    </button>
+    <button type="button" class="mx-btn primary" id="btn-save">
+        <i class="ki-duotone ki-check-square"><span class="path1"></span><span class="path2"></span></i>{% trans "Kaydet" %}
+    </button>
 </div>
 
-<div class="row g-5">
+<!-- ===================== GÖVDE ===================== -->
+<div class="mx-body">
+
     <!-- SOL: blok listesi -->
-    <div class="col-lg-3">
-        <div class="card">
-            <div class="card-header min-h-50px">
-                <h3 class="card-title fs-5">{% trans "Bloklar" %}</h3>
-                <div class="card-toolbar">
-                    <div class="dropdown">
-                        <button class="btn btn-sm btn-primary" data-bs-toggle="dropdown">
-                            <i class="ki-duotone ki-plus fs-4"></i>{% trans "Ekle" %}
-                        </button>
-                        <div class="dropdown-menu dropdown-menu-end fs-7" id="add-block-menu">
-                            <a class="dropdown-item" href="#" data-add="heading">
-                                <i class="ki-duotone ki-text fs-5 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i>{% trans "Başlık" %}</a>
-                            <a class="dropdown-item" href="#" data-add="text">
-                                <i class="ki-duotone ki-notepad fs-5 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>{% trans "Metin" %}</a>
-                            <a class="dropdown-item" href="#" data-add="kpi_cards">
-                                <i class="ki-duotone ki-element-11 fs-5 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i>{% trans "KPI Kartları" %}</a>
-                            <a class="dropdown-item" href="#" data-add="chart">
-                                <i class="ki-duotone ki-chart-line fs-5 me-2"><span class="path1"></span><span class="path2"></span></i>{% trans "Grafik" %}</a>
-                            <a class="dropdown-item" href="#" data-add="table">
-                                <i class="ki-duotone ki-row-horizontal fs-5 me-2"><span class="path1"></span><span class="path2"></span></i>{% trans "Veri Tablosu" %}</a>
-                            <div class="separator my-2"></div>
-                            <a class="dropdown-item" href="#" data-add="spacer">
-                                <i class="ki-duotone ki-arrow-up-down fs-5 me-2"><span class="path1"></span><span class="path2"></span></i>{% trans "Boşluk" %}</a>
-                            <a class="dropdown-item" href="#" data-add="page_break">
-                                <i class="ki-duotone ki-scissor fs-5 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>{% trans "Sayfa Sonu" %}</a>
-                        </div>
-                    </div>
+    <div class="mx-left">
+        <div class="lp-head">
+            <span>{% trans "Bloklar" %}</span>
+            <div class="r-menu" id="add-menu">
+                <button type="button" class="mini-btn" id="btn-add-block">
+                    <i class="ki-duotone ki-plus" style="font-size:14px"></i>{% trans "Ekle" %}
+                </button>
+                <div class="r-menu-list" id="add-block-menu">
+                    <button type="button" class="menu-item" data-add="heading">
+                        <i class="ki-duotone ki-text"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i>{% trans "Başlık" %}</button>
+                    <button type="button" class="menu-item" data-add="text">
+                        <i class="ki-duotone ki-notepad"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>{% trans "Metin" %}</button>
+                    <button type="button" class="menu-item" data-add="kpi_cards">
+                        <i class="ki-duotone ki-element-11"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i>{% trans "KPI Kartları" %}</button>
+                    <button type="button" class="menu-item" data-add="chart">
+                        <i class="ki-duotone ki-chart-line"><span class="path1"></span><span class="path2"></span></i>{% trans "Grafik" %}</button>
+                    <button type="button" class="menu-item" data-add="table">
+                        <i class="ki-duotone ki-row-horizontal"><span class="path1"></span><span class="path2"></span></i>{% trans "Veri Tablosu" %}</button>
+                    <div class="menu-sep"></div>
+                    <button type="button" class="menu-item" data-add="spacer">
+                        <i class="ki-duotone ki-arrow-up-down"><span class="path1"></span><span class="path2"></span></i>{% trans "Boşluk" %}</button>
+                    <button type="button" class="menu-item" data-add="page_break">
+                        <i class="ki-duotone ki-scissor"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>{% trans "Sayfa Sonu" %}</button>
                 </div>
-            </div>
-            <div class="card-body pt-3" id="block-list">
-                <!-- JS doldurur -->
             </div>
         </div>
+        <div class="panel-scroll" id="block-list"></div>
     </div>
 
-    <!-- ORTA: önizleme -->
-    <div class="col-lg-5">
-        <div class="card">
-            <div class="card-header min-h-50px">
-                <h3 class="card-title fs-5">{% trans "Canlı Önizleme" %}</h3>
-                <div class="card-toolbar">
-                    <span class="text-muted fs-8">{% trans "gerçek veriyle render edilir" %}</span>
-                </div>
-            </div>
-            <div class="card-body pt-3 position-relative">
-                <div id="preview-loading"><span class="spinner-border text-primary"></span></div>
-                <iframe id="preview-frame" sandbox="allow-same-origin"></iframe>
-            </div>
+    <!-- ORTA: canlı önizleme -->
+    <div class="mx-center">
+        <div class="pv-bar">
+            <i class="ki-duotone ki-eye" style="font-size:16px"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+            <span>{% trans "Canlı Önizleme — gerçek veriyle render edilir" %}</span>
         </div>
+        <div id="preview-loading"><span class="spinner-border text-primary"></span></div>
+        <iframe id="preview-frame" sandbox="allow-same-origin"></iframe>
     </div>
 
-    <!-- SAĞ: blok ayarları -->
-    <div class="col-lg-4">
-        <div class="card">
-            <div class="card-header min-h-50px">
-                <h3 class="card-title fs-5">{% trans "Blok Ayarları" %}</h3>
-                <div class="card-toolbar">
-                    <button type="button" class="btn btn-sm btn-light-danger d-none" id="btn-del-block">
-                        <i class="ki-duotone ki-trash fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>{% trans "Bloğu Sil" %}
-                    </button>
-                </div>
+    <!-- SAĞ: blok ayarları + sayfa ayarları -->
+    <div class="mx-right">
+        <div class="mx-tabs">
+            <div class="rp-tab active" data-tab="block">{% trans "Blok Ayarları" %}</div>
+            <div class="rp-tab" data-tab="page">{% trans "Sayfa" %}</div>
+            <div class="rp-tab" data-tab="sched">{% trans "Zamanlama" %}</div>
+        </div>
+
+        <!-- Blok sekmesi -->
+        <div class="rp-pane active panel-scroll" data-pane="block">
+            <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+                <button type="button" class="mini-btn danger" id="btn-del-block">
+                    <i class="ki-duotone ki-trash" style="font-size:14px"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>{% trans "Bloğu Sil" %}
+                </button>
             </div>
-            <div class="card-body pt-3" id="settings-panel">
-                <div class="text-muted text-center py-8" id="settings-empty">
+            <div id="settings-panel">
+                <div class="empty-note" id="settings-empty">
                     {% trans "Düzenlemek için soldan bir blok seçin veya yeni blok ekleyin." %}
                 </div>
             </div>
         </div>
+
+        <!-- Sayfa sekmesi -->
+        <div class="rp-pane panel-scroll" data-pane="page">
+            <div class="pg-grid">
+                <div class="full">
+                    <label class="form-label">{% trans "Açıklama" %}</label>
+                    <input type="text" class="form-control" id="rpt-desc">
+                </div>
+                <div>
+                    <label class="form-label">{% trans "Sayfa Boyutu" %}</label>
+                    <select class="form-select" id="rpt-size">
+                        <option value="A4">A4</option>
+                        <option value="A3">A3</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">{% trans "Yönlendirme" %}</label>
+                    <select class="form-select" id="rpt-orient">
+                        <option value="portrait">{% trans "Dikey" %}</option>
+                        <option value="landscape">{% trans "Yatay" %}</option>
+                    </select>
+                </div>
+                <div class="full">
+                    <label class="form-label">{% trans "Üst Bilgi (PDF)" %}</label>
+                    <input type="text" class="form-control" id="rpt-header">
+                </div>
+                <div class="full">
+                    <label class="form-label">{% trans "Alt Bilgi (PDF)" %}</label>
+                    <input type="text" class="form-control" id="rpt-footer">
+                </div>
+                <div class="full">
+                    <label class="form-check form-switch form-check-custom" style="gap:8px">
+                        <input class="form-check-input" type="checkbox" id="rpt-logo" checked>
+                        <span class="form-check-label">{% trans "Logo Göster" %}</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Zamanlama sekmesi (JS doldurur) -->
+        <div class="rp-pane panel-scroll" data-pane="sched" id="sched-pane"></div>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_scripts %}
 <script src="{% static 'dashboard/plugins/custom/sortablejs/sortable.min.js' %}"></script>
 <script>
 window.RPT_CFG = {
@@ -186,6 +293,10 @@ window.RPT_CFG = {
         stationParams: '{% url "dashboard:api_station_parameters" %}',
         studio: '{% url "dashboard:report_studio" %}',
         editBase: '{% url "dashboard:report_editor_new" %}',
+        schedList: '{% url "dashboard:api_report_sched_list" %}',
+        schedSave: '{% url "dashboard:api_report_sched_save" %}',
+        schedDelete: '{% url "dashboard:api_report_sched_delete" %}',
+        recipients: '{% url "dashboard:api_notification_recipients" %}',
     },
     stations: [
         {% for st in stations %}{ id: {{ st.id }}, name: '{{ st.name|escapejs }}' },{% endfor %}
@@ -244,8 +355,38 @@ window.RPT_CFG = {
         colMax: '{% trans "Max" %}',
         colCount: '{% trans "Okuma Sayısı" %}',
         colBad: '{% trans "Hatalı Sayısı" %}',
+        /* Zamanlama sekmesi */
+        schedSaveFirst: '{% trans "Zamanlama eklemek için önce raporu kaydedin." %}',
+        schedNew: '{% trans "Yeni Zamanlama" %}',
+        schedNone: '{% trans "Bu rapor için henüz zamanlama yok." %}',
+        schedPeriod: '{% trans "Periyot" %}',
+        schedDaily: '{% trans "Günlük" %}',
+        schedWeekly: '{% trans "Haftalık" %}',
+        schedMonthly: '{% trans "Aylık" %}',
+        schedWeekday: '{% trans "Haftanın Günü" %}',
+        schedDom: '{% trans "Ayın Günü (1-28)" %}',
+        schedTime: '{% trans "Saat" %}',
+        schedEnabled: '{% trans "Etkin" %}',
+        schedFormats: '{% trans "Çıktı formatları" %}',
+        schedEmail: '{% trans "E-posta ile gönder" %}',
+        schedUsers: '{% trans "Alıcılar (SCADA kullanıcıları)" %}',
+        schedNoEmail: '{% trans "e-posta yok" %}',
+        schedExtra: '{% trans "Ek alıcılar (virgülle ayrılmış e-posta)" %}',
+        schedSubject: '{% trans "E-posta Konusu" %}',
+        schedBody: '{% trans "E-posta Gövdesi" %}',
+        schedNext: '{% trans "Sonraki" %}',
+        schedSave: '{% trans "Kaydet" %}',
+        schedCancel: '{% trans "Vazgeç" %}',
+        schedDelete: '{% trans "Sil" %}',
+        schedConfirmDel: '{% trans "Bu zamanlamayı silmek istediğinize emin misiniz?" %}',
+        schedEdit: '{% trans "Düzenle" %}',
+        schedOff: '{% trans "Kapalı" %}',
+        weekdays: ['{% trans "Pazartesi" %}', '{% trans "Salı" %}', '{% trans "Çarşamba" %}',
+                   '{% trans "Perşembe" %}', '{% trans "Cuma" %}', '{% trans "Cumartesi" %}',
+                   '{% trans "Pazar" %}'],
     },
 };
 </script>
 <script src="{% static 'dashboard/js/report_editor.js' %}"></script>
-{% endblock %}
+</body>
+</html>

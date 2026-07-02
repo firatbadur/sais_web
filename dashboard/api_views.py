@@ -4498,6 +4498,42 @@ def report_preview(request):
 
 
 @login_required
+def report_sched_list(request):
+    """Bir şablonun zamanlamaları (?template_id=) — editör Zamanlama sekmesi."""
+    denied = _require_admin(request)
+    if denied:
+        return denied
+
+    from api.models import ReportSchedule
+
+    qs = (
+        ReportSchedule.objects.filter(template_id=request.GET.get("template_id"))
+        .order_by("id")
+    )
+    items = [{
+        "id": s.id,
+        "enabled": s.enabled,
+        "period": s.period,
+        "period_summary": s.period_summary,
+        "time_of_day": s.time_of_day.strftime("%H:%M") if s.time_of_day else "07:00",
+        "weekday": s.weekday,
+        "day_of_month": s.day_of_month,
+        "output_pdf": s.output_pdf,
+        "output_excel": s.output_excel,
+        "email_enabled": s.email_enabled,
+        "recipients": s.recipients,
+        "email_subject": s.email_subject,
+        "email_body": s.email_body,
+        "next_run_at": (
+            timezone.localtime(s.next_run_at).strftime("%d.%m.%Y %H:%M")
+            if s.next_run_at else None
+        ),
+        "last_status": s.last_status,
+    } for s in qs]
+    return JsonResponse({"ok": True, "results": items})
+
+
+@login_required
 def report_sched_save(request):
     """Zamanlama oluştur/güncelle — next_run_at yeniden hesaplanır."""
     import json

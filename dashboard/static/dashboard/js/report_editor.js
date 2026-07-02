@@ -493,15 +493,53 @@
     }
 
     /* ------------------------------------------------------------------ */
+    /* Standalone chrome: sağ panel sekmeleri + Ekle menüsü + tema          */
+    /* ------------------------------------------------------------------ */
+
+    function switchTab(name) {
+        document.querySelectorAll(".rp-tab").forEach(t =>
+            t.classList.toggle("active", t.dataset.tab === name));
+        document.querySelectorAll(".rp-pane").forEach(p =>
+            p.classList.toggle("active", p.dataset.pane === name));
+        if (name === "sched") renderSchedPane();
+    }
+    document.querySelectorAll(".rp-tab").forEach(t =>
+        t.addEventListener("click", () => switchTab(t.dataset.tab)));
+
+    // Blok Ekle açılır menüsü (bootstrap JS yok — custom toggle)
+    const addMenu = document.getElementById("add-menu");
+    const addBtn = document.getElementById("btn-add-block");
+    if (addMenu && addBtn) {
+        addBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            addMenu.classList.toggle("open");
+        });
+        document.addEventListener("click", () => addMenu.classList.remove("open"));
+    }
+
+    // Tema değiştirici (dashboard ile paylaşılan localStorage anahtarı)
+    const themeBtn = document.getElementById("btn-theme");
+    if (themeBtn) {
+        themeBtn.addEventListener("click", () => {
+            const cur = document.documentElement.getAttribute("data-bs-theme") || "light";
+            const next = cur === "dark" ? "light" : "dark";
+            document.documentElement.setAttribute("data-bs-theme", next);
+            localStorage.setItem("data-bs-theme", next);
+        });
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Blok ekle / sil                                                      */
     /* ------------------------------------------------------------------ */
 
     document.querySelectorAll("#add-block-menu [data-add]").forEach((a) => {
         a.addEventListener("click", (e) => {
             e.preventDefault();
+            if (addMenu) addMenu.classList.remove("open");
             const b = defaultBlock(a.dataset.add);
             state.blocks.push(b);
             markDirty();
+            switchTab("block");
             selectBlock(b.id);
         });
     });
@@ -595,17 +633,20 @@
                 const stateEl = document.getElementById("save-state");
                 if (!d.ok) {
                     stateEl.textContent = "✗ " + (d.error || T.saveError);
-                    stateEl.classList.add("text-danger");
+                    stateEl.classList.add("err");
                     return;
                 }
                 dirty = false;
-                stateEl.classList.remove("text-danger");
+                stateEl.classList.remove("err");
                 stateEl.textContent = "✓ " + T.saved;
                 if (!state.id) {
                     state.id = d.id;
                     // Yeni kayıt — URL'i düzenleme moduna çevir (reload'suz)
                     const editUrl = CFG.urls.editBase + d.id + "/";
                     window.history.replaceState({}, "", editUrl);
+                    // Zamanlama sekmesi artık kullanılabilir — açıksa tazele
+                    const schedTab = document.querySelector('.rp-tab[data-tab="sched"].active');
+                    if (schedTab) renderSchedPane();
                 }
             })
             .catch(() => {
@@ -616,6 +657,282 @@
     window.addEventListener("beforeunload", (e) => {
         if (dirty) { e.preventDefault(); e.returnValue = ""; }
     });
+
+    /* ------------------------------------------------------------------ */
+    /* Zamanlama sekmesi — şablonun zamanlamaları + SCADA kullanıcı listesi */
+    /* ------------------------------------------------------------------ */
+
+    let usersCache = null;   // [{id, name, email}]
+    let schedListCache = null;
+
+    function fetchUsers() {
+        if (usersCache) return Promise.resolve(usersCache);
+        return fetch(CFG.urls.recipients)
+            .then(r => r.json())
+            .then(d => {
+                usersCache = (d.results || []).map(u => ({
+                    id: u.id,
+                    name: (u.text || "").split(" — ")[0],
+                    email: u.email || "",
+                }));
+                return usersCache;
+            })
+            .catch(() => []);
+    }
+
+    function fetchSchedules() {
+        return fetch(CFG.urls.schedList + "?template_id=" + state.id)
+            .then(r => r.json())
+            .then(d => { schedListCache = d.results || []; return schedListCache; })
+            .catch(() => []);
+    }
+
+    function renderSchedPane() {
+        const pane = document.getElementById("sched-pane");
+        if (!pane) return;
+        if (!state.id) {
+            pane.innerHTML = '<div class="empty-note">' + escapeHtml(T.schedSaveFirst) + "</div>";
+            return;
+        }
+        pane.innerHTML = '<div class="empty-note"><span class="spinner-border spinner-border-sm"></span></div>';
+        fetchSchedules().then(renderSchedList);
+    }
+
+    function renderSchedList(items) {
+        const pane = document.getElementById("sched-pane");
+        pane.innerHTML = "";
+
+        const newBtn = el("button", { class: "mini-btn", type: "button", style: "margin-bottom:10px" },
+            '<i class="ki-duotone ki-plus" style="font-size:14px"></i>' + T.schedNew);
+        newBtn.addEventListener("click", () => renderSchedForm(null));
+        pane.appendChild(newBtn);
+
+        if (!items.length) {
+            pane.appendChild(el("div", { class: "empty-note" }, escapeHtml(T.schedNone)));
+            return;
+        }
+
+        items.forEach(s => {
+            const row = el("div", { class: "kpi-card-row" });
+            const head = el("div", { style: "display:flex;justify-content:space-between;align-items:center;gap:6px" });
+            head.appendChild(el("span", { style: "font-weight:600;color:var(--mx-head);font-size:12.5px" },
+                escapeHtml(s.period_summary)));
+            const badges = el("span", { style: "display:flex;gap:4px" });
+            badges.appendChild(el("span", {
+                class: "badge " + (s.enabled ? "badge-light-success" : "badge-light"),
+            }, s.enabled ? T.schedEnabled : T.schedOff));
+            head.appendChild(badges);
+            row.appendChild(head);
+
+            const info = el("div", { style: "font-size:11px;color:var(--mx-muted);margin:4px 0 8px" },
+                (s.output_pdf ? "PDF " : "") + (s.output_excel ? "Excel " : "") +
+                (s.email_enabled ? "· ✉ " : "") +
+                (s.next_run_at ? "· " + T.schedNext + ": " + s.next_run_at : ""));
+            row.appendChild(info);
+
+            const btns = el("div", { style: "display:flex;gap:6px" });
+            const eBtn = el("button", { class: "mini-btn", type: "button" }, T.schedEdit);
+            eBtn.addEventListener("click", () => renderSchedForm(s));
+            const dBtn = el("button", { class: "mini-btn danger", type: "button" }, T.schedDelete);
+            dBtn.addEventListener("click", () => {
+                if (!confirm(T.schedConfirmDel)) return;
+                fetch(CFG.urls.schedDelete, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "X-CSRFToken": CFG.csrf },
+                    body: JSON.stringify({ id: s.id }),
+                }).then(r => r.json()).then(d => { if (d.ok) renderSchedPane(); });
+            });
+            btns.appendChild(eBtn);
+            btns.appendChild(dBtn);
+            row.appendChild(btns);
+            pane.appendChild(row);
+        });
+    }
+
+    function renderSchedForm(sched) {
+        const pane = document.getElementById("sched-pane");
+        pane.innerHTML = "";
+        const s = sched || {
+            id: null, enabled: true, period: "daily", time_of_day: "07:00",
+            weekday: 0, day_of_month: 1, output_pdf: true, output_excel: false,
+            email_enabled: false, recipients: "",
+            email_subject: "{report_name} - {date}", email_body: "",
+        };
+
+        // Periyot
+        const perSel = el("select", { class: "form-select" });
+        [["daily", T.schedDaily], ["weekly", T.schedWeekly], ["monthly", T.schedMonthly]]
+            .forEach(([v, l]) => perSel.appendChild(el("option", { value: v }, l)));
+        perSel.value = s.period;
+        pane.appendChild(fieldWrap(T.schedPeriod, perSel));
+
+        // Haftanın günü / ayın günü (koşullu)
+        const wdWrap = el("div", { class: "mb-4", style: s.period === "weekly" ? "" : "display:none" });
+        const wdSel = el("select", { class: "form-select" });
+        T.weekdays.forEach((l, i) => wdSel.appendChild(el("option", { value: i }, escapeHtml(l))));
+        wdSel.value = s.weekday === null || s.weekday === undefined ? 0 : s.weekday;
+        wdWrap.appendChild(el("label", { class: "form-label" }, T.schedWeekday));
+        wdWrap.appendChild(wdSel);
+        pane.appendChild(wdWrap);
+
+        const domWrap = el("div", { class: "mb-4", style: s.period === "monthly" ? "" : "display:none" });
+        const domInp = el("input", { class: "form-control", type: "number", min: 1, max: 28,
+                                     value: s.day_of_month || 1 });
+        domWrap.appendChild(el("label", { class: "form-label" }, T.schedDom));
+        domWrap.appendChild(domInp);
+        pane.appendChild(domWrap);
+
+        perSel.addEventListener("change", () => {
+            wdWrap.style.display = perSel.value === "weekly" ? "" : "none";
+            domWrap.style.display = perSel.value === "monthly" ? "" : "none";
+        });
+
+        // Saat + etkin
+        const timeInp = el("input", { class: "form-control", type: "time", value: s.time_of_day });
+        pane.appendChild(fieldWrap(T.schedTime, timeInp));
+
+        const enLab = el("label", { class: "form-check form-switch form-check-custom mb-4", style: "gap:8px" });
+        const enCb = el("input", { class: "form-check-input", type: "checkbox" });
+        enCb.checked = s.enabled !== false;
+        enLab.appendChild(enCb);
+        enLab.appendChild(el("span", { class: "form-check-label" }, T.schedEnabled));
+        pane.appendChild(enLab);
+
+        // Formatlar
+        const fmtWrap = el("div", { class: "mb-4" });
+        fmtWrap.appendChild(el("label", { class: "form-label" }, T.schedFormats));
+        const pdfCb = el("input", { class: "form-check-input", type: "checkbox" });
+        pdfCb.checked = s.output_pdf !== false;
+        const xlsCb = el("input", { class: "form-check-input", type: "checkbox" });
+        xlsCb.checked = !!s.output_excel;
+        [["PDF", pdfCb], ["Excel", xlsCb]].forEach(([lbl, cb]) => {
+            const lab = el("label", { class: "form-check form-check-custom form-check-sm mb-1", style: "gap:8px" });
+            lab.appendChild(cb);
+            lab.appendChild(el("span", { class: "form-check-label" }, lbl));
+            fmtWrap.appendChild(lab);
+        });
+        pane.appendChild(fmtWrap);
+
+        // E-posta
+        const emLab = el("label", { class: "form-check form-switch form-check-custom mb-4", style: "gap:8px" });
+        const emCb = el("input", { class: "form-check-input", type: "checkbox" });
+        emCb.checked = !!s.email_enabled;
+        emLab.appendChild(emCb);
+        emLab.appendChild(el("span", { class: "form-check-label" }, T.schedEmail));
+        pane.appendChild(emLab);
+
+        const emailWrap = el("div", { style: emCb.checked ? "" : "display:none" });
+        pane.appendChild(emailWrap);
+        emCb.addEventListener("change", () => {
+            emailWrap.style.display = emCb.checked ? "" : "none";
+            if (emCb.checked) loadUserList();
+        });
+
+        // SCADA kullanıcı listesi (checkbox) + ek alıcılar
+        const userBox = el("div", { class: "mb-4" });
+        userBox.appendChild(el("label", { class: "form-label" }, T.schedUsers));
+        const userList = el("div", {
+            style: "max-height:180px;overflow-y:auto;border:1px solid var(--mx-border);" +
+                   "border-radius:7px;padding:8px;background:var(--mx-panel-2)",
+        });
+        userBox.appendChild(userList);
+        emailWrap.appendChild(userBox);
+
+        const extraTa = el("textarea", { class: "form-control", rows: 2,
+                                         placeholder: "ornek@firma.com, ..." });
+        emailWrap.appendChild(fieldWrap(T.schedExtra, extraTa));
+
+        const subjInp = el("input", { class: "form-control", type: "text",
+                                      value: s.email_subject || "{report_name} - {date}" });
+        emailWrap.appendChild(fieldWrap(T.schedSubject, subjInp));
+
+        const bodyTa = el("textarea", { class: "form-control", rows: 3 });
+        bodyTa.value = s.email_body || "";
+        emailWrap.appendChild(fieldWrap(T.schedBody, bodyTa));
+
+        const selectedEmails = new Set();
+        const existing = (s.recipients || "").split(/[,;\n]+/).map(x => x.trim()).filter(Boolean);
+
+        function loadUserList() {
+            userList.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            fetchUsers().then(users => {
+                userList.innerHTML = "";
+                const known = new Set();
+                users.forEach(u => {
+                    const lab = el("label", {
+                        class: "form-check form-check-custom form-check-sm",
+                        style: "gap:8px;margin-bottom:5px;opacity:" + (u.email ? "1" : ".5"),
+                    });
+                    const cb = el("input", { class: "form-check-input", type: "checkbox" });
+                    if (!u.email) cb.disabled = true;
+                    else {
+                        known.add(u.email.toLowerCase());
+                        if (existing.some(e => e.toLowerCase() === u.email.toLowerCase())) {
+                            cb.checked = true;
+                            selectedEmails.add(u.email);
+                        }
+                        cb.addEventListener("change", () => {
+                            cb.checked ? selectedEmails.add(u.email) : selectedEmails.delete(u.email);
+                        });
+                    }
+                    lab.appendChild(cb);
+                    lab.appendChild(el("span", { class: "form-check-label", style: "font-size:12px" },
+                        escapeHtml(u.name) + " — " +
+                        (u.email ? escapeHtml(u.email) : "<i>" + T.schedNoEmail + "</i>")));
+                    userList.appendChild(lab);
+                });
+                // Kullanıcı listesinde olmayan mevcut alıcılar → ek alıcılar alanına
+                const extras = existing.filter(e => !known.has(e.toLowerCase()));
+                extraTa.value = extras.join(", ");
+            });
+        }
+        if (emCb.checked) loadUserList();
+
+        // Hata + kaydet/vazgeç
+        const errBox = el("div", { class: "empty-note", style: "display:none;color:#e4544c;padding:8px" });
+        pane.appendChild(errBox);
+
+        const btnRow = el("div", { style: "display:flex;gap:8px;margin-top:8px" });
+        const saveBtn = el("button", { class: "mini-btn", type: "button", style: "flex:1;justify-content:center;padding:9px" }, T.schedSave);
+        const cancelBtn = el("button", { class: "mini-btn", type: "button",
+            style: "flex:1;justify-content:center;padding:9px;background:var(--mx-panel-2);color:var(--mx-text);border:1px solid var(--mx-border)" }, T.schedCancel);
+        cancelBtn.addEventListener("click", renderSchedPane);
+        saveBtn.addEventListener("click", () => {
+            const recipients = Array.from(selectedEmails)
+                .concat(extraTa.value.split(/[,;\n]+/).map(x => x.trim()).filter(Boolean))
+                .join(", ");
+            const payload = {
+                id: s.id,
+                template_id: state.id,
+                enabled: enCb.checked,
+                period: perSel.value,
+                time_of_day: timeInp.value || "07:00",
+                weekday: parseInt(wdSel.value, 10),
+                day_of_month: parseInt(domInp.value, 10),
+                output_pdf: pdfCb.checked,
+                output_excel: xlsCb.checked,
+                email_enabled: emCb.checked,
+                recipients: recipients,
+                email_subject: subjInp.value,
+                email_body: bodyTa.value,
+            };
+            fetch(CFG.urls.schedSave, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-CSRFToken": CFG.csrf },
+                body: JSON.stringify(payload),
+            }).then(r => r.json()).then(d => {
+                if (!d.ok) {
+                    errBox.textContent = d.error || T.saveError;
+                    errBox.style.display = "";
+                    return;
+                }
+                renderSchedPane();
+            });
+        });
+        btnRow.appendChild(saveBtn);
+        btnRow.appendChild(cancelBtn);
+        pane.appendChild(btnRow);
+    }
 
     /* ------------------------------------------------------------------ */
     /* Başlat                                                               */

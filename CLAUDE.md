@@ -774,14 +774,20 @@ sistem raporu Celery ile otomatik üretip (PDF/Excel) alıcılara gönderir. Jen
   `api.tasks.dispatch_report_schedules` (60 sn) `next_run_at <= now` olanları kuyruklar ve
   `next_run_at`'ı kuyruklamadan ÖNCE ilerletir. Kullanıcı zamanlama düzenleyince endpoint
   `next_run_at=None` verir → model `save()` yeniden hesaplar.
-- **UI**: `/dashboard/report-studio/` (`ReportStudioView`, operatör; şablon/zamanlama düzenleme
-  butonları admin) — 3 bölüm: şablon galerisi + zamanlama tablosu (modal) + üretilen raporlar
-  (5 sn durum poll + indirme). Editör `/dashboard/report-studio/editor/[pk/]`
-  (`ReportEditorView`, rol=1, dashboard iskeleti İÇİNDE): sol blok listesi (SortableJS sıralama),
-  orta **canlı önizleme** (`api_report_preview` → iframe `srcdoc`, kaydetmeden gerçek veriyle),
-  sağ blok ayar formu. JS: [report_editor.js](dashboard/static/dashboard/js/report_editor.js).
-  AJAX: `/dashboard/api/report-studio/...` (tpl list/get/save/delete, preview, sched save/delete,
-  run-now, generated status/download/delete — download path-traversal korumalı, backup deseni).
+- **UI**: `/dashboard/report-studio/` (`ReportStudioView`, operatör; düzenleme butonları admin) —
+  **2 sekme**: Şablonlar (galeri) + Üretilen Raporlar (5 sn durum poll + indirme). Editör
+  `/dashboard/report-studio/editor/[pk/]` (`ReportEditorView`, rol=1) **standalone tam-ekran**
+  (mimik editörü deseni: base.html YOK, yeni sekmede açılır, Metronic CSS bundle + `--mx-*` tema
+  değişkenleri, localStorage `data-bs-theme` paylaşımı): üst header (ad + Önizle/Kaydet/Stüdyo/tema),
+  sol blok listesi (SortableJS), orta **canlı önizleme** (`api_report_preview` → iframe `srcdoc`,
+  kaydetmeden gerçek veriyle), sağ 3 sekme: **Blok Ayarları / Sayfa / Zamanlama**. Zamanlamalar
+  editörün Zamanlama sekmesinden yönetilir (şablon kaydedilmeden eklenemez); e-posta açılınca
+  alıcılar **SCADA kullanıcı listesinden** seçilir (`api_notification_recipients` — e-postasız
+  kullanıcılar devre dışı) + ek serbest e-posta alanı; seçim `recipients` alanına virgüllü yazılır.
+  JS: [report_editor.js](dashboard/static/dashboard/js/report_editor.js).
+  AJAX: `/dashboard/api/report-studio/...` (tpl list/get/save/delete, preview, sched
+  list/save/delete, run-now, generated status/download/delete — download path-traversal korumalı,
+  backup deseni).
 - **Seed**: `python manage.py seed_report_templates` (idempotent) — "Günlük Tesis Özeti" yerleşik
   şablonu + devre dışı örnek zamanlama. **Debug**: `python manage.py generate_report
   --template-id N [--formats pdf,excel] [--schedule-id N]` (worker'sız sync üretim).
