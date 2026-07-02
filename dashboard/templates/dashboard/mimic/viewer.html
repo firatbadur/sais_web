@@ -45,6 +45,45 @@
         .v-body { flex: 1; position: relative; min-height: 0; background: var(--mx-canvas-bg, var(--mx-bg)); }
         #v-wrap { position: absolute; inset: 0; }
         ::-webkit-scrollbar { width: 9px; } ::-webkit-scrollbar-thumb { background: var(--mx-border); border-radius: 5px; }
+        /* Tıklama aksiyon menüsü (rapor + kontrol) */
+        .vm-menu { position: fixed; z-index: 9000; min-width: 220px; background: var(--mx-panel);
+            border: 1px solid var(--mx-border); border-radius: 9px; box-shadow: 0 12px 34px rgba(0,0,0,.32);
+            padding: 6px; display: none; }
+        .vm-menu.show { display: block; }
+        .vm-title { font-size: 11px; font-weight: 700; color: var(--mx-head); padding: 6px 9px 4px; }
+        .vm-title small { display: block; font-weight: 500; color: var(--mx-muted); margin-top: 2px; }
+        .vm-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 6px;
+            cursor: pointer; color: var(--mx-text); font-size: 13px; }
+        .vm-item:hover { background: var(--mx-bg); color: var(--mx-head); }
+        .vm-item .ic { width: 16px; text-align: center; opacity: .8; }
+        .vm-sep { height: 1px; background: var(--mx-border); margin: 5px 4px; }
+        /* Kontrol diyalogu */
+        .vm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 9100; display: none;
+            align-items: center; justify-content: center; }
+        .vm-overlay.show { display: flex; }
+        .vm-dialog { width: 340px; max-width: 92vw; background: var(--mx-panel); border: 1px solid var(--mx-border);
+            border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.4); overflow: hidden; }
+        .vm-dhead { padding: 14px 16px; border-bottom: 1px solid var(--mx-border); font-weight: 700; color: var(--mx-head); }
+        .vm-dhead small { display: block; font-weight: 500; font-size: 12px; color: var(--mx-muted); margin-top: 3px; }
+        .vm-dbody { padding: 16px; }
+        .vm-cur { font-size: 13px; color: var(--mx-muted); margin-bottom: 14px; }
+        .vm-cur b { color: var(--mx-head); font-size: 15px; }
+        .vm-btns { display: flex; gap: 8px; }
+        .vm-cbtn { flex: 1; padding: 11px; border-radius: 8px; border: 1px solid var(--mx-border); cursor: pointer;
+            font-size: 13px; font-weight: 600; color: #fff; }
+        .vm-cbtn.on { background: #2fb574; border-color: #2fb574; }
+        .vm-cbtn.off { background: #e4544c; border-color: #e4544c; }
+        .vm-setrow { display: flex; gap: 8px; margin-top: 12px; }
+        .vm-setrow input { flex: 1; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--mx-border);
+            background: var(--mx-bg); color: var(--mx-text); font-size: 13px; }
+        .vm-setrow button { padding: 9px 14px; border-radius: 8px; border: 1px solid var(--mx-accent);
+            background: var(--mx-accent); color: #fff; font-weight: 600; cursor: pointer; }
+        .vm-dfoot { padding: 12px 16px; border-top: 1px solid var(--mx-border); display: flex; justify-content: space-between;
+            align-items: center; gap: 10px; }
+        .vm-note { font-size: 12px; color: var(--mx-muted); }
+        .vm-note.ok { color: #2fb574; } .vm-note.err { color: #e4544c; }
+        .vm-close { background: var(--mx-bg); border: 1px solid var(--mx-border); color: var(--mx-text);
+            border-radius: 7px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -66,11 +105,40 @@
     <div id="v-wrap"><canvas id="v-canvas"></canvas></div>
 </div>
 
+<!-- Tıklama aksiyon menüsü -->
+<div class="vm-menu" id="vm-menu"></div>
+
+<!-- Kontrol diyalogu -->
+<div class="vm-overlay" id="vm-overlay">
+    <div class="vm-dialog">
+        <div class="vm-dhead" id="vm-dtitle">{% trans "Kontrol" %}<small id="vm-dsub"></small></div>
+        <div class="vm-dbody">
+            <div class="vm-cur" id="vm-dcur"></div>
+            <div class="vm-btns">
+                <button class="vm-cbtn on" id="vm-bon">{% trans "AKTİF (Aç)" %}</button>
+                <button class="vm-cbtn off" id="vm-boff">{% trans "PASİF (Kapat)" %}</button>
+            </div>
+            <div class="vm-setrow">
+                <input type="number" id="vm-setval" placeholder="{% trans 'Değer (0/1)' %}" step="1">
+                <button id="vm-setbtn">{% trans "Değer Ata" %}</button>
+            </div>
+        </div>
+        <div class="vm-dfoot">
+            <span class="vm-note" id="vm-note"></span>
+            <button class="vm-close" id="vm-dclose">{% trans "Kapat" %}</button>
+        </div>
+    </div>
+</div>
+
 {{ screen.data|json_script:"v-data" }}
 <script>
 window.V_CFG = {
     width: {{ screen.width }}, height: {{ screen.height }}, background: "{{ screen.background|escapejs }}",
-    tagsUrl: "{% url 'dashboard:api_mimic_tags' %}"
+    tagsUrl: "{% url 'dashboard:api_mimic_tags' %}",
+    reportUrl: "{% url 'dashboard:reports_readings' %}",
+    controlUrl: "{% url 'dashboard:api_mimic_control' %}",
+    csrf: "{{ csrf_token }}",
+    canControl: {% if user|has_role:"1" or user|has_role:"2" %}true{% else %}false{% endif %}
 };
 </script>
 <script src="{% static 'dashboard/plugins/custom/fabric/fabric.min.js' %}"></script>
@@ -87,7 +155,15 @@ window.V_CFG = {
         nodata:  "{% trans 'Veri yok' %}",
         offline: "{% trans 'Bağlantı yok' %}",
         full:    "{% trans 'Tam Ekran' %}",
-        exit:    "{% trans 'Çık' %}"
+        exit:    "{% trans 'Çık' %}",
+        historic: "{% trans 'Historik Trend' %}",
+        report:   "{% trans 'Veri Raporu' %}",
+        daily:    "{% trans 'Günlük Özet' %}",
+        control:  "{% trans 'Kontrol' %}",
+        sending:  "{% trans 'Gönderiliyor…' %}",
+        sent:     "{% trans 'Komut kuyruğa alındı.' %}",
+        cerror:   "{% trans 'Komut gönderilemedi.' %}",
+        notctrl:  "{% trans 'Bu etiket kontrol edilemez (dijital çıkış değil).' %}"
     };
 
     document.addEventListener("contextmenu", function (e) { e.preventDefault(); }, true);
@@ -104,11 +180,16 @@ window.V_CFG = {
         canvas.requestRenderAll();
     }
 
+    // Bir obje "etkileşimli" mi: etiketi var + menüsü etkin (default kapalı).
+    function interactive(o) {
+        return !!(o.scada && o.scada.menu && o.scada.menu.enabled && o.scada.tag);
+    }
+
     canvas.loadFromJSON(data, function () {
         canvas.forEachObject(function (o) {
             o.selectable = false;
-            o.evented = !!o.isButton;          // butonlar tıklanabilir
-            if (o.isButton) o.hoverCursor = "pointer";
+            o.evented = !!o.isButton || interactive(o);   // buton veya menülü nesne tıklanabilir
+            if (o.isButton || interactive(o)) o.hoverCursor = "pointer";
         });
         // Editör tuvalin arka planını kareli "grid" Pattern olarak kaydeder
         // (toJSON → data.background). Gerçek HMI'da ızgara olmasın: yüklemeden
@@ -123,18 +204,29 @@ window.V_CFG = {
     });
 
     // HMI butonu tıklama — etiketi anlık sürer (görsel geri besleme; canlı poll ezer).
+    var downPt = null, downTarget = null;
     canvas.on("mouse:down", function (opt) {
         if (opt.target && opt.target.isButton) {
             runtime.pressButton(opt.target); opt.target._op = opt.target.opacity; opt.target.set("opacity", 0.7);
             canvas.requestRenderAll(); return;
         }
-        if (opt.e.button === 1) { panning = true; lastPan = { x: opt.e.clientX, y: opt.e.clientY }; opt.e.preventDefault(); }
+        if (opt.e.button === 1) { panning = true; lastPan = { x: opt.e.clientX, y: opt.e.clientY }; opt.e.preventDefault(); return; }
+        // Sol tıkla etkileşimli nesne → mouse:up'ta menü aç (sürükleme değilse).
+        downPt = { x: opt.e.clientX, y: opt.e.clientY };
+        downTarget = (opt.target && interactive(opt.target)) ? opt.target : null;
+        if (!opt.target) hideMenu();
     });
     canvas.on("mouse:up", function (opt) {
         if (opt.target && opt.target.isButton) {
             runtime.releaseButton(opt.target); opt.target.set("opacity", opt.target._op == null ? 1 : opt.target._op);
             canvas.requestRenderAll();
         }
+        // Tıklama (kayda değer sürükleme yok) + etkileşimli hedef → menü
+        if (downTarget && opt.target === downTarget && downPt) {
+            var dx = Math.abs(opt.e.clientX - downPt.x), dy = Math.abs(opt.e.clientY - downPt.y);
+            if (dx < 6 && dy < 6) openMenu(downTarget, opt.e.clientX, opt.e.clientY);
+        }
+        downPt = null; downTarget = null;
         panning = false; lastPan = null;
     });
 
@@ -154,6 +246,108 @@ window.V_CFG = {
         opt.e.preventDefault(); opt.e.stopPropagation();
     });
 
+    // ------------------------------------------------------------------ //
+    // Tıklama aksiyon menüsü (rapor navigasyonu + kontrol)
+    // ------------------------------------------------------------------ //
+    var TAGMETA = {};                 // tag -> {sensor_id, station_id, parameter_id, is_output, ...}
+    var menuEl = $("vm-menu");
+
+    function reportLink(meta, interval, chart) {
+        var qs = "?submitted=1&interval=" + interval;
+        if (meta && meta.station_id) qs += "&station=" + meta.station_id;
+        if (meta && meta.parameter_id) qs += "&parameter=" + meta.parameter_id;
+        if (chart) qs += "&chart=1";
+        return CFG.reportUrl + qs;
+    }
+    function openReport(meta, interval, chart) {
+        window.open(reportLink(meta, interval, chart), "_blank");
+    }
+    function hideMenu() { menuEl.classList.remove("show"); }
+
+    function openMenu(obj, x, y) {
+        var sc = obj.scada || {}, mn = sc.menu || {}, tag = sc.tag;
+        var meta = TAGMETA[tag] || {};
+        var label = meta.label || tag;
+        var rows = [];
+        if (mn.historic) rows.push({ ic: "📈", txt: I18N.historic, fn: function () { openReport(meta, "1min", true); } });
+        if (mn.report)   rows.push({ ic: "📋", txt: I18N.report,   fn: function () { openReport(meta, "1min", false); } });
+        if (mn.daily)    rows.push({ ic: "📊", txt: I18N.daily,    fn: function () { openReport(meta, "daily", true); } });
+        // Kontrol yalnız operatör/admin + dijital çıkış etiketinde; öncesine ayraç.
+        if (mn.control && CFG.canControl) {
+            rows.push({ ic: "⚙️", txt: I18N.control, sep: rows.length > 0, fn: function () { openControl(tag, meta); } });
+        }
+        if (!rows.length) return;   // gösterilecek öğe yok
+        var html = '<div class="vm-title">' + esc(label) +
+                   '<small>' + esc(tag) + (meta.station ? " · " + esc(meta.station) : "") + '</small></div>';
+        rows.forEach(function (r, i) {
+            if (r.sep) html += '<div class="vm-sep"></div>';
+            html += '<div class="vm-item" data-i="' + i + '"><span class="ic">' + r.ic + '</span>' + esc(r.txt) + '</div>';
+        });
+        menuEl.innerHTML = html;
+        menuEl.querySelectorAll(".vm-item").forEach(function (el) {
+            el.addEventListener("click", function () {
+                var r = rows[parseInt(el.dataset.i, 10)];
+                hideMenu(); if (r) r.fn();
+            });
+        });
+        menuEl.classList.add("show");
+        var mw = menuEl.offsetWidth || 220, mh = menuEl.offsetHeight || 200;
+        menuEl.style.left = Math.min(x, window.innerWidth - mw - 8) + "px";
+        menuEl.style.top = Math.min(y, window.innerHeight - mh - 8) + "px";
+    }
+    document.addEventListener("mousedown", function (e) {
+        if (menuEl.classList.contains("show") && !menuEl.contains(e.target)) hideMenu();
+    });
+
+    // ------------------------------------------------------------------ //
+    // Kontrol diyalogu (aktif/pasif + değer ata) → mimic_control endpoint
+    // ------------------------------------------------------------------ //
+    var ctlTag = null, ctlMeta = null;
+    function openControl(tag, meta) {
+        ctlTag = tag; ctlMeta = meta || TAGMETA[tag] || {};
+        $("vm-dtitle").firstChild.textContent = I18N.control + " — " + (ctlMeta.label || tag);
+        $("vm-dsub").textContent = tag + (ctlMeta.station ? " · " + ctlMeta.station : "");
+        setNote("", "");
+        refreshCur();
+        var out = !!ctlMeta.is_output;
+        $("vm-bon").disabled = $("vm-boff").disabled = $("vm-setbtn").disabled = !out;
+        if (!out) setNote(I18N.notctrl, "err");
+        $("vm-overlay").classList.add("show");
+    }
+    function refreshCur() {
+        var v = ctlMeta && TAGMETA[ctlTag] ? TAGMETA[ctlTag].value : null;
+        $("vm-dcur").innerHTML = "{% trans 'Anlık değer' %}: <b>" + (v == null ? "—" : v) + "</b>";
+    }
+    function closeControl() { $("vm-overlay").classList.remove("show"); ctlTag = null; }
+    function sendControl(action, value) {
+        if (!ctlTag) return;
+        setNote(I18N.sending, "");
+        var body = { tag: ctlTag, action: action };
+        if (action === "set") body.value = value;
+        fetch(CFG.controlUrl, {
+            method: "POST", credentials: "same-origin",
+            headers: { "Content-Type": "application/json", "X-CSRFToken": CFG.csrf, "X-Requested-With": "XMLHttpRequest" },
+            body: JSON.stringify(body)
+        }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+          .then(function (res) {
+              if (res.ok && res.d.ok) setNote(res.d.message || I18N.sent, "ok");
+              else setNote((res.d && res.d.error) || I18N.cerror, "err");
+          }).catch(function () { setNote(I18N.cerror, "err"); });
+    }
+    function setNote(txt, cls) { var n = $("vm-note"); n.textContent = txt; n.className = "vm-note" + (cls ? " " + cls : ""); }
+    $("vm-bon").addEventListener("click", function () { sendControl("start"); });
+    $("vm-boff").addEventListener("click", function () { sendControl("stop"); });
+    $("vm-setbtn").addEventListener("click", function () {
+        var v = parseFloat($("vm-setval").value);
+        if (isNaN(v)) { setNote("{% trans 'Geçerli bir değer girin.' %}", "err"); return; }
+        sendControl("set", v);
+    });
+    $("vm-dclose").addEventListener("click", closeControl);
+    $("vm-overlay").addEventListener("click", function (e) { if (e.target === $("vm-overlay")) closeControl(); });
+
+    function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
     // --- Canlı veri: gerçek sensör (tag) değerlerini periyodik çek ---
     var ind = $("v-ind"), indTxt = $("v-ind-txt"), liveTimer = null;
     function setInd(state, txt) { ind.className = "v-ind " + state; indTxt.textContent = txt; }
@@ -167,6 +361,7 @@ window.V_CFG = {
             .then(function (d) {
                 var vals = (d && d.values) || {};
                 Object.keys(vals).forEach(function (t) { runtime.setTag(t, vals[t]); });
+                (d && d.results || []).forEach(function (it) { TAGMETA[it.tag] = it; });
                 setInd("ok", I18N.live);
                 $("v-clock").textContent = clockStr();
             })

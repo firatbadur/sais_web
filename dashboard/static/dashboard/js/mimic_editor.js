@@ -571,6 +571,21 @@
         setVal("b-decimals", sc.decimals == null ? 1 : sc.decimals);
         if ($("b-showunit")) $("b-showunit").checked = sc.showUnit !== false;
         setVal("b-moverange", sc.moveRange == null ? 60 : sc.moveRange);
+        syncMenuBindings(sc);
+    }
+    // Etkileşim menüsü (görüntüleyici tıklama) yapılandırması.
+    var MENU_ITEMS = ["historic", "report", "daily", "control"];
+    function menuOf(o) { o.scada = o.scada || {}; return (o.scada.menu = o.scada.menu || {}); }
+    function syncMenuBindings(sc) {
+        var mn = sc.menu || {};
+        if ($("b-menu-enabled")) $("b-menu-enabled").checked = !!mn.enabled;
+        MENU_ITEMS.forEach(function (k) { if ($("b-menu-" + k)) $("b-menu-" + k).checked = !!mn[k]; });
+        setMenuItemsEnabled(!!mn.enabled);
+    }
+    function setMenuItemsEnabled(on) {
+        var box = $("b-menu-items"); if (!box) return;
+        box.style.opacity = on ? "1" : ".5";
+        box.style.pointerEvents = on ? "auto" : "none";
     }
     function bindScada(id, key, isNumber) {
         var el = $(id); if (!el) return;
@@ -596,6 +611,17 @@
     on("b-showunit", "change", function () {
         var o = activeObj(); if (!o) return;
         o.scada = o.scada || {}; o.scada.showUnit = $("b-showunit").checked; markDirty();
+    });
+    on("b-menu-enabled", "change", function () {
+        var o = activeObj(); if (!o) return;
+        var on = $("b-menu-enabled").checked;
+        menuOf(o).enabled = on; setMenuItemsEnabled(on); markDirty();
+    });
+    MENU_ITEMS.forEach(function (k) {
+        on("b-menu-" + k, "change", function () {
+            var o = activeObj(); if (!o) return;
+            menuOf(o)[k] = $("b-menu-" + k).checked; markDirty();
+        });
     });
     // Gerçek sensör tag'i seçilince birimi otomatik doldur.
     function applyTagUnit() {

@@ -3392,9 +3392,118 @@ def mimic_tags(request):
             "type": s.sensor_type,
             "digital": s.sensor_type in (2, 3),
             "value": round(float(val), 3) if val is not None else 0,
+            # Mimik görüntüleyici tıklama menüsü için: rapor navigasyonu +
+            # kontrol (yalnız dijital çıkış type=3 yazılabilir).
+            "sensor_id": s.id,
+            "station_id": s.connection.station_id if s.connection_id else None,
+            "parameter_id": s.parameter_id,
+            "is_output": s.sensor_type == 3,
         })
         values[s.tag] = round(float(val), 3) if val is not None else 0
     return JsonResponse({"ok": True, "results": items, "values": values})
+
+
+def mimic_control(request):
+    """Mimik görüntüleyici tıklama menüsü → "Kontrol" aksiyonu.
+
+    Bir mimik objesine bağlı etiketin (``tag``) sensörüne komut yazar.
+    Güvenlik sınırı: yalnız **dijital çıkış** (``sensor_type=3``) yazılabilir.
+
+    POST JSON: ``{"tag": str, "action": "start"|"stop"|"set", "value"?: number}``
+      - ``start``/``stop`` → aktif/pasif (1/0).
+      - ``set`` → verilen sayısal değeri yazar (çıkış sensörü).
+
+    Yanıt: ``{"ok", "message", "command_id"?, "duplicate"?}``. Operatör/admin
+    (rol 1/2) gerekir; komut `Command` tablosuna yazılır → Celery yürütür
+    (`digital_output_command` ile aynı akış).
+    """
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    tag = (data.get("tag") or "").strip()
+    action = data.get("action")
+    if not tag:
+        return JsonResponse({"ok": False, "error": "Etiket (tag) gerekli."}, status=400)
+    if action not in ("start", "stop", "set"):
+        return JsonResponse({"ok": False, "error": "Geçersiz action."}, status=400)
+
+    sensor = (
+        Sensor.objects.select_related("connection__station")
+        .filter(is_active=True, sensor_type=3)
+        .exclude(tag="")
+        .filter(tag=tag)
+        .first()
+    )
+    if sensor is None:
+        return JsonResponse(
+            {"ok": False, "error": "Bu etiket kontrol edilemez (dijital çıkış değil)."},
+            status=404,
+        )
+
+    if action == "set":
+        try:
+            logical = 1 if float(data.get("value")) != 0 else 0
+        except (TypeError, ValueError):
+            return JsonResponse({"ok": False, "error": "Geçersiz değer."}, status=400)
+    else:
+        logical = 1 if action == "start" else 0
+
+    # digital_inverse ise fiziksel coil tersine yazılır (okuma da terslediği için).
+    coil_value = (0 if logical else 1) if sensor.digital_inverse else logical
+
+    try:
+        from datetime import timedelta as _timedelta
+
+        from api.models import Command, RequestType
+
+        bucket = int(timezone.now().timestamp() // 3)
+        idem = f"mimic_control:{sensor.id}:{logical}:{bucket}"
+        request_type = RequestType.objects.filter(code="manual_output").first()
+        cmd, created = Command.objects.get_or_create(
+            idempotency_key=idem,
+            defaults=dict(
+                sensor=sensor,
+                value_type="bool",
+                value=coil_value,
+                status="pending",
+                priority=10,
+                source="operator",
+                request_type=request_type,
+                requested_by=request.user,
+                expires_at=timezone.now() + _timedelta(minutes=5),
+                max_attempts=3,
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001 — UI hataya düşmesin
+        return JsonResponse({"ok": False, "error": str(exc)}, status=500)
+
+    if created:
+        from api.events import EventType, log_event
+
+        lbl = {"start": "Aktif (AÇ)", "stop": "Pasif (KAPAT)", "set": f"Değer={logical}"}[action]
+        station = getattr(sensor.connection, "station", None)
+        log_event(
+            EventType.COMMAND,
+            f"Mimik kontrol: {sensor.name or ('sensör#' + str(sensor.pk))} → {lbl}",
+            severity="warning", request=request, station=station,
+        )
+
+    return JsonResponse({
+        "ok": True,
+        "message": None if created else "Aynı komut zaten kuyrukta.",
+        "command_id": cmd.pk,
+        "duplicate": not created,
+    })
 
 
 # --------------------------------------------------------------------------- #

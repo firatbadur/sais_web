@@ -590,6 +590,22 @@
                     <label class="mx-check" style="margin-bottom:7px;"><input type="checkbox" id="b-showunit"> {% trans "Değerin yanında birimi göster" %}</label>
                     <div class="prop-field"><label>{% trans "Hareket Menzili (px)" %}</label><input type="number" id="b-moverange"></div>
                 </div>
+                <div class="prop-sec">
+                    <h6>{% trans "Etkileşim Menüsü (görüntüleyici)" %}</h6>
+                    <label class="mx-check" style="margin-bottom:7px;"><input type="checkbox" id="b-menu-enabled"> <b>{% trans "Tıklanınca menü aç" %}</b></label>
+                    <div style="color:var(--mx-muted);font-size:10px;margin:-3px 0 8px;line-height:1.35;">
+                        {% trans "Görüntüleyicide bu nesneye tıklanınca rapor/kontrol menüsü açılır. Etiket (tag) atanmış olmalı. Varsayılan kapalı." %}
+                    </div>
+                    <div id="b-menu-items" style="opacity:.5;pointer-events:none;">
+                        <label class="mx-check" style="margin-bottom:5px;"><input type="checkbox" id="b-menu-historic"> {% trans "Historik Trend (grafik)" %}</label>
+                        <label class="mx-check" style="margin-bottom:5px;"><input type="checkbox" id="b-menu-report"> {% trans "Veri Raporu (tablo)" %}</label>
+                        <label class="mx-check" style="margin-bottom:5px;"><input type="checkbox" id="b-menu-daily"> {% trans "Günlük Özet (grafik)" %}</label>
+                        <label class="mx-check" style="margin-bottom:5px;"><input type="checkbox" id="b-menu-control"> {% trans "Kontrol (aktif/pasif · değer ata)" %}</label>
+                        <div style="color:var(--mx-muted);font-size:10px;margin-top:3px;line-height:1.35;">
+                            {% trans "Kontrol yalnız dijital çıkış sensörlerinde çalışır ve operatör/yönetici gerektirir." %}
+                        </div>
+                    </div>
+                </div>
                 <div class="prop-sec" style="color:var(--mx-muted);font-size:11px;">
                     {% trans "İpucu: Simülasyon modunda etiketlere değer atayarak animasyonları test edin. (Bu fazda etiketler gerçek sensöre bağlı değildir.)" %}
                 </div>
