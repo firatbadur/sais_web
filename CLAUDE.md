@@ -165,7 +165,8 @@ copy .env.example .env
 python manage.py migrate
 python manage.py seed_initial_data    # çekirdek: Station, Parameter, StatusCode, jenerik RequestType
 python manage.py seed_sais_data       # SAIS: atıksu StationType, ministry_sample, EnvisoftChannel
-python manage.py seed_periodic_tasks  # 9 Celery beat periodic task (idempotent)
+python manage.py seed_periodic_tasks  # Celery beat periodic task'lar (idempotent)
+python manage.py seed_report_templates  # Rapor Stüdyosu yerleşik "Günlük Tesis Özeti" şablonu
 python manage.py createsuperuser
 python manage.py runserver
 
@@ -486,6 +487,7 @@ Tüm periyodik iş Celery beat'in DB'de tuttuğu `PeriodicTask` kayıtlarıyla y
 | `sais_domain.tasks.compute_sim_valid_stats` | `30 1 * * *` | Geçerli veri istatistiği: ayın günlerini **gün gün** (kısım kısım) `GetDataByBetweenTwoDate` ile çekip `SimValidDay`'e damgalar (Dinamik Veri Raporu aylık geçerli kartı bunu DB'den okur — canlı ay-sorgusu yok) |
 | `sais_domain.tasks.check_system_alarms` | `*/10 * * * *` | Sistem alarmları (gerçek-zamanlı): son 10 dk Bakanlık verisi → seçili hata kodları `persist` dk tekrarlıysa + uzun PowerOff kesintileri → operatöre SMS/e-posta |
 | `sais_domain.tasks.check_system_alarms_daily` | `10 8 * * *` | Sistem alarmları (günlük): SSL bitiş / lisans bitiş / kalibrasyon hatırlatma uyarıları |
+| `api.tasks.dispatch_report_schedules` | her 60 sn | Rapor Stüdyosu: `next_run_at` vadesi gelen etkin `ReportSchedule`'ları `generate_report_run`'a gönderir (lisans gate'li) |
 
 Yönetim:
 - Admin panelinden (`/admin/django_celery_beat/periodictask/`) bireysel task'lar enable/disable edilebilir veya periyot değiştirilebilir.
@@ -738,6 +740,56 @@ Tamamen dashboard arayüzüne özgü → `dashboard/`.
   PNG/thumbnail dışa aktarımı `withIdentityVpt` ile viewport transform sıfırlanarak yapılır (zoom/pan
   hizasızlığını önler).
 
+## Rapor Stüdyosu (Aveva Reports benzeri raporlama editörü)
+
+Kullanıcı **blok tabanlı rapor şablonları** tasarlar (Aveva Reports paradigması; Mimik'in aksine
+serbest tuval DEĞİL — dikey akan doküman blokları), zamanlama + e-posta dağıtımı yapılandırır;
+sistem raporu Celery ile otomatik üretip (PDF/Excel) alıcılara gönderir. Jenerik SCADA →
+**modeller + motor + task'lar `api/`**, UI `dashboard/` (Yedekleme özelliğiyle aynı bölünme).
+
+- **Modeller** ([api/models.py](api/models.py)): `ReportTemplate` (name + `blocks` JSONField +
+  sayfa ayarları + `is_template` silinemez yerleşik), `ReportSchedule` (period daily/weekly/monthly +
+  `time_of_day`/`weekday`/`day_of_month`, format bayrakları `output_pdf/excel`, e-posta
+  `email_enabled/recipients/subject/body` — placeholder `{report_name}` `{date}`, dispatcher anahtarı
+  `next_run_at` + `compute_next_run()`), `GeneratedReport` (iş geçmişi: status running/success/failed,
+  dosyalar REPORTS_DIR altında çıplak ad, e-posta durumu; `delete()` dosyaları da siler).
+- **Blok şeması** (`ReportTemplate.blocks` — sıralı liste): `heading`(text,level) / `text` /
+  `kpi_cards`(cards:[{station_id,parameter_id,agg:last|avg|min|max,window,label}]) /
+  `chart`(chart_type:line|bar + binding) / `table`(binding + columns + max_rows) / `page_break` /
+  `spacer`. **binding** = `{station_id, parameter_ids[], bucket: raw|15min|hourly|daily, window,
+  columns}`. **window** = `{"mode":"relative","key":last_24h|yesterday|last_7d|last_week|this_month|
+  last_month|last_30d}` veya `{"mode":"fixed","start","end"}` — üretim anındaki `reference_time`'a
+  göre çözülür (zamanlanmış raporlar her koşuda güncel dönemi kapsar).
+- **Üretim motoru** [api/reporting.py](api/reporting.py): blok çözümü → veri sorgusu (parametre
+  kapsam kuralı burada da geçerli: sensörler üzerinden), matplotlib (Agg) PNG grafik → HTML
+  ([api/templates/reporting/report.html](api/templates/reporting/report.html), print CSS `@page`) →
+  WeasyPrint PDF; openpyxl Excel (Özet + tablo/grafik sheet'leri, native chart). `generate_report()`
+  backup_database komut şekli: kayıt running → üret → e-posta → success/failed. E-posta
+  `api.notifications.send_email(..., kind="report", attachments=[...])` — `attachments` parametresi
+  bu özellik için eklendi.
+- **WeasyPrint Windows dev'de yok** (GTK/pango DLL) → import geniş `except` ile sarılı;
+  `PDF_AVAILABLE=False` iken PDF atlanır (uyarı `GeneratedReport.error`'a), Excel/önizleme/e-posta
+  çalışır. Docker imajı pango/cairo paketlerini içerir → sahada PDF tam çalışır.
+- **Zamanlama dispatcher deseni**: schedule başına PeriodicTask YOK; tek beat task
+  `api.tasks.dispatch_report_schedules` (60 sn) `next_run_at <= now` olanları kuyruklar ve
+  `next_run_at`'ı kuyruklamadan ÖNCE ilerletir. Kullanıcı zamanlama düzenleyince endpoint
+  `next_run_at=None` verir → model `save()` yeniden hesaplar.
+- **UI**: `/dashboard/report-studio/` (`ReportStudioView`, operatör; şablon/zamanlama düzenleme
+  butonları admin) — 3 bölüm: şablon galerisi + zamanlama tablosu (modal) + üretilen raporlar
+  (5 sn durum poll + indirme). Editör `/dashboard/report-studio/editor/[pk/]`
+  (`ReportEditorView`, rol=1, dashboard iskeleti İÇİNDE): sol blok listesi (SortableJS sıralama),
+  orta **canlı önizleme** (`api_report_preview` → iframe `srcdoc`, kaydetmeden gerçek veriyle),
+  sağ blok ayar formu. JS: [report_editor.js](dashboard/static/dashboard/js/report_editor.js).
+  AJAX: `/dashboard/api/report-studio/...` (tpl list/get/save/delete, preview, sched save/delete,
+  run-now, generated status/download/delete — download path-traversal korumalı, backup deseni).
+- **Seed**: `python manage.py seed_report_templates` (idempotent) — "Günlük Tesis Özeti" yerleşik
+  şablonu + devre dışı örnek zamanlama. **Debug**: `python manage.py generate_report
+  --template-id N [--formats pdf,excel] [--schedule-id N]` (worker'sız sync üretim).
+- `.env`: `REPORTS_DIR` (compose'da `report_files` volume → `/reports`; dev default `media/reports`).
+- **Ertelenenler**: üretilen dosya retention'ı (`prune_generated_reports` — BackupPolicy deseniyle),
+  EN `.po` çevirileri, `docker-compose.prod.yml` + `install-linux.sh` heredoc'una `report_files`
+  volume senkronu (saha dağıtımından önce yapılmalı).
+
 ## Testler
 
 `api/tests.py`, `users/tests.py`, `modbus/tests.py` şu an boş. Yeni özellik eklerken ilgili uygulamaya test yazılması beklenir.
@@ -782,5 +834,8 @@ Beklenen yük: cycle 1.5-2.5 sn, 17 Reading insert/sn, ~1.4M satır/gün, 90 gü
 - **Aggregate Python-side** — `aggregate_readings` pandas-benzeri Python groupby kullanır; 1500+ tag ölçeğinde PostgreSQL `GROUP BY` SQL rewrite gerekir.
 - **DB partition yok** — `Reading` tek tablo; 3000+ tag uzun vadeli operasyonda aylık partition (PostgreSQL declarative partitioning) gerekir.
 - **Celery worker monitoring** — Flower kurulu değil; isteğe göre `pip install flower` + `celery -A sais_web flower` ile eklenebilir.
+- **WeasyPrint Windows dev'de çalışmaz** — GTK/pango DLL'leri gerekir (MSYS2 veya GTK3-runtime ile kurulabilir); yoksa Rapor Stüdyosu PDF üretimi dev'de zarifçe devre dışı kalır (`api.reporting.PDF_AVAILABLE=False`), Excel/önizleme çalışır. Docker imajında sorun yok.
+- **Rapor dosyası retention yok** — `GeneratedReport` dosyaları manuel silinene dek `REPORTS_DIR`'de birikir; `prune_generated_reports` komutu (BackupPolicy deseni) eklenmeli.
+- **prod compose'da `report_files` volume eksik** — Rapor Stüdyosu saha dağıtımından önce `docker-compose.prod.yml` + `install-linux.sh` embedded compose'una `report_files:/reports` mount'u ve `REPORTS_DIR` env'i eklenmeli.
 - **Windows'ta lokal Celery** — `-B` (worker+beat tek process) desteklenmiyor; iki ayrı terminal aç veya `-P solo` ile worker + ayrı terminal'de beat. Prefork pool Windows'ta sorunlu, `-P solo` zorunlu.
 - **TLS Modbus** — pymodbus 3.x henüz native desteklemiyor; out of scope.
