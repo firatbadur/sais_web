@@ -3004,6 +3004,9 @@ msgstr "Generated — copied to clipboard"
 msgid "SIM Ayarları"
 msgstr "SIM Settings"
 
+msgid "Sürekli İzleme Merkezi"
+msgstr "Continuous Monitoring Center"
+
 msgid "Kabin Kayıtları"
 msgstr "Cabinet Records"
 

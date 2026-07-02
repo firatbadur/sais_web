@@ -80,7 +80,7 @@ MENU = [
         ],
     },
     {
-        "label": _("SIM Ayarları"),
+        "label": _("Sürekli İzleme Merkezi"),
         "menu_key": "sim",
         "icon": "ki-cloud-change",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR),
