@@ -3451,6 +3451,8 @@ def mimic_report_data(request):
         loc = timezone.localtime(dt)
         return [loc.strftime("%d.%m.%Y %H:%M:%S"), int(loc.timestamp() * 1000)]
 
+    # Kalite → bootstrap renk sınıfı (tabloda renkli rozet için)
+    qcls = {"good": "success", "bad": "danger", "uncertain": "warning"}
     rows = []
     if kind == "raw":
         columns = ["Zaman", "Değer", "Kalite", "Durum"]
@@ -3461,8 +3463,9 @@ def mimic_report_data(request):
         )
         for x in qs:
             t = fmt(x.time_iso)
-            rows.append([t[0], t[1], rnd(x.value), x.quality or "",
-                         str(x.status) if x.status_id else ""])
+            st = str(x.status) if x.status_id else ""
+            rows.append([t[0], t[1], rnd(x.value), x.quality or "", st,
+                         qcls.get(x.quality, "secondary")])
     else:
         columns = ["Zaman", "Ortalama", "Min", "Max", "Adet"]
         model = {"15min": ReadingFifteenMin, "hourly": ReadingHourly, "daily": ReadingDaily}[kind]

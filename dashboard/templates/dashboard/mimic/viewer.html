@@ -150,11 +150,13 @@
     <div class="vm-rdialog">
         <div class="vm-rhead">
             <span class="t" id="vm-rtitle"></span>
+            <button class="v-btn" id="vm-rchart-btn" style="margin-left:auto;"><i class="ki-duotone ki-chart-line-up"><span class="path1"></span><span class="path2"></span></i> <span id="vm-rchart-lbl">{% trans "Grafik" %}</span></button>
             <button class="vm-x" id="vm-rclose" title="{% trans 'Kapat' %}">✕</button>
         </div>
         <div class="vm-rbody">
             <div id="vm-rloading">{% trans "Yükleniyor…" %}</div>
             <table id="vm-rtable" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-2 w-100" style="display:none;"></table>
+            <div id="vm-rchartwrap" style="display:none;"><div id="vm-rchart-el" style="height:440px;"></div></div>
         </div>
     </div>
 </div>
@@ -322,10 +324,11 @@ window.V_CFG = {
     // ------------------------------------------------------------------ //
     // Rapor modal (tablo + kopya/CSV/Excel/PDF/yazdır) → mimic_report endpoint
     // ------------------------------------------------------------------ //
-    var dt = null;   // DataTables örneği
+    var dt = null;            // DataTables örneği
+    var rChart = null;        // ApexCharts örneği
+    var lastReport = null;    // son yüklenen rapor verisi (grafik için)
+    var chartOn = false;
     var DT_L10N = {
-        search: "{% trans 'Ara' %}:",
-        lengthMenu: "_MENU_ {% trans 'kayıt göster' %}",
         info: "_TOTAL_ {% trans 'kayıttan _START_ – _END_' %}",
         infoEmpty: "{% trans '0 kayıt' %}",
         zeroRecords: "{% trans 'Kayıt bulunamadı' %}",
@@ -338,6 +341,7 @@ window.V_CFG = {
             (meta.station ? " · " + esc(meta.station) : "") + '</small>';
         $("vm-rloading").style.display = "block";
         $("vm-rloading").textContent = "{% trans 'Yükleniyor…' %}";
+        showChart(false);
         var tbl = $("vm-rtable");
         tbl.style.display = "none";
         if (dt) { dt.destroy(); tbl.innerHTML = ""; dt = null; }
@@ -348,29 +352,32 @@ window.V_CFG = {
             .then(function (r) { return r.json(); })
             .then(function (d) {
                 if (!d || !d.ok) { $("vm-rloading").textContent = (d && d.error) || "{% trans 'Hata' %}"; return; }
+                lastReport = d;
                 buildReportTable(d);
             })
             .catch(function () { $("vm-rloading").textContent = "{% trans 'Sunucuya ulaşılamadı.' %}"; });
     }
     function buildReportTable(d) {
         var unit = d.unit ? " (" + d.unit + ")" : "";
-        var cols = d.columns.slice();
-        // Değer/Ortalama/Min/Max başlıklarına birim ekle
         var head = "<thead><tr>";
-        cols.forEach(function (c, i) {
+        d.columns.forEach(function (c) {
             var lbl = c;
             if (unit && (c === "Değer" || c === "Ortalama" || c === "Min" || c === "Max")) lbl = c + unit;
             head += "<th>" + esc(lbl) + "</th>";
         });
         head += "</tr></thead>";
-        // rows: [display, ts, v1, v2, ...] — 2. eleman (ts) sıralama için, tabloda gösterilmez
-        var body = "<tbody>";
+        // raw:  [display, ts, value, quality, statusText, cls]
+        // agg:  [display, ts, avg, min, max, count]
+        var raw = d.kind === "raw", body = "<tbody>";
         d.rows.forEach(function (row) {
-            body += "<tr>";
-            body += '<td data-order="' + row[1] + '">' + esc(row[0]) + "</td>";
-            for (var i = 2; i < row.length; i++) {
-                var v = row[i];
-                body += "<td>" + (v == null ? "" : esc(v)) + "</td>";
+            body += '<tr><td data-order="' + row[1] + '">' + esc(row[0]) + "</td>";
+            if (raw) {
+                var cls = row[5] || "secondary";
+                body += "<td>" + (row[2] == null ? "" : esc(row[2])) + "</td>";
+                body += '<td><span class="badge badge-light-' + cls + '">' + esc(row[3] || "—") + "</span></td>";
+                body += '<td><span class="badge badge-light-' + cls + '">' + esc(row[4] || "—") + "</span></td>";
+            } else {
+                for (var i = 2; i < row.length; i++) body += "<td>" + (row[i] == null ? "" : esc(row[i])) + "</td>";
             }
             body += "</tr>";
         });
@@ -382,7 +389,7 @@ window.V_CFG = {
 
         var fname = (d.label || "rapor") + "_" + d.kind;
         dt = window.jQuery(tbl).DataTable({
-            dom: "<'row'<'col-sm-6'B><'col-sm-6'f>>t<'row'<'col-sm-5'i><'col-sm-7'p>>",
+            dom: "<'mb-3'B>t<'row'<'col-sm-5'i><'col-sm-7'p>>",   // arama (f) ve sütunlar (colvis) yok
             order: [[0, "desc"]],
             pageLength: 25,
             lengthChange: false,
@@ -392,14 +399,65 @@ window.V_CFG = {
                 { extend: "csvHtml5", text: "CSV", filename: fname, className: "btn btn-sm btn-light-primary" },
                 { extend: "excelHtml5", text: "Excel", filename: fname, className: "btn btn-sm btn-light-success" },
                 { extend: "pdfHtml5", text: "PDF", filename: fname, orientation: "landscape", className: "btn btn-sm btn-light-danger" },
-                { extend: "print", text: "{% trans 'Yazdır' %}", className: "btn btn-sm btn-light-info" },
-                { extend: "colvis", text: "{% trans 'Sütunlar' %}", className: "btn btn-sm btn-light" }
+                { extend: "print", text: "{% trans 'Yazdır' %}", className: "btn btn-sm btn-light-info" }
             ]
         });
     }
+
+    // --- Grafik görünümü (rapor sayfasındaki ApexCharts deseni) ---
+    function showChart(on) {
+        chartOn = on;
+        var tblWrap = document.getElementById("vm-rtable_wrapper");
+        if (tblWrap) tblWrap.style.display = on ? "none" : "";
+        $("vm-rchartwrap").style.display = on ? "block" : "none";
+        $("vm-rchart-lbl").textContent = on ? "{% trans 'Tablo' %}" : "{% trans 'Grafik' %}";
+    }
+    function toggleChart() {
+        if (!lastReport) return;
+        if (!chartOn) { buildChartFromReport(lastReport); showChart(true); }
+        else { showChart(false); }
+    }
+    function buildChartFromReport(d) {
+        var el = $("vm-rchart-el");
+        // raw → value (index 2); agg → ortalama (index 2). ts = index 1.
+        var pts = [];
+        d.rows.forEach(function (row) {
+            var v = parseFloat(row[2]);
+            if (row[1] && isFinite(v)) pts.push([row[1], v]);
+        });
+        pts.sort(function (a, b) { return a[0] - b[0]; });
+        if (rChart) { rChart.destroy(); rChart = null; }
+        el.innerHTML = "";
+        if (!pts.length) { el.innerHTML = '<div style="text-align:center;color:var(--mx-muted);padding:40px;">{% trans "Grafik için sayısal veri yok." %}</div>'; return; }
+        var isDark = (document.documentElement.getAttribute("data-bs-theme") || "light") === "dark";
+        var axisColor = isDark ? "#92929F" : "#5E6278", gridColor = isDark ? "#2B2B40" : "#E4E6EF";
+        rChart = new ApexCharts(el, {
+            chart: { type: "line", height: 440, fontFamily: "inherit", background: "transparent",
+                toolbar: { show: true, tools: { download: true, zoom: true, zoomin: true, zoomout: true, pan: true, reset: true }, autoSelected: "zoom" },
+                animations: { enabled: true, speed: 500 }, zoom: { enabled: true, type: "x", autoScaleYaxis: true } },
+            theme: { mode: isDark ? "dark" : "light" },
+            series: [{ name: (d.label || "") + (d.unit ? " (" + d.unit + ")" : ""), data: pts }],
+            stroke: { curve: "smooth", width: 3, lineCap: "round" },
+            markers: { size: 0, hover: { size: 6 } },
+            dataLabels: { enabled: false },
+            grid: { borderColor: gridColor, strokeDashArray: 4, padding: { top: 10, right: 16, left: 12 } },
+            xaxis: { type: "datetime", axisBorder: { color: gridColor }, axisTicks: { color: gridColor },
+                labels: { style: { colors: axisColor, fontSize: "12px" }, datetimeUTC: false,
+                    datetimeFormatter: { year: "yyyy", month: "MMM 'yy", day: "dd MMM", hour: "HH:mm", minute: "HH:mm:ss" } } },
+            yaxis: { labels: { formatter: function (v) { return Number(v).toFixed(2); }, style: { colors: axisColor, fontSize: "12px" } } },
+            colors: ["#009EF7"],
+            tooltip: { theme: isDark ? "dark" : "light", x: { format: "dd.MM.yyyy HH:mm:ss" },
+                y: { formatter: function (v) { return v == null ? "—" : Number(v).toFixed(3); } } }
+        });
+        rChart.render();
+    }
+    $("vm-rchart-btn").addEventListener("click", toggleChart);
+
     function closeReport() {
         $("vm-rovl").classList.remove("show");
         if (dt) { dt.destroy(); $("vm-rtable").innerHTML = ""; dt = null; }
+        if (rChart) { rChart.destroy(); rChart = null; }
+        lastReport = null; chartOn = false;
     }
     $("vm-rclose").addEventListener("click", closeReport);
     $("vm-rovl").addEventListener("click", function (e) { if (e.target === $("vm-rovl")) closeReport(); });

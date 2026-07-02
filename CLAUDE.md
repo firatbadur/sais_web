@@ -694,7 +694,9 @@ Tamamen dashboard arayüzüne özgü → `dashboard/`.
   Viewer'da bir obje yalnız **etiketi (tag) VE `menu.enabled`** varsa tıklanabilir (`evented`);
   tıklanınca konumlu bir menü açılır: **Historik Trend (saatlik) / Veri Raporu (ham) / Günlük Özet
   (günlük)** → **viewer içinde bir modal** açar (rapor sayfasına gitmez, filtre inputu yok): salt
-  tablo + DataTables export (kopyala/CSV/Excel/PDF/yazdır/sütun-seç). Veri `mimic_report_data`
+  tablo + DataTables export (kopyala/CSV/Excel/PDF/yazdır — arama ve sütun-seç yok) + **Grafik/Tablo
+  geçiş butonu** (ApexCharts, rapor sayfası deseni; raw→değer, aggregate→ortalama). Raw tabloda
+  Kalite/Durum **renkli rozet** (quality→success/danger/warning). Veri `mimic_report_data`
   endpoint'inden gelir (`?tag=&kind=raw|15min|hourly|daily`; raw→`Reading`, diğerleri aggregate
   tabloları; salt-okuma, tüm roller). **Kontrol** (yalnız operatör/admin `canControl` + dijital
   çıkış sensörü) → aktif/pasif + değer ata diyalogu → `mimic_control` endpoint'ine POST → `Command`
