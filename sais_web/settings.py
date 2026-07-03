@@ -51,6 +51,8 @@ BACKUP_DIR = os.getenv("BACKUP_DIR", "/backups")
 # Docker'da web + celery_worker'a mount edilen report_files volume (/reports);
 # dev'de media/reports altına düşer.
 REPORTS_DIR = os.getenv("REPORTS_DIR", str(BASE_DIR / "media" / "reports"))
+# Üretilen rapor kayıtları + dosyaları bu kadar gün saklanır (prune_generated_reports).
+REPORT_RETENTION_DAYS = int(os.getenv("REPORT_RETENTION_DAYS", "90"))
 
 # ---- Web erişim / Caddy reverse proxy ----
 # WebSettings → api.web_proxy bu yolları kullanarak Caddyfile + manuel cert

@@ -92,6 +92,12 @@ def prune_readings_task():
     call_command("prune_readings")
 
 
+@shared_task(name="api.tasks.prune_generated_reports_task")
+def prune_generated_reports_task():
+    """REPORT_RETENTION_DAYS'den eski üretilen rapor kayıt + dosyalarını siler."""
+    call_command("prune_generated_reports")
+
+
 @shared_task(name="api.tasks.backup_database_run")
 def backup_database_run(tier="manual", force=False, user_id=None):
     """Bir tier için DB yedeği alır (beat + manuel tetik ortak).

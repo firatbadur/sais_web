@@ -488,6 +488,7 @@ Tüm periyodik iş Celery beat'in DB'de tuttuğu `PeriodicTask` kayıtlarıyla y
 | `sais_domain.tasks.check_system_alarms` | `*/10 * * * *` | Sistem alarmları (gerçek-zamanlı): son 10 dk Bakanlık verisi → seçili hata kodları `persist` dk tekrarlıysa + uzun PowerOff kesintileri → operatöre SMS/e-posta |
 | `sais_domain.tasks.check_system_alarms_daily` | `10 8 * * *` | Sistem alarmları (günlük): SSL bitiş / lisans bitiş / kalibrasyon hatırlatma uyarıları |
 | `api.tasks.dispatch_report_schedules` | her 60 sn | Rapor Stüdyosu: `next_run_at` vadesi gelen etkin `ReportSchedule`'ları `generate_report_run`'a gönderir (lisans gate'li) |
+| `api.tasks.prune_generated_reports_task` | `45 3 * * *` | `REPORT_RETENTION_DAYS`'den (90) eski üretilen rapor kayıt + PDF/Excel dosyalarını sil |
 
 Yönetim:
 - Admin panelinden (`/admin/django_celery_beat/periodictask/`) bireysel task'lar enable/disable edilebilir veya periyot değiştirilebilir.
@@ -791,10 +792,14 @@ sistem raporu Celery ile otomatik üretip (PDF/Excel) alıcılara gönderir. Jen
 - **Seed**: `python manage.py seed_report_templates` (idempotent) — "Günlük Tesis Özeti" yerleşik
   şablonu + devre dışı örnek zamanlama. **Debug**: `python manage.py generate_report
   --template-id N [--formats pdf,excel] [--schedule-id N]` (worker'sız sync üretim).
-- `.env`: `REPORTS_DIR` (compose'da `report_files` volume → `/reports`; dev default `media/reports`).
-- **Ertelenenler**: üretilen dosya retention'ı (`prune_generated_reports` — BackupPolicy deseniyle),
-  EN `.po` çevirileri, `docker-compose.prod.yml` + `install-linux.sh` heredoc'una `report_files`
-  volume senkronu (saha dağıtımından önce yapılmalı).
+- `.env`: `REPORTS_DIR` (dev + prod compose'da `report_files` volume → `/reports`, web+worker'a
+  mount; dev default `media/reports`) + `REPORT_RETENTION_DAYS` (90).
+- **Retention**: `prune_generated_reports` komutu (`--days`/`--dry-run`) +
+  `api.tasks.prune_generated_reports_task` (gecelik 03:45) — kayıt `delete()` dosyaları da siler.
+- **Saha dağıtımı**: `docker-compose.prod.yml` + `install-linux.sh` heredoc + `env.template`
+  `report_files`/`REPORTS_DIR` içerir (v0.8.1+). Mevcut sahalarda compose dosyası host'ta durduğu
+  için volume ancak compose dosyası yenilenip `up -d` yapılınca gelir (Watchtower yalnız imajı günceller).
+- **Ertelenenler**: EN `.po` çevirileri.
 
 ## Testler
 
@@ -841,7 +846,6 @@ Beklenen yük: cycle 1.5-2.5 sn, 17 Reading insert/sn, ~1.4M satır/gün, 90 gü
 - **DB partition yok** — `Reading` tek tablo; 3000+ tag uzun vadeli operasyonda aylık partition (PostgreSQL declarative partitioning) gerekir.
 - **Celery worker monitoring** — Flower kurulu değil; isteğe göre `pip install flower` + `celery -A sais_web flower` ile eklenebilir.
 - **WeasyPrint Windows dev'de çalışmaz** — GTK/pango DLL'leri gerekir (MSYS2 veya GTK3-runtime ile kurulabilir); yoksa Rapor Stüdyosu PDF üretimi dev'de zarifçe devre dışı kalır (`api.reporting.PDF_AVAILABLE=False`), Excel/önizleme çalışır. Docker imajında sorun yok.
-- **Rapor dosyası retention yok** — `GeneratedReport` dosyaları manuel silinene dek `REPORTS_DIR`'de birikir; `prune_generated_reports` komutu (BackupPolicy deseni) eklenmeli.
-- **prod compose'da `report_files` volume eksik** — Rapor Stüdyosu saha dağıtımından önce `docker-compose.prod.yml` + `install-linux.sh` embedded compose'una `report_files:/reports` mount'u ve `REPORTS_DIR` env'i eklenmeli.
+- **Mevcut sahalarda `report_files` volume güncellemesi manuel** — Watchtower yalnız imajı yeniler; v0.8.1 öncesi kurulmuş sahalarda `docker-compose.prod.yml` host'ta eski kaldığından Rapor Stüdyosu dosya kalıcılığı için compose dosyasının elle yenilenip `up -d` yapılması gerekir (yeni kurulumlar installer ile tam gelir).
 - **Windows'ta lokal Celery** — `-B` (worker+beat tek process) desteklenmiyor; iki ayrı terminal aç veya `-P solo` ile worker + ayrı terminal'de beat. Prefork pool Windows'ta sorunlu, `-P solo` zorunlu.
 - **TLS Modbus** — pymodbus 3.x henüz native desteklemiyor; out of scope.

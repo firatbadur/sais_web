@@ -189,6 +189,10 @@ READING_RETENTION_DAILY_DAYS=99999
 # DB yedekleme
 BACKUP_DIR=/backups
 
+# Rapor Stüdyosu — üretilen PDF/Excel dosyaları (report_files volume) + retention
+REPORTS_DIR=/reports
+REPORT_RETENTION_DAYS=90
+
 # Lisanslama
 LICENSE_ENFORCE=${LICENSE_ENFORCE}
 LICENSE_KEY=${LICENSE_KEY}
@@ -227,6 +231,7 @@ x-app-env: &app-env
   REDIS_URL: redis://redis:6379/1
   CELERY_BROKER_URL: redis://redis:6379/2
   CELERY_RESULT_BACKEND: django-db
+  REPORTS_DIR: /reports
   WATCHTOWER_API_TOKEN: "${WATCHTOWER_API_TOKEN:-envisoft-update-token}"
 
 services:
@@ -282,6 +287,7 @@ services:
       - media_data:/app/media
       - static_data:/app/staticfiles_root
       - pg_backups:/backups
+      - report_files:/reports
       - caddy_config:/etc/caddy
     expose:
       - "8000"
@@ -329,6 +335,7 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"
     volumes:
       - pg_backups:/backups
+      - report_files:/reports
     healthcheck:
       disable: true
     command: >
@@ -372,6 +379,7 @@ services:
 volumes:
   pg_data:
   pg_backups:
+  report_files:
   redis_data:
   media_data:
   static_data:
