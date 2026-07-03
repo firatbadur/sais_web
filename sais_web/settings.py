@@ -41,6 +41,10 @@ CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "")
 # Uygulama sürümü — CI build sırasında Dockerfile build-arg'ından ENV'e yazılır
 # (git tag). Lokal/dev'de "dev" kalır. Dashboard footer'ında gösterilir.
 APP_VERSION = os.getenv("APP_VERSION", "dev")
+# İmaj build zamanı (unix epoch) — release.yml build-arg ile doldurur. Lisans
+# bootstrap grace'i buna çıpalanır: DB created_at sıfırlansa bile imaj bu kadar
+# eskiyse grace verilmez (api.licensing._within_bootstrap_grace). Dev'de 0 → çıpasız.
+BUILD_EPOCH = int(os.getenv("BUILD_EPOCH", "0") or "0")
 
 # DB yedek dosyalarının (.dump) yazılacağı dizin. app + celery_worker
 # container'larına mount edilen pg_backups volume'ünün yolu (pg_dump'ı app
@@ -68,14 +72,18 @@ CADDY_UPSTREAM = os.getenv("CADDY_UPSTREAM", "web:8000")
 # gömülü public key ile doğrulanır. Detay: api/licensing.py.
 #
 # ENFORCEMENT ÜRETİMDE KOD SABİTİDİR — .env'den KAPATILAMAZ.
-# Neden: `.env` müşterinin makinesinde; eskiden `LICENSE_ENFORCE=0` lisansı tamamen
-# bypass ediyordu (tek satırlık açık). Artık üretimde (DEBUG=False) enforce HER ZAMAN
-# açıktır; env `LICENSE_ENFORCE=0` yazmak etkisizdir (True or X == True). Dağıtılan imaj
-# DEBUG=0 çalışır. Yalnız yerel geliştirme (DEBUG=True) varsayılan kapalıdır; dev enforce'u
-# TEST etmek isterse env ile AÇABİLİR (asla üretimde kapatamaz). Kalan tek vektör
-# DJANGO_DEBUG=1'dir (üretimde footgun); onu da kod obfuscation (PyArmor) mühürler.
+# İki katman: (1) PRODUCTION_BUILD build-time bayrağı (api/_buildflags.py; release
+# imaj build'inde True'ya yazılır + Cython ile derlenir) → dağıtılan imajda enforce
+# HER ZAMAN açık, `DJANGO_DEBUG=1` ile bile kapatılamaz. (2) not DEBUG → env'siz
+# üretimde de açık. Env `LICENSE_ENFORCE=0` yazmak ETKİSİZDİR (True or X == True).
+# Dev/lokal (PRODUCTION_BUILD=False + DEBUG=True) varsayılan kapalı; dev enforce'u
+# TEST etmek isterse env ile açabilir (asla üretimde kapatamaz).
 # İç demo/"sınırsız" = enforce kapatmak DEĞİL, imzalı çok-uzun-süreli (perpetual) token.
-LICENSE_ENFORCE = (not DEBUG) or env_bool("LICENSE_ENFORCE", default=False)
+try:
+    from api._buildflags import PRODUCTION_BUILD as _PRODUCTION_BUILD
+except Exception:  # noqa: BLE001 — bayrak modülü yoksa güvenli varsayılan
+    _PRODUCTION_BUILD = False
+LICENSE_ENFORCE = _PRODUCTION_BUILD or (not DEBUG) or env_bool("LICENSE_ENFORCE", default=False)
 # Saha kimliği — her kurulumda .env ile benzersiz verilir; manifest'teki anahtarla eşleşir.
 LICENSE_KEY = os.getenv("LICENSE_KEY", "")
 # İmzalı lisans manifest'inin URL'i (GitHub raw vb.).

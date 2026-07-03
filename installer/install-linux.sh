@@ -319,6 +319,7 @@ services:
       - pg_backups:/backups
       - report_files:/reports
       - caddy_config:/etc/caddy
+      - /etc/machine-id:/host/machine-id:ro
     expose:
       - "8000"
     labels:
@@ -366,6 +367,7 @@ services:
     volumes:
       - pg_backups:/backups
       - report_files:/reports
+      - /etc/machine-id:/host/machine-id:ro
     healthcheck:
       disable: true
     command: >
@@ -386,6 +388,8 @@ services:
         condition: service_started
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
+    volumes:
+      - /etc/machine-id:/host/machine-id:ro
     healthcheck:
       disable: true
     command: >

@@ -85,6 +85,9 @@ services:
       - pg_backups:/backups
       - report_files:/reports
       - caddy_config:/etc/caddy
+      # Lisans node-lock: host makine kimliği salt-okunur; parmak izi container
+      # içinde bundan hesaplanır (.env düzenleyerek atlatma engellenir).
+      - /etc/machine-id:/host/machine-id:ro
     # NOT: web artık host'a publish edilmez; ingress Caddy (80/443) üzerinden.
     expose:
       - "8000"
@@ -136,6 +139,7 @@ services:
     volumes:
       - pg_backups:/backups
       - report_files:/reports
+      - /etc/machine-id:/host/machine-id:ro   # lisans node-lock parmak izi
     # Image'in HEALTHCHECK'i web (localhost:8000) icindir; celery HTTP sunmaz ->
     # devre disi (yoksa container "unhealthy" gorunur).
     healthcheck:
@@ -159,6 +163,8 @@ services:
         condition: service_started
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
+    volumes:
+      - /etc/machine-id:/host/machine-id:ro   # lisans node-lock parmak izi
     healthcheck:
       disable: true
     command: >

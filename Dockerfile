@@ -41,6 +41,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
 
+# İmaj build zamanı (unix epoch) — lisans bootstrap grace bu tarihe çıpalanır
+# (DB created_at sıfırlamayla grace istismarını engeller). release.yml doldurur;
+# verilmezse 0 → çıpasız (dev).
+ARG BUILD_EPOCH=0
+ENV BUILD_EPOCH=$BUILD_EPOCH
+
+# Üretim (release) build bayrağı — 1 ise lisans enforcement kod ile mühürlenir
+# (DJANGO_DEBUG=1 ile kapatılamaz). release.yml PRODUCTION=1 geçer; dev build 0.
+ARG PRODUCTION=0
+# OBFUSCATE=1 (release) → Cython ile seçili modüller .so'ya derlenir (bkz. aşağıda).
+ARG OBFUSCATE=0
+
 # PostgreSQL client 16 (pg_dump / pg_restore — yedekleme/geri yükleme app
 # container'ından çalışır). Bookworm'un kendi paketi 15; compose `db` postgres:16
 # olduğundan sürüm uyumu için PGDG deposundan client-16 kurulur (pg_dump major
@@ -68,6 +80,10 @@ RUN pip install --no-index --find-links=/wheels -r requirements.txt \
     && rm -rf /wheels
 
 COPY --chown=app:app . /app
+
+# Üretim build'inde lisans enforcement bayrağını kod ile sabitle (DJANGO_DEBUG=1
+# bypass'ını kapatır). Cython aşaması (OBFUSCATE=1) bu dosyayı da .so'ya derler.
+RUN if [ "$PRODUCTION" = "1" ]; then printf 'PRODUCTION_BUILD = True\n' > /app/api/_buildflags.py; fi
 
 # /backups: pg_backups named volume buraya mount edilir. Mount noktasını imajda
 # app sahipliğiyle oluşturursak, ilk mount'ta named volume bu sahipliği devralır

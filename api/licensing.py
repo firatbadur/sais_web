@@ -14,6 +14,7 @@ Enforcement imzalı token'ın `expires_at` tarihine dayanır; gate anında ağ g
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from datetime import datetime, timezone as dt_timezone
@@ -69,13 +70,32 @@ def _parse_dt(value: str):
     return dt
 
 
-def runtime_fingerprint() -> str:
-    """Bu kurulumun çalıştığı makinenin parmak izi (host'tan env ile geçer).
+def _read_host_id(path: str) -> str:
+    """Salt-okunur mount'lu host kimlik dosyasını oku (strip'li). Yoksa ''."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
 
-    Installer/sais-stack.ps1 Windows MachineGuid + baseboard serial'dan üretip
-    .env'e yazar; container'a env_file ile gelir. Boşsa (dev / eski kurulum)
-    makineye-bağlama uygulanmaz.
+
+def runtime_fingerprint() -> str:
+    """Bu kurulumun çalıştığı makinenin parmak izi.
+
+    ÖNCELİK — container'a salt-okunur mount edilen HOST kimliği (Linux):
+    `/host/machine-id` [+ mümkünse `/host/product_uuid`] → sha256. Böylece parmak
+    izi `.env`'den DEĞİL, mount'lu host kimliğinden hesaplanır → müşteri
+    `MACHINE_FINGERPRINT`'i düzenleyerek node-lock'u atlatamaz (kopyalanan kuruluma
+    karşı gerçek koruma). İhraç (dashboard) ve enforcement aynı fonksiyonu çağırdığı
+    için değer kendiliğinden tutarlıdır.
+
+    FALLBACK — mount yoksa (Windows; MachineGuid+baseboard'dan sais-stack.ps1 env'e
+    yazar) veya eski kurulum → env `MACHINE_FINGERPRINT`. Boşsa node-lock uygulanmaz.
     """
+    mid = _read_host_id("/host/machine-id")
+    if mid:
+        puuid = _read_host_id("/host/product_uuid")
+        return hashlib.sha256(f"{mid}|{puuid}".encode("utf-8")).hexdigest()
     return (getattr(settings, "MACHINE_FINGERPRINT", "") or "").strip()
 
 
@@ -203,23 +223,28 @@ def fetch_and_refresh() -> "object":
         )
 
 
-def _revalidate_cached(lic) -> bool:
-    """Cache'lenmiş raw_token'ı yeniden imza-doğrula (manipülasyon tespiti)."""
+def _revalidate_cached(lic):
+    """Cache'lenmiş raw_token'ı yeniden imza-doğrula; doğrulanmış payload'ı döndür.
+
+    İmza geçerliyse **payload dict**, değilse None. Enforcement değerleri (süre,
+    makine kilidi) DB kolonlarından DEĞİL — kurcalanabilir — bu doğrulanmış
+    payload'dan okunur. Böylece `UPDATE license SET valid_until=...` gibi DB
+    manipülasyonları etkisiz kalır (imza payload'ı kapsar).
+    """
     if not lic.raw_token:
-        return False
+        return None
     try:
-        verify_token(lic.raw_token)
-        return True
+        return verify_token(lic.raw_token)
     except LicenseError:
-        return False
+        return None
 
 
 def license_active() -> bool:
     """Gate — bu kurulum çalışmaya yetkili mi?
 
     - LICENSE_ENFORCE kapalı (dev) → her zaman True.
-    - Geçerli imzalı token + now <= valid_until → True.
-    - Hiç başarılı kontrol yok ama kurulum yaşı < bootstrap grace → True (yeni saha).
+    - Geçerli imzalı token + now <= imzalı expires_at → True.
+    - Hiç token uygulanmamış ama kurulum + imaj yaşı < bootstrap grace → True (yeni saha).
     - Diğer (süre dolmuş / imza geçersiz / yok) → False.
     """
     if not getattr(settings, "LICENSE_ENFORCE", False):
@@ -230,23 +255,48 @@ def license_active() -> bool:
     lic = License.load()
     now = timezone.now()
 
-    if lic.valid_until and lic.raw_token:
-        # raw_token imzası hâlâ geçerli mi (DB elle kurcalanmış olabilir)?
-        if not (_revalidate_cached(lic) and now <= lic.valid_until):
-            return False
-        # Makine-bağlama (node-lock): token bir makineye kilitliyse, çalıştığımız
-        # makinenin parmak izi eşleşmeli. FAIL-CLOSED — token kilitli ama runtime
-        # parmak izi boş/farklıysa reddet (kopyalanan kuruluma karşı koruma).
-        bound = ((lic.raw_token.get("payload") or {}).get("machine") or "").strip()
+    if lic.raw_token:
+        # İmzayı yeniden doğrula; süre + makine-kilidini İMZALI payload'dan oku
+        # (DB `valid_until`/`machine_fingerprint` kolonlarına GÜVENME — kurcalanabilir).
+        payload = _revalidate_cached(lic)
+        if payload is None:
+            return False  # imza geçersiz (raw_token DB'de değiştirilmiş) → kilit
+        signed_expiry = _parse_dt(payload.get("expires_at"))
+        if not (signed_expiry and now <= signed_expiry):
+            return False  # imzalı süre dolmuş
+        # Makine-bağlama (node-lock): token kilitliyse çalıştığımız makinenin parmak
+        # izi eşleşmeli. FAIL-CLOSED — kilitli ama runtime parmak izi boş/farklıysa reddet.
+        bound = (payload.get("machine") or "").strip()
         if bound and runtime_fingerprint() != bound:
             logger.warning("Lisans makine parmak izi eşleşmiyor (kilitli makine ≠ bu makine).")
             return False
         return True
 
-    # Henüz hiç geçerli token uygulanmadı → yeni kurulum bootstrap grace'i.
+    # Henüz hiç token uygulanmadı → yeni kurulum bootstrap grace'i. Grace hem DB
+    # `created_at`'e hem imaj BUILD_EPOCH'una çıpalı: DB'de created_at sıfırlansa
+    # bile imaj grace'ten yaşlıysa açılmaz (bkz. _within_bootstrap_grace).
+    return _within_bootstrap_grace(lic, now)
+
+
+def _within_bootstrap_grace(lic, now) -> bool:
+    """Yeni kurulum grace penceresi — DB created_at VE imaj build tarihiyle sınırlı.
+
+    Grace = (now - created_at) < grace  VE  (BUILD_EPOCH varsa) (now - build) < grace.
+    `UPDATE license SET created_at=NOW()` ile grace sıfırlansa bile imaj build
+    tarihinden grace kadar sonra kilitlenir (taze kurulum taze imajla gelir → çalışır).
+    """
     grace_h = int(getattr(settings, "LICENSE_BOOTSTRAP_GRACE_HOURS", 24))
-    age = (now - lic.created_at).total_seconds() / 3600.0 if lic.created_at else 0
-    return age < grace_h
+    if not lic.created_at:
+        return False
+    age_h = (now - lic.created_at).total_seconds() / 3600.0
+    if age_h >= grace_h:
+        return False
+    build_epoch = int(getattr(settings, "BUILD_EPOCH", 0) or 0)
+    if build_epoch > 0:
+        build_age_h = (now.timestamp() - build_epoch) / 3600.0
+        if build_age_h >= grace_h:
+            return False
+    return True
 
 
 def license_status_dict() -> dict:

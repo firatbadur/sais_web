@@ -44,6 +44,10 @@ jobs:
             type=ref,event=tag
             type=raw,value=stable
 
+      - name: Build epoch (lisans grace çıpası)
+        id: buildmeta
+        run: echo "epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -54,6 +58,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=${{ github.ref_name }}
+            BUILD_EPOCH=${{ steps.buildmeta.outputs.epoch }}
+            PRODUCTION=1
+            OBFUSCATE=1
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
