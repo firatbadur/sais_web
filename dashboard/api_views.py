@@ -4648,7 +4648,13 @@ def report_sched_delete(request):
 
 @login_required
 def report_run_now(request):
-    """'Şimdi Üret' — Celery worker'a üretim gönderir (operatör)."""
+    """'Şimdi Üret' — raporu SENKRON üretir (operatör).
+
+    Manuel üretim bilinçli olarak worker'a gönderilmez: dev'de/worker'sız
+    kurulumda kuyrukta sessizce beklerdi. Üretim birkaç saniye sürer; frontend
+    butonda loader gösterir, yanıt gelince Üretilen Raporlar sekmesine geçer.
+    Zamanlanmış üretimler Celery'de kalır (dispatch_report_schedules).
+    """
     import json
 
     denied = _require_operator(request)
@@ -4657,9 +4663,9 @@ def report_run_now(request):
     if request.method != "POST":
         return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
 
+    from api import reporting
     from api.events import EventType, log_event
     from api.models import ReportTemplate
-    from api.tasks import generate_report_run
 
     try:
         payload = json.loads(request.body or "{}")
@@ -4674,15 +4680,20 @@ def report_run_now(request):
     if not formats:
         return JsonResponse({"ok": False, "error": "En az bir format seçin."}, status=400)
 
-    generate_report_run.delay(
+    rep = reporting.generate_report(
         tpl.pk, trigger="manual", user_id=request.user.id, formats=formats,
     )
     log_event(
         EventType.SYSTEM,
-        f"Manuel rapor üretimi tetiklendi: {tpl.name} ({', '.join(formats)})",
+        f"Manuel rapor üretildi: {tpl.name} ({', '.join(formats)}) [{rep.status}]",
         request=request,
     )
-    return JsonResponse({"ok": True})
+    return JsonResponse({
+        "ok": True,
+        "id": rep.id,
+        "status": rep.status,
+        "error": rep.error or "",
+    })
 
 
 @login_required

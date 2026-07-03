@@ -271,6 +271,7 @@
         builtinNoDelete: '{% trans "Yerleşik şablon silinemez." %}',
         pickFormat: '{% trans "En az bir format seçin." %}',
         genError: '{% trans "İşlem başarısız." %}',
+        generating: '{% trans "Üretiliyor..." %}',
     };
 
     function postJSON(url, payload) {
@@ -306,17 +307,34 @@
             errBox.classList.remove('d-none');
             return;
         }
+        errBox.classList.add('d-none');
+        // Loader: üretim senkron çalışır (birkaç sn) — buton kilitlenir
+        const orig = rnSubmit.innerHTML;
+        rnSubmit.disabled = true;
+        rnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + I18N.generating;
         postJSON(URLS.runNow, { template_id: runTplId, formats: formats }).then(function (d) {
             if (!d.ok) {
+                rnSubmit.disabled = false;
+                rnSubmit.innerHTML = orig;
                 errBox.textContent = d.error || I18N.genError;
                 errBox.classList.remove('d-none');
                 return;
             }
-            rnModal && rnModal.hide();
-            document.getElementById('running-badge').classList.remove('d-none');
-            startPolling(true);
+            // Bitti — Üretilen Raporlar sekmesine dönerek yenile
+            window.location.href = window.location.pathname + '?tab=generated';
+        }).catch(function () {
+            rnSubmit.disabled = false;
+            rnSubmit.innerHTML = orig;
+            errBox.textContent = I18N.genError;
+            errBox.classList.remove('d-none');
         });
     });
+
+    /* ---------- ?tab=generated → Üretilen Raporlar sekmesini aç ---------- */
+    if (new URLSearchParams(window.location.search).get('tab') === 'generated') {
+        const tabLink = document.querySelector('a[href="#tab-generated"]');
+        if (tabLink && window.bootstrap) new bootstrap.Tab(tabLink).show();
+    }
 
     /* ---------- Durum poll (Yedekleme deseni) ---------- */
     let pollTimer = null;
