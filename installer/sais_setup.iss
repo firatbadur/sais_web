@@ -97,6 +97,7 @@ var
   SitePage: TInputQueryWizardPage;
   AdminPage: TInputQueryWizardPage;
   TlsCombo: TNewComboBox;
+  LicModeCombo: TNewComboBox;
 
 { Enable the Next button only when the current page's REQUIRED fields are filled.
   Required: Site page -> domain (with a dot) + Let's Encrypt email (when TLS is
@@ -130,10 +131,20 @@ procedure InitializeWizard;
 begin
   { License }
   LicensePage := CreateInputQueryPage(wpSelectDir,
-    'License', 'Installation license information',
-    'Enter the signed license information for this site.');
-  LicensePage.Add('License Key (LICENSE_KEY):', False);
-  LicensePage.Add('License Manifest URL (LICENSE_URL):', False);
+    'License', 'License mode',
+    'Choose "trial" for a 30-day evaluation (locks afterwards), or "licensed" and enter the signed license key/URL. Enforcement cannot be disabled from the config.');
+  LicensePage.Add('License Key (LICENSE_KEY, licensed only):', False);
+  LicensePage.Add('License Manifest URL (LICENSE_URL, licensed only):', False);
+  { License mode combo (trial = 30-day grace, licensed = key required) }
+  LicModeCombo := TNewComboBox.Create(LicensePage);
+  LicModeCombo.Parent := LicensePage.Surface;
+  LicModeCombo.Style := csDropDownList;
+  LicModeCombo.Items.Add('trial');
+  LicModeCombo.Items.Add('licensed');
+  LicModeCombo.ItemIndex := 0;
+  LicModeCombo.Top := LicensePage.Edits[1].Top + LicensePage.Edits[1].Height + 24;
+  LicModeCombo.Left := LicensePage.Edits[1].Left;
+  LicModeCombo.Width := LicensePage.Edits[1].Width;
 
   { Database }
   DbPage := CreateInputQueryPage(LicensePage.ID,
@@ -192,6 +203,14 @@ function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
 
+  { License page: licensed mode requires a license key. }
+  if CurPageID = LicensePage.ID then begin
+    if (LicModeCombo.Text = 'licensed') and (Trim(LicensePage.Values[0]) = '') then begin
+      MsgBox('Licensed mode requires a license key. Choose "trial" for a 30-day evaluation instead.', mbError, MB_OK);
+      Result := False;
+    end;
+  end;
+
   { Site page: domain is always required; Let's Encrypt also needs an email. }
   if CurPageID = SitePage.ID then begin
     if Trim(SitePage.Values[0]) = '' then begin
@@ -233,6 +252,7 @@ begin
     '  "TlsMode": "' + TlsCombo.Text + '",' + #13#10 +
     '  "LeEmail": "' + JsonEscape(SitePage.Values[1]) + '",' + #13#10 +
     '  "PgPassword": "' + JsonEscape(DbPage.Values[0]) + '",' + #13#10 +
+    '  "LicenseMode": "' + LicModeCombo.Text + '",' + #13#10 +
     '  "LicenseKey": "' + JsonEscape(LicensePage.Values[0]) + '",' + #13#10 +
     '  "LicenseUrl": "' + JsonEscape(LicensePage.Values[1]) + '",' + #13#10 +
     '  "GhcrUser": "{#GHCR_USER}",' + #13#10 +

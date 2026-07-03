@@ -317,13 +317,23 @@ modeliyle aynı "pull": lisanslar merkezde (GitHub manifest), sahalar çeker.
   açık. Lock ekranı + admin **Lisans** sayfası (`admin_license`): "Şimdi Yenile" + elle token uygula.
   Aktifken bitişe `LICENSE_WARN_DAYS` (15) kala sarı banner (context processor `license_status` →
   base.html).
-- **Dev**: `LICENSE_ENFORCE` varsayılanı `not DEBUG` → DEBUG=1'de lisans **bypass** (lokal geliştirme
-  kilitlenmez). Yeni kurulum ilk fetch'e dek `LICENSE_BOOTSTRAP_GRACE_HOURS` (24) çalışır.
+- **Enforcement env'den KAPATILAMAZ (güvenlik)**: `LICENSE_ENFORCE = (not DEBUG) or env_bool("LICENSE_ENFORCE", False)`
+  ([settings.py](sais_web/settings.py)). Üretimde (`DEBUG=0`) `not DEBUG=True` → enforce **her zaman
+  açık**; `.env`'de `LICENSE_ENFORCE=0` yazmak **etkisizdir** (eskiden tek-satırlık bypass'tı). Dev'de
+  (`DEBUG=1`) varsayılan kapalı ama env ile **açılabilir** (enforce'u test etmek için; asla üretimde
+  kapatamaz). Kalan tek vektör `DJANGO_DEBUG=1` (üretimde footgun) → kod obfuscation (PyArmor,
+  [[project_code_obfuscation]]) ile mühürlenecek. **İç demo/"sınırsız" enforce kapatmak DEĞİL**, imzalı
+  çok-uzun-süreli (perpetual) token'dır.
+- **Deneme (trial) modu**: her iki installer da kurulumda **[1] Lisanslı / [2] Deneme (30 gün)** sorar.
+  Deneme = lisans yok + `LICENSE_BOOTSTRAP_GRACE_HOURS=720` (30 gün) → `License.created_at`'ten itibaren
+  30 gün çalışır, sonra kilitlenir. Lisanslı = anahtar/URL + grace 168 (token çekilene dek). Not: grace
+  DB'deki `created_at`'e dayandığından DB-wipe trial'ı sıfırlar (tam sağlam trial = imzalı sabit-bitişli
+  token; şu an obfuscation'a bırakıldı).
 - **Sürüm çıkarma akışı (sen)**: `license_tool.py keygen` (bir kez, public key'i settings default'una
   koy) → `issue --key <saha> --customer <ad> --expires <tarih>` → `manifest *.json` → ayrı bir
-  GitHub repo'ya push (imza sayesinde public olabilir). Saha `.env`: `LICENSE_KEY`, `LICENSE_URL`,
-  `LICENSE_ENFORCE=1`. Uzatma = manifest'i güncelle; saha sonraki refresh'te alır (veya admin
-  "Şimdi Yenile").
+  GitHub repo'ya push (imza sayesinde public olabilir). Saha `.env`: `LICENSE_KEY`, `LICENSE_URL`
+  (enforce zaten üretimde açık — ayrıca yazmaya gerek yok). Uzatma = manifest'i güncelle; saha sonraki
+  refresh'te alır (veya admin "Şimdi Yenile"). İç demo/perpetual = `issue --expires 2099-01-01`.
 
 ## Web erişim / SSL (Caddy reverse proxy)
 
@@ -417,7 +427,8 @@ yok (Linux'ta Docker native çalışır), servis NSSM/scheduled-task yerine **sy
 - **Domain/SSL**: script yalnız ALLOWED_HOSTS/CSRF wildcard'ını `.env`'e yazar; Caddy'ye domain
   **yazmaz** (WebSettings bootstrap yok) — SSL/domain sonradan dashboard → Web Erişim Ayarları'ndan
   açılır. Kurulum dizini varsayılan `/opt/envisoft`.
-- **Lisans**: `LICENSE_KEY` verilmezse `LICENSE_ENFORCE=0` (kilitlenmesin); verilirse `=1`.
+- **Lisans**: kurulumda **[1] Lisanslı / [2] Deneme (30 gün)** sorulur (bkz. Lisanslama bölümü). Deneme
+  → grace 720s; Lisanslı → anahtar/URL + grace 168. Enforce env'e yazılmaz (üretimde kod ile açık).
 - **DRY notu**: embedded compose, [docker-compose.prod.yml](docker-compose.prod.yml) ile **elle senkron
   tutulmalı** (prod compose değişince bu heredoc da güncellenmeli). Satır sonları **LF** olmalı (CRLF →
   Linux'ta `bash` patlar).

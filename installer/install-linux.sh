@@ -95,8 +95,30 @@ ask        DOMAIN      "Alan adı (ör. demo.envisoft.com.tr) — SSL'i sonra da
 ask        ADMIN_USER  "Yönetici (admin) kullanıcı adı" "admin"
 ask_secret ADMIN_PASS  "Yönetici şifresi"
 ask        ADMIN_EMAIL "Yönetici e-postası" ""
-ask        LICENSE_KEY "Lisans anahtarı (yoksa boş geçin — lisans zorlaması kapalı kalır)" ""
-ask        LICENSE_URL "Lisans manifest URL'i (yoksa boş geçin)" ""
+
+# ── Lisans modu: 1=Lisanslı  2=Deneme (30 gün) ───────────────────────────────
+# Enforcement artık ÜRETİMDE kod sabiti (settings.py: LICENSE_ENFORCE = not DEBUG);
+# .env'den kapatılamaz. Bu yüzden burada "sınırsız/enforce=0" seçeneği YOK — iç demo
+# için imzalı perpetual token (Lisanslı mod) kullanılır. Fark yalnız bootstrap grace:
+# Deneme = 30 gün (720s) sonra kilitlenir; Lisanslı = token süresince.
+# Env ile LICENSE_KEY geldiyse mod=1 varsay; yoksa deneme (2) varsayılan.
+_def_mode=2
+[[ -n "${LICENSE_KEY:-}" ]] && _def_mode=1
+ask LICENSE_MODE "Lisans modu — [1] Lisanslı (anahtar gir)  [2] Deneme (30 gün, sonunda kilitlenir)" "$_def_mode"
+case "$LICENSE_MODE" in
+    1|lisansli|licensed)
+        LICENSE_MODE=1
+        ask        LICENSE_KEY "Lisans anahtarı" ""
+        ask        LICENSE_URL "Lisans manifest URL'i" ""
+        GRACE_HOURS=168
+        [[ -n "${LICENSE_KEY:-}" ]] || die "Lisanslı modda lisans anahtarı zorunlu."
+        ;;
+    *)  # 2 = Deneme (varsayılan)
+        LICENSE_MODE=2
+        LICENSE_KEY=""; LICENSE_URL=""; GRACE_HOURS=720
+        ;;
+esac
+
 # GHCR token yalnız gömülü DEĞİLSE (geliştirici) sorulur:
 ask_secret GHCR_TOKEN  "GHCR token (read:packages yetkili PAT)"
 
@@ -201,12 +223,12 @@ BACKUP_DIR=/backups
 REPORTS_DIR=/reports
 REPORT_RETENTION_DAYS=90
 
-# Lisanslama
-LICENSE_ENFORCE=${LICENSE_ENFORCE}
+# Lisanslama — NOT: enforcement üretimde kod sabiti (settings.py), .env'den
+# kapatılamaz. Mod farkı yalnız bootstrap grace: Deneme=720s (30 gün), Lisanslı=168s.
 LICENSE_KEY=${LICENSE_KEY}
 LICENSE_URL=${LICENSE_URL}
 LICENSE_WARN_DAYS=15
-LICENSE_BOOTSTRAP_GRACE_HOURS=168
+LICENSE_BOOTSTRAP_GRACE_HOURS=${GRACE_HOURS}
 MACHINE_FINGERPRINT=${MACHINE_FP}
 
 # Session / production
@@ -483,6 +505,11 @@ echo    "Dashboard (IP)   : http://${SERVER_IP}/dashboard/"
 [[ -n "$DOMAIN" ]] && echo "Dashboard (domain): https://${DOMAIN}/dashboard/  (SSL'i dashboard'dan açın)"
 echo    "Yönetici kullanıcı: ${ADMIN_USER}"
 echo    "Kurulum dizini    : ${INSTALL_DIR}  (.env burada — şifreler içinde)"
+if [[ "$LICENSE_MODE" == "2" ]]; then
+    echo -e "Lisans            : ${c_yellow}DENEME — 30 gün sonra kilitlenir.${c_reset} Lisans için admin → Lisans sayfası."
+else
+    echo    "Lisans            : Lisanslı (anahtar: ${LICENSE_KEY})"
+fi
 echo -e "\nSonraki adımlar:"
 echo    "  1) Tarayıcıdan http://${SERVER_IP}/dashboard/ ile giriş yapın."
 echo    "  2) Yönetici → Web Erişim Ayarları'ndan domain + SSL'i açın."

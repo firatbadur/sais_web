@@ -67,8 +67,15 @@ CADDY_UPSTREAM = os.getenv("CADDY_UPSTREAM", "web:8000")
 # kilitlenir). İmzalı (Ed25519) token'lar uzaktan (LICENSE_URL manifest) çekilir,
 # gömülü public key ile doğrulanır. Detay: api/licensing.py.
 #
-# DEV'de varsayılan KAPALI (DEBUG=True iken enforce yok) — lokal geliştirme kilitlenmez.
-LICENSE_ENFORCE = env_bool("LICENSE_ENFORCE", default=not DEBUG)
+# ENFORCEMENT ÜRETİMDE KOD SABİTİDİR — .env'den KAPATILAMAZ.
+# Neden: `.env` müşterinin makinesinde; eskiden `LICENSE_ENFORCE=0` lisansı tamamen
+# bypass ediyordu (tek satırlık açık). Artık üretimde (DEBUG=False) enforce HER ZAMAN
+# açıktır; env `LICENSE_ENFORCE=0` yazmak etkisizdir (True or X == True). Dağıtılan imaj
+# DEBUG=0 çalışır. Yalnız yerel geliştirme (DEBUG=True) varsayılan kapalıdır; dev enforce'u
+# TEST etmek isterse env ile AÇABİLİR (asla üretimde kapatamaz). Kalan tek vektör
+# DJANGO_DEBUG=1'dir (üretimde footgun); onu da kod obfuscation (PyArmor) mühürler.
+# İç demo/"sınırsız" = enforce kapatmak DEĞİL, imzalı çok-uzun-süreli (perpetual) token.
+LICENSE_ENFORCE = (not DEBUG) or env_bool("LICENSE_ENFORCE", default=False)
 # Saha kimliği — her kurulumda .env ile benzersiz verilir; manifest'teki anahtarla eşleşir.
 LICENSE_KEY = os.getenv("LICENSE_KEY", "")
 # İmzalı lisans manifest'inin URL'i (GitHub raw vb.).

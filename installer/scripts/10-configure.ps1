@@ -15,6 +15,7 @@ param(
     [string]$TlsMode = "letsencrypt",
     [string]$LeEmail = "",
     [string]$PgPassword = "",
+    [string]$LicenseMode = "trial",   # "trial" (30 gun deneme) veya "licensed"
     [string]$LicenseKey = "",
     [string]$LicenseUrl = "",
     [string]$GhcrImage = "ghcr.io/firatbadur/sais_web",
@@ -71,6 +72,17 @@ $content = Get-Content -Raw -Encoding UTF8 $templatePath
 # Windows path fails with "invalid volume specification".
 $dockerConfigDir = "/root/.docker"
 
+# Lisans modu: deneme (trial) -> 30 gun (720h) bootstrap grace, sonunda kilitlenir;
+# lisansli -> 168h (token cekilene kadar). Enforcement uretimde kod sabiti; env'den
+# kapatilamaz (settings.py). "licensed" secildiyse anahtar zorunlu.
+if ($LicenseMode -eq "licensed") {
+    if (-not $LicenseKey) { throw "Lisansli mod secildi ama lisans anahtari (LicenseKey) bos." }
+    $graceHours = "168"
+} else {
+    $LicenseMode = "trial"
+    $graceHours = "720"
+}
+
 $map = @{
     "__GHCR_IMAGE__"          = $GhcrImage
     "__IMAGE_TAG__"           = $ImageTag
@@ -83,6 +95,7 @@ $map = @{
     "__MACHINE_FINGERPRINT__" = $machineFp
     "__LICENSE_KEY__"         = $LicenseKey
     "__LICENSE_URL__"         = $LicenseUrl
+    "__LICENSE_GRACE_HOURS__" = $graceHours
 }
 foreach ($k in $map.Keys) {
     $content = $content.Replace($k, $map[$k])
