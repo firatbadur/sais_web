@@ -27,12 +27,25 @@ def env_list(name: str, default: str = "") -> list[str]:
 
 
 # SECURITY
-SECRET_KEY = os.getenv(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-dev-only-change-me-in-production",
-)
+_DEV_SECRET_KEY = "django-insecure-dev-only-change-me-in-production"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", _DEV_SECRET_KEY)
 
 DEBUG = env_bool("DJANGO_DEBUG", default=True)
+
+# Üretimde (DEBUG=0) güvensiz varsayılan SECRET_KEY ile ÇALIŞMA — session/CSRF/
+# parola-sıfırlama token'ları taklit edilebilir. Fail-hard: net hata ver.
+if not DEBUG and (not SECRET_KEY or SECRET_KEY == _DEV_SECRET_KEY):
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured(
+        "Üretimde (DJANGO_DEBUG=0) DJANGO_SECRET_KEY tanımlı ve güçlü olmalı; "
+        "varsayılan/boş anahtar güvenlik açığıdır."
+    )
+
+# Kabin sırları (SaisCabinet.auth_secret) at-rest Fernet şifreleme anahtarı (urlsafe
+# base64, 32 byte). Boşsa SECRET_KEY'den türetilir (bkz. sais_domain/crypto.py). Kalıcı
+# kurulumda açıkça set edip SABİT tutun (SECRET_KEY döndürülürse türetilen anahtar değişir).
+CABINET_FERNET_KEY = os.getenv("CABINET_FERNET_KEY", "")
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 

@@ -8,6 +8,7 @@ izole edilir.
 """
 from django.db import models
 
+from sais_domain.crypto import EncryptedCharField
 from users.models import CustomUser
 
 
@@ -48,10 +49,11 @@ class SaisCabinet(models.Model):
         max_length=50,
         verbose_name="Bakanlık Kullanıcı Adı",
     )
-    # TODO: auth_secret şu an plaintext tutuluyor; ileride django-fernet-fields
-    # veya bir KMS katmanı ile şifrelenmeli.
-    auth_secret = models.CharField(
-        max_length=255,
+    # Bakanlık şifresi DB'de + pg_dump yedeklerinde Fernet ile ŞİFRELİ tutulur
+    # (at-rest). Python tarafında düz metin sunulur → kullanım kodu değişmez.
+    # Bkz. sais_domain/crypto.py. max_length token'ı barındıracak kadar geniş (512).
+    auth_secret = EncryptedCharField(
+        max_length=512,
         verbose_name="Bakanlık Şifresi",
     )
     user = models.ForeignKey(

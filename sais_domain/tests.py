@@ -1,8 +1,35 @@
 """sais_domain birim testleri."""
 from datetime import timedelta
 
+from django.db import connection
 from django.test import TestCase
 from django.utils import timezone
+
+
+class CabinetSecretEncryptionTests(TestCase):
+    """SaisCabinet.auth_secret at-rest Fernet şifrelemesi."""
+
+    def _cabinet(self, secret):
+        from api.models import Station
+        from sais_domain.models import SaisCabinet
+        station = Station.objects.create(name="Test Tesis")
+        return SaisCabinet.objects.create(
+            station=station, device_id="SIM1", code="30060001",
+            name="Kabin", auth_username="kullanici", auth_secret=secret,
+        )
+
+    def test_roundtrip_plaintext_in_python(self):
+        from sais_domain.models import SaisCabinet
+        cab = self._cabinet("GizliSifre!123")
+        self.assertEqual(SaisCabinet.objects.get(pk=cab.pk).auth_secret, "GizliSifre!123")
+
+    def test_stored_ciphertext_encrypted(self):
+        cab = self._cabinet("GizliSifre!123")
+        with connection.cursor() as cur:
+            cur.execute("SELECT auth_secret FROM sais_cabinet WHERE id=%s", [cab.pk])
+            raw = cur.fetchone()[0]
+        self.assertTrue(raw.startswith("fernet:"), raw)
+        self.assertNotIn("GizliSifre", raw)
 
 
 class ParseMissingDatesTests(TestCase):

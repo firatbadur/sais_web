@@ -73,11 +73,14 @@ class EnvisoftClient(BaseHttpClient):
             or getattr(settings, "ENVISOFT_SEND_DATA_URL", None)
             or self.DEFAULT_SEND_DATA_URL
         )
+        # Kimlik bilgileri env'den (ENVISOFT_USERNAME/PASSWORD) gelir. Hardcoded
+        # şifre GÜVENLİK RİSKİ (imajda plaintext) → kaldırıldı; verilmezse boş kalır
+        # (Envisoft çağrısı 401 alır, sessizce yanlış şifre kullanmaz).
         self._username = (
-            username or getattr(settings, "ENVISOFT_USERNAME", None) or "envisoft"
+            username or getattr(settings, "ENVISOFT_USERNAME", None) or ""
         )
         self._password = (
-            password or getattr(settings, "ENVISOFT_PASSWORD", None) or "envisoft21"
+            password or getattr(settings, "ENVISOFT_PASSWORD", None) or ""
         )
         self.session.headers["User-Agent"] = self.DEFAULT_USER_AGENT
 
