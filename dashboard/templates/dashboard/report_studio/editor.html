@@ -37,7 +37,7 @@
         .mx-tier1 { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--mx-panel);
             border-bottom: 1px solid var(--mx-border); flex: 0 0 auto; z-index: 31; }
         .mx-brand { display: flex; align-items: center; gap: 9px; font-weight: 700; color: var(--mx-head); white-space: nowrap; }
-        .mx-brand i { color: var(--mx-accent); font-size: 26px !important; }
+        .mx-brand .mx-logo { height: 30px; width: auto; display: block; }
         .mx-name { background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-head);
             border-radius: 8px; padding: 0 12px; height: 40px; min-width: 260px; font-weight: 600; font-size: 14px; }
         .mx-name:focus { outline: none; border-color: var(--mx-accent); }
@@ -134,7 +134,12 @@
         .kpi-card-row { border: 1px solid var(--mx-border); border-radius: 8px; padding: 9px; margin-bottom: 9px;
             background: var(--mx-panel-2); }
         .kpi-card-row .form-control, .kpi-card-row .form-select { background: var(--mx-panel); }
-        #btn-del-block { display: none; }
+        .d-none { display: none !important; }
+        .blk-item .blk-del { display: flex; color: var(--mx-muted); border: none; background: transparent;
+            cursor: pointer; padding: 2px; border-radius: 5px; opacity: 0; transition: .12s; }
+        .blk-item:hover .blk-del { opacity: 1; }
+        .blk-item .blk-del:hover { color: #e4544c; background: var(--mx-hover); }
+        .blk-item .blk-del i { font-size: 16px; }
         .settings-head { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px;
             color: var(--mx-head); margin-bottom: 12px; }
         .settings-head i { font-size: 20px; color: var(--mx-accent); }
@@ -154,7 +159,7 @@
 <!-- ===================== ÜST HEADER ===================== -->
 <div class="mx-tier1">
     <div class="mx-brand">
-        <i class="ki-duotone ki-document"><span class="path1"></span><span class="path2"></span></i>
+        <img src="{% static 'images/logo/icon.png' %}" class="mx-logo" alt="Envisoft">
         <span>{% trans "Rapor Editörü" %}</span>
     </div>
     <input type="text" class="mx-name" id="rpt-name" placeholder="{% trans 'Rapor adı...' %}" maxlength="150">
@@ -228,7 +233,7 @@
         <!-- Blok sekmesi -->
         <div class="rp-pane active panel-scroll" data-pane="block">
             <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
-                <button type="button" class="mini-btn danger" id="btn-del-block">
+                <button type="button" class="mini-btn danger d-none" id="btn-del-block">
                     <i class="ki-duotone ki-trash" style="font-size:14px"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>{% trans "Bloğu Sil" %}
                 </button>
             </div>

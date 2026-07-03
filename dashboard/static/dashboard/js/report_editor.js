@@ -135,8 +135,19 @@
                 '<span class="drag-handle"><i class="ki-duotone ki-burger-menu fs-3"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i></span>' +
                 '<i class="ki-duotone ' + (BLOCK_ICONS[b.type] || "ki-abstract") + ' fs-3 text-primary"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>' +
                 '<span class="blk-label"><span class="t">' + (T[b.type] || b.type) + '</span>' +
-                '<span class="s">' + escapeHtml(blockSummary(b)) + "</span></span>";
+                '<span class="s">' + escapeHtml(blockSummary(b)) + "</span></span>" +
+                '<button type="button" class="blk-del" title="' + T.confirmDelBlock.split("?")[0] + '">' +
+                '<i class="ki-duotone ki-trash"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i></button>';
             div.addEventListener("click", () => selectBlock(b.id));
+            div.querySelector(".blk-del").addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (!confirm(T.confirmDelBlock)) return;
+                state.blocks = state.blocks.filter(x => x.id !== b.id);
+                if (selectedId === b.id) selectedId = null;
+                markDirty();
+                renderBlockList();
+                renderSettings();
+            });
             wrap.appendChild(div);
         });
     }

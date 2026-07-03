@@ -35,8 +35,16 @@
         {% if not for_pdf %}padding: 24px; background: #f5f8fa;{% endif %}
     }
     {% if not for_pdf %}
+    /* Önizleme sayfa kabı — gerçek kağıt genişliğinde (96dpi):
+       A4 dikey 794px / A4 yatay 1123px / A3 dikey 1123px / A3 yatay 1587px */
     .page-wrap {
-        background: #fff; max-width: 860px; margin: 0 auto;
+        background: #fff; margin: 0 auto;
+        {% if report.page_size == "A3" %}
+            {% if report.orientation == "landscape" %}width: 1587px;{% else %}width: 1123px;{% endif %}
+        {% else %}
+            {% if report.orientation == "landscape" %}width: 1123px;{% else %}width: 794px;{% endif %}
+        {% endif %}
+        max-width: 100%;
         padding: 40px 44px; border: 1px solid #e4e6ef; border-radius: 6px;
         box-shadow: 0 4px 12px rgba(0,0,0,.05);
     }
@@ -50,7 +58,7 @@
     }
     .rep-head .title { font-size: 18pt; font-weight: 700; }
     .rep-head .meta { font-size: 8pt; color: #7e8299; margin-top: 4px; }
-    .rep-head img.logo { height: 72px; max-width: 240px; object-fit: contain; }
+    .rep-head img.logo { height: 100px; max-width: 320px; object-fit: contain; }
 
     h1.blk { font-size: 15pt; margin: 16px 0 6px; }
     h2.blk { font-size: 12.5pt; margin: 14px 0 5px; }
