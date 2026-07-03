@@ -34,7 +34,7 @@
 
     {% elif b.type == "table" %}
         <div class="blk-section allow-break">
-            <div class="blk-title">{{ b.title }}</div>
+            <div class="blk-title">{{ b.title }}{% if b.continued %} <span style="font-weight:400;color:#7e8299">(devam)</span>{% endif %}</div>
             <div class="blk-sub">{{ b.subtitle }} · {{ b.row_count }} satır</div>
             {% if b.rows %}
             <table class="data">

@@ -528,6 +528,86 @@ def _build_table_block(block: dict, data: dict, table_no: int) -> dict:
 # HTML / PDF / Excel render
 # --------------------------------------------------------------------------- #
 
+# Önizleme sayfa kapasitesi — "tablo satırı" biriminde kaba yükseklik bütçesi.
+# Yalnız ekran önizlemesini etkiler; PDF sayfalamasını WeasyPrint native yapar.
+_PAGE_CAPACITY = {
+    ("A4", "portrait"): 40,
+    ("A4", "landscape"): 26,
+    ("A3", "portrait"): 62,
+    ("A3", "landscape"): 40,
+}
+_TABLE_HEAD_COST = 3   # tablo başlık + kolon satırı
+_FIRST_PAGE_HEAD_COST = 6  # rapor başlığı (ad + logo + meta)
+
+
+def _block_cost(b: dict) -> int:
+    """Bloğun kaba yüksekliği (tablo satırı birimi) — önizleme sayfalaması için."""
+    t = b["type"]
+    if t == "heading":
+        return 2
+    if t == "text":
+        return 2 + len(b.get("text", "")) // 180
+    if t == "kpi_cards":
+        n = max(len(b.get("cards", [])), 1)
+        return 5 * ((n + 3) // 4)  # satırda 4 kart
+    if t == "chart":
+        return 15
+    if t == "spacer":
+        return 1
+    return 2
+
+
+def _paginate_for_preview(blocks: list[dict], capacity: int) -> list[list[dict]]:
+    """Blokları önizleme sayfalarına dağıtır.
+
+    - `page_break` her zaman yeni kağıt açar.
+    - Sayfa bütçesini aşan blok sonraki sayfaya kayar.
+    - Uzun tablolar satır satır bölünür; devam parçaları `continued=True`
+      işaretlenir (başlıkta "(devam)" gösterilir), kolon başlıkları tekrarlanır.
+    """
+    pages: list[list[dict]] = [[]]
+    used = _FIRST_PAGE_HEAD_COST
+
+    def new_page():
+        nonlocal used
+        pages.append([])
+        used = 0
+
+    for b in blocks:
+        if b["type"] == "page_break":
+            new_page()
+            continue
+
+        if b["type"] == "table" and b.get("rows"):
+            rows = b["rows"]
+            idx = 0
+            part = 1
+            while idx < len(rows):
+                avail = capacity - used - _TABLE_HEAD_COST
+                if avail < 5 and pages[-1]:
+                    new_page()
+                    avail = capacity - _TABLE_HEAD_COST
+                take = min(len(rows) - idx, max(int(avail), 5))
+                chunk = dict(b)
+                chunk["rows"] = rows[idx:idx + take]
+                chunk["continued"] = part > 1
+                pages[-1].append(chunk)
+                used += _TABLE_HEAD_COST + take
+                idx += take
+                part += 1
+                if idx < len(rows):
+                    new_page()
+            continue
+
+        cost = _block_cost(b)
+        if used + cost > capacity and pages[-1]:
+            new_page()
+        pages[-1].append(b)
+        used += cost
+
+    return pages
+
+
 def render_report_html(template, now: datetime.datetime, *, for_pdf: bool = False) -> str:
     """Şablonu (kaydedilmiş veya in-memory ReportTemplate) HTML'e render eder.
 
@@ -536,14 +616,11 @@ def render_report_html(template, now: datetime.datetime, *, for_pdf: bool = Fals
     """
     resolved = _resolve_blocks(template.blocks or [], now)
 
-    # Önizleme (ekran) için blokları sayfalara böl — her page_break yeni bir
-    # "kağıt" başlatır (PDF'te bunu @page + page-break-before halleder).
-    pages = [[]]
-    for b in resolved:
-        if b["type"] == "page_break":
-            pages.append([])
-        else:
-            pages[-1].append(b)
+    # Önizleme (ekran) için blokları sayfalara böl: page_break yeni kağıt
+    # başlatır + kapasiteyi aşan içerik OTOMATİK sonraki sayfaya taşar (uzun
+    # tablolar satır satır bölünür). PDF'te bunu WeasyPrint kendisi yapar.
+    capacity = _PAGE_CAPACITY.get((template.page_size, template.orientation), 40)
+    pages = _paginate_for_preview(resolved, capacity)
 
     ctx = {
         "report": template,
