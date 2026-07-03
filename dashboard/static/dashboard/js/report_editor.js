@@ -67,10 +67,15 @@
         return base; // spacer / page_break
     }
 
+    let autoSaveTimer = null;
+
     function markDirty() {
         dirty = true;
         document.getElementById("save-state").textContent = "● " + T.unsaved;
         schedulePreview();
+        // Otomatik kaydetme — son değişiklikten 3 sn sonra sessizce kaydet
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(() => saveTemplate({ auto: true }), 3000);
     }
 
     /* ------------------------------------------------------------------ */
@@ -628,12 +633,25 @@
     /* Kaydet                                                               */
     /* ------------------------------------------------------------------ */
 
-    document.getElementById("btn-save").addEventListener("click", () => {
+    let saving = false;
+
+    function saveTemplate(opts) {
+        opts = opts || {};
+        const stateEl = document.getElementById("save-state");
+
         if (!(state.name || "").trim()) {
-            alert(T.nameRequired);
-            document.getElementById("rpt-name").focus();
+            // Otomatik kayıt ad girilene dek sessizce bekler; manuel kayıt uyarır
+            if (!opts.auto) {
+                alert(T.nameRequired);
+                document.getElementById("rpt-name").focus();
+            }
             return;
         }
+        if (saving) return;
+        saving = true;
+        stateEl.classList.remove("err");
+        stateEl.textContent = "⏳ " + T.saving;
+
         fetch(CFG.urls.save, {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-CSRFToken": CFG.csrf },
@@ -641,7 +659,6 @@
         })
             .then(r => r.json())
             .then(d => {
-                const stateEl = document.getElementById("save-state");
                 if (!d.ok) {
                     stateEl.textContent = "✗ " + (d.error || T.saveError);
                     stateEl.classList.add("err");
@@ -649,7 +666,10 @@
                 }
                 dirty = false;
                 stateEl.classList.remove("err");
-                stateEl.textContent = "✓ " + T.saved;
+                const now = new Date();
+                const hhmm = String(now.getHours()).padStart(2, "0") + ":" +
+                             String(now.getMinutes()).padStart(2, "0");
+                stateEl.textContent = "✓ " + (opts.auto ? T.autosaved : T.saved) + " · " + hhmm;
                 if (!state.id) {
                     state.id = d.id;
                     // Yeni kayıt — URL'i düzenleme moduna çevir (reload'suz)
@@ -661,9 +681,13 @@
                 }
             })
             .catch(() => {
-                document.getElementById("save-state").textContent = "✗ " + T.saveError;
-            });
-    });
+                stateEl.textContent = "✗ " + T.saveError;
+                stateEl.classList.add("err");
+            })
+            .finally(() => { saving = false; });
+    }
+
+    document.getElementById("btn-save").addEventListener("click", () => saveTemplate());
 
     window.addEventListener("beforeunload", (e) => {
         if (dirty) { e.preventDefault(); e.returnValue = ""; }
