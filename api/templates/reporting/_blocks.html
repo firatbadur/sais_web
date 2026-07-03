@@ -1,0 +1,64 @@
+{# Blok render döngüsü — report.html hem PDF (düz akış) hem önizleme (sayfa sayfa) için include eder. #}
+{% for b in blocks %}
+    {% if b.type == "heading" %}
+        {% if b.level == 1 %}<h1 class="blk">{{ b.text }}</h1>
+        {% elif b.level == 2 %}<h2 class="blk">{{ b.text }}</h2>
+        {% else %}<h3 class="blk">{{ b.text }}</h3>{% endif %}
+
+    {% elif b.type == "text" %}
+        <p class="blk-text">{{ b.text }}</p>
+
+    {% elif b.type == "kpi_cards" %}
+        <div class="kpi-row">
+            {% for c in b.cards %}
+            <div class="kpi-card">
+                <div class="lbl">{{ c.label }}</div>
+                <div class="val">{{ c.value_str }}{% if c.unit %}<small>{{ c.unit }}</small>{% endif %}</div>
+                {% if c.sub %}<div class="sub">{{ c.sub }}</div>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+    {% elif b.type == "chart" %}
+        <div class="blk-section">
+            <div class="blk-title">{{ b.title }}</div>
+            <div class="blk-sub">{{ b.subtitle }}</div>
+            {% if b.img %}
+                <img class="chart" src="{{ b.img }}" alt="{{ b.title }}">
+            {% elif not b.charts_available %}
+                <div class="empty-note">Grafik motoru (matplotlib) bu sunucuda kullanılamıyor.</div>
+            {% else %}
+                <div class="empty-note">Seçilen aralıkta veri bulunamadı.</div>
+            {% endif %}
+        </div>
+
+    {% elif b.type == "table" %}
+        <div class="blk-section allow-break">
+            <div class="blk-title">{{ b.title }}</div>
+            <div class="blk-sub">{{ b.subtitle }} · {{ b.row_count }} satır</div>
+            {% if b.rows %}
+            <table class="data">
+                <thead>
+                    <tr>{% for col in b.columns %}<th>{{ col }}</th>{% endfor %}</tr>
+                </thead>
+                <tbody>
+                    {% for row in b.rows %}
+                    <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-note">Seçilen aralıkta veri bulunamadı.</div>
+            {% endif %}
+        </div>
+
+    {% elif b.type == "spacer" %}
+        <div class="spacer"></div>
+
+    {% elif b.type == "page_break" %}
+        <div class="page-break"></div>
+
+    {% elif b.type == "error" %}
+        <div class="err-note">{{ b.message }}</div>
+    {% endif %}
+{% endfor %}

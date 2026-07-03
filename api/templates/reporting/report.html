@@ -110,20 +110,18 @@
     .spacer { height: 22px; }
     .page-break { page-break-before: always; }
     {% if not for_pdf %}
-    .page-break {
-        border-top: 2px dashed #d8d8e5; margin: 22px 0; position: relative;
-    }
-    .page-break::after {
-        content: "sayfa sonu"; position: absolute; top: -9px; left: 50%;
-        transform: translateX(-50%); background: #fff; color: #a1a5b7;
-        font-size: 7.5pt; padding: 0 8px;
+    /* Önizlemede her sayfa ayrı "kağıt" olarak render edilir */
+    .page-wrap { margin-bottom: 26px; position: relative; min-height: 320px; }
+    .pv-pageno {
+        position: absolute; bottom: 10px; right: 16px;
+        font-size: 7.5pt; color: #a1a5b7;
     }
     {% endif %}
 </style>
 </head>
 <body>
+{% if for_pdf %}
 <div class="page-wrap">
-
     <div class="rep-head">
         <div>
             <div class="title">{{ report.name }}</div>
@@ -135,72 +133,40 @@
         {% if logo_uri %}<img class="logo" src="{{ logo_uri }}" alt="logo">{% endif %}
     </div>
 
-    {% for b in blocks %}
-        {% if b.type == "heading" %}
-            {% if b.level == 1 %}<h1 class="blk">{{ b.text }}</h1>
-            {% elif b.level == 2 %}<h2 class="blk">{{ b.text }}</h2>
-            {% else %}<h3 class="blk">{{ b.text }}</h3>{% endif %}
-
-        {% elif b.type == "text" %}
-            <p class="blk-text">{{ b.text }}</p>
-
-        {% elif b.type == "kpi_cards" %}
-            <div class="kpi-row">
-                {% for c in b.cards %}
-                <div class="kpi-card">
-                    <div class="lbl">{{ c.label }}</div>
-                    <div class="val">{{ c.value_str }}{% if c.unit %}<small>{{ c.unit }}</small>{% endif %}</div>
-                    {% if c.sub %}<div class="sub">{{ c.sub }}</div>{% endif %}
-                </div>
-                {% endfor %}
-            </div>
-
-        {% elif b.type == "chart" %}
-            <div class="blk-section">
-                <div class="blk-title">{{ b.title }}</div>
-                <div class="blk-sub">{{ b.subtitle }}</div>
-                {% if b.img %}
-                    <img class="chart" src="{{ b.img }}" alt="{{ b.title }}">
-                {% elif not b.charts_available %}
-                    <div class="empty-note">Grafik motoru (matplotlib) bu sunucuda kullanılamıyor.</div>
-                {% else %}
-                    <div class="empty-note">Seçilen aralıkta veri bulunamadı.</div>
-                {% endif %}
-            </div>
-
-        {% elif b.type == "table" %}
-            <div class="blk-section allow-break">
-                <div class="blk-title">{{ b.title }}</div>
-                <div class="blk-sub">{{ b.subtitle }} · {{ b.row_count }} satır</div>
-                {% if b.rows %}
-                <table class="data">
-                    <thead>
-                        <tr>{% for col in b.columns %}<th>{{ col }}</th>{% endfor %}</tr>
-                    </thead>
-                    <tbody>
-                        {% for row in b.rows %}
-                        <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <div class="empty-note">Seçilen aralıkta veri bulunamadı.</div>
-                {% endif %}
-            </div>
-
-        {% elif b.type == "spacer" %}
-            <div class="spacer"></div>
-
-        {% elif b.type == "page_break" %}
-            <div class="page-break"></div>
-
-        {% elif b.type == "error" %}
-            <div class="err-note">{{ b.message }}</div>
-        {% endif %}
-    {% empty %}
+    {% if blocks %}
+        {% include "reporting/_blocks.html" %}
+    {% else %}
         <div class="empty-note">Bu raporda henüz blok yok. Editörden blok ekleyin.</div>
-    {% endfor %}
-
+    {% endif %}
 </div>
+{% else %}
+{# Önizleme: her page_break yeni bir kağıt başlatır #}
+{% for page in pages %}
+<div class="page-wrap">
+    {% if forloop.first %}
+    <div class="rep-head">
+        <div>
+            <div class="title">{{ report.name }}</div>
+            {% if report.description %}<div style="font-size:9pt;color:#7e8299;margin-top:2px">{{ report.description }}</div>{% endif %}
+            <div class="meta">
+                Üretim: {{ generated_at|date:"d.m.Y H:i" }} · Envisoft WebX {{ app_version }}
+            </div>
+        </div>
+        {% if logo_uri %}<img class="logo" src="{{ logo_uri }}" alt="logo">{% endif %}
+    </div>
+    {% endif %}
+
+    {% if page %}
+        {% include "reporting/_blocks.html" with blocks=page %}
+    {% elif forloop.first %}
+        <div class="empty-note">Bu raporda henüz blok yok. Editörden blok ekleyin.</div>
+    {% else %}
+        <div class="empty-note">Boş sayfa — soldan blok ekleyin.</div>
+    {% endif %}
+
+    <div class="pv-pageno">Sayfa {{ forloop.counter }} / {{ pages|length }}</div>
+</div>
+{% endfor %}
+{% endif %}
 </body>
 </html>

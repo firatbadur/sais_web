@@ -523,9 +523,21 @@ def render_report_html(template, now: datetime.datetime, *, for_pdf: bool = Fals
     Aynı HTML hem editör önizlemesinde (iframe srcdoc) hem WeasyPrint PDF
     girdisinde kullanılır.
     """
+    resolved = _resolve_blocks(template.blocks or [], now)
+
+    # Önizleme (ekran) için blokları sayfalara böl — her page_break yeni bir
+    # "kağıt" başlatır (PDF'te bunu @page + page-break-before halleder).
+    pages = [[]]
+    for b in resolved:
+        if b["type"] == "page_break":
+            pages.append([])
+        else:
+            pages[-1].append(b)
+
     ctx = {
         "report": template,
-        "blocks": _resolve_blocks(template.blocks or [], now),
+        "blocks": resolved,
+        "pages": pages,
         "generated_at": timezone.localtime(now),
         "logo_uri": _logo_data_uri() if template.show_logo else "",
         "for_pdf": for_pdf,
