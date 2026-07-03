@@ -109,3 +109,14 @@ class LicenseEnforcementTests(TestCase):
         old_build = int((timezone.now() - datetime.timedelta(hours=200)).timestamp())
         with override_settings(BUILD_EPOCH=old_build):
             self.assertFalse(licensing.license_active())
+
+    def test_grace_env_huge_capped(self):
+        """`.env`'den devasa grace verilse bile MAX tavanı aşılamaz → eski kurulum kilit."""
+        License.objects.filter(pk=1).delete()
+        lic = License.load()
+        # created_at'i tavandan (744s) eski yap → grace huge olsa da kilit.
+        License.objects.filter(pk=1).update(
+            created_at=timezone.now() - datetime.timedelta(hours=800)
+        )
+        with override_settings(LICENSE_BOOTSTRAP_GRACE_HOURS=999999, BUILD_EPOCH=0):
+            self.assertFalse(licensing.license_active())

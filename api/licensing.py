@@ -278,14 +278,22 @@ def license_active() -> bool:
     return _within_bootstrap_grace(lic, now)
 
 
+# Grace için mutlak tavan (saat) — `.env`'den `LICENSE_BOOTSTRAP_GRACE_HOURS` ile
+# devasa değer verip token'sız süresiz çalışma bypass'ını engeller. 744s = 31 gün
+# (30 günlük deneme rahat sığar). Bu tavan koddadır (obfuscate edilir), env'den aşılamaz.
+MAX_BOOTSTRAP_GRACE_HOURS = 744
+
+
 def _within_bootstrap_grace(lic, now) -> bool:
     """Yeni kurulum grace penceresi — DB created_at VE imaj build tarihiyle sınırlı.
 
     Grace = (now - created_at) < grace  VE  (BUILD_EPOCH varsa) (now - build) < grace.
     `UPDATE license SET created_at=NOW()` ile grace sıfırlansa bile imaj build
     tarihinden grace kadar sonra kilitlenir (taze kurulum taze imajla gelir → çalışır).
+    Grace `MAX_BOOTSTRAP_GRACE_HOURS` ile tavanlanır → env'den süresiz grace alınamaz.
     """
-    grace_h = int(getattr(settings, "LICENSE_BOOTSTRAP_GRACE_HOURS", 24))
+    grace_h = min(int(getattr(settings, "LICENSE_BOOTSTRAP_GRACE_HOURS", 24)),
+                  MAX_BOOTSTRAP_GRACE_HOURS)
     if not lic.created_at:
         return False
     age_h = (now - lic.created_at).total_seconds() / 3600.0
