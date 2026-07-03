@@ -475,9 +475,20 @@ def _build_table_block(block: dict, data: dict, table_no: int) -> dict:
             for c in sel_cols:
                 columns.append(f"{s['label']}{unit} — {AGG_COLUMNS[c]}")
 
-    # Zaman birleşimi
-    all_ts = sorted({row[0] for s in data["series"] for row in s["rows"]})
-    by_series = [{row[0]: row for row in s["rows"]} for s in data["series"]]
+    # Zaman birleşimi. Ham veride sensörler aynı dakika içinde farklı
+    # saniyelerde okunur; birebir zaman eşleşmesi her okumaya ayrı satır açar
+    # (seyrek '—' matrisi). Bu yüzden ham tablo DAKİKA çözünürlüğünde
+    # birleştirilir — seri başına o dakikanın son okuması gösterilir.
+    if is_raw:
+        def _key(ts):
+            return ts.replace(second=0, microsecond=0)
+    else:
+        def _key(ts):
+            return ts
+
+    all_ts = sorted({_key(row[0]) for s in data["series"] for row in s["rows"]})
+    # rows zaman sırasında geldiği için dict'te son yazan kazanır (dakikanın son değeri)
+    by_series = [{_key(row[0]): row for row in s["rows"]} for s in data["series"]]
 
     def _fmt(v):
         if v is None:
