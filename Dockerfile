@@ -85,6 +85,19 @@ COPY --chown=app:app . /app
 # bypass'ını kapatır). Cython aşaması (OBFUSCATE=1) bu dosyayı da .so'ya derler.
 RUN if [ "$PRODUCTION" = "1" ]; then printf 'PRODUCTION_BUILD = True\n' > /app/api/_buildflags.py; fi
 
+# OBFUSCATE=1 (release) → seçili iş-mantığı modüllerini Cython ile .so'ya derle,
+# .py/.c kaynağını sil. build-essential + cython yalnız bu RUN içinde kurulur ve
+# aynı katmanda kaldırılır → nihai imajda derleyici YOK, kaynak .py YOK (yalnız .so).
+# Kaynak-koruma (kopyalama/korsanlık) tehdidine karşı asıl katman budur.
+RUN if [ "$OBFUSCATE" = "1" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends build-essential \
+        && pip install --no-cache-dir cython \
+        && python build/cythonize_app.py --root /app \
+        && pip uninstall -y cython \
+        && apt-get purge -y build-essential && apt-get autoremove -y \
+        && rm -rf /var/lib/apt/lists/* /root/.cache; \
+    fi
+
 # /backups: pg_backups named volume buraya mount edilir. Mount noktasını imajda
 # app sahipliğiyle oluşturursak, ilk mount'ta named volume bu sahipliği devralır
 # → non-root app kullanıcısı pg_dump çıktısını yazabilir (ayrı chmod sidecar'ı

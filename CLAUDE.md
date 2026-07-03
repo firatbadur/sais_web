@@ -335,6 +335,38 @@ modeliyle aynı "pull": lisanslar merkezde (GitHub manifest), sahalar çeker.
   (enforce zaten üretimde açık — ayrıca yazmaya gerek yok). Uzatma = manifest'i güncelle; saha sonraki
   refresh'te alır (veya admin "Şimdi Yenile"). İç demo/perpetual = `issue --expires 2099-01-01`.
 
+## Kod koruma / obfuscation (Cython) + sertleştirme
+
+Yazılım kopyalanması/korsanlığına karşı katmanlı koruma. Kaynak Docker imajında; tek
+çalışma-zamanı gate lisans olduğundan **kod açıktaysa gate patch'lenebilir** → obfuscation
+şart. Lisans mantık açıkları (aşağıda) obfuscation'dan bağımsız olarak da kapatıldı çünkü
+onlar **DB-veri** bypass'ıydı (kod gizlense de işlerdi).
+
+- **Cython build-time obfuscation**: [build/cythonize_app.py](build/cythonize_app.py) seçili
+  iş-mantığı modüllerini `.so`'ya derleyip `.py`/`.c`'yi siler. [Dockerfile](Dockerfile)
+  `OBFUSCATE=1` (release.yml build-arg) RUN adımında `build-essential`+`cython`'ı **aynı katmanda**
+  kurup kaldırır → nihai imajda derleyici YOK, seçili modüllerin `.py`'si YOK (yalnız `.so`).
+  Yalnız `git tag` → release.yml çalışınca obfuscate edilir; dev `docker-compose.yml` düz `.py`.
+  **DERLENMEZ** (script `NEVER` + glob): migrations, models.py, apps.py, `__init__`, management,
+  templatetags, manage/wsgi/asgi/celery/settings/urls (Django introspection/entry-point/isim keşfi).
+  İlk turda views/api_views/tasks/serializers/middleware/**forms** (metaclass) de hariç — başarılı
+  Docker testinden sonra `COMPILE_GLOBS`'a eklenebilir. `--dry-run` ile hedef listesi test edilir.
+  **Gerçek derleme testi Docker Linux gerektirir** (lokal Windows'ta gcc yok) → release build'de
+  veya `docker build --build-arg OBFUSCATE=1 --build-arg PRODUCTION=1 ...` ile doğrulanır.
+- **Enforcement env'den kapatılamaz**: `LICENSE_ENFORCE = PRODUCTION_BUILD or (not DEBUG) or env(...)`.
+  `api/_buildflags.py` `PRODUCTION_BUILD` release build'de `True` yazılır + Cython'da mühürlenir →
+  `DJANGO_DEBUG=1` ile bile enforce kapatılamaz.
+- **valid_until DB bypass'ı kapandı**: `license_active` süreyi imzalı payload'dan okur (DB kolonu
+  değil) — `UPDATE license SET valid_until=...` etkisiz. Bkz. `_revalidate_cached` (payload döndürür).
+- **Grace reset kapandı**: bootstrap grace imaj `BUILD_EPOCH`'una çıpalı — `created_at` sıfırlansa da
+  imaj grace'ten yaşlıysa kilit (`_within_bootstrap_grace`).
+- **Node-lock sertleşti**: `runtime_fingerprint` parmak izini container'a salt-okunur mount'lu host
+  `/etc/machine-id`'den hesaplar (`.env` düzenleyerek atlatma engellendi); mount yoksa env'e düşer.
+- **Sır hijyeni**: `SaisCabinet.auth_secret` at-rest Fernet ([sais_domain/crypto.py](sais_domain/crypto.py)),
+  hardcoded `envisoft21` kaldırıldı, `SECRET_KEY` üretimde fail-hard, `elazig-aat.json` git'ten çıkarıldı
+  + `.dockerignore` private key'i hariç tutar. Testler: [api/tests.py](api/tests.py) (9 enforcement) +
+  [sais_domain/tests.py](sais_domain/tests.py) (2 şifreleme).
+
 ## Web erişim / SSL (Caddy reverse proxy)
 
 Dış erişim (`https://sais-tesis1.envisoft.com.tr` gibi) bir **Caddy** servisiyle sağlanır. Caddy

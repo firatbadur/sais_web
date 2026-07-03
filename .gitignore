@@ -6,7 +6,9 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
+# build/ setuptools artefaktları ignore; ama obfuscation build script'i izlensin
+build/*
+!build/cythonize_app.py
 develop-eggs/
 dist/
 downloads/
