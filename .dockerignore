@@ -34,6 +34,17 @@ docker-compose*.yml
 .env.*
 !.env.example
 
+# Lisans sırları — private key (Ed25519 kök güven) + üretilmiş lisans/manifest
+# dosyaları ASLA imaja girmemeli (lokal `docker build` footgun'u). .gitignore'da
+# zaten var; build context'ten de kesin çıkar.
+*.hex
+*license*.json
+*-aat.json
+*-license.json
+manifest.json
+licenses/
+scripts/license_tool.py
+
 # Media / static collected output (in container these come from volume / collectstatic)
 media/
 staticfiles_root/

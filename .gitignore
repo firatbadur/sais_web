@@ -93,6 +93,7 @@ license_private_key.hex
 _dev_license.json
 *-license.json
 *license*.json
+*-aat.json
 licenses/
 manifest.json
 
