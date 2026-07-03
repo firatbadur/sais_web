@@ -410,6 +410,10 @@ yok (Linux'ta Docker native çalışır), servis NSSM/scheduled-task yerine **sy
   GHCR login (`--password-stdin`) → `pull` + `up -d` → migration bekle + `seed_initial_data`/
   `seed_sais_data`/`seed_admin_user` (retry'li) → systemd unit `envisoft-webx.service`
   (`enable`, açılışta `compose up -d`).
+- **Makine parmak izi (node-lock)**: Windows'ta `sais-stack.ps1` MachineGuid+baseboard'dan üretip
+  `.env`'e yazar; Linux karşılığı `install-linux.sh` içinde `sha256(/etc/machine-id [+ DMI product_uuid])`
+  → `MACHINE_FINGERPRINT`. `machine-id` kalıcı olduğundan kurulumda bir kez hesaplanır (Windows'taki
+  her-boot tazelemesine gerek yok). Boşsa node-lock uygulanmaz (lisans yalnız süreye bakar).
 - **Domain/SSL**: script yalnız ALLOWED_HOSTS/CSRF wildcard'ını `.env`'e yazar; Caddy'ye domain
   **yazmaz** (WebSettings bootstrap yok) — SSL/domain sonradan dashboard → Web Erişim Ayarları'ndan
   açılır. Kurulum dizini varsayılan `/opt/envisoft`.

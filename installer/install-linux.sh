@@ -125,6 +125,14 @@ SECRET="$(gen_secret 50)"
 PG_PASSWORD="${POSTGRES_PASSWORD:-$(gen_secret 28)}"
 WT_TOKEN="${WATCHTOWER_API_TOKEN:-$(gen_secret 24)}"
 
+# Makine parmak izi (lisans node-lock) — Windows'ta sais-stack.ps1 MachineGuid +
+# baseboard'dan üretir; Linux karşılığı: /etc/machine-id (+ mümkünse DMI product_uuid).
+# machine-id kalıcıdır (reboot'ta değişmez) → kurulumda bir kez hesaplamak yeter.
+# Boş kalırsa node-lock uygulanmaz (lisans yalnız süreye bakar).
+_MID="$(cat /etc/machine-id 2>/dev/null || true)"
+_PUUID="$(cat /sys/class/dmi/id/product_uuid 2>/dev/null || true)"
+MACHINE_FP="$(printf '%s|%s' "$_MID" "$_PUUID" | sha256sum 2>/dev/null | awk '{print $1}')"
+
 # Sunucunun birincil IP'si (ALLOWED_HOSTS + son mesaj için)
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"; SERVER_IP="${SERVER_IP:-127.0.0.1}"
 
@@ -199,7 +207,7 @@ LICENSE_KEY=${LICENSE_KEY}
 LICENSE_URL=${LICENSE_URL}
 LICENSE_WARN_DAYS=15
 LICENSE_BOOTSTRAP_GRACE_HOURS=168
-MACHINE_FINGERPRINT=
+MACHINE_FINGERPRINT=${MACHINE_FP}
 
 # Session / production
 SESSION_COOKIE_AGE=36000
