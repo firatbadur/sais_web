@@ -91,8 +91,8 @@ RUN if [ "$PRODUCTION" = "1" ]; then printf 'PRODUCTION_BUILD = True\n' > /app/a
 # Kaynak-koruma (kopyalama/korsanlık) tehdidine karşı asıl katman budur.
 RUN if [ "$OBFUSCATE" = "1" ]; then \
         apt-get update && apt-get install -y --no-install-recommends build-essential \
-        && pip install --no-cache-dir cython \
-        && python build/cythonize_app.py --root /app \
+        && pip install --no-cache-dir cython setuptools \
+        && SETUPTOOLS_USE_DISTUTILS=local python build/cythonize_app.py --root /app \
         && pip uninstall -y cython \
         && apt-get purge -y build-essential && apt-get autoremove -y \
         && rm -rf /var/lib/apt/lists/* /root/.cache; \
