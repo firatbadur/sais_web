@@ -1,8 +1,8 @@
 {% extends "dashboard/base.html" %}
 {% load i18n dashboard_extras %}
 
-{% block title %}{% trans "Ham Veri Raporu" %}{% endblock %}
-{% block page_title %}{% trans "Ham Veri Raporu" %}{% endblock %}
+{% block title %}{% trans "Veri Raporu" %}{% endblock %}
+{% block page_title %}{% trans "Veri Raporu" %}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -31,6 +31,25 @@
     }
     /* Flatpickr koyu temada okunabilirlik */
     .flatpickr-calendar { z-index: 10000; }
+
+    /* Pivot tablo: dar hücre + kaydırılabilir. */
+    #report-table th { white-space: nowrap; }
+    #report-table td { white-space: nowrap; }
+    #report-table td.cell-val { font-weight: 600; color: var(--bs-gray-800); }
+
+    /* Hücre boyama (Dinamik Veri Raporu ile aynı 3 kademe):
+         kod 1 (VeriGeçerli)            → sade
+         geçerli-ama-operasyonel (amber) → cell-op  (yıkama/purge/bakım)
+         geçersiz (kırmızı)             → cell-bad */
+    #report-table td.cell-bad { background-color: rgba(241, 65, 108, .14); cursor: help; }
+    #report-table td.cell-bad.cell-val { color: #a01138; }
+    [data-bs-theme="dark"] #report-table td.cell-bad { background-color: rgba(241, 65, 108, .26); }
+    [data-bs-theme="dark"] #report-table td.cell-bad.cell-val { color: #ff9bb1; }
+
+    #report-table td.cell-op { background-color: rgba(255, 199, 0, .20); cursor: help; }
+    #report-table td.cell-op.cell-val { color: #7a5d00; }
+    [data-bs-theme="dark"] #report-table td.cell-op { background-color: rgba(255, 199, 0, .20); }
+    [data-bs-theme="dark"] #report-table td.cell-op.cell-val { color: #ffd75e; }
 
     /* --- Grafik kartı / ApexCharts kontrast iyileştirmeleri --- */
     #report-chart-wrap {
@@ -72,7 +91,7 @@
 <!-- ============ FİLTRE FORMU ============ -->
 <div class="card mb-5 mb-xl-8">
     <div class="card-header border-0 pt-6">
-        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Ham Veri Raporu" %}</h3>
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Veri Raporu" %}</h3>
     </div>
     <div class="card-body pt-2">
         <form method="get" id="report-filter-form" class="row g-5">
@@ -137,7 +156,7 @@
                 </select>
             </div>
 
-            <!-- Status Code Filtresi (multi) — Sensör Tipi alanının yerine -->
+            <!-- Status Code Filtresi (multi) -->
             <div class="col-md-3">
                 <label class="form-label fw-semibold">{% trans "Status Filtresi" %}</label>
                 <select name="status" id="filter-status" class="form-select" data-control="select2"
@@ -182,7 +201,7 @@
                     <i class="ki-outline ki-flash fs-3"></i>{% trans "Rapor Getir" %}
                 </button>
                 {% if filters.submitted %}
-                <a href="{% url 'dashboard:reports_readings' %}" class="btn btn-light-warning ms-2">
+                <a href="{% url 'dashboard:reports_data' %}" class="btn btn-light-warning ms-2">
                     <i class="ki-outline ki-arrows-circle fs-3"></i>{% trans "Sıfırla" %}
                 </a>
                 {% endif %}
@@ -210,63 +229,44 @@
                 {% trans "Rapor oluşturmak için tesis seçip 'Rapor Getir' butonuna basın." %}
             </div>
         {% else %}
+            {% if col_truncated %}
+            <div class="alert alert-warning d-flex align-items-center mb-4">
+                <i class="ki-outline ki-information-5 fs-2 me-2"></i>
+                <span>{% blocktrans with n=columns|length %}Sütun sayısı {{ n }} ile sınırlandı; daha az sensör seçerek daralt.{% endblocktrans %}</span>
+            </div>
+            {% endif %}
+
             <!-- Grafik -->
             <div id="report-chart-wrap" style="display:none;">
                 <div id="report-chart" style="height:420px;"></div>
             </div>
 
-            <!-- Tablo -->
+            <!-- Tablo (pivot: zaman satır, sensör sütun) -->
             <div id="report-table-wrap" class="table-responsive">
                 <table id="report-table" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
                     <thead class="fs-7 fw-bold text-uppercase text-gray-700">
                         <tr>
-                            {% if is_raw %}
-                                <th>{% trans "Zaman" %}</th>
-                                <th>{% trans "Parametre" %}</th>
-                                <th class="text-end">{% trans "Değer" %}</th>
-                                <th>{% trans "Birim" %}</th>
-                                <th>{% trans "Status Kodu" %}</th>
-                                <th>{% trans "Kalite" %}</th>
-                            {% else %}
-                                <th>{% trans "Bucket" %}</th>
-                                <th>{% trans "Parametre" %}</th>
-                                <th class="text-end">{% trans "Ortalama" %}</th>
-                                <th class="text-end">{% trans "Min" %}</th>
-                                <th class="text-end">{% trans "Max" %}</th>
-                                <th>{% trans "Birim" %}</th>
-                                <th class="text-end">{% trans "Adet" %}</th>
-                                <th class="text-end">{% trans "Bad" %}</th>
-                            {% endif %}
+                            <th>{% trans "Zaman" %}</th>
+                            {% for col in columns %}
+                                <th class="text-end" data-series="{{ col.label }}">
+                                    {{ col.label }}{% if col.unit %} <span class="text-muted fw-normal">({{ col.unit }})</span>{% endif %}
+                                </th>
+                            {% endfor %}
                         </tr>
                     </thead>
                     <tbody>
-                        {% for r in rows %}
+                        {% for row in pivot_rows %}
                             <tr>
-                                {% if is_raw %}
-                                    <td data-order="{{ r.time_iso|date:'U' }}">{{ r.time_iso|date:"d.m.Y H:i:s" }}</td>
-                                    <td>{{ r.sensor.parameter.display_name|default:r.sensor_id }}</td>
-                                    <td class="text-end fw-semibold" data-order="{{ r.value|default_if_none:'' }}">{{ r.value|default_if_none:"—" }}</td>
-                                    <td class="text-muted">{{ r.sensor.parameter.unit_txt|default:r.sensor.parameter.unit|default:"" }}</td>
-                                    <td>
-                                        {% if r.status %}
-                                            <span class="text-gray-700">{% if r.status.code is not None %}[{{ r.status.code }}] {% endif %}{{ r.status.name|default:'' }}</span>
-                                        {% else %}<span class="text-muted">—</span>{% endif %}
-                                    </td>
-                                    <td>
-                                        <span class="badge badge-light-{% if r.quality == 'good' %}success{% elif r.quality == 'bad' %}danger{% elif r.quality == 'uncertain' %}warning{% else %}secondary{% endif %}">
-                                            {{ r.get_quality_display }}
-                                        </span>
-                                    </td>
-                                {% else %}
-                                    <td data-order="{{ r.bucket_start|date:'U' }}">{{ r.bucket_start|date:"d.m.Y H:i" }}</td>
-                                    <td>{{ r.sensor.parameter.display_name|default:r.sensor_id }}</td>
-                                    <td class="text-end fw-semibold" data-order="{{ r.avg_value|default_if_none:'' }}">{{ r.avg_value|default_if_none:"—" }}</td>
-                                    <td class="text-end text-muted" data-order="{{ r.min_value|default_if_none:'' }}">{{ r.min_value|default_if_none:"—" }}</td>
-                                    <td class="text-end text-muted" data-order="{{ r.max_value|default_if_none:'' }}">{{ r.max_value|default_if_none:"—" }}</td>
-                                    <td class="text-muted">{{ r.sensor.parameter.unit_txt|default:r.sensor.parameter.unit|default:"" }}</td>
-                                    <td class="text-end">{{ r.count }}</td>
-                                    <td class="text-end">{% if r.bad_count %}<span class="text-danger">{{ r.bad_count }}</span>{% else %}0{% endif %}</td>
-                                {% endif %}
+                                <td data-order="{{ row.order }}" class="fw-semibold">{{ row.time|date:"d.m.Y H:i" }}</td>
+                                {% for cell in row.cells %}
+                                    {% if cell %}
+                                        <td class="text-end cell-val {{ cell.css }}"
+                                            data-order="{{ cell.order }}"
+                                            {% if cell.tip %}title="{{ cell.tip }}"{% endif %}>{{ cell.disp }}</td>
+                                    {% else %}
+                                        <td class="text-end text-muted" data-order="">—</td>
+                                    {% endif %}
+                                {% endfor %}
                             </tr>
                         {% endfor %}
                     </tbody>
@@ -282,7 +282,7 @@
 (function() {
     // Page-level constants
     const IS_RAW = {{ is_raw|yesno:"true,false" }};
-    const ROWS_RENDERED = {{ rows|length|default:0 }};
+    const ROWS_RENDERED = {{ pivot_rows|length|default:0 }};
 
     // --- Form validation state ---
     const startInput   = document.getElementById('filter-start');
@@ -377,7 +377,6 @@
 
         // Buton & alert
         if (errors.length > 0) {
-            // Birinci hatayı alert'te göster — çakışan mesajları tekrarlama
             showAlert(errors[0]);
             if (btnGenerate) btnGenerate.disabled = true;
             return false;
@@ -420,9 +419,6 @@
     });
 
     // --- Parametre listesini istasyon değişiminde AJAX ile yenile ---
-    // Metronic data-control="select2" ile auto-init edilen instance, sonradan
-    // DOM'a eklenen <option>'ları kendiliğinden tanımıyor. AJAX yanıtı geldikten
-    // sonra select2'yi destroy + reinit ediyoruz.
     const stationSel = document.getElementById('filter-station');
     const $paramSel  = $('#filter-parameters');
     const paramUrl   = "{% url 'dashboard:api_station_parameters' %}";
@@ -443,7 +439,6 @@
 
     function setParamDisabled(disabled) {
         $paramSel.prop('disabled', !!disabled);
-        // disabled değişiminde select2 wrapper'ı da güncellesin
         reinitParamSelect2();
         if (paramHint) {
             paramHint.textContent = disabled ? I18N.paramHintNone : I18N.paramHintIdle;
@@ -481,7 +476,6 @@
             reloadParameters(this.value);
             validateForm();
         });
-        // İlk render sonrası hint metnini de duruma göre ayarla
         if (paramHint) {
             paramHint.textContent = stationSel.value ? I18N.paramHintIdle : I18N.paramHintNone;
         }
@@ -548,30 +542,34 @@
 
     function tdText(td) { return (td.innerText || td.textContent || '').trim(); }
 
+    // Pivot tabloda her SÜTUN bir seri: değer hücrelerinin data-order'ı (sayısal
+    // ham değer) y ekseni, zaman sütununun data-order'ı (unix sn) x ekseni.
+    // Dijital "Aktif/Pasif" hücreleri de data-order (1/0) ile sayısal çizilir.
     function buildChartFromTable() {
         if (!chartEl) return;
-        // Datatables filtre uygulamış olabilir; ama biz tüm raw DOM satırlarını alalım.
-        const tbodyRows = Array.from(document.querySelectorAll('#report-table tbody tr'));
-        const series = {};
-        tbodyRows.forEach(tr => {
-            const cells = tr.querySelectorAll('td');
-            if (cells.length < 3) return;
-            const tTxt   = tdText(cells[0]);
-            const param  = tdText(cells[1]);
-            // Raw → cells[2] = Değer; Aggregate → cells[2] = Ortalama
-            const rawVal = tdText(cells[2]).replace(/\s/g, '').replace(',', '.').replace('—', '');
-            const val = parseFloat(rawVal);
-            if (!param || !isFinite(val)) return;
-            // dd.mm.yyyy HH:MM(:SS)
-            const m = tTxt.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
-            if (!m) return;
-            const d = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], +(m[6] || 0));
-            if (!series[param]) series[param] = [];
-            series[param].push([d.getTime(), val]);
+        const headerCells = Array.from(document.querySelectorAll('#report-table thead th'));
+        const colNames = headerCells.slice(1).map(function(th){
+            return th.getAttribute('data-series') || tdText(th);
         });
-        const apexSeries = Object.entries(series).map(([name, data]) => ({
-            name, data: data.sort((a,b) => a[0]-b[0])
-        }));
+        const series = colNames.map(function(n){ return { name: n, data: [] }; });
+        const tbodyRows = Array.from(document.querySelectorAll('#report-table tbody tr'));
+        tbodyRows.forEach(function(tr){
+            const cells = tr.querySelectorAll('td');
+            if (cells.length < 2) return;
+            const tOrd = parseInt(cells[0].getAttribute('data-order'), 10);
+            if (!isFinite(tOrd)) return;
+            const ts = tOrd * 1000;
+            for (let i = 1; i < cells.length; i++) {
+                const ord = cells[i].getAttribute('data-order');
+                if (ord === null || ord === '') continue;
+                const val = parseFloat(ord);
+                if (!isFinite(val)) continue;
+                if (series[i-1]) series[i-1].data.push([ts, val]);
+            }
+        });
+        const apexSeries = series
+            .filter(function(s){ return s.data.length; })
+            .map(function(s){ return { name: s.name, data: s.data.sort(function(a,b){ return a[0]-b[0]; }) }; });
         if (apexSeries.length === 0) {
             chartEl.innerHTML = '<div class="text-center text-muted py-10">{% trans "Grafik için sayısal veri yok." %}</div>';
             return;
@@ -686,7 +684,6 @@
         } else {
             if (chartWrap) chartWrap.style.display = 'none';
             if (tableWrap) tableWrap.style.display = 'block';
-            // DataTables responsive recalc
             if (dt) { dt.columns.adjust(); }
         }
     }
@@ -697,9 +694,6 @@
     }
 
     // --- FOUC önleme: tüm init zinciri tamamlanınca içeriği aç ---
-    // window.load tüm asset'ler (CSS/JS/font) yüklendiğinde tetiklenir; bir
-    // requestAnimationFrame daha bekleyerek select2/DataTables wrap'lerinin
-    // DOM'a yerleşmesini garantiliyoruz.
     function revealContent() {
         if (document.body.classList.contains('page-ready')) return;
         requestAnimationFrame(function() {
@@ -711,7 +705,6 @@
     } else {
         window.addEventListener('load', revealContent);
     }
-    // Failsafe: load event bir sebepten tetiklenmezse 1.2sn sonra zorla göster
     setTimeout(revealContent, 1200);
 })();
 </script>

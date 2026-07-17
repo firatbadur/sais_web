@@ -26,6 +26,7 @@ urlpatterns = [
 
     # --- Reports ---
     path("reports/readings/", views.ReadingsReportView.as_view(), name="reports_readings"),
+    path("reports/data/", views.DataReportView.as_view(), name="reports_data"),
     path("reports/aggregates/", views.AggregatesReportView.as_view(), name="reports_aggregates"),
     path("reports/calibrations/", views.CalibrationsReportView.as_view(), name="reports_calibrations"),
     path("reports/power-offs/", views.PowerOffsReportView.as_view(), name="reports_power_offs"),

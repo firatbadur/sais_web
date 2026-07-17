@@ -3546,3 +3546,12 @@ msgstr "Import failed."
 
 msgid "Sunucuya bağlanılamadı."
 msgstr "Could not connect to the server."
+
+msgid "Ham Veri Raporu"
+msgstr "Raw Data Report"
+
+msgid "Veri Raporu"
+msgstr "Data Report"
+
+msgid "Sütun sayısı %(n)s ile sınırlandı; daha az sensör seçerek daralt."
+msgstr "Columns capped at %(n)s; narrow it by selecting fewer sensors."

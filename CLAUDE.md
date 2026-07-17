@@ -26,7 +26,7 @@ Mimari üç katmana ayrıldı:
 
 - **`api/`** — jenerik SCADA çekirdeği. Sektör-özel hiçbir kavram içermez. Modeller: `Station`, `StationType`, `Connection`, `ScanGroup`, `Parameter`, `Sensor`, `SensorLatest`, `Reading`, `ReadingFifteenMin`, `ReadingHourly`, `ReadingDaily`, `Calibration`, `PowerOff`, `Command`, `RequestType`, `StatusCode`, `LogType`, `SystemLog`, `ApiLog`.
 - **`sais_domain/`** — SAIS'e (Çevre ve Şehircilik Bakanlığı atıksu izleme rejimi) özgü uzantılar. Modeller: `SaisCabinet` (Bakanlık SIM ID + erişim bilgileri), `EnvisoftChannel` (Parameter ↔ Envisoft kanal eşlemesi). Atıksu istasyon tipleri ve "Bakanlık Numune Talebi" gibi alan-özel lookup kayıtları `seed_sais_data` ile yüklenir.
-- **`dashboard/`** — Metronic tabanlı rol-bazlı izleme arayüzü. `/dashboard/` URL prefix'i; `/` otomatik oraya yönlendirir. Admin panelinden (Jazzmin) ayrıdır — konfigürasyonu yine admin yapar, dashboard izleme + kısıtlı yönetim içindir. Çoklu dil (TR/EN) Django i18n ile. Ana sayfa 4 canlı widget (KPI + sensör grid + 24s trend + olay akışı), AJAX polling (5-30sn) ile dinamik. Home dışında: 6 rapor + 3 yönetim + 2 operatör + 2 admin sayfası + 3 ayar. Rol mapping: `CustomUser.rol` 1=Sistem Yöneticisi (tam erişim), 2=Operatör (rapor+operatör+yönetim okuma), 3=Normal Kullanıcı (salt-izleme).
+- **`dashboard/`** — Metronic tabanlı rol-bazlı izleme arayüzü. `/dashboard/` URL prefix'i; `/` otomatik oraya yönlendirir. Admin panelinden (Jazzmin) ayrıdır — konfigürasyonu yine admin yapar, dashboard izleme + kısıtlı yönetim içindir. Çoklu dil (TR/EN) Django i18n ile. Ana sayfa 4 canlı widget (KPI + sensör grid + 24s trend + olay akışı), AJAX polling (5-30sn) ile dinamik. Home dışında: 7 rapor + 3 yönetim + 2 operatör + 2 admin sayfası + 3 ayar. Rol mapping: `CustomUser.rol` 1=Sistem Yöneticisi (tam erişim), 2=Operatör (rapor+operatör+yönetim okuma), 3=Normal Kullanıcı (salt-izleme).
 
 Çekirdek özellikler:
 
@@ -107,7 +107,7 @@ sais_web/
 │   │   ├── partials/      # header.html, sidebar.html, footer.html, pagination.html
 │   │   ├── auth/          # auth_base.html + login.html + forgot_password.html (corporate layout)
 │   │   ├── home.html      # 4 widget + embedded AJAX JS
-│   │   ├── reports/       # sensor_readings/aggregates/calibrations/power_offs/commands/system_logs
+│   │   ├── reports/       # sensor_readings(ham)/data_report(pivot)/aggregates/calibrations/power_offs/commands/system_logs
 │   │   ├── operator/      # scenario_builder (numune senaryosu — 4 sekme), alarms
 │   │   ├── management/    # stations, connections, sensors (readonly)
 │   │   ├── admin_pages/   # user_list, user_form, api_logs, web_settings (rol=1 only)
@@ -693,6 +693,16 @@ Sayfalama yapan tablolarda `{% querystring_without "page" %}` template tag'i ile
 - Tüm dashboard sayfaları `container-fluid` ([`base.html`](dashboard/templates/dashboard/base.html)'de set edildi). `container-xxl` kullanma — geniş ekranda iki yanda boşluk açar.
 
 > **Yeni rapor sayfası eklerken**: `sensor_readings.html` + `ReadingsReportView` referans alınmalı; üst başlık, filtre alanları, validasyon, DataTables, grafik, FOUC blocklarının tamamı kopyalanıp adapte edilmeli — kullanıcı bu sayfayla "rapor altyapısını öğrendik" diye onayladı, bu standart artık her rapor sayfasında beklenmeli.
+
+**Veri Raporu (pivot varyantı — `reports_data`):** "Ham Veri Raporu" (`reports_readings`, eski adı "Sensör
+Okumaları") ile **aynı** filtre/aralık/validasyon/grafik/DataTables/FOUC iskeleti; tek fark **çıktı tablosu
+pivot**: zaman satır, **her sensör ayrı sütun** ([data_report.html](dashboard/templates/dashboard/reports/data_report.html)
++ `DataReportView` — `ReadingsReportView` alt sınıfı, `_build_pivot`). Status kolonu yok; hücreler `Dinamik
+Veri Raporu` mantığıyla renklenir (kod 1 sade / geçerli-ama-operasyonel amber `cell-op` / geçersiz kırmızı
+`cell-bad`, `VALID_CODES`'e göre; status yoksa `Reading.quality`'e düşer; aggregate'de `bad_count` ile).
+Dijital kanal 1/0 yerine **Aktif/Pasif**. Raw okumalar dakikaya yuvarlanarak (`time_iso` mikrosaniye farkları)
+kovaya toplanır, aggregate'te `bucket_start` zaten hizalı. Grafik pivot sütunlarından (her sütun bir seri,
+hücre `data-order`'ı sayısal) kurulur. Sütun tavanı `PIVOT_MAX_COLS=80`.
 
 ## Mimik Tasarım Stüdyosu (SCADA/HMI editör)
 

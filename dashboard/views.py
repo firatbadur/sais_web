@@ -387,6 +387,156 @@ class ReadingsReportView(RoleRequiredMixin, ListView):
         return ctx
 
 
+class DataReportView(ReadingsReportView):
+    """Veri Raporu — Ham Veri Raporu ile aynı filtre/aralık/grafik iskeleti, ama
+    tablo **pivot** (zaman satır, sensör sütun) olarak dökülür.
+
+    Farklar (Ham Veri Raporu'na göre):
+      * Her sensör ayrı sütun; satırlar zaman kovası (raw → dakikaya yuvarlanır,
+        aggregate → ``bucket_start`` zaten hizalı).
+      * Status kolonu yok; hücreler ``Dinamik Veri Raporu`` mantığıyla renklenir
+        (kod 1 sade, geçerli-ama-operasyonel amber, geçersiz kırmızı; aggregate'de
+        ``bad_count`` ile). Renk sınıfı yoksa ``Reading.quality``'e düşülür.
+      * Dijital kanal değeri 1/0 yerine "Aktif"/"Pasif" gösterilir.
+    """
+    template_name = "dashboard/reports/data_report.html"
+
+    # Pivot çok geniş tablo browser'ı kilitlemesin: sütun tavanı.
+    PIVOT_MAX_COLS = 80
+
+    # --- Hücre biçimleme yardımcıları ---
+    @staticmethod
+    def _param_label(sensor):
+        p = getattr(sensor, "parameter", None)
+        return (getattr(p, "display_name", None) if p else None) or sensor.tag or f"#{sensor.id}"
+
+    @staticmethod
+    def _param_unit(sensor):
+        p = getattr(sensor, "parameter", None)
+        if not p:
+            return ""
+        return getattr(p, "unit_txt", "") or getattr(p, "unit", "") or ""
+
+    @staticmethod
+    def _num(value):
+        try:
+            f = float(value)
+        except (TypeError, ValueError):
+            return str(value)
+        if f == int(f):
+            return str(int(f))
+        return f"{round(f, 3)}"
+
+    def _format_value(self, value, sensor):
+        if value is None:
+            return "—"
+        if sensor.sensor_type in (2, 3):  # dijital → Aktif/Pasif
+            try:
+                fv = float(value)
+            except (TypeError, ValueError):
+                return str(value)
+            if fv == 1:
+                return _("Aktif")
+            if fv == 0:
+                return _("Pasif")
+            # Kısmi ortalama (aggregate) → sayısal göster.
+        return self._num(value)
+
+    @staticmethod
+    def _tip(code, name):
+        if name:
+            return f"{name} (kod {code})"
+        return f"kod {code}"
+
+    def _raw_cell_status(self, r, valid_codes):
+        """Ham okuma için (css_class, tooltip). Dinamik Veri Raporu ile aynı 3 kademe."""
+        st = getattr(r, "status", None)
+        code = getattr(st, "code", None) if st else None
+        if code == 1:
+            return "", ""
+        if code is not None:
+            name = getattr(st, "name", "") or ""
+            return ("cell-op" if code in valid_codes else "cell-bad"), self._tip(code, name)
+        # Status yok → kaliteye düş.
+        q = getattr(r, "quality", None)
+        if q == "uncertain":
+            return "cell-op", r.get_quality_display()
+        if q == "bad":
+            return "cell-bad", r.get_quality_display()
+        return "", ""
+
+    @staticmethod
+    def _agg_cell_status(r):
+        bad = r.bad_count or 0
+        cnt = r.count or 0
+        if bad <= 0:
+            return "", ""
+        tip = f"{bad}/{cnt} hatalı" if cnt else f"{bad} hatalı"
+        if cnt and bad >= cnt:
+            return "cell-bad", tip
+        return "cell-op", tip
+
+    def _build_pivot(self, qs, is_raw):
+        from sais_domain.sim_report import VALID_CODES
+
+        sensors = {}          # sensor_id -> Sensor
+        buckets = {}          # time_key(datetime) -> {sensor_id: cell}
+
+        for r in qs:
+            s = r.sensor
+            sensors.setdefault(s.id, s)
+            if is_raw:
+                tkey = r.time_iso.replace(second=0, microsecond=0)
+                value = r.value
+                css, tip = self._raw_cell_status(r, VALID_CODES)
+            else:
+                tkey = r.bucket_start
+                value = r.avg_value
+                css, tip = self._agg_cell_status(r)
+
+            row = buckets.setdefault(tkey, {})
+            # qs -time sıralı: aynı dakika/sensör için ilk (en yeni) kayıt tutulur.
+            if s.id in row:
+                continue
+            row[s.id] = {
+                "disp": self._format_value(value, s),
+                "order": "" if value is None else value,
+                "css": css,
+                "tip": tip,
+            }
+
+        # Kolon sırası: parametre etiketine göre (stabil), sensor_id ile eşitlik kırma.
+        col_sensors = sorted(
+            sensors.values(),
+            key=lambda s: (self._param_label(s).lower(), s.id),
+        )[: self.PIVOT_MAX_COLS]
+        columns = [{
+            "sensor_id": s.id,
+            "label": self._param_label(s),
+            "unit": self._param_unit(s),
+            "is_digital": s.sensor_type in (2, 3),
+        } for s in col_sensors]
+        col_ids = [c["sensor_id"] for c in columns]
+
+        pivot_rows = []
+        for tkey in sorted(buckets.keys(), reverse=True):
+            cellmap = buckets[tkey]
+            pivot_rows.append({
+                "time": tkey,
+                "order": int(tkey.timestamp()),
+                "cells": [cellmap.get(cid) for cid in col_ids],
+            })
+        return columns, pivot_rows
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        columns, pivot_rows = self._build_pivot(ctx["rows"], ctx["is_raw"])
+        ctx["columns"] = columns
+        ctx["pivot_rows"] = pivot_rows
+        ctx["col_truncated"] = len(columns) >= self.PIVOT_MAX_COLS
+        return ctx
+
+
 class AggregatesReportView(RoleRequiredMixin, ListView):
     """Aggregate Raporu — istasyon/sensör/seviye/tarih filtreli bucket tablosu."""
     template_name = "dashboard/reports/aggregates.html"

@@ -27,7 +27,9 @@ MENU = [
         "icon": "ki-chart-line-star",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
         "children": [
-            {"label": _("Sensör Okumaları"), "url_name": "dashboard:reports_readings",
+            {"label": _("Ham Veri Raporu"), "url_name": "dashboard:reports_readings",
+             "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER)},
+            {"label": _("Veri Raporu"), "url_name": "dashboard:reports_data",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER)},
             {"label": _("Kalibrasyon Geçmişi"), "url_name": "dashboard:reports_calibrations",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER)},
