@@ -42,10 +42,14 @@ class ModbusTcpReader(ProtocolReader):
         from pymodbus.client import ModbusTcpClient
 
         timeout_sec = max(0.1, (self.connection.timeout_ms or 2000) / 1000.0)
+        _rc = self.connection.retry_count
         kwargs = dict(
             host=self.connection.host,
             port=self.connection.port or 502,
             timeout=timeout_sec,
+            # Connection.retry_count → pymodbus ek deneme sayısı (cevapsız okumada).
+            # Toplam deneme = 1 + retries; her deneme timeout kadar bekler.
+            retries=3 if _rc is None else max(0, _rc),
         )
         framer = _framer_for_protocol(self.connection.protocol)
         if framer is not None:

@@ -488,6 +488,7 @@ ve karşılaşılabilecek hatalar tek bir kullanıcı kılavuzunda toplanır (ku
 - **DEBUG=False** modunda HSTS, güvenli çerez ve Whitenoise manifest storage aktiftir.
 - **Seed komutları idempotenttir** — `seed_initial_data`, `seed_sais_data`, `seed_periodic_tasks` birden çok kez çalıştırmak güvenlidir (`get_or_create` / `update_or_create`).
 - **pymodbus 3.11+ API:** readers/writers `device_id=` parametresi kullanır (pymodbus 3.13'te `slave=` → `device_id=` rename edildi). Bu dokümantasyonda veya PR'da `slave=` görürsen o eski API'dir.
+- **Modbus timeout + retry (Connection-level, pymodbus'a bağlı):** Tüm Modbus reader/writer'ları pymodbus client'ını `timeout=Connection.timeout_ms/1000` + `retries=Connection.retry_count` ile kurar. pymodbus cevapsız (TimeoutError) okumada `retries` kadar ek dener → **toplam deneme = 1 + retry**, her deneme timeout kadar bekler (ör. retry=3, timeout=2000 → cevapsız okuma ~8 sn bloklar; Modbus exception yanıtı/illegal-address ANINDA döner, retry edilmez). `retry_count` eskiden ölüydü (pymodbus örtük default 3 kullanıyordu); artık canlı — migration `0031` mevcut inert default 1'i 3'e taşıyıp çalışan davranışı korudu, model default 3. **Cevap vermeyen/yavaş noktalarda `retry_count`'u düşürmek (0–1) poll cycle'ı hızlandırır** ve timeout-bloklama kaynaklı overlap/bayatlığı azaltır (İletişim Tanılama sayfasından izle).
 - **SCADA polling akışı:** `scada_io.tasks.dispatch_polls` her 5 sn'de çalışır; `Connection.last_polled_at + poll_interval_sec` due olan bağlantılar için `poll_connection.delay(conn_id)` enqueue eder. Worker pool'dan cached reader alır (veya yeni bağlantı açar):
   1. Connection'ın aktif `ScanGroup`'larını **tek Modbus request** ile okur (`reader.read_raw`), ham register listelerini bellekte tutar.
   2. Her sensör için: `scan_group` varsa batch cache'inden `decode_sensor_from_batch` ile değer çıkar; yoksa legacy `reader.read(sensor)` ile tek-tek okur.
@@ -905,7 +906,7 @@ Beklenen yük: cycle 1.5-2.5 sn, 17 Reading insert/sn, ~1.4M satır/gün, 90 gü
   [sais_domain/crypto.py](sais_domain/crypto.py) `EncryptedCharField` ile at-rest **Fernet** şifreli
   (Python'da şeffaf düz metin). Anahtar `CABINET_FERNET_KEY` (yoksa `SECRET_KEY`'den türetilir);
   migration `0012` mevcut kayıtları şifreler.
-- **Per-sensor poll override yok** — `Sensor.poll_interval_sec` alanı modelde var ama dispatcher kullanmıyor; tüm sensörler bağlı oldukları connection'ın periyoduyla okunur. İleride hibrit dispatch eklenebilir.
+- **Per-sensor poll override yok** — `Sensor.poll_interval_sec` alanı modelde var ama dispatcher kullanmıyor; tüm sensörler bağlı oldukları connection'ın periyoduyla okunur. İleride hibrit dispatch eklenebilir. Aynı şekilde **`Sensor.timeout_ms` / `Sensor.retry_count` de ölü** (reader connection-level client kullandığından); `Connection.timeout_ms` + `Connection.retry_count` ise **pymodbus'a bağlı ve canlıdır** (aşağıdaki reader notu).
 - **Aggregate Python-side** — `aggregate_readings` pandas-benzeri Python groupby kullanır; 1500+ tag ölçeğinde PostgreSQL `GROUP BY` SQL rewrite gerekir.
 - **DB partition yok** — `Reading` tek tablo; 3000+ tag uzun vadeli operasyonda aylık partition (PostgreSQL declarative partitioning) gerekir.
 - **Celery worker monitoring** — Flower kurulu değil; isteğe göre `pip install flower` + `celery -A sais_web flower` ile eklenebilir.

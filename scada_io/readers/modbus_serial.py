@@ -37,6 +37,7 @@ class ModbusSerialReader(ProtocolReader):
             else FramerType.ASCII
         )
         timeout_sec = max(0.1, (self.connection.timeout_ms or 2000) / 1000.0)
+        _rc = self.connection.retry_count
 
         self._client = ModbusSerialClient(
             port=self.connection.serial_port,
@@ -46,6 +47,8 @@ class ModbusSerialReader(ProtocolReader):
             stopbits=self.connection.stop_bits or 1,
             bytesize=self.connection.byte_size or 8,
             timeout=timeout_sec,
+            # Connection.retry_count → pymodbus ek deneme sayısı (bkz. modbus_tcp).
+            retries=3 if _rc is None else max(0, _rc),
         )
 
         try:

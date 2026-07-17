@@ -108,7 +108,8 @@ class Command(BaseCommand):
         polled_age = self._age(conn.last_polled_at, now)
         conn_age = self._age(conn.last_connected_at, now)
         w(f"  Son poll: {polled_age}   Son başarılı bağlantı: {conn_age}   "
-          f"poll_interval={conn.poll_interval_sec}s  timeout={conn.timeout_ms}ms")
+          f"poll_interval={conn.poll_interval_sec}s  timeout={conn.timeout_ms}ms  "
+          f"retry={conn.retry_count} (cevapsızda ~{(conn.retry_count + 1) * (conn.timeout_ms or 2000) // 1000}sn blok)")
         if conn.last_error_message:
             cat = classify_comm_error(conn.last_error_message)
             w(f"  Son hata ({self._age(conn.last_error_at, now)}): "

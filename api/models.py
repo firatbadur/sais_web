@@ -223,7 +223,11 @@ class Connection(models.Model):
         default=2000, verbose_name="Bağlantı Timeout (ms)",
     )
     retry_count = models.IntegerField(
-        default=1, verbose_name="Retry Sayısı",
+        default=3, verbose_name="Retry Sayısı",
+        help_text="Cevapsız okumada pymodbus ek deneme sayısı. Toplam deneme = 1 + "
+                  "retry; her deneme timeout_ms kadar bekler (ör. retry=3, timeout=2000 "
+                  "→ cevapsız okuma en fazla ~8 sn bloklar). 0 = tek deneme (en hızlı). "
+                  "Cevap vermeyen/yavaş noktalarda düşürmek poll cycle'ı hızlandırır.",
     )
     auto_reconnect = models.BooleanField(
         default=True, verbose_name="Otomatik Yeniden Bağlan",
