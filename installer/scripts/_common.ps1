@@ -13,6 +13,25 @@
 #>
 
 $script:WslDistro = "Ubuntu"
+
+# Every WSL call that touches Docker runs as ROOT — explicitly, never relying on
+# the distro's *default* user.
+#
+# WHY (real field incident): 00-ensure-docker installs the distro with
+# `wsl --install -d Ubuntu --no-launch`, so Ubuntu's first-run OOBE never runs
+# -> no Unix user exists -> the default user IS root -> docker works. But the
+# moment ANYONE opens an interactive `wsl` on the box (a technician debugging),
+# the OOBE fires, creates a user (named after the Windows account, e.g.
+# "envisoftwebx") and makes it the DEFAULT. That user is not in the `docker`
+# group, so every `docker compose` here dies with
+# "permission denied ... unix:///var/run/docker.sock".
+#
+# The failure is SILENT and nasty: containers keep running (restart:
+# unless-stopped) so the site looks fine, but sais-stack.ps1's `up -d` throws ->
+# the loop never reaches Set-PortProxy (external 80/443 bridge goes stale on the
+# next WSL IP change) nor `sleep infinity` (WSL2 VM keepalive). Pinning root
+# makes the installer + service independent of whatever the default user is.
+$script:WslUser = "root"
 $script:ComposeFile = "docker-compose.prod.yml"
 
 # True when our stdout is a pipe (e.g. a step running as a child process whose
@@ -68,7 +87,7 @@ function Test-DockerReady {
     $prev = $ErrorActionPreference
     $ErrorActionPreference = 'SilentlyContinue'
     try {
-        wsl.exe -d $script:WslDistro -- bash -lc "docker info >/dev/null 2>&1" | Out-Null
+        wsl.exe -d $script:WslDistro -u $script:WslUser -- bash -lc "docker info >/dev/null 2>&1" | Out-Null
         return ($LASTEXITCODE -eq 0)
     } catch {
         return $false
@@ -77,9 +96,9 @@ function Test-DockerReady {
     }
 }
 
-# Run an arbitrary bash command inside the WSL distro.
+# Run an arbitrary bash command inside the WSL distro (as root — see $WslUser).
 function Invoke-Wsl([string]$bash) {
-    wsl.exe -d $script:WslDistro -- bash -lc "$bash"
+    wsl.exe -d $script:WslDistro -u $script:WslUser -- bash -lc "$bash"
     if ($LASTEXITCODE -ne 0) {
         throw "WSL command failed (exit $LASTEXITCODE): $bash"
     }
@@ -96,7 +115,7 @@ function Invoke-Compose([string]$InstallDir, [string]$composeArgs) {
     Assert-Docker
     $wslDir = ConvertTo-WslPath $InstallDir
     $cmd = "cd '$wslDir' && docker compose --env-file .env -f $script:ComposeFile $composeArgs"
-    wsl.exe -d $script:WslDistro -- bash -lc "$cmd"
+    wsl.exe -d $script:WslDistro -u $script:WslUser -- bash -lc "$cmd"
     if ($LASTEXITCODE -ne 0) {
         throw "docker compose failed (exit $LASTEXITCODE): $composeArgs"
     }
@@ -137,6 +156,9 @@ function Invoke-WslSpin {
                                    # retry. Only use for idempotent commands.
     )
     if (-not $Distro) { $Distro = $script:WslDistro }
+    # Default to root: callers (20-up pull/up, 30-firstrun exec) all touch Docker
+    # and must not depend on the distro's default user. See $script:WslUser.
+    if (-not $User) { $User = $script:WslUser }
     if (-not $LogDir) { $LogDir = $env:TEMP }
     $log = Join-Path $LogDir ("envisoft-step-" + ([guid]::NewGuid().ToString('N').Substring(0, 8)) + ".log")
 

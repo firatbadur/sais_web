@@ -424,6 +424,20 @@ başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows ser
 - **Docker erişimi**: tüm `docker compose` çağrıları WSL2 içinde çalışır
   ([_common.ps1](installer/scripts/_common.ps1) sarmalayıcıları); compose + `.env` Windows'ta `C:\SAIS`,
   WSL `/mnt/c/SAIS`'ten erişir.
+- **WSL kullanıcısı root'a SABİTLENDİ (`$script:WslUser`) — TUZAK (saha deneyimi):** Docker'a dokunan
+  her `wsl.exe` çağrısı **açıkça `-u root`** ile koşar; distro'nun *varsayılan* kullanıcısına asla
+  güvenilmez. Sebep: `00-ensure-docker` distro'yu `wsl --install -d Ubuntu **--no-launch**` ile kurar →
+  Ubuntu OOBE hiç çalışmaz → Unix kullanıcısı oluşmaz → varsayılan **root**'tur ve docker çalışır. Ama
+  sahada **biri bir kez interaktif `wsl` yazarsa** OOBE tetiklenir, Windows hesabından türetilmiş bir
+  kullanıcı (ör. `envisoftwebx`) oluşturur ve onu **varsayılan** yapar; bu kullanıcı `docker` grubunda
+  olmadığı için tüm `docker compose` çağrıları `permission denied ... /var/run/docker.sock` verir.
+  **Arıza sinsidir**: container'lar `restart: unless-stopped` sayesinde ayakta kalır (site çalışıyor
+  görünür) ama [sais-stack.ps1](installer/scripts/sais-stack.ps1) döngüsünde `up -d` fırlatınca
+  **`Set-PortProxy` (dış 80/443 köprüsü) ve `sleep infinity` (WSL2 VM keep-alive) adımlarına hiç
+  ulaşılmaz** → sonraki WSL IP değişiminde dış erişim sessizce ölür. **Ayrıca:** OOBE `/etc/wsl.conf`'a
+  `[user] default=...` yazar ve bu **registry `DefaultUid`'i EZER** → `wsl --manage --set-default-user`
+  veya `DefaultUid=0` "başarılı" der ama etkisiz kalır; geri almak için `/etc/wsl.conf` düzeltilip
+  `wsl --terminate` gerekir. `-u root` sabitlemesi bu sınıfı tamamen kapatır.
 - **Admin (rol=1)**: [users/seed_admin_user](users/management/commands/seed_admin_user.py) non-interactive
   (env `DJANGO_SUPERUSER_*`) — `createsuperuser --noinput` CustomUser `rol` alanını set edemediği için.
 - **DB**: **PostgreSQL 16** (açık kaynak, lisans gerektirmez; bundled `postgres:16` container). Şifre installer'da otomatik üretilir (`POSTGRES_PASSWORD`).

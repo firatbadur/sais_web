@@ -36,7 +36,7 @@ Assert-Docker
 $wslDir = ConvertTo-WslPath $InstallDir
 $checkCmd = "cd '$wslDir' && docker compose --env-file .env -f $script:ComposeFile exec -T web python manage.py migrate --check >/dev/null 2>&1"
 $ready = Wait-WithSpin "Waiting for web to finish migrations" -TimeoutSec 480 -CheckEverySec 5 -Check {
-    wsl.exe -d $script:WslDistro -- bash -lc $checkCmd
+    wsl.exe -d $script:WslDistro -u $script:WslUser -- bash -lc $checkCmd
     return ($LASTEXITCODE -eq 0)
 }
 if (-not $ready) {

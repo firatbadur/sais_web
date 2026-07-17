@@ -33,7 +33,7 @@ Invoke-WslSpin "Starting the stack (docker compose up -d)" `
 $wslDir = ConvertTo-WslPath $InstallDir
 $psBash = "cd '$wslDir' && docker compose -f $script:ComposeFile ps --format '{{.Service}} {{.State}}'"
 $healthy = Wait-WithSpin "Waiting for services to become healthy" -TimeoutSec $HealthTimeoutSec -Check {
-    try { $ps = wsl.exe -d $script:WslDistro -- bash -lc $psBash 2>$null } catch { $ps = "" }
+    try { $ps = wsl.exe -d $script:WslDistro -u $script:WslUser -- bash -lc $psBash 2>$null } catch { $ps = "" }
     return ($ps -match "web\s+running" -and $ps -match "db\s+running")
 }
 
