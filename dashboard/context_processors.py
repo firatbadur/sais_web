@@ -51,8 +51,6 @@ MENU = [
         "children": [
             {"label": _("Numune Senaryosu"), "url_name": "dashboard:operator_sample",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
-            {"label": _("Senaryo Tasarımcı (Demo)"), "url_name": "dashboard:operator_scenario_designer",
-             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("İnteraktif Kalibrasyon"), "url_name": "dashboard:operator_calibration",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Alarmlar"), "url_name": "dashboard:operator_alarms",
@@ -125,6 +123,8 @@ MENU = [
         "icon": "ki-shield-tick",
         "roles": (ROLE_ADMIN,),
         "children": [
+            {"label": _("Senaryo Tasarımcı (Demo)"), "url_name": "dashboard:operator_scenario_designer",
+             "roles": (ROLE_ADMIN,)},
             {"label": _("Lisans"), "url_name": "dashboard:admin_license",
              "roles": (ROLE_ADMIN,)},
             {"label": _("Web Erişim Ayarları"), "url_name": "dashboard:admin_web_settings",

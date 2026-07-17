@@ -975,8 +975,8 @@ class ScenarioBuilderView(OperatorRequiredMixin, TemplateView):
         return ctx
 
 
-class ScenarioDesignerView(OperatorRequiredMixin, TemplateView):
-    """Operatör/Yönetici → Senaryo Tasarımcı (Demo).
+class ScenarioDesignerView(AdminRequiredMixin, TemplateView):
+    """Yönetici → Senaryo Tasarımcı (Demo).
 
     Node-graph (PLC-benzeri) görsel senaryo tasarımcısı: sürükle-bırak sensör
     giriş / AND-OR-NOT mantık / gecikme / çıkış-aksiyon node'ları, aralarında

@@ -1889,7 +1889,7 @@ def scenario_cancel_run(request):
 @login_required
 def graph_list(request):
     """Kayıtlı senaryo tasarımları (şablonlar dahil)."""
-    denied = _require_operator(request)
+    denied = _require_admin(request)
     if denied:
         return denied
     from sais_domain.models import ScenarioGraph
@@ -1907,7 +1907,7 @@ def graph_list(request):
 @login_required
 def graph_get(request):
     """Tek tasarımın tam tanımı (graph JSON dahil)."""
-    denied = _require_operator(request)
+    denied = _require_admin(request)
     if denied:
         return denied
     from sais_domain.models import ScenarioGraph
@@ -1926,7 +1926,7 @@ def graph_save(request):
     """Senaryo tasarımı oluştur/güncelle (Drawflow export JSON)."""
     import json
 
-    denied = _require_operator(request)
+    denied = _require_admin(request)
     if denied:
         return denied
     if request.method != "POST":
@@ -1973,7 +1973,7 @@ def graph_delete(request):
     """Senaryo tasarımı sil — yerleşik şablonlar silinemez."""
     import json
 
-    denied = _require_operator(request)
+    denied = _require_admin(request)
     if denied:
         return denied
     if request.method != "POST":
