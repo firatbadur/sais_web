@@ -102,3 +102,7 @@ manifest.json
 # Installer — derleme çıktısı + bundle'lanan NSSM binary'si commit'lenmez
 installer/dist/
 installer/payload/nssm.exe
+
+# Güvenlik denetim raporları — canlı kimlik referansları + lisans-kırma detayı
+# içerir, remote'a ASLA gitmez (yalnız yerel referans)
+GUVENLIK-DENETIMI*.md
