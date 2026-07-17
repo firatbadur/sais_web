@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import random
+import time
 from datetime import timedelta
 
 from celery import shared_task
@@ -24,6 +25,7 @@ from django.utils import timezone
 from api.models import Command, Connection, Sensor
 
 from . import connection_pool
+from .comm_errors import category_source, classify_comm_error
 from .decoders import decode_sensor_from_batch
 from .persistence import persist_reading
 from .readers import ReadResult, build_reader
@@ -31,6 +33,46 @@ from .writers import build_writer
 
 
 logger = logging.getLogger(__name__)
+
+
+# İletişim hata olayı (CommErrorEvent) hacim throttle'ı — worker-process local.
+# Aynı (connection, sensor, category) için COMM_ERROR_MIN_INTERVAL_SEC'te en
+# fazla bir olay yazılır: kalıcı-hatalı bir bağlantı her polling cycle'ında
+# sensör başına satır üretip tabloyu şişirmesin. Kategori değişimi yeni anahtar
+# → hemen yazılır (patern değişimi yakalanır). Worker restart'ta sıfırlanır.
+_COMM_ERR_LAST: dict[tuple, float] = {}
+
+
+def _record_comm_error(conn_id, sensor_id, error_text, status_code) -> None:
+    """İletişim hatasını `CommErrorEvent`'e teşhis amacıyla yaz (defansif + throttle'lı).
+
+    SALT gözlem — `status_code` atamasını, SIM yayınını veya polling akışını
+    değiştirmez. `log_event` gibi asla exception fırlatmaz (asıl polling'i kesmez).
+    """
+    try:
+        from django.conf import settings
+
+        category = classify_comm_error(error_text)
+        min_interval = int(getattr(settings, "COMM_ERROR_MIN_INTERVAL_SEC", 300))
+        key = (conn_id, sensor_id, category)
+        now = time.monotonic()
+        last = _COMM_ERR_LAST.get(key)
+        if last is not None and (now - last) < min_interval:
+            return
+        _COMM_ERR_LAST[key] = now
+
+        from api.models import CommErrorEvent
+        CommErrorEvent.objects.create(
+            connection_id=conn_id,
+            sensor_id=sensor_id,
+            category=category,
+            source=category_source(category),
+            status_code=status_code,
+            detail=(error_text or "")[:500],
+        )
+    except Exception:  # noqa: BLE001 — teşhis kaydı asıl akışı kesmesin
+        logger.debug("CommErrorEvent yazılamadı conn=%s sensor=%s", conn_id, sensor_id,
+                     exc_info=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -150,6 +192,7 @@ def poll_connection(self, conn_id: int):
             last_error_at=now,
             last_error_message=str(exc)[:500],
         )
+        _record_comm_error(conn_id, None, str(exc), None)
         logger.warning("poll_connection: %s — %s", conn, exc)
         return
 
@@ -159,6 +202,7 @@ def poll_connection(self, conn_id: int):
             last_error_at=now,
             last_error_message="bağlantı açılamadı"[:500],
         )
+        _record_comm_error(conn_id, None, "bağlantı açılamadı", 8)
         for sensor in real_sensors:
             persist_reading(sensor, value=None, quality="bad", origin="polled", status_code=8)
         return
@@ -210,6 +254,8 @@ def poll_connection(self, conn_id: int):
                 # 8 = İletişim Hatası (comm/timeout); 4 = Geçersiz Veri
                 # (decode/parse failure — bağlantı ok ama veri yorumlanamadı).
                 fail_status = 8 if is_conn_err else 4
+                # Teşhis kaydı (throttle'lı, davranışı değiştirmez).
+                _record_comm_error(conn_id, sensor.id, result.error, fail_status)
 
             persist_reading(
                 sensor,

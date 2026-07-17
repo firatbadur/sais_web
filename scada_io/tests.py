@@ -3,6 +3,20 @@ import struct
 
 from django.test import SimpleTestCase
 
+from .comm_errors import (
+    CONN_OPEN,
+    CONN_RESET,
+    CRC_FRAME,
+    DECODE,
+    ILLEGAL_ADDRESS,
+    ILLEGAL_FUNCTION,
+    ILLEGAL_VALUE,
+    SLAVE_FAILURE,
+    TIMEOUT,
+    UNKNOWN,
+    category_source,
+    classify_comm_error,
+)
 from .decoders import decode_registers, encode_value
 
 
@@ -149,3 +163,98 @@ class DecoderTests(SimpleTestCase):
     def test_int32_insufficient_registers_raises(self):
         with self.assertRaises(ValueError):
             decode_registers([1], "int32")
+
+
+class ClassifyCommErrorTests(SimpleTestCase):
+    """İletişim hata metni → kategori sınıflandırması."""
+
+    def test_empty_is_unknown(self):
+        self.assertEqual(classify_comm_error(""), UNKNOWN)
+        self.assertEqual(classify_comm_error(None), UNKNOWN)
+
+    # ---- Modbus ExceptionResponse (cihaz reddi = bizim config) ----
+
+    def test_exception_code_illegal_function(self):
+        s = "Modbus hata: ExceptionResponse(dev_id=1, function_code=131, exception_code=1)"
+        self.assertEqual(classify_comm_error(s), ILLEGAL_FUNCTION)
+
+    def test_exception_code_illegal_address(self):
+        s = "Modbus hata: ExceptionResponse(dev_id=1, function_code=131, exception_code=2)"
+        self.assertEqual(classify_comm_error(s), ILLEGAL_ADDRESS)
+        self.assertEqual(category_source(ILLEGAL_ADDRESS), "config")
+
+    def test_exception_code_illegal_value(self):
+        s = "Modbus hata: ExceptionResponse(dev_id=1, function_code=131, exception_code=3)"
+        self.assertEqual(classify_comm_error(s), ILLEGAL_VALUE)
+
+    def test_exception_code_slave_failure(self):
+        s = "Modbus hata: ExceptionResponse(dev_id=1, function_code=132, exception_code=4)"
+        self.assertEqual(classify_comm_error(s), SLAVE_FAILURE)
+        self.assertEqual(category_source(SLAVE_FAILURE), "device")
+
+    def test_illegal_by_name(self):
+        self.assertEqual(classify_comm_error("Illegal Data Address"), ILLEGAL_ADDRESS)
+
+    # ---- timeout / no response (ambiguous) ----
+
+    def test_no_response_is_timeout(self):
+        s = "ModbusIOException: Modbus Error: [Input/Output] No Response received from the remote unit"
+        self.assertEqual(classify_comm_error(s), TIMEOUT)
+        self.assertEqual(category_source(TIMEOUT), "ambiguous")
+
+    def test_generic_io_is_timeout(self):
+        self.assertEqual(
+            classify_comm_error("Modbus Error: [Input/Output] "), TIMEOUT
+        )
+
+    def test_ascii_timeout(self):
+        self.assertEqual(classify_comm_error("cihazdan yanıt yok (timeout)"), TIMEOUT)
+
+    # ---- bağlantı açma / kopma (network) ----
+
+    def test_conn_open(self):
+        self.assertEqual(classify_comm_error("bağlantı açılamadı"), CONN_OPEN)
+        self.assertEqual(
+            classify_comm_error("TCP bağlantısı kurulamadı: 10.0.0.5:502"), CONN_OPEN
+        )
+
+    def test_conn_refused(self):
+        self.assertEqual(
+            classify_comm_error("ConnectionRefusedError: [WinError 10061] ..."), CONN_OPEN
+        )
+
+    def test_conn_reset(self):
+        self.assertEqual(
+            classify_comm_error("ConnectionResetError: [WinError 10054] ..."), CONN_RESET
+        )
+        # Oturum ortasında düşen bağlantı → "[connection]" → reset.
+        self.assertEqual(
+            classify_comm_error("ConnectionException: Modbus Error: [Connection] lost"),
+            CONN_RESET,
+        )
+        self.assertEqual(category_source(CONN_RESET), "network")
+
+    def test_bağlantı_yok_is_conn_open(self):
+        self.assertEqual(classify_comm_error("bağlantı yok"), CONN_OPEN)
+
+    # ---- crc / frame (line) ----
+
+    def test_unable_to_decode_is_crc_frame(self):
+        s = "ModbusIOException: Modbus Error: [Input/Output] Unable to decode response"
+        self.assertEqual(classify_comm_error(s), CRC_FRAME)
+
+    def test_crc(self):
+        self.assertEqual(classify_comm_error("CRC check failed"), CRC_FRAME)
+
+    # ---- decode / parse (bizim config) ----
+
+    def test_decode_insufficient_registers(self):
+        s = "decode: int32 2 register gerektirir; 1 verildi"
+        self.assertEqual(classify_comm_error(s), DECODE)
+        self.assertEqual(category_source(DECODE), "config")
+
+    def test_regex_no_match(self):
+        self.assertEqual(classify_comm_error("regex eşleşmedi"), DECODE)
+
+    def test_unknown_fallback(self):
+        self.assertEqual(classify_comm_error("something totally unexpected xyz"), UNKNOWN)

@@ -1212,6 +1212,68 @@ class ApiLog(models.Model):
         return f"[{self.direction}] {self.method} {self.url} → {self.response_status}"
 
 
+class CommErrorEvent(models.Model):
+    """Polling sırasında oluşan iletişim (Modbus/ASCII) hatasının teşhis kaydı.
+
+    `poll_connection` bir okuma başarısız olduğunda (defansif olarak) buraya
+    kategorize edilmiş bir olay yazar. Amaç **teşhis** — "bizden mi PLC/ağdan mı"
+    sorusunu zaman içinde kategori dağılımıyla yanıtlamak. Mevcut sinyaller yetersiz:
+    `Connection.last_error_message` yalnız *son* hatayı tutar, `Reading.status` yalnız
+    8/4 ayrımını. Bu tablo ham hata metnini `scada_io.comm_errors.classify_comm_error`
+    ile bir kategoriye (timeout/conn_reset/illegal_address/...) indirir ve biriktirir.
+
+    Bu tablo yalnız **gözlem** içindir; `status_code` atamasını, SIM/Bakanlık yayınını
+    veya polling davranışını DEĞİŞTİRMEZ. Worker-process bazlı bir cooldown ile hacim
+    sınırlanır (aynı sensör+kategori için `COMM_ERROR_MIN_INTERVAL_SEC`'te bir olay).
+    Retention: `prune_comm_errors` (COMM_ERROR_RETENTION_DAYS, default 30).
+    """
+
+    connection = models.ForeignKey(
+        "Connection", on_delete=models.CASCADE, related_name="comm_errors",
+        verbose_name="Bağlantı",
+    )
+    sensor = models.ForeignKey(
+        "Sensor", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="comm_errors",
+        verbose_name="Sensör",
+        help_text="Boş = bağlantı-seviyesi hata (tüm sensörleri etkiler; ör. bağlantı açılamadı).",
+    )
+    category = models.CharField(
+        max_length=32, db_index=True,
+        verbose_name="Kategori",
+        help_text="classify_comm_error kodu: timeout/conn_reset/illegal_address/decode/...",
+    )
+    source = models.CharField(
+        max_length=16, blank=True, default="",
+        verbose_name="Kaynak Yorumu",
+        help_text="config (biz) / device / network / line / ambiguous",
+    )
+    status_code = models.IntegerField(
+        blank=True, null=True,
+        verbose_name="Status Kodu",
+        help_text="persist_reading'e yazılan kod (8=İletişim, 4=Geçersiz Veri).",
+    )
+    detail = models.CharField(
+        max_length=500, blank=True, default="",
+        verbose_name="Ham Hata Metni",
+    )
+    time_iso = models.DateTimeField(
+        auto_now_add=True, db_index=True, verbose_name="Zaman",
+    )
+
+    class Meta:
+        db_table = "comm_error_event"
+        verbose_name_plural = "İletişim Hata Olayları"
+        ordering = ["-time_iso"]
+        indexes = [
+            models.Index(fields=["connection", "-time_iso"], name="commerr_conn_time_idx"),
+            models.Index(fields=["category", "-time_iso"], name="commerr_cat_time_idx"),
+        ]
+
+    def __str__(self):
+        return f"[{self.category}] conn={self.connection_id} @ {self.time_iso}"
+
+
 class RequestType(models.Model):
     """Çıkış / numune / alarm talebinin sınıflandırması lookup'u."""
 

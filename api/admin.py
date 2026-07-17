@@ -8,6 +8,7 @@ from .models import (
     AlarmRule,
     ApiLog,
     Calibration,
+    CommErrorEvent,
     Command,
     Connection,
     GeneratedReport,
@@ -493,6 +494,28 @@ class ApiLogAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False  # log kayıtları manuel oluşturulmaz
+
+    def has_change_permission(self, request, obj=None):
+        return False  # readonly
+
+
+@admin.register(CommErrorEvent)
+class CommErrorEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "time_iso", "connection", "sensor", "category", "source",
+        "status_code", "detail",
+    )
+    list_filter = ("category", "source", "status_code", "connection")
+    search_fields = ("detail", "connection__name", "sensor__tag")
+    date_hierarchy = "time_iso"
+    ordering = ("-time_iso",)
+    readonly_fields = (
+        "connection", "sensor", "category", "source", "status_code",
+        "detail", "time_iso",
+    )
+
+    def has_add_permission(self, request):
+        return False  # teşhis kayıtları worker tarafından yazılır
 
     def has_change_permission(self, request, obj=None):
         return False  # readonly

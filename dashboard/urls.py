@@ -62,6 +62,8 @@ urlpatterns = [
     path("sensor-config/sensors/<int:pk>/delete/", views.SensorConfigDeleteView.as_view(),
          name="sensorcfg_sensor_delete"),
     path("sensor-config/test/", views.SensorTestView.as_view(), name="sensorcfg_test"),
+    path("sensor-config/comm-diagnostics/", views.CommDiagnosticsView.as_view(),
+         name="sensorcfg_comm_diagnostics"),
 
     # --- Takvim Hatırlatıcı ---
     path("reminders/", views.RemindersView.as_view(), name="reminders"),
@@ -180,6 +182,8 @@ urlpatterns = [
          name="api_sensorcfg_sensors"),
     path("api/sensor-config/test-sensor/", api_views.sensor_test_run,
          name="api_sensorcfg_test_sensor"),
+    path("api/sensor-config/comm-diagnostics/", api_views.comm_diagnostics_data,
+         name="api_sensorcfg_comm_diagnostics"),
     path("api/sensor-config/test-scangroup/", api_views.scangroup_test_run,
          name="api_sensorcfg_test_scangroup"),
     path("api/sensor-config/connection-save/", api_views.connection_save,

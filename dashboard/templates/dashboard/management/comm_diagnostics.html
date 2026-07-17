@@ -1,0 +1,430 @@
+{% extends "dashboard/base.html" %}
+{% load i18n static %}
+
+{% block title %}{% trans "İletişim Tanılama" %}{% endblock %}
+{% block page_title %}{% trans "İletişim Tanılama" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .cd-verdict-ok   { color: var(--bs-success); }
+    .cd-verdict-warn { color: var(--bs-warning); }
+    .cd-verdict-err  { color: var(--bs-danger); }
+    .cd-src-config   { background: var(--bs-danger);  color:#fff; }
+    .cd-src-device   { background: #7239ea;           color:#fff; }
+    .cd-src-network  { background: var(--bs-warning);  color:#000; }
+    .cd-src-line     { background: var(--bs-info);     color:#fff; }
+    .cd-src-ambiguous{ background: #f1bc00;            color:#000; }
+    .cd-src-unknown  { background: var(--bs-gray-400); color:#000; }
+    .cd-detail { font-family: var(--bs-font-monospace); font-size: .8rem; word-break: break-all; }
+    .apexcharts-toolbar { opacity: 1 !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# --- Yardım / açıklama --- #}
+<div class="alert alert-primary d-flex align-items-center mb-6">
+    <i class="ki-outline ki-information-5 fs-2 me-3"></i>
+    <div>
+        {% blocktrans %}Bu sayfa sensör okumadaki iletişim hatalarının kaynağını teşhis eder:
+        <b>bizim yapılandırmamız mı</b> yoksa <b>PLC/ağ mı</b>. Hata metinleri kategorilere
+        ayrılır; bir bağlantıda tüm sensörler birlikte hatalıysa PLC/ağ, belirli sensörler
+        sürekli hatalıyken diğerleri sağlıklıysa yapılandırma şüphesi öne çıkar. Salt gözlem —
+        polling davranışını değiştirmez.{% endblocktrans %}
+    </div>
+</div>
+
+{# --- Filtre çubuğu --- #}
+<div class="card mb-6">
+    <div class="card-body py-4">
+        <div class="row g-4 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">{% trans "Tesis" %}</label>
+                <select id="cd-station" class="form-select form-select-sm">
+                    <option value="">{% trans "Tümü" %}</option>
+                    {% for s in stations %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">{% trans "Bağlantı" %}</label>
+                <select id="cd-connection" class="form-select form-select-sm">
+                    <option value="">{% trans "Tümü" %}</option>
+                    {% for c in connections %}
+                    <option value="{{ c.id }}" data-station="{{ c.station_id|default:'' }}">
+                        {{ c.station.name|default:'—' }} / {{ c.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">{% trans "Pencere" %}</label>
+                <select id="cd-days" class="form-select form-select-sm">
+                    <option value="1">{% trans "Son 24 saat" %}</option>
+                    <option value="3">{% trans "Son 3 gün" %}</option>
+                    <option value="7">{% trans "Son 7 gün" %}</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button id="cd-refresh" class="btn btn-sm btn-primary flex-grow-1">
+                    <i class="ki-outline ki-arrows-circle fs-5"></i>{% trans "Yenile" %}
+                </button>
+            </div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="form-check form-check-sm form-check-custom">
+                <input class="form-check-input" type="checkbox" id="cd-auto" checked>
+                <label class="form-check-label ms-2 text-muted fs-8" for="cd-auto">
+                    {% trans "Otomatik yenile (15 sn)" %}
+                </label>
+            </div>
+            <span class="text-muted fs-8" id="cd-updated"></span>
+        </div>
+    </div>
+</div>
+
+{# --- Özet kartları --- #}
+<div class="row g-4 mb-6">
+    <div class="col-md-3">
+        <div class="card card-flush h-100"><div class="card-body text-center py-5">
+            <div class="fs-2x fw-bold text-success" id="cd-sum-ok">–</div>
+            <div class="text-muted fs-7">{% trans "Sağlıklı bağlantı" %}</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-flush h-100"><div class="card-body text-center py-5">
+            <div class="fs-2x fw-bold text-warning" id="cd-sum-warn">–</div>
+            <div class="text-muted fs-7">{% trans "Uyarı (config şüphesi)" %}</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-flush h-100"><div class="card-body text-center py-5">
+            <div class="fs-2x fw-bold text-danger" id="cd-sum-err">–</div>
+            <div class="text-muted fs-7">{% trans "Kritik (PLC/ağ şüphesi)" %}</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-flush h-100"><div class="card-body text-center py-5">
+            <div class="fs-2x fw-bold" id="cd-sum-events">–</div>
+            <div class="text-muted fs-7">{% trans "Kategorili hata olayı" %}</div>
+        </div></div>
+    </div>
+</div>
+
+{# --- Grafikler --- #}
+<div class="row g-6 mb-6">
+    <div class="col-lg-5">
+        <div class="card h-100">
+            <div class="card-header"><h3 class="card-title">{% trans "Hata kategorileri (kök neden)" %}</h3></div>
+            <div class="card-body">
+                <div id="cd-chart-cat" style="min-height:300px;"></div>
+                <div id="cd-cat-empty" class="text-center text-muted py-10 d-none">
+                    {% trans "Bu pencerede kategorili hata olayı yok. (Kayıtlar hata oluştukça birikir.)" %}
+                    <div class="mt-3 fs-8">{% trans "Aşağıda okuma status kodlarından türetilen özet gösterilir." %}</div>
+                    <div id="cd-chart-status" class="mt-3" style="min-height:220px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-header"><h3 class="card-title">{% trans "Saatlik hata trendi" %}</h3></div>
+            <div class="card-body">
+                <div id="cd-chart-trend" style="min-height:300px;"></div>
+                <div id="cd-trend-empty" class="text-center text-muted py-20 d-none">
+                    {% trans "Trend için henüz veri yok." %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# --- Bağlantı sağlığı tablosu --- #}
+<div class="card mb-6">
+    <div class="card-header"><h3 class="card-title">{% trans "Bağlantı sağlığı" %}</h3></div>
+    <div class="card-body pt-2">
+        <div class="table-responsive">
+            <table class="table table-row-bordered table-row-gray-300 align-middle gy-3">
+                <thead>
+                    <tr class="fw-bold text-muted fs-7">
+                        <th>{% trans "Bağlantı" %}</th>
+                        <th>{% trans "Protokol / Host" %}</th>
+                        <th>{% trans "Son Poll" %}</th>
+                        <th class="text-end">{% trans "Okuma" %}</th>
+                        <th class="text-end">{% trans "Hata Oranı" %}</th>
+                        <th>{% trans "Değerlendirme" %}</th>
+                        <th>{% trans "Son Hata" %}</th>
+                    </tr>
+                </thead>
+                <tbody id="cd-conn-tbody">
+                    <tr><td colspan="7" class="text-center text-muted py-8">{% trans "Yükleniyor…" %}</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{# --- Son ham hatalar --- #}
+<div class="card">
+    <div class="card-header"><h3 class="card-title">{% trans "Son ham hata kayıtları" %}</h3></div>
+    <div class="card-body pt-2">
+        <div class="table-responsive">
+            <table class="table table-row-bordered table-row-gray-300 align-middle gy-2 fs-7">
+                <thead>
+                    <tr class="fw-bold text-muted fs-8">
+                        <th>{% trans "Zaman" %}</th>
+                        <th>{% trans "Bağlantı" %}</th>
+                        <th>{% trans "Sensör" %}</th>
+                        <th>{% trans "Kategori" %}</th>
+                        <th>{% trans "Kaynak" %}</th>
+                        <th>{% trans "Ham Metin" %}</th>
+                    </tr>
+                </thead>
+                <tbody id="cd-recent-tbody">
+                    <tr><td colspan="6" class="text-center text-muted py-8">–</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    const API = "{% url 'dashboard:api_sensorcfg_comm_diagnostics' %}";
+    const I18N = {
+        none: "{% trans '(yok)' %}",
+        never: "{% trans 'hiç' %}",
+        connLevel: "{% trans '(bağlantı)' %}",
+        noData: "{% trans 'Eşleşen bağlantı yok.' %}",
+        readings: "{% trans 'okuma' %}",
+        srcConfig: "{% trans 'config (biz)' %}",
+        srcDevice: "{% trans 'cihaz' %}",
+        srcNetwork: "{% trans 'ağ' %}",
+        srcLine: "{% trans 'hat' %}",
+        srcAmbiguous: "{% trans 'belirsiz' %}",
+        srcUnknown: "{% trans 'bilinmeyen' %}",
+        updated: "{% trans 'Son güncelleme' %}",
+    };
+    const SRC_LABEL = {
+        config: I18N.srcConfig, device: I18N.srcDevice, network: I18N.srcNetwork,
+        line: I18N.srcLine, ambiguous: I18N.srcAmbiguous, unknown: I18N.srcUnknown,
+    };
+    const SRC_COLOR = {
+        config: "#f1416c", device: "#7239ea", network: "#ffc700",
+        line: "#00a3ff", ambiguous: "#f1bc00", unknown: "#a1a5b7",
+    };
+
+    const $station = document.getElementById('cd-station');
+    const $conn    = document.getElementById('cd-connection');
+    const $days    = document.getElementById('cd-days');
+    const $auto    = document.getElementById('cd-auto');
+    let catChart = null, statusChart = null, trendChart = null;
+    let timer = null;
+
+    function isDark() {
+        return document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    }
+    function esc(s) {
+        const d = document.createElement('div'); d.textContent = s == null ? '' : s;
+        return d.innerHTML;
+    }
+    function pct(x) { return '%' + (x * 100).toFixed(1); }
+    function fmtAge(sec) {
+        if (sec == null) return I18N.never;
+        if (sec < 90) return sec + 'sn';
+        if (sec < 5400) return Math.round(sec / 60) + 'dk';
+        if (sec < 172800) return (sec / 3600).toFixed(1) + 'sa';
+        return (sec / 86400).toFixed(1) + 'g';
+    }
+
+    // İstasyon seçimi bağlantı dropdown'unu filtrele
+    $station.addEventListener('change', function () {
+        const sid = $station.value;
+        Array.from($conn.options).forEach(function (o) {
+            if (!o.value) return;
+            o.hidden = sid && o.dataset.station !== sid;
+        });
+        if ($conn.selectedOptions[0] && $conn.selectedOptions[0].hidden) $conn.value = '';
+        load();
+    });
+    [$conn, $days].forEach(function (el) { el.addEventListener('change', load); });
+    document.getElementById('cd-refresh').addEventListener('click', load);
+    $auto.addEventListener('change', schedule);
+
+    function schedule() {
+        if (timer) { clearInterval(timer); timer = null; }
+        if ($auto.checked) timer = setInterval(load, 15000);
+    }
+
+    function load() {
+        const params = new URLSearchParams();
+        if ($station.value) params.set('station', $station.value);
+        if ($conn.value) params.set('connection', $conn.value);
+        params.set('days', $days.value);
+        fetch(API + '?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.json(); })
+            .then(render)
+            .catch(function () { /* sessizce geç, sonraki tick dener */ });
+    }
+
+    function render(d) {
+        if (!d || !d.ok) return;
+        document.getElementById('cd-sum-ok').textContent = d.summary.ok;
+        document.getElementById('cd-sum-warn').textContent = d.summary.warn;
+        document.getElementById('cd-sum-err').textContent = d.summary.err;
+        const totalEvents = (d.categories || []).reduce(function (a, c) { return a + c.count; }, 0);
+        document.getElementById('cd-sum-events').textContent = totalEvents;
+        document.getElementById('cd-updated').textContent =
+            I18N.updated + ': ' + new Date(d.generated_at).toLocaleTimeString();
+
+        renderCategoryChart(d.categories, d.status_proxy);
+        renderTrendChart(d.trend);
+        renderConnTable(d.connections);
+        renderRecent(d.recent);
+    }
+
+    function renderCategoryChart(cats, proxy) {
+        const catEmpty = document.getElementById('cd-cat-empty');
+        const catDiv = document.getElementById('cd-chart-cat');
+        if (cats && cats.length) {
+            catEmpty.classList.add('d-none');
+            catDiv.classList.remove('d-none');
+            const labels = cats.map(function (c) { return c.label; });
+            const data = cats.map(function (c) { return c.count; });
+            const colors = cats.map(function (c) { return SRC_COLOR[c.source] || SRC_COLOR.unknown; });
+            const opts = {
+                chart: { type: 'bar', height: 320, toolbar: { show: false }, fontFamily: 'inherit' },
+                series: [{ name: 'Olay', data: data }],
+                plotOptions: { bar: { horizontal: true, distributed: true, borderRadius: 4 } },
+                colors: colors,
+                dataLabels: { enabled: true },
+                xaxis: { categories: labels },
+                legend: { show: false },
+                theme: { mode: isDark() ? 'dark' : 'light' },
+                tooltip: { theme: isDark() ? 'dark' : 'light' },
+            };
+            if (catChart) catChart.destroy();
+            catChart = new ApexCharts(catDiv, opts); catChart.render();
+        } else {
+            catDiv.classList.add('d-none');
+            catEmpty.classList.remove('d-none');
+            renderStatusProxy(proxy);
+        }
+    }
+
+    function renderStatusProxy(p) {
+        if (!p) return;
+        const div = document.getElementById('cd-chart-status');
+        const series = [p.comm, p.invalid, p.nodata, p.good];
+        const opts = {
+            chart: { type: 'donut', height: 220, fontFamily: 'inherit' },
+            series: series,
+            labels: ['İletişim (8)', 'Geçersiz (4)', 'Veri Yok (0)', 'İyi (1)'],
+            colors: ['#f1416c', '#ffc700', '#a1a5b7', '#50cd89'],
+            legend: { position: 'bottom' },
+            theme: { mode: isDark() ? 'dark' : 'light' },
+        };
+        if (statusChart) statusChart.destroy();
+        statusChart = new ApexCharts(div, opts); statusChart.render();
+    }
+
+    function renderTrendChart(trend) {
+        const empty = document.getElementById('cd-trend-empty');
+        const div = document.getElementById('cd-chart-trend');
+        if (!trend || !trend.length) {
+            div.classList.add('d-none'); empty.classList.remove('d-none'); return;
+        }
+        empty.classList.add('d-none'); div.classList.remove('d-none');
+        const data = trend.map(function (t) { return { x: new Date(t.t).getTime(), y: t.n }; });
+        const opts = {
+            chart: { type: 'area', height: 320, toolbar: { show: true }, fontFamily: 'inherit' },
+            series: [{ name: 'Hata olayı', data: data }],
+            colors: ['#f1416c'],
+            fill: { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0.05 } },
+            stroke: { curve: 'smooth', width: 2 },
+            dataLabels: { enabled: false },
+            xaxis: { type: 'datetime' },
+            yaxis: { min: 0, forceNiceScale: true },
+            theme: { mode: isDark() ? 'dark' : 'light' },
+            tooltip: { theme: isDark() ? 'dark' : 'light', x: { format: 'dd MMM HH:mm' } },
+        };
+        if (trendChart) trendChart.destroy();
+        trendChart = new ApexCharts(div, opts); trendChart.render();
+    }
+
+    function verdictClass(level) {
+        return level === 'ok' ? 'cd-verdict-ok' : (level === 'err' ? 'cd-verdict-err' : 'cd-verdict-warn');
+    }
+    function verdictIcon(level) {
+        return level === 'ok' ? 'ki-check-circle' : (level === 'err' ? 'ki-cross-circle' : 'ki-information-5');
+    }
+
+    function renderConnTable(conns) {
+        const tb = document.getElementById('cd-conn-tbody');
+        if (!conns || !conns.length) {
+            tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-8">' + I18N.noData + '</td></tr>';
+            return;
+        }
+        tb.innerHTML = conns.map(function (c) {
+            let topBad = '';
+            if (c.top_bad && c.top_bad.length) {
+                topBad = '<div class="mt-1 fs-8 text-muted">' + c.top_bad.map(function (s) {
+                    return esc(s.label) + ' (' + pct(s.bad_rate) + ')';
+                }).join('<br>') + '</div>';
+            }
+            let lastErr = '';
+            if (c.last_error_message) {
+                const src = c.last_error_source || 'unknown';
+                lastErr = '<span class="badge cd-src-' + src + ' mb-1">' +
+                          esc(c.last_error_category || '') + '</span>' +
+                          '<div class="cd-detail text-muted">' + esc(c.last_error_message) + '</div>' +
+                          '<div class="fs-8 text-muted">' + esc(c.last_error_ago || '') + '</div>';
+            } else {
+                lastErr = '<span class="text-muted">' + I18N.none + '</span>';
+            }
+            const rateCls = c.err_rate >= 0.25 ? 'text-danger fw-bold'
+                          : (c.err_rate >= 0.05 ? 'text-warning fw-bold' : 'text-muted');
+            return '<tr>' +
+                '<td><div class="fw-semibold">' + esc(c.name) + '</div>' +
+                    '<div class="fs-8 text-muted">' + esc(c.station) + '</div></td>' +
+                '<td><span class="badge badge-light">' + esc(c.protocol) + '</span>' +
+                    '<div class="fs-8 text-muted">' + esc(c.host) + '</div></td>' +
+                '<td>' + fmtAge(c.last_polled_sec) + '</td>' +
+                '<td class="text-end">' + c.total.toLocaleString() + '</td>' +
+                '<td class="text-end ' + rateCls + '">' + pct(c.err_rate) + '</td>' +
+                '<td class="' + verdictClass(c.level) + '"><i class="ki-outline ' + verdictIcon(c.level) +
+                    ' fs-5 me-1"></i>' + esc(c.verdict) + topBad + '</td>' +
+                '<td>' + lastErr + '</td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    function renderRecent(recent) {
+        const tb = document.getElementById('cd-recent-tbody');
+        if (!recent || !recent.length) {
+            tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-8">–</td></tr>';
+            return;
+        }
+        tb.innerHTML = recent.map(function (e) {
+            const src = e.source || 'unknown';
+            return '<tr>' +
+                '<td class="text-nowrap">' + new Date(e.time).toLocaleString() + '</td>' +
+                '<td>' + esc(e.connection) + '</td>' +
+                '<td>' + esc(e.sensor) + '</td>' +
+                '<td>' + esc(e.category) + '</td>' +
+                '<td><span class="badge cd-src-' + src + '">' + (SRC_LABEL[src] || src) + '</span></td>' +
+                '<td class="cd-detail">' + esc(e.detail) + '</td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    // İlk yükleme + otomatik yenileme
+    load();
+    schedule();
+})();
+</script>
+{% endblock %}

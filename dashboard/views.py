@@ -1018,6 +1018,25 @@ class AlarmsView(OperatorRequiredMixin, TemplateView):
         return ctx
 
 
+class CommDiagnosticsView(OperatorRequiredMixin, TemplateView):
+    """Sensör Ayarları → İletişim Tanılama (operatör/yönetici).
+
+    Sensör okumadaki iletişim hatalarının "bizden mi PLC/ağdan mı" kaynaklandığını
+    teşhis eder. Veri `api_views.comm_diagnostics_data`'dan (canlı poll) gelir;
+    hata metinleri `scada_io.comm_errors.classify_comm_error` ile kategorilenir.
+    Salt gözlem — polling davranışını değiştirmez.
+    """
+    template_name = "dashboard/management/comm_diagnostics.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["stations"] = Station.objects.filter(active=True).order_by("name")
+        ctx["connections"] = (
+            Connection.objects.select_related("station").order_by("station__id", "name")
+        )
+        return ctx
+
+
 class RemindersView(RoleRequiredMixin, TemplateView):
     """Takvim Hatırlatıcı — paylaşımlı (tüm roller görür ve yönetir).
 

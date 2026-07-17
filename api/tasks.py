@@ -98,6 +98,12 @@ def prune_generated_reports_task():
     call_command("prune_generated_reports")
 
 
+@shared_task(name="api.tasks.prune_comm_errors_task")
+def prune_comm_errors_task():
+    """COMM_ERROR_RETENTION_DAYS'den eski CommErrorEvent teşhis kayıtlarını siler."""
+    call_command("prune_comm_errors")
+
+
 @shared_task(name="api.tasks.backup_database_run")
 def backup_database_run(tier="manual", force=False, user_id=None):
     """Bir tier için DB yedeği alır (beat + manuel tetik ortak).

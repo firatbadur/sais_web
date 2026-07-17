@@ -4829,3 +4829,194 @@ def report_generated_delete(request):
     rep.delete()  # dosyaları da diskten kaldırır
     return JsonResponse({"ok": True})
 
+
+# --------------------------------------------------------------------------- #
+# İletişim Tanılama (comm diagnostics) — "bizden mi PLC/ağdan mı?"
+# --------------------------------------------------------------------------- #
+
+def _comm_verdict(err_rate, sensor_stats):
+    """Bağlantı-seviyesi vs sensör-seviyesi kararı → (metin, seviye).
+
+    sensor_stats: [(sensor_id, total, bad_rate), ...]. Karar mantığı
+    `diagnose_comm_errors` komutuyla aynı: tüm sensörler birlikte hatalı →
+    bağlantı/PLC/ağ; belirli sensörler hep hatalı, diğerleri sağlıklı → bizim
+    config'imiz.
+    """
+    if err_rate < 0.02:
+        return ("Sağlıklı — hata oranı ihmal edilebilir.", "ok")
+    n = len(sensor_stats)
+    bad = [t for t in sensor_stats if t[2] >= 0.5]
+    clean = [t for t in sensor_stats if t[2] < 0.05]
+    frac = (len(bad) / n) if n else 0
+    if frac >= 0.8:
+        return ("Bağlantı seviyesi — sensörlerin çoğu birlikte hatalı. "
+                "Şüphe: PLC/ağ (erişilemezlik, reset, timeout, eşzamanlı socket).", "err")
+    if bad and clean:
+        return ("Sensör seviyesi — bazı sensörler sürekli hatalı, diğerleri sağlıklı. "
+                "Şüphe: bizim config (adres/slave/quantity).", "warn")
+    return ("Karışık — hem bağlantı hem sensör kaynaklı olabilir; "
+            "kategori dağılımına ve son hata metnine bak.", "warn")
+
+
+@login_required
+def comm_diagnostics_data(request):
+    """İletişim Tanılama sayfası veri endpoint'i (operatör+admin, salt-okuma).
+
+    Verilen pencere (gün) ve opsiyonel istasyon/bağlantı filtresi için:
+      - Bağlantı sağlığı (son poll/hata, hata oranı, bağlantı-vs-sensör kararı)
+      - Reading status proxy (kod 8 İletişim / 4 Geçersiz / 0 Veri Yok)
+      - CommErrorEvent kategori dağılımı + saatlik trend + son ham hatalar
+    Sayfa bunu periyodik poll'lar (canlı freshness).
+    """
+    from django.db.models import Count
+    from django.db.models.functions import TruncHour
+
+    from api.models import CommErrorEvent, Sensor
+    from scada_io.comm_errors import category_label, category_source, classify_comm_error
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    try:
+        days = int(request.GET.get("days", 1))
+    except (TypeError, ValueError):
+        days = 1
+    days = max(1, min(days, 30))
+    now = timezone.now()
+    cutoff = now - timedelta(days=days)
+
+    conns = Connection.objects.all().select_related("station")
+    station_id = request.GET.get("station") or None
+    conn_filter = request.GET.get("connection") or None
+    if station_id:
+        conns = conns.filter(station_id=station_id)
+    if conn_filter:
+        conns = conns.filter(pk=conn_filter)
+    conns = list(conns.order_by("station__id", "name"))
+    conn_ids = [c.pk for c in conns]
+
+    # İletişim/veri HATASI sayılan kodlar (operasyonel 23-26/39 dahil DEĞİL —
+    # bunlar comm hatası değil; None = belirsiz → hata). diagnose_comm_errors ile
+    # tutarlı.
+    error_codes = {0, 4, 8}
+
+    # --- Reading status kırılımı (sensör+status grain, tek sorgu) ---
+    per_conn: dict[int, dict] = {cid: {} for cid in conn_ids}
+    status_totals: dict[int | None, int] = {}
+    if conn_ids:
+        for r in (Reading.objects
+                  .filter(sensor__connection_id__in=conn_ids, time_iso__gte=cutoff)
+                  .values("sensor__connection_id", "sensor_id", "status__code")
+                  .annotate(n=Count("id"))):
+            cid = r["sensor__connection_id"]
+            sid = r["sensor_id"]
+            code = r["status__code"]
+            n = r["n"]
+            s = per_conn.setdefault(cid, {}).setdefault(sid, {"total": 0, "err": 0})
+            s["total"] += n
+            if code is None or code in error_codes:
+                s["err"] += n
+            status_totals[code] = status_totals.get(code, 0) + n
+
+    # Sensör etiketleri (yalnız ilgili sensörler)
+    sensor_ids = [sid for cid in per_conn for sid in per_conn[cid]]
+    labels: dict[int, str] = {}
+    if sensor_ids:
+        for sen in Sensor.objects.filter(pk__in=sensor_ids).select_related("parameter"):
+            code = sen.parameter.parameter_name if sen.parameter_id else ""
+            base = sen.tag or code or f"#{sen.pk}"
+            labels[sen.pk] = f"{base} (slave {sen.slave_id}, adr {sen.address})"
+
+    # --- Bağlantı bazlı özet + karar ---
+    connections_out = []
+    summary = {"ok": 0, "warn": 0, "err": 0}
+    for c in conns:
+        sensors = per_conn.get(c.pk, {})
+        total = sum(v["total"] for v in sensors.values())
+        bad = sum(v["err"] for v in sensors.values())
+        rate = (bad / total) if total else 0
+        sstats = []
+        for sid, v in sensors.items():
+            br = (v["err"] / v["total"]) if v["total"] else 0
+            sstats.append((sid, v["total"], br))
+        sstats.sort(key=lambda t: -t[2])
+        verdict, level = _comm_verdict(rate, sstats) if total else ("Veri yok (bu pencerede okuma yok).", "warn")
+        summary[level] += 1
+
+        last_cat = classify_comm_error(c.last_error_message) if c.last_error_message else None
+        top_bad = [
+            {"label": labels.get(sid, f"#{sid}"), "bad_rate": round(br, 4), "readings": tot}
+            for sid, tot, br in sstats[:5] if br >= 0.5
+        ]
+        connections_out.append({
+            "id": c.pk,
+            "name": c.name,
+            "station": str(c.station) if c.station_id else "",
+            "protocol": c.protocol,
+            "host": f"{c.host or c.serial_port or '?'}:{c.port or ''}",
+            "last_polled_sec": int((now - c.last_polled_at).total_seconds()) if c.last_polled_at else None,
+            "last_error_ago": _humanize_ago_tr(c.last_error_at, now),
+            "last_error_message": (c.last_error_message or "")[:200],
+            "last_error_category": category_label(last_cat) if last_cat else None,
+            "last_error_source": category_source(last_cat) if last_cat else None,
+            "total": total,
+            "err_rate": round(rate, 4),
+            "verdict": verdict,
+            "level": level,
+            "top_bad": top_bad,
+        })
+
+    # --- CommErrorEvent kategori dağılımı (scope geneli) ---
+    categories = []
+    trend = []
+    recent = []
+    if conn_ids:
+        for r in (CommErrorEvent.objects
+                  .filter(connection_id__in=conn_ids, time_iso__gte=cutoff)
+                  .values("category").annotate(n=Count("id")).order_by("-n")):
+            categories.append({
+                "category": r["category"],
+                "label": category_label(r["category"]),
+                "source": category_source(r["category"]),
+                "count": r["n"],
+            })
+        for r in (CommErrorEvent.objects
+                  .filter(connection_id__in=conn_ids, time_iso__gte=cutoff)
+                  .annotate(h=TruncHour("time_iso")).values("h")
+                  .annotate(n=Count("id")).order_by("h")):
+            trend.append({"t": r["h"].isoformat(), "n": r["n"]})
+        for e in (CommErrorEvent.objects
+                  .filter(connection_id__in=conn_ids, time_iso__gte=cutoff)
+                  .select_related("connection", "sensor")
+                  .order_by("-time_iso")[:40]):
+            recent.append({
+                "time": e.time_iso.isoformat(),
+                "connection": e.connection.name if e.connection_id else "",
+                "sensor": (e.sensor.tag or f"#{e.sensor_id}") if e.sensor_id else "(bağlantı)",
+                "category": category_label(e.category),
+                "source": e.source or category_source(e.category),
+                "status_code": e.status_code,
+                "detail": (e.detail or "")[:200],
+            })
+
+    status_proxy = {
+        "good": status_totals.get(1, 0),
+        "comm": status_totals.get(8, 0),
+        "invalid": status_totals.get(4, 0),
+        "nodata": status_totals.get(0, 0),
+        "other": sum(n for code, n in status_totals.items() if code not in (0, 1, 4, 8)),
+    }
+
+    return JsonResponse({
+        "ok": True,
+        "generated_at": now.isoformat(),
+        "days": days,
+        "summary": summary,
+        "connections": connections_out,
+        "status_proxy": status_proxy,
+        "categories": categories,
+        "trend": trend,
+        "recent": recent,
+    })
+
