@@ -25,7 +25,7 @@ from django.utils import timezone
 from api.models import Command, Connection, Sensor
 
 from . import connection_pool
-from .comm_errors import category_source, classify_comm_error
+from .comm_errors import CONN_RESET, category_source, classify_comm_error
 from .decoders import decode_sensor_from_batch
 from .persistence import persist_reading
 from .readers import ReadResult, build_reader
@@ -207,68 +207,63 @@ def poll_connection(self, conn_id: int):
             persist_reading(sensor, value=None, quality="bad", origin="polled", status_code=8)
         return
 
+    # --- Okuma: ölü sokette tek seferlik reconnect-retry ---
+    # PLC boşta kalan oturumu kapattıysa ilk yazımda `BrokenPipeError` alırız ve
+    # o cycle'ın TÜM sensörleri bad olur (SIM'e bozuk dakika gider). Ölü soket
+    # tespit edilirse (kategori `conn_reset`) pool'u tazeleyip cycle'ı BİR kez
+    # tekrarlarız → veri kaybı olmaz. Timeout'ta retry YAPILMAZ: taze soket
+    # cevap vermeyen bir cihazı konuşturmaz, yalnız bloklamayı ikiye katlar.
+    results: list = []
     last_sensor_error = ""
-    any_success = False
     connection_level_error = False
 
-    # --- Adım 1: Scan group batch okumaları ---
-    # Aynı Connection üzerindeki aktif scan group'lar tek Modbus request ile
-    # okunur; sonuç bellekte tutulup bu grubu kullanan sensörler decode edilir.
-    # `None` anahtarı scan_group'suz (legacy) sensörler için kullanılır.
-    group_data: dict[int | None, tuple[list[int] | None, str]] = {}
-    for sg in conn.scan_groups.filter(is_active=True):
-        regs, err = reader.read_raw(
-            slave_id=sg.slave_id,
-            function=sg.function,
-            address=sg.start_address,
-            count=sg.quantity,
-        )
-        group_data[sg.pk] = (regs, err)
-        if err:
-            last_sensor_error = f"scan_group {sg.name}: {err}"
-            err_lower = err.lower()
-            if any(kw in err_lower for kw in (
-                "connection lost", "broken", "reset", "no route",
-                "bağlantı yok", "socket", "disconnected",
-            )):
-                connection_level_error = True
-
-    # --- Adım 2: Sensörleri decode et + persist ---
-    try:
-        for sensor in real_sensors:
-            result = _read_sensor_with_groups(reader, sensor, group_data)
-
-            if result.ok:
-                any_success = True
-                fail_status = None
-            else:
-                last_sensor_error = f"sensor {sensor.id}: {result.error or 'unknown read error'}"
-                err_lower = (result.error or "").lower()
-                is_conn_err = any(kw in err_lower for kw in (
-                    "connection lost", "broken", "reset", "no route",
-                    "bağlantı yok", "socket", "disconnected",
-                    "timeout", "no response",
-                ))
-                if is_conn_err:
-                    connection_level_error = True
-                # 8 = İletişim Hatası (comm/timeout); 4 = Geçersiz Veri
-                # (decode/parse failure — bağlantı ok ama veri yorumlanamadı).
-                fail_status = 8 if is_conn_err else 4
-                # Teşhis kaydı (throttle'lı, davranışı değiştirmez).
-                _record_comm_error(conn_id, sensor.id, result.error, fail_status)
-
-            persist_reading(
-                sensor,
-                value=result.value,
-                quality=result.quality,
-                origin="polled",
-                status_code=1 if result.ok else fail_status,
+    for attempt in (1, 2):
+        try:
+            results, last_sensor_error, connection_level_error, socket_dead = _read_cycle(
+                reader, conn, real_sensors
             )
-    except Exception as exc:  # noqa: BLE001
-        # Reader.read kendi içinde yakalar; buraya düşüyorsa beklenmedik bir hata
-        logger.exception("poll_connection: beklenmedik exception conn=%s", conn_id)
-        last_sensor_error = f"{type(exc).__name__}: {exc}"
-        connection_level_error = True
+        except Exception as exc:  # noqa: BLE001
+            # Reader.read kendi içinde yakalar; buraya düşüyorsa beklenmedik bir hata
+            logger.exception("poll_connection: beklenmedik exception conn=%s", conn_id)
+            results = []
+            last_sensor_error = f"{type(exc).__name__}: {exc}"
+            connection_level_error = True
+            socket_dead = False
+
+        if not socket_dead or attempt == 2:
+            break
+
+        # Ölü soket → pool'u tazele ve cycle'ı bir kez daha dene.
+        logger.info(
+            "poll_connection: ölü soket, taze bağlantıyla yeniden deneniyor conn=%s (%s)",
+            conn_id, last_sensor_error,
+        )
+        connection_pool.invalidate(conn_id, reason=f"dead socket: {last_sensor_error}")
+        reader = connection_pool.get_reader(conn)
+        if reader is None:
+            break  # taze bağlantı da açılamadı → eldeki sonuçlarla devam
+
+    # --- Sonuçları persist et ---
+    any_success = False
+    for sensor, result in results:
+        if result.ok:
+            any_success = True
+            fail_status = None
+        else:
+            is_conn_err = _is_conn_level(result.error, include_timeout=True)
+            # 8 = İletişim Hatası (comm/timeout); 4 = Geçersiz Veri
+            # (decode/parse failure — bağlantı ok ama veri yorumlanamadı).
+            fail_status = 8 if is_conn_err else 4
+            # Teşhis kaydı (throttle'lı, davranışı değiştirmez).
+            _record_comm_error(conn_id, sensor.id, result.error, fail_status)
+
+        persist_reading(
+            sensor,
+            value=result.value,
+            quality=result.quality,
+            origin="polled",
+            status_code=1 if result.ok else fail_status,
+        )
 
     # --- Pool state yönetimi ---
     if connection_level_error:
@@ -290,6 +285,66 @@ def poll_connection(self, conn_id: int):
             last_error_at=timezone.now(),
             last_error_message=last_sensor_error[:500],
         )
+
+
+# Bir hata metnini "bağlantı seviyesi" sayan anahtar kelimeler. Timeout ayrı
+# tutulur: scan-group fazında timeout bağlantıyı ölü saymaz (cihaz cevap
+# vermiyor olabilir, soket sağlam), sensör fazında sayar — mevcut davranış.
+_CONN_KEYWORDS = (
+    "connection lost", "broken", "reset", "no route",
+    "bağlantı yok", "socket", "disconnected",
+)
+_TIMEOUT_KEYWORDS = ("timeout", "no response")
+
+
+def _is_conn_level(err: str | None, *, include_timeout: bool) -> bool:
+    text = (err or "").lower()
+    keywords = _CONN_KEYWORDS + (_TIMEOUT_KEYWORDS if include_timeout else ())
+    return any(kw in text for kw in keywords)
+
+
+def _read_cycle(reader, conn, real_sensors):
+    """Scan group batch'lerini + sensörleri oku. **Persist YOK** (retry edilebilsin).
+
+    Döner: ``(results, last_error, connection_level_error, socket_dead)``
+      - ``results``: ``[(sensor, ReadResult), ...]``
+      - ``socket_dead``: hatalardan biri `conn_reset` (broken pipe/reset) mi —
+        yani soket ölü mü? Caller bunu görünce taze soketle bir kez retry eder.
+    """
+    # Aynı Connection üzerindeki aktif scan group'lar tek Modbus request ile
+    # okunur; sonuç bellekte tutulup bu grubu kullanan sensörler decode edilir.
+    group_data: dict[int | None, tuple[list[int] | None, str]] = {}
+    last_error = ""
+    conn_level = False
+    socket_dead = False
+
+    for sg in conn.scan_groups.filter(is_active=True):
+        regs, err = reader.read_raw(
+            slave_id=sg.slave_id,
+            function=sg.function,
+            address=sg.start_address,
+            count=sg.quantity,
+        )
+        group_data[sg.pk] = (regs, err)
+        if err:
+            last_error = f"scan_group {sg.name}: {err}"
+            if _is_conn_level(err, include_timeout=False):
+                conn_level = True
+            if classify_comm_error(err) == CONN_RESET:
+                socket_dead = True
+
+    results = []
+    for sensor in real_sensors:
+        result = _read_sensor_with_groups(reader, sensor, group_data)
+        results.append((sensor, result))
+        if not result.ok:
+            last_error = f"sensor {sensor.id}: {result.error or 'unknown read error'}"
+            if _is_conn_level(result.error, include_timeout=True):
+                conn_level = True
+            if classify_comm_error(result.error) == CONN_RESET:
+                socket_dead = True
+
+    return results, last_error, conn_level, socket_dead
 
 
 def _read_sensor_with_groups(reader, sensor, group_data):

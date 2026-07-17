@@ -349,6 +349,12 @@ READING_RETENTION_DAILY_DAYS = int(os.getenv("READING_RETENTION_DAILY_DAYS", "99
 COMM_ERROR_MIN_INTERVAL_SEC = int(os.getenv("COMM_ERROR_MIN_INTERVAL_SEC", "300"))
 COMM_ERROR_RETENTION_DAYS = int(os.getenv("COMM_ERROR_RETENTION_DAYS", "30"))
 
+# Persistent connection pool — havuzdaki soket bu kadar sn KULLANILMADIYSA
+# kullanmadan önce kapatılıp yeniden açılır. PLC'ler boşta kalan Modbus TCP
+# oturumunu kapatır; ölü sokete yazmak `BrokenPipeError`'a ve o cycle'ın tüm
+# sensörlerinin bad olmasına yol açar. 0 = kapalı (eski davranış).
+POOL_MAX_IDLE_SEC = int(os.getenv("POOL_MAX_IDLE_SEC", "60"))
+
 # PC kapanma tespiti (heartbeat) — açılışta son canlılık damgası ile şimdiki zaman
 # arasındaki boşluk bu dakikayı aşarsa PowerOff kaydı düşülür. Kısa container
 # restart'larını (Watchtower güncellemesi vb.) kayıt dışı bırakacak kadar büyük tut.

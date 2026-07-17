@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import socket as sock_mod
 import threading
+import time
 from typing import Dict, Optional
 
 from .readers import ProtocolReader, build_reader
@@ -36,6 +37,18 @@ logger = logging.getLogger(__name__)
 # koşuluna göre işler.
 MAX_CONSECUTIVE_FAILED_CYCLES = 3
 
+# Havuzdaki soket bu kadar süre KULLANILMADIYSA, kullanmadan önce kapatılıp
+# yeniden açılır (idle-aware refresh).
+#
+# NEDEN: PLC'lerin çoğu boşta kalan Modbus TCP oturumunu kendi kapatır. Prefork
+# pool'da her worker process'in kendi soketi olduğundan (aşağıdaki not) bir
+# soket cycle'ların ancak 1/N'inde kullanılır → aralarda boşta kalır → PLC
+# düşürür → biz ölü sokete yazınca `BrokenPipeError [Errno 32]` alırız ve o
+# cycle'ın TÜM sensörleri bad olur. Bayat soketi baştan tazelemek bunu önler.
+# Saha kanıtı: Mikrodev PLC'de tek anda 3 açık soket + periyodik broken pipe.
+# `.env` `POOL_MAX_IDLE_SEC` ile ayarlanır; 0 = kapalı (eski davranış).
+DEFAULT_POOL_MAX_IDLE_SEC = 60
+
 # Linux TCP keep-alive parametreleri. Windows'ta SIO_KEEPALIVE_VALS ioctl
 # gerekir; şimdilik sadece SO_KEEPALIVE enable edilir (OS default idle süresi
 # kullanılır — Win: 2 saat; kötü ama sıfırdan iyi).
@@ -46,19 +59,48 @@ KEEPALIVE_PROBES = 3          # kaç başarısız probe → ölü say
 
 _POOL: Dict[int, ProtocolReader] = {}
 _FAILURES: Dict[int, int] = {}
+_LAST_USED: Dict[int, float] = {}   # conn_id → monotonic zaman (idle refresh için)
 _LOCK = threading.Lock()
+
+
+def _max_idle_sec() -> int:
+    """POOL_MAX_IDLE_SEC (settings/.env). 0 → idle refresh kapalı."""
+    try:
+        from django.conf import settings
+        return int(getattr(settings, "POOL_MAX_IDLE_SEC", DEFAULT_POOL_MAX_IDLE_SEC))
+    except Exception:  # noqa: BLE001 — settings yoksa (test/CLI) default'a düş
+        return DEFAULT_POOL_MAX_IDLE_SEC
 
 
 def get_reader(connection) -> Optional[ProtocolReader]:
     """Cached reader varsa döner; yoksa yeni aç + keep-alive + cache'le.
+
+    Bayat (uzun süre kullanılmamış) soket kullanılmadan önce tazelenir — bkz.
+    `DEFAULT_POOL_MAX_IDLE_SEC`.
 
     Başarısızsa None döner (caller bağlantı kurulamadığını bilir, Connection
     tablosundaki last_error_message'ı günceller).
     """
     with _LOCK:
         reader = _POOL.get(connection.pk)
+
         if reader is not None and reader.connected:
-            return reader
+            # Idle-aware refresh: PLC boşta kalan oturumu çoktan kapatmış
+            # olabilir; ölü sokete yazıp broken pipe almaktansa taze aç.
+            max_idle = _max_idle_sec()
+            last = _LAST_USED.get(connection.pk)
+            idle = (time.monotonic() - last) if last is not None else 0
+            if max_idle > 0 and last is not None and idle > max_idle:
+                logger.info(
+                    "connection_pool: bayat soket tazeleniyor conn=%s (%.0f sn boşta > %s)",
+                    connection.pk, idle, max_idle,
+                )
+                _safe_close(reader)
+                _POOL.pop(connection.pk, None)
+                reader = None
+            else:
+                _LAST_USED[connection.pk] = time.monotonic()
+                return reader
 
         # Cache'te var ama connected=False — kapat ve at
         if reader is not None:
@@ -78,6 +120,7 @@ def get_reader(connection) -> Optional[ProtocolReader]:
         _apply_keepalive(reader, connection)
         _POOL[connection.pk] = reader
         _FAILURES[connection.pk] = 0
+        _LAST_USED[connection.pk] = time.monotonic()
         logger.info(
             "connection_pool: yeni bağlantı açıldı conn=%s (%s) %s",
             connection.pk, connection.name, connection.protocol,
@@ -90,6 +133,7 @@ def invalidate(conn_id: int, reason: str = "") -> None:
     with _LOCK:
         reader = _POOL.pop(conn_id, None)
         _FAILURES.pop(conn_id, None)
+        _LAST_USED.pop(conn_id, None)
         if reader is not None:
             _safe_close(reader)
             logger.info("connection_pool: invalidate conn=%s reason=%s", conn_id, reason or "-")
@@ -121,20 +165,27 @@ def close_all(reason: str = "shutdown") -> int:
             logger.info("connection_pool: %s close conn=%s", reason, conn_id)
         _POOL.clear()
         _FAILURES.clear()
+        _LAST_USED.clear()
         return count
 
 
 def stats() -> dict:
     """Debug/monitoring için pool özetini döner."""
     with _LOCK:
+        now = time.monotonic()
         return {
             "open_count": len(_POOL),
+            "max_idle_sec": _max_idle_sec(),
             "connections": {
                 conn_id: {
                     "protocol": r.connection.protocol,
                     "host": r.connection.host or r.connection.serial_port,
                     "connected": r.connected,
                     "failures": _FAILURES.get(conn_id, 0),
+                    "idle_sec": (
+                        round(now - _LAST_USED[conn_id], 1)
+                        if conn_id in _LAST_USED else None
+                    ),
                 }
                 for conn_id, r in _POOL.items()
             },

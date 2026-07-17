@@ -4834,30 +4834,6 @@ def report_generated_delete(request):
 # İletişim Tanılama (comm diagnostics) — "bizden mi PLC/ağdan mı?"
 # --------------------------------------------------------------------------- #
 
-def _comm_verdict(err_rate, sensor_stats):
-    """Bağlantı-seviyesi vs sensör-seviyesi kararı → (metin, seviye).
-
-    sensor_stats: [(sensor_id, total, bad_rate), ...]. Karar mantığı
-    `diagnose_comm_errors` komutuyla aynı: tüm sensörler birlikte hatalı →
-    bağlantı/PLC/ağ; belirli sensörler hep hatalı, diğerleri sağlıklı → bizim
-    config'imiz.
-    """
-    if err_rate < 0.02:
-        return ("Sağlıklı — hata oranı ihmal edilebilir.", "ok")
-    n = len(sensor_stats)
-    bad = [t for t in sensor_stats if t[2] >= 0.5]
-    clean = [t for t in sensor_stats if t[2] < 0.05]
-    frac = (len(bad) / n) if n else 0
-    if frac >= 0.8:
-        return ("Bağlantı seviyesi — sensörlerin çoğu birlikte hatalı. "
-                "Şüphe: PLC/ağ (erişilemezlik, reset, timeout, eşzamanlı socket).", "err")
-    if bad and clean:
-        return ("Sensör seviyesi — bazı sensörler sürekli hatalı, diğerleri sağlıklı. "
-                "Şüphe: bizim config (adres/slave/quantity).", "warn")
-    return ("Karışık — hem bağlantı hem sensör kaynaklı olabilir; "
-            "kategori dağılımına ve son hata metnine bak.", "warn")
-
-
 @login_required
 def comm_diagnostics_data(request):
     """İletişim Tanılama sayfası veri endpoint'i (operatör+admin, salt-okuma).
@@ -4872,7 +4848,12 @@ def comm_diagnostics_data(request):
     from django.db.models.functions import TruncHour
 
     from api.models import CommErrorEvent, Sensor
-    from scada_io.comm_errors import category_label, category_source, classify_comm_error
+    from scada_io.comm_errors import (
+        category_label,
+        category_source,
+        classify_comm_error,
+        verdict as comm_verdict,
+    )
 
     denied = _require_operator(request)
     if denied:
@@ -4928,6 +4909,19 @@ def comm_diagnostics_data(request):
             base = sen.tag or code or f"#{sen.pk}"
             labels[sen.pk] = f"{base} (slave {sen.slave_id}, adr {sen.address})"
 
+    # --- CommErrorEvent kategori dağılımı (bağlantı bazlı + scope geneli) ---
+    # Bağlantı bazlı sayım `verdict()`'e beslenir — kök-neden kaynağı (ağ vs
+    # config) en güçlü sinyaldir. Scope geneli ise grafiği besler.
+    cat_by_conn: dict[int, dict[str, int]] = {}
+    cat_total: dict[str, int] = {}
+    if conn_ids:
+        for r in (CommErrorEvent.objects
+                  .filter(connection_id__in=conn_ids, time_iso__gte=cutoff)
+                  .values("connection_id", "category")
+                  .annotate(n=Count("id"))):
+            cat_by_conn.setdefault(r["connection_id"], {})[r["category"]] = r["n"]
+            cat_total[r["category"]] = cat_total.get(r["category"], 0) + r["n"]
+
     # --- Bağlantı bazlı özet + karar ---
     connections_out = []
     summary = {"ok": 0, "warn": 0, "err": 0}
@@ -4941,7 +4935,12 @@ def comm_diagnostics_data(request):
             br = (v["err"] / v["total"]) if v["total"] else 0
             sstats.append((sid, v["total"], br))
         sstats.sort(key=lambda t: -t[2])
-        verdict, level = _comm_verdict(rate, sstats) if total else ("Veri yok (bu pencerede okuma yok).", "warn")
+        if total:
+            verdict_text, level = comm_verdict(
+                rate, [t[2] for t in sstats], cat_by_conn.get(c.pk)
+            )
+        else:
+            verdict_text, level = ("Veri yok (bu pencerede okuma yok).", "warn")
         summary[level] += 1
 
         last_cat = classify_comm_error(c.last_error_message) if c.last_error_message else None
@@ -4962,25 +4961,24 @@ def comm_diagnostics_data(request):
             "last_error_source": category_source(last_cat) if last_cat else None,
             "total": total,
             "err_rate": round(rate, 4),
-            "verdict": verdict,
+            "verdict": verdict_text,
             "level": level,
             "top_bad": top_bad,
         })
 
-    # --- CommErrorEvent kategori dağılımı (scope geneli) ---
-    categories = []
+    # --- Grafik + son hatalar (kategori sayımı yukarıda toplandı) ---
+    categories = [
+        {
+            "category": cat,
+            "label": category_label(cat),
+            "source": category_source(cat),
+            "count": n,
+        }
+        for cat, n in sorted(cat_total.items(), key=lambda kv: -kv[1])
+    ]
     trend = []
     recent = []
     if conn_ids:
-        for r in (CommErrorEvent.objects
-                  .filter(connection_id__in=conn_ids, time_iso__gte=cutoff)
-                  .values("category").annotate(n=Count("id")).order_by("-n")):
-            categories.append({
-                "category": r["category"],
-                "label": category_label(r["category"]),
-                "source": category_source(r["category"]),
-                "count": r["n"],
-            })
         for r in (CommErrorEvent.objects
                   .filter(connection_id__in=conn_ids, time_iso__gte=cutoff)
                   .annotate(h=TruncHour("time_iso")).values("h")

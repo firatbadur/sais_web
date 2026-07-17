@@ -35,7 +35,12 @@ from django.db.models.functions import TruncHour
 from django.utils import timezone
 
 from api.models import Connection, Reading
-from scada_io.comm_errors import category_label, category_source, classify_comm_error
+from scada_io.comm_errors import (
+    category_label,
+    category_source,
+    classify_comm_error,
+    verdict,
+)
 
 # İletişim/veri HATASI sayılan status kodları. Operasyonel kodlar (yıkama/bakım
 # 23-26, aralık-dışı 39 vb.) iletişim hatası DEĞİLDİR → hata oranına katılmaz
@@ -155,22 +160,23 @@ class Command(BaseCommand):
             sensor_stats.append((sid, s["total"], bad_rate))
         sensor_stats.sort(key=lambda t: -t[2])
 
+        # --- CommErrorEvent kategori dağılımı (varsa) — verdict'in en güçlü sinyali ---
+        cat_counts = self._category_breakdown_from_events(conn, cutoff)
+
         # --- 3) Bağlantı-seviyesi vs sensör-seviyesi karar ---
-        n_sensors = len(sensor_stats)
-        bad_sensors = [t for t in sensor_stats if t[2] >= BAD_SENSOR_THRESHOLD]
-        clean_sensors = [t for t in sensor_stats if t[2] < 0.05]
-        w("  " + self._verdict(err_rate, n_sensors, bad_sensors, clean_sensors, sensor_labels))
+        text, level = verdict(err_rate, [t[2] for t in sensor_stats], cat_counts)
+        style = {"ok": self.style.SUCCESS, "warn": self.style.WARNING,
+                 "err": self.style.ERROR}[level]
+        w("  Değerlendirme: " + style(text))
 
         # En hatalı sensörler
+        bad_sensors = [t for t in sensor_stats if t[2] >= BAD_SENSOR_THRESHOLD]
         if bad_sensors:
             w(f"  En hatalı sensörler (bad-oran >= %{int(BAD_SENSOR_THRESHOLD*100)}):")
             for sid, tot, br in sensor_stats[:top]:
                 if br < BAD_SENSOR_THRESHOLD:
                     break
                 w(f"    - {sensor_labels.get(sid, sid)}: bad {self._pct(br)}  ({tot:,} okuma)")
-
-        # --- Ekstra: CommErrorEvent kategori dağılımı (varsa) ---
-        self._category_breakdown_from_events(conn, cutoff)
 
         # --- Ekstra: bad okumaların saatlik dağılımı (sabit mi / patlamalı mı) ---
         self._time_distribution(conn, cutoff)
@@ -189,12 +195,15 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------ #
 
-    def _category_breakdown_from_events(self, conn, cutoff):
-        """CommErrorEvent tablosu varsa gerçek kategori dağılımını göster."""
+    def _category_breakdown_from_events(self, conn, cutoff) -> dict:
+        """CommErrorEvent kategori dağılımını yaz + ``{kategori: adet}`` döndür.
+
+        Dönen dict `verdict()`'e beslenir (kök-neden kaynağı en güçlü sinyaldir).
+        """
         try:
             from api.models import CommErrorEvent
         except ImportError:
-            return
+            return {}
         try:
             rows = list(
                 CommErrorEvent.objects
@@ -204,9 +213,9 @@ class Command(BaseCommand):
                 .order_by("-n")
             )
         except Exception:  # noqa: BLE001 — tablo henüz migrate edilmemiş olabilir
-            return
+            return {}
         if not rows:
-            return
+            return {}
         total = sum(r["n"] for r in rows)
         self.stdout.write(f"  Hata kategorileri ({total:,} olay, CommErrorEvent):")
         for r in rows:
@@ -215,6 +224,7 @@ class Command(BaseCommand):
                 f"    - {category_label(cat)} [{category_source(cat)}]: "
                 f"{r['n']:,} ({self._pct(r['n']/total)})"
             )
+        return {r["category"]: r["n"] for r in rows}
 
     def _time_distribution(self, conn, cutoff):
         """Bad okumaların saatlik dağılımı -> sabit hata mı, patlamalı mı?"""
@@ -238,27 +248,6 @@ class Command(BaseCommand):
         )
 
     # ---- yardımcılar ----
-
-    def _verdict(self, err_rate, n_sensors, bad_sensors, clean_sensors, labels) -> str:
-        if err_rate < 0.02:
-            return self.style.SUCCESS("Değerlendirme: SAĞLIKLI (hata oranı ihmal edilebilir).")
-        frac_bad = len(bad_sensors) / n_sensors if n_sensors else 0
-        if frac_bad >= 0.8:
-            return self.style.ERROR(
-                "Değerlendirme: BAĞLANTI SEVİYESİ — sensörlerin çoğu birlikte hatalı. "
-                "Şüphe: PLC/ağ (erişilemezlik, reset, timeout, eşzamanlı socket)."
-            )
-        if bad_sensors and clean_sensors:
-            names = ", ".join(str(labels.get(t[0], t[0])) for t in bad_sensors[:5])
-            return self.style.WARNING(
-                "Değerlendirme: SENSÖR SEVİYESİ — bazı sensörler sürekli hatalı, "
-                f"diğerleri sağlıklı. Şüphe: BİZİM config (adres/slave/quantity). "
-                f"Hatalı: {names}"
-            )
-        return self.style.WARNING(
-            "Değerlendirme: KARIŞIK — hem bağlantı hem sensör kaynaklı olabilir; "
-            "kategori dağılımına ve son hata metnine bak."
-        )
 
     @staticmethod
     def _age(dt, now) -> str:

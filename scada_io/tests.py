@@ -16,6 +16,7 @@ from .comm_errors import (
     UNKNOWN,
     category_source,
     classify_comm_error,
+    verdict,
 )
 from .decoders import decode_registers, encode_value
 
@@ -258,3 +259,48 @@ class ClassifyCommErrorTests(SimpleTestCase):
 
     def test_unknown_fallback(self):
         self.assertEqual(classify_comm_error("something totally unexpected xyz"), UNKNOWN)
+
+
+class VerdictTests(SimpleTestCase):
+    """Bağlantı-seviyesi vs sensör-seviyesi kararı."""
+
+    def test_healthy(self):
+        text, level = verdict(0.001, [0.0, 0.0, 0.002])
+        self.assertEqual(level, "ok")
+
+    def test_mikrodev_episodic_socket_drop(self):
+        """Gerçek saha: tüm sensörler aynı anda düşüyor, oran düşük (%2), olaylar
+        %100 conn_reset. Eski heuristik 'Karışık' diyordu — artık bağlantı seviyesi."""
+        rates = [0.02] * 30          # hepsi birlikte, benzer oran
+        cats = {CONN_RESET: 100}
+        text, level = verdict(0.02, rates, cats)
+        self.assertEqual(level, "err")
+        self.assertIn("Bağlantı seviyesi", text)
+
+    def test_iskenderun_specific_sensors(self):
+        """Gerçek saha: belirli dijital noktalar hep bad, analoglar temiz →
+        bizim config şüphesi (CommErrorEvent verisi henüz yok)."""
+        rates = [0.61, 0.59, 0.58] + [0.0] * 16
+        text, level = verdict(0.035, rates)
+        self.assertEqual(level, "warn")
+        self.assertIn("Sensör seviyesi", text)
+
+    def test_category_config_dominant_wins(self):
+        """Olaylar cihaz reddi (illegal_address) baskınsa → config şüphesi."""
+        cats = {ILLEGAL_ADDRESS: 90, TIMEOUT: 10}
+        text, level = verdict(0.4, [0.4] * 5, cats)
+        self.assertEqual(level, "warn")
+        self.assertIn("Sensör seviyesi", text)
+
+    def test_all_sensors_dead_uniform(self):
+        """PLC tamamen erişilemez → herkes %100 → bağlantı seviyesi."""
+        text, level = verdict(1.0, [1.0] * 12)
+        self.assertEqual(level, "err")
+        self.assertIn("Bağlantı seviyesi", text)
+
+    def test_ambiguous_falls_back_to_mixed(self):
+        """Ne kategori baskın ne de net bir patern → Karışık."""
+        rates = [0.3, 0.12]  # spread 0.18 > 0.10; bad yok (>=0.5), clean yok (<0.05)
+        text, level = verdict(0.2, rates)
+        self.assertEqual(level, "warn")
+        self.assertIn("Karışık", text)

@@ -75,6 +75,73 @@ def category_source(category: str) -> str:
     return CATEGORY_INFO.get(category, CATEGORY_INFO[UNKNOWN])[1]
 
 
+# --- Değerlendirme (verdict) eşikleri --------------------------------------
+# Bu oranın altındaki hata "sağlıklı" sayılır.
+HEALTHY_MAX_RATE = 0.02
+# Bir kaynak (config/network) olayların bu kadarını kapsıyorsa "baskın" sayılır.
+DOMINANT_SHARE = 0.7
+# Sensörlerin hata oranları birbirine bu kadar yakınsa "hepsi birlikte düşüyor"
+# → bağlantı seviyesi. (Epizodik kopmalarda oran düşüktür ama HERKESTE aynıdır.)
+UNIFORM_SPREAD = 0.10
+# Bir sensörün "sürekli hatalı" sayılma eşiği.
+BAD_SENSOR_RATE = 0.5
+
+
+def verdict(err_rate, sensor_bad_rates, category_counts=None) -> tuple[str, str]:
+    """İletişim hatalarının kaynağını yorumlar → ``(metin, seviye)``.
+
+    Seviye: ``ok`` / ``warn`` (config şüphesi) / ``err`` (PLC-ağ şüphesi).
+
+    İki sinyal kullanılır (güçlüden zayıfa):
+
+    1. **Kategori kaynağı** (`CommErrorEvent` varsa): olaylar ağ kaynaklıysa
+       (conn_reset/conn_open) bağlantı seviyesi; config kaynaklıysa
+       (illegal_address/decode) sensör seviyesi.
+    2. **Eş-zamanlılık proxy'si**: sensörlerin hata oranları birbirine yakınsa
+       hepsi BİRLİKTE düşüyor → bağlantı/PLC/ağ. Ayrışıyorsa (bazısı hep bad,
+       bazısı temiz) → bizim adres/slave config'imiz.
+
+    (2) kritik: epizodik soket kopmalarında bağlantı geneli oran düşüktür (%2)
+    ve hiçbir sensör "sürekli hatalı" eşiğini geçmez — yalnız per-sensör orana
+    bakan bir kural bunu göremez, eş-zamanlılık görür.
+
+    `sensor_bad_rates`: her sensörün hata oranı (0-1) listesi.
+    `category_counts`: ``{kategori: adet}`` (opsiyonel).
+    """
+    if err_rate < HEALTHY_MAX_RATE:
+        return ("Sağlıklı — hata oranı ihmal edilebilir.", "ok")
+
+    # 1) Kategori kaynağı baskın mı?
+    if category_counts:
+        total = sum(category_counts.values())
+        if total:
+            by_source: dict[str, int] = {}
+            for cat, n in category_counts.items():
+                src = category_source(cat)
+                by_source[src] = by_source.get(src, 0) + n
+            if by_source.get(SOURCE_NETWORK, 0) / total >= DOMINANT_SHARE:
+                return ("Bağlantı seviyesi — hatalar ağ/TCP kaynaklı (soket kopması/reddi). "
+                        "Şüphe: PLC oturum limiti / idle timeout, eşzamanlı soket, ağ.", "err")
+            if by_source.get(SOURCE_CONFIG, 0) / total >= DOMINANT_SHARE:
+                return ("Sensör seviyesi — hatalar cihaz reddi/çözümleme kaynaklı. "
+                        "Şüphe: bizim config (adres/slave/quantity).", "warn")
+
+    # 2) Eş-zamanlılık proxy'si
+    rates = list(sensor_bad_rates)
+    if len(rates) >= 2:
+        if (max(rates) - min(rates)) <= UNIFORM_SPREAD:
+            return ("Bağlantı seviyesi — tüm sensörler birlikte ve benzer oranda hatalı. "
+                    "Şüphe: PLC/ağ (soket kopması, timeout).", "err")
+        bad = [r for r in rates if r >= BAD_SENSOR_RATE]
+        clean = [r for r in rates if r < 0.05]
+        if bad and clean:
+            return ("Sensör seviyesi — bazı sensörler sürekli hatalı, diğerleri sağlıklı. "
+                    "Şüphe: bizim config (adres/slave/quantity).", "warn")
+
+    return ("Karışık — hem bağlantı hem sensör kaynaklı olabilir; "
+            "kategori dağılımına ve son hata metnine bak.", "warn")
+
+
 def _exception_code(text: str) -> int | None:
     """pymodbus ExceptionResponse metninden `exception_code=N` değerini çıkar.
 
