@@ -302,6 +302,20 @@ def persist_reading(
         defaults["last_saved_value"] = value
         defaults["last_saved_status"] = status
 
+    # --- Dijital durum (aktif/pasif) değişim takibi ---
+    # Yalnız dijital sensörlerde (sensor_type 2/3) ve YALNIZ geçerli okumalarda
+    # (value not None → iletişim/decode hatası DEĞİL) aktif/pasif geçişini
+    # damgalar. İletişim hatasında value None gelir → bu blok atlanır ve önceki
+    # geçerli durum korunur; böylece comm-error kaynaklı sahte "değişim" son
+    # değişim zamanına yazılmaz. Karşılaştırma ham değer üzerinden (digital_inverse
+    # sabit bir dönüşüm olduğundan ham bit'in dönmesi = aktif/pasif'in dönmesi).
+    if getattr(sensor, "sensor_type", None) in (2, 3) and value is not None:
+        new_state = bool(value)
+        prev_state = latest.last_digital_state if latest else None
+        if prev_state is None or prev_state != new_state:
+            defaults["last_digital_change_at"] = now
+        defaults["last_digital_state"] = new_state
+
     SensorLatest.objects.update_or_create(sensor=sensor, defaults=defaults)
 
     # --- Dijital giriş/çıkış olayı ---

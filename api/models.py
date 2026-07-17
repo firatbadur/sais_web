@@ -824,6 +824,20 @@ class SensorLatest(models.Model):
         verbose_name="Son Değişim Zamanı",
         help_text="Değer en son ne zaman bir önceki okumadan farklıydı (deadband/COV için)",
     )
+    last_digital_state = models.BooleanField(
+        blank=True, null=True,
+        verbose_name="Son Dijital Durum",
+        help_text="Dijital sensörün son GEÇERLİ okumadaki ham aktif/pasif durumu "
+                  "(iletişim/decode hatası okumaları hariç). "
+                  "last_digital_change_at karşılaştırma referansı.",
+    )
+    last_digital_change_at = models.DateTimeField(
+        blank=True, null=True,
+        verbose_name="Son Durum Değişim Zamanı",
+        help_text="Dijital sensörün aktif/pasif durumu en son ne zaman değişti. "
+                  "İletişim hatası kaynaklı değişimler (value None) sayılmaz — "
+                  "anasayfa Dijital Kanallar 'Son Değişim' sütununu besler.",
+    )
     last_saved_at = models.DateTimeField(
         blank=True, null=True,
         verbose_name="Son Reading Kayıt Zamanı",

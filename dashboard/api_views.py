@@ -143,6 +143,7 @@ def home_snapshot(request):
                     (digital_inverse uygulanmış bool) ve `sensor_type` ekler
       - omit/`all` → hepsi
     """
+    now = timezone.now()
     type_filter = (request.GET.get("type") or "all").lower()
     sensor_types = None
     if type_filter == "analog":
@@ -220,6 +221,13 @@ def home_snapshot(request):
             "status_code": latest.status.code if latest.status else None,
             "status_name": latest.status.name if latest.status else None,
             "readtime": latest.readtime.isoformat() if latest.readtime else None,
+            # Dijital "Son Değişim": aktif/pasif durumu en son ne zaman değişti
+            # (iletişim hataları sayılmaz). Analogda None döner (kullanılmaz).
+            "digital_change": (
+                latest.last_digital_change_at.isoformat()
+                if latest.last_digital_change_at else None
+            ),
+            "digital_change_ago": _humanize_ago_tr(latest.last_digital_change_at, now),
         })
     return JsonResponse({"count": len(rows), "rows": rows, "wash": wash_info})
 

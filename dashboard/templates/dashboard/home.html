@@ -159,7 +159,7 @@
                             <tr class="fs-7 fw-bold text-gray-500 text-uppercase">
                                 <th>{% trans "Sensör" %}</th>
                                 <th>{% trans "Durum" %}</th>
-                                <th class="text-end">{% trans "Son Okuma" %}</th>
+                                <th class="text-end">{% trans "Son Değişim" %}</th>
                                 {% if can_control %}<th class="text-end">{% trans "Kontrol" %}</th>{% endif %}
                             </tr>
                         </thead>
@@ -486,8 +486,15 @@
                 tbody.innerHTML = `<tr><td colspan="${emptyCols}" class="text-center text-muted">{% trans "Dijital sensör yok." %}</td></tr>`;
             } else {
                 tbody.innerHTML = data.rows.map(r => {
+                    // Bayatlık (opacity + uyarı ikonu) hâlâ iletişim tazeliğine göre
+                    // (readtime): dijital sensör uzun süre değişmemiş olabilir, bu
+                    // "bayat" değildir; ama son POLL 5 dk'dan eskiyse iletişim uyarısı.
                     const stale = isStale(r.readtime);
-                    const timeTxt = formatTime(r.readtime);
+                    // "Son Değişim": aktif/pasif durumu en son ne zaman değişti
+                    // (iletişim hataları sayılmaz). Kompakt görece metin + tam
+                    // tarih tooltip'i.
+                    const changeTxt = r.digital_change_ago || '-';
+                    const changeTitle = r.digital_change ? formatDateTime(r.digital_change) : '';
                     const isActive = !!r.is_active;
                     const statusBadge = isActive
                         ? `<span class="badge badge-light-success"><i class="ki-outline ki-shield-tick fs-7 me-1"></i>{% trans "Aktif" %}</span>`
@@ -526,7 +533,7 @@
                     return `<tr data-sid="${r.sensor_id}" data-stype="${r.sensor_type}"${stale ? ' class="opacity-75"' : ''}>
                         <td><div class="fw-semibold text-gray-800">${nameTxt}</div>${stationTxt}</td>
                         <td>${statusBadge}</td>
-                        <td class="text-end text-muted fs-7">${timeTxt}${staleBadge}</td>
+                        <td class="text-end text-muted fs-7" title="${changeTitle}">${changeTxt}${staleBadge}</td>
                         ${actionCell}
                     </tr>`;
                 }).join('');

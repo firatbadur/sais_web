@@ -196,6 +196,9 @@ msgstr "Quality"
 msgid "Son Okuma"
 msgstr "Last Reading"
 
+msgid "Son Değişim"
+msgstr "Last Change"
+
 msgid "Yükleniyor..."
 msgstr "Loading..."
 
