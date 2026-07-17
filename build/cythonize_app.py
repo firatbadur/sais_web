@@ -103,8 +103,17 @@ def main() -> int:
 
     # Cython inplace derleme (.py -> .c -> .so). gcc + cython gerekir (Docker build).
     # cythonize CLI build_ext'i de yapar (-j paralel).
-    cmd = ["cythonize", "--inplace", "-3", "-j", "4", *files]
-    print("cythonize: çalıştırılıyor:", " ".join(cmd[:4]), "... (%d dosya)" % len(files))
+    #
+    # annotation_typing=False ZORUNLU: kaynaktaki `-> str` / `-> dict` / `-> list`
+    # anotasyonları dokümantasyon amaçlıdır, Cython'a tip ipucu değil. Cython 3
+    # varsayılanı (True) bunları exact type check'e çevirir (PyUnicode_CheckExact
+    # gibi) ve ALT SINIFLARI reddeder -> `render_report_html() -> str` Django'nun
+    # SafeString'ini döndürdüğü an sahada "Expected str, got SafeString" ile patlar.
+    # Düz .py'de anotasyon çalışma zamanında kontrol edilmediğinden bu hata sınıfı
+    # yalnız release (OBFUSCATE=1) imajında görünür.
+    cmd = ["cythonize", "--inplace", "-3", "-X", "annotation_typing=False",
+           "-j", "4", *files]
+    print("cythonize: çalıştırılıyor:", " ".join(cmd[:6]), "... (%d dosya)" % len(files))
     subprocess.run(cmd, check=True, cwd=args.root)
 
     # Kaynağı temizle: .py + üretilen .c sil, yalnız .so kalsın.

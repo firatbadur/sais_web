@@ -353,6 +353,23 @@ onlar **DB-veri** bypass'ıydı (kod gizlense de işlerdi).
   Docker testinden sonra `COMPILE_GLOBS`'a eklenebilir. `--dry-run` ile hedef listesi test edilir.
   **Gerçek derleme testi Docker Linux gerektirir** (lokal Windows'ta gcc yok) → release build'de
   veya `docker build --build-arg OBFUSCATE=1 --build-arg PRODUCTION=1 ...` ile doğrulanır.
+- **TUZAK — `annotation_typing=False` ZORUNLU (saha deneyimi, v0.9.3):** Cython 3 varsayılanı tip
+  anotasyonlarını **bağlayıcı** sayar ve builtin tipler için **exact type check** üretir
+  (`PyUnicode_CheckExact` vb.) → **alt sınıfları reddeder**. Kaynaktaki `-> str` / `-> dict` /
+  `-> list` anotasyonları dokümantasyon amaçlı yazıldığından bu, sessiz bir hata sınıfı doğuruyordu:
+  `api.reporting.render_report_html() -> str` Django'nun `SafeString`'ini döndürdüğü için sahada
+  Rapor Stüdyosu'nun tamamı (önizleme + PDF + zamanlanmış e-posta) `TypeError: Expected str, got
+  SafeString` ile düşüyordu. **Düz `.py`'de anotasyon çalışma zamanında kontrol edilmez → bu sınıf
+  yalnız release (`OBFUSCATE=1`) imajında görünür, dev'de ASLA.** Tarama: fix öncesi 12 modülde
+  **40** exact-type check (`licensing.py` + `decoders.py` dahil — henüz patlamamış mayınlar), fix
+  sonrası **0**. Bu yüzden [cythonize_app.py](build/cythonize_app.py) `cythonize`'ı
+  `-X annotation_typing=False` ile çağırır; **kaldırma**. Yeni modül `COMPILE_GLOBS`'a eklerken
+  anotasyonlara güvenip tip kontrolü bekleme (Cython'a tip ipucu vermek istenirse `cdef`/`.pxd`
+  ile açıkça yapılmalı).
+- **gcc'siz doğrulama (Windows dev'de mümkün):** `cython` **transpile** için derleyici gerektirmez →
+  `venv/Scripts/cython.exe -3 [-X annotation_typing=False] <dosya>.py -o out.c` ile üretilen C'de
+  `grep RaiseUnexpectedTypeError` yaparak exact-type check'ler derlemeden sayılabilir. Cython
+  kaynaklı tip regresyonlarını release'e gitmeden yakalamanın en ucuz yolu budur.
 - **Enforcement env'den kapatılamaz**: `LICENSE_ENFORCE = PRODUCTION_BUILD or (not DEBUG) or env(...)`.
   `api/_buildflags.py` `PRODUCTION_BUILD` release build'de `True` yazılır + Cython'da mühürlenir →
   `DJANGO_DEBUG=1` ile bile enforce kapatılamaz.
