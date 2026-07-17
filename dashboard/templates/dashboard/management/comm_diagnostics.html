@@ -22,18 +22,6 @@
 
 {% block content %}
 
-{# --- Yardım / açıklama --- #}
-<div class="alert alert-primary d-flex align-items-center mb-6">
-    <i class="ki-outline ki-information-5 fs-2 me-3"></i>
-    <div>
-        {% blocktrans %}Bu sayfa sensör okumadaki iletişim hatalarının kaynağını teşhis eder:
-        <b>bizim yapılandırmamız mı</b> yoksa <b>PLC/ağ mı</b>. Hata metinleri kategorilere
-        ayrılır; bir bağlantıda tüm sensörler birlikte hatalıysa PLC/ağ, belirli sensörler
-        sürekli hatalıyken diğerleri sağlıklıysa yapılandırma şüphesi öne çıkar. Salt gözlem —
-        polling davranışını değiştirmez.{% endblocktrans %}
-    </div>
-</div>
-
 {# --- Filtre çubuğu --- #}
 <div class="card mb-6">
     <div class="card-body py-4">
