@@ -30,6 +30,15 @@
     .wz-pane { display: none; animation: wzFade .3s ease; }
     .wz-pane.active { display: block; }
     @keyframes wzFade { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform:none; } }
+    /* Parametre seçimi: select2 + sağda bütünleşik "ekle" ikonu */
+    .param-group { display: flex; align-items: stretch; }
+    .param-group .select2-container { flex: 1 1 auto; width: 1% !important; }
+    .param-group .select2-container--default .select2-selection--single {
+        height: 100%; display: flex; align-items: center;
+        border-top-right-radius: 0; border-bottom-right-radius: 0; }
+    .param-group .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 100%; }
+    .param-group #s-param-add { flex: 0 0 auto; border-top-left-radius: 0; border-bottom-left-radius: 0; }
 </style>
 {% endblock %}
 
@@ -322,16 +331,16 @@
                     </div>
                     <div class="row">
                         <div class="col-md-4 mb-4">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <label class="form-label mb-0">{% trans "Parametre" %}</label>
-                                <button type="button" id="s-param-add" class="btn btn-sm btn-light-primary py-1 px-2">
-                                    <i class="ki-outline ki-plus fs-6 me-1"></i>{% trans "Ekle" %}
+                            <label class="form-label">{% trans "Parametre" %}</label>
+                            <div class="param-group">
+                                <select id="s-parameter" class="form-select form-select-solid form-select-sm" data-control="select2" data-placeholder="{% trans 'Parametre seçin' %}">
+                                    <option></option>
+                                    {% for p in parameters %}<option value="{{ p.id }}">{{ p.display_name }}</option>{% endfor %}
+                                </select>
+                                <button type="button" id="s-param-add" class="btn btn-sm btn-light-primary px-3 d-flex align-items-center justify-content-center" title="{% trans 'Yeni Parametre Ekle' %}">
+                                    <i class="ki-outline ki-plus fs-3"></i>
                                 </button>
                             </div>
-                            <select id="s-parameter" class="form-select form-select-solid form-select-sm mt-2" data-control="select2" data-placeholder="{% trans 'Parametre seçin' %}">
-                                <option></option>
-                                {% for p in parameters %}<option value="{{ p.id }}">{{ p.display_name }}</option>{% endfor %}
-                            </select>
                             <div class="text-danger small" data-serr="parameter"></div>
                         </div>
                         <div class="col-md-4 mb-4">
@@ -542,6 +551,22 @@
         });
         document.querySelectorAll('.wz-pane').forEach(p=>p.classList.toggle('active', +p.dataset.pane===n));
         window.scrollTo({top:0,behavior:'smooth'});
+        saveWzState(n);
+    }
+
+    // Refresh sonrası aynı adımda (ve step 3'te aynı grupta) kal — sessionStorage.
+    function wzKey(){ return connId ? ('sais_wz_'+connId) : null; }
+    function saveWzState(n){
+        const k=wzKey(); if(!k) return;
+        try{ sessionStorage.setItem(k, JSON.stringify({step:n, groupMeta: n>=3?groupMeta:null})); }catch(e){}
+    }
+    function restoreWzState(){
+        const k=wzKey(); if(!k) return;
+        let st=null; try{ st=JSON.parse(sessionStorage.getItem(k)||'null'); }catch(e){ st=null; }
+        if(!st || !st.step || st.step<2) return;
+        loadGroups();
+        if(st.step>=3 && st.groupMeta && st.groupMeta.id){ openSensors(st.groupMeta); }
+        else { gotoStep(2); }
     }
     document.querySelectorAll('.wz-step').forEach(st=>{
         st.addEventListener('click', ()=>{
@@ -826,11 +851,12 @@
         min_range:'p-minrange', max_range:'p-maxrange', gec_min:'p-gecmin', gec_max:'p-gecmax' };
     function clearPErrors(){ document.querySelectorAll('[data-perr]').forEach(e=>e.textContent=''); const a=g('p-alert'); a.classList.add('d-none'); a.textContent=''; }
     function resetParamForm(){ Object.values(P_FIELDS).forEach(id=>{ g(id).value=''; }); clearPErrors(); }
-    g('s-param-add').addEventListener('click', e=>{
-        e.preventDefault(); resetParamForm();
+    function openParamModal(){
+        resetParamForm();
         if(!paramModal && window.bootstrap) paramModal=new bootstrap.Modal(g('param-modal'));
         if(paramModal) paramModal.show();
-    });
+    }
+    g('s-param-add').addEventListener('click', e=>{ e.preventDefault(); openParamModal(); });
     g('p-save').addEventListener('click', function(e){
         e.preventDefault(); clearPErrors();
         const payload={};
@@ -854,6 +880,7 @@
     $(function(){
         $('[data-control="select2"]').select2({width:'100%'});
         if(connId){ loadConnDetail(connId); }   // düzenleme: bağlantı alanlarını doldur
+        restoreWzState();                        // refresh sonrası son adıma dön
     });
 })();
 </script>
