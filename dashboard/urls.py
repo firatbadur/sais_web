@@ -200,6 +200,8 @@ urlpatterns = [
          name="api_sensorcfg_group_sensor_save"),
     path("api/sensor-config/group-sensor-delete/", api_views.group_sensor_delete,
          name="api_sensorcfg_group_sensor_delete"),
+    path("api/sensor-config/parameter-save/", api_views.parameter_save,
+         name="api_sensorcfg_parameter_save"),
 
     # --- AJAX API (Takvim Hatırlatıcı) ---
     path("api/reminders/list/", api_views.reminders_list, name="api_reminders_list"),

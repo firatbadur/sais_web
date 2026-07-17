@@ -3093,6 +3093,43 @@ def group_sensor_delete(request):
     return JsonResponse({"ok": True})
 
 
+@login_required
+def parameter_save(request):
+    """Sensör sihirbazından (step 3) hızlı parametre oluştur — modal. POST JSON.
+
+    Döner: {ok, parameter: {id, display_name}} veya {ok:false, errors:{alan:[mesaj]}}.
+    """
+    import json
+
+    denied = _require_operator(request)
+    if denied:
+        return denied
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
+
+    from dashboard.forms import ParameterQuickForm
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
+
+    form = ParameterQuickForm(data)
+    if not form.is_valid():
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+
+    param = form.save()
+    log_event(
+        EventType.CONFIG,
+        f"Parametre oluşturuldu (sihirbaz): {param.display_name} (#{param.id})",
+        severity="warning", request=request,
+    )
+    return JsonResponse({
+        "ok": True,
+        "parameter": {"id": param.id, "display_name": param.display_name},
+    })
+
+
 # --------------------------------------------------------------------------- #
 # İlk kurulum sihirbazı (rol=1)
 # --------------------------------------------------------------------------- #

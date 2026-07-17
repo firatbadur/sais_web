@@ -322,8 +322,13 @@
                     </div>
                     <div class="row">
                         <div class="col-md-4 mb-4">
-                            <label class="form-label">{% trans "Parametre" %}</label>
-                            <select id="s-parameter" class="form-select form-select-solid form-select-sm" data-control="select2" data-placeholder="{% trans 'Parametre seçin' %}">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <label class="form-label mb-0">{% trans "Parametre" %}</label>
+                                <button type="button" id="s-param-add" class="btn btn-sm btn-light-primary py-1 px-2">
+                                    <i class="ki-outline ki-plus fs-6 me-1"></i>{% trans "Ekle" %}
+                                </button>
+                            </div>
+                            <select id="s-parameter" class="form-select form-select-solid form-select-sm mt-2" data-control="select2" data-placeholder="{% trans 'Parametre seçin' %}">
                                 <option></option>
                                 {% for p in parameters %}<option value="{{ p.id }}">{{ p.display_name }}</option>{% endfor %}
                             </select>
@@ -430,6 +435,68 @@
             <div class="d-flex justify-content-between mt-7">
                 <button id="wz-back-3" class="btn btn-light"><i class="ki-outline ki-arrow-left fs-4 me-1"></i>{% trans "Scan Gruplarına Dön" %}</button>
                 <a href="{% url 'dashboard:sensorcfg_connections' %}" class="btn btn-success"><i class="ki-outline ki-check-circle fs-4 me-1"></i>{% trans "Bitir" %}</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ Yeni Parametre Modalı ============ -->
+<div class="modal fade" id="param-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-4">
+                <h3 class="modal-title fs-5">{% trans "Yeni Parametre" %}</h3>
+                <button type="button" class="btn btn-icon btn-sm btn-active-light-primary ms-2" data-bs-dismiss="modal" aria-label="Close">
+                    <i class="ki-outline ki-cross fs-2"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-12 mb-4">
+                        <label class="form-label required">{% trans "Görünen Ad" %}</label>
+                        <input id="p-txt" type="text" class="form-control form-control-solid form-control-sm" placeholder="{% trans 'ör. Çözünmüş Oksijen' %}">
+                        <div class="text-danger small" data-perr="parameter_txt"></div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <label class="form-label">{% trans "Kod (Kanal Adı)" %}</label>
+                        <input id="p-name" type="text" class="form-control form-control-solid form-control-sm" placeholder="{% trans 'ör. CozunmusOksijen' %}">
+                        <div class="text-muted fs-8 mt-1">{% trans "Bakanlık/Envisoft kanal kodu (opsiyonel)." %}</div>
+                        <div class="text-danger small" data-perr="parameter_name"></div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <label class="form-label">{% trans "Birim" %}</label>
+                        <input id="p-unit" type="text" class="form-control form-control-solid form-control-sm" placeholder="{% trans 'ör. mg/L' %}">
+                        <div class="text-danger small" data-perr="unit"></div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <label class="form-label">{% trans "Range Min" %}</label>
+                        <input id="p-minrange" type="number" step="any" class="form-control form-control-solid form-control-sm">
+                        <div class="text-muted fs-8 mt-1">{% trans "Simülasyon / grafik ölçek aralığı." %}</div>
+                        <div class="text-danger small" data-perr="min_range"></div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <label class="form-label">{% trans "Range Max" %}</label>
+                        <input id="p-maxrange" type="number" step="any" class="form-control form-control-solid form-control-sm">
+                        <div class="text-danger small" data-perr="max_range"></div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <label class="form-label">{% trans "Geçerli Veri Min" %}</label>
+                        <input id="p-gecmin" type="number" step="any" class="form-control form-control-solid form-control-sm">
+                        <div class="text-danger small" data-perr="gec_min"></div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <label class="form-label">{% trans "Geçerli Veri Max" %}</label>
+                        <input id="p-gecmax" type="number" step="any" class="form-control form-control-solid form-control-sm">
+                        <div class="text-danger small" data-perr="gec_max"></div>
+                    </div>
+                </div>
+                <div id="p-alert" class="alert alert-danger d-none py-2 mb-0"></div>
+            </div>
+            <div class="modal-footer py-4">
+                <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">{% trans "Vazgeç" %}</button>
+                <button type="button" id="p-save" class="btn btn-primary btn-sm">
+                    <i class="ki-outline ki-check fs-4 me-1"></i>{% trans "Parametreyi Kaydet" %}
+                </button>
             </div>
         </div>
     </div>
@@ -751,6 +818,36 @@
                 });
             }
         }).catch(()=>{ box.innerHTML='<div class="alert alert-danger mb-0">'+I18N.failed+'</div>'; });
+    });
+
+    // ============ Yeni Parametre Modalı ============
+    let paramModal = null;
+    const P_FIELDS = { parameter_txt:'p-txt', parameter_name:'p-name', unit:'p-unit',
+        min_range:'p-minrange', max_range:'p-maxrange', gec_min:'p-gecmin', gec_max:'p-gecmax' };
+    function clearPErrors(){ document.querySelectorAll('[data-perr]').forEach(e=>e.textContent=''); const a=g('p-alert'); a.classList.add('d-none'); a.textContent=''; }
+    function resetParamForm(){ Object.values(P_FIELDS).forEach(id=>{ g(id).value=''; }); clearPErrors(); }
+    g('s-param-add').addEventListener('click', e=>{
+        e.preventDefault(); resetParamForm();
+        if(!paramModal && window.bootstrap) paramModal=new bootstrap.Modal(g('param-modal'));
+        if(paramModal) paramModal.show();
+    });
+    g('p-save').addEventListener('click', function(e){
+        e.preventDefault(); clearPErrors();
+        const payload={};
+        Object.keys(P_FIELDS).forEach(f=>{ payload[f]=g(P_FIELDS[f]).value; });
+        const btn=this; btn.disabled=true;
+        postJSON("{% url 'dashboard:api_sensorcfg_parameter_save' %}", payload).then(j=>{
+            btn.disabled=false;
+            if(!j.ok){
+                if(j.errors){ Object.keys(j.errors).forEach(k=>{const el=document.querySelector('[data-perr="'+k+'"]'); if(el) el.textContent=(j.errors[k]||[]).join(' ');}); }
+                else { const a=g('p-alert'); a.textContent=j.error||I18N.failed; a.classList.remove('d-none'); }
+                return;
+            }
+            // Yeni parametreyi listeye ekle + seç (select2)
+            const opt=new Option(j.parameter.display_name, j.parameter.id, true, true);
+            $('#s-parameter').append(opt).trigger('change');
+            if(paramModal) paramModal.hide();
+        }).catch(()=>{ btn.disabled=false; const a=g('p-alert'); a.textContent=I18N.failed; a.classList.remove('d-none'); });
     });
 
     // ---------- init ----------

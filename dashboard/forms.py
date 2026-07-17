@@ -479,6 +479,29 @@ class GroupSensorForm(forms.ModelForm):
         )
 
 
+class ParameterQuickForm(forms.ModelForm):
+    """Sensör sihirbazından (step 3) hızlı parametre oluşturma — modal.
+
+    Yalnız temel alanlar; görünen ad (`parameter_txt`) zorunlu. Kanal/ölçüm
+    sınırı gibi ileri alanlar sonradan admin panelinden düzenlenir. Sensör
+    formundaki "Parametre" listesine yeni bir kayıt eklemek için kullanılır.
+    """
+
+    class Meta:
+        from api.models import Parameter  # lazy
+
+        model = Parameter
+        fields = (
+            "parameter_txt", "parameter_name", "unit",
+            "min_range", "max_range", "gec_min", "gec_max",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["parameter_txt"].required = True
+        _apply_metronic_classes(self)
+
+
 class DocumentUploadForm(forms.ModelForm):
     """Doküman yükleme — yalnızca belge dosyalarına izin verir (resim/video yasak)."""
 
