@@ -427,6 +427,23 @@ class DataReportView(ReadingsReportView):
             return str(int(f))
         return f"{round(f, 3)}"
 
+    @staticmethod
+    def _digital_css(sensor, value):
+        """Dijital kanal hücresi için değere göre renk sınıfı: Aktif→yeşil,
+        Pasif→kırmızı. Dijital değilse veya değer 1/0 değilse None (status/kalite
+        rengi korunur)."""
+        if sensor.sensor_type not in (2, 3) or value is None:
+            return None
+        try:
+            fv = float(value)
+        except (TypeError, ValueError):
+            return None
+        if fv == 1:
+            return "cell-on"
+        if fv == 0:
+            return "cell-off"
+        return None
+
     def _format_value(self, value, sensor):
         if value is None:
             return "—"
@@ -498,6 +515,12 @@ class DataReportView(ReadingsReportView):
             # qs -time sıralı: aynı dakika/sensör için ilk (en yeni) kayıt tutulur.
             if s.id in row:
                 continue
+            # Dijital kanal: değere göre yeşil (Aktif) / kırmızı (Pasif) arka plan —
+            # status renginin önüne geçer (kullanıcı isteği). Kısmi/None değerde
+            # (aggregate ortalaması vb.) status/kalite bazlı renk korunur.
+            dcss = self._digital_css(s, value)
+            if dcss is not None:
+                css = dcss
             row[s.id] = {
                 "disp": self._format_value(value, s),
                 "order": "" if value is None else value,
