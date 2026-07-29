@@ -455,6 +455,17 @@ başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows ser
   `[user] default=...` yazar ve bu **registry `DefaultUid`'i EZER** → `wsl --manage --set-default-user`
   veya `DefaultUid=0` "başarılı" der ama etkisiz kalır; geri almak için `/etc/wsl.conf` düzeltilip
   `wsl --terminate` gerekir. `-u root` sabitlemesi bu sınıfı tamamen kapatır.
+- **TUZAK — Windows 10'da `wsl --install --no-launch` distroyu KAYIT ETMEZ (saha deneyimi, sonsuz
+  reboot döngüsü):** Win10 (19045) kutu-içi wsl.exe'de `--no-launch` Ubuntu Store paketini indirir ama
+  kayıt (rootfs açılımı) ilk launcher çalışmasına bırakılır → distro hiç oluşmaz →
+  `00-ensure-docker` "reboot gerek" sanıp exit 10 → resume → yeniden indir → döngü (Win11/Store
+  WSL'de `--install` doğrudan kayıt ettiği için görülmez). Çözüm [00-ensure-docker.ps1](installer/scripts/00-ensure-docker.ps1)
+  içinde: distro **kayıtlı değilse** reboot yerine `Register-DistroNoOobe` — önce Ubuntu launcher
+  `ubuntu.exe install --root` (OOBE'siz, root default), olmazsa Ubuntu jammy rootfs tarball indirip
+  `wsl --import` (Store bağımlılığı sıfır). Reboot (exit 10) yalnız "kayıtlı ama çalışmıyor"
+  durumunda; kayıt hiç yapılamıyorsa `wsl --status`/`wsl -l -v` teşhisini loga basıp hard-fail.
+  Sahada elle kurtarma: EnvisoftWebX oturumunda `ubuntu.exe install --root` +
+  `Start-ScheduledTask EnvisoftWebX-Install`.
 - **Admin (rol=1)**: [users/seed_admin_user](users/management/commands/seed_admin_user.py) non-interactive
   (env `DJANGO_SUPERUSER_*`) — `createsuperuser --noinput` CustomUser `rol` alanını set edemediği için.
 - **DB**: **PostgreSQL 16** (açık kaynak, lisans gerektirmez; bundled `postgres:16` container). Şifre installer'da otomatik üretilir (`POSTGRES_PASSWORD`).

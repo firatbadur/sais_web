@@ -42,6 +42,92 @@ function Test-DistroUsable([string]$d) {
     }
 }
 
+# Is the distro REGISTERED at all? (wsl -l -q; strip the interleaved NULs that
+# wsl.exe's UTF-16 output leaves when captured by Windows PowerShell)
+function Test-DistroRegistered([string]$d) {
+    try {
+        $list = (wsl.exe -l -q 2>$null) | ForEach-Object { ($_ -replace "`0", "").Trim() } | Where-Object { $_ }
+        return (@($list) -contains $d)
+    } catch {
+        return $false
+    }
+}
+
+# Dump WSL state into the install log so a failed site can be diagnosed from
+# logs\install.log alone (no remote session needed).
+function Write-WslDiag {
+    Write-Host "   ---- wsl --status ----" -ForegroundColor DarkGray
+    try { (wsl.exe --status 2>&1) | ForEach-Object { Write-Host ("   " + ($_ -replace "`0", "")) -ForegroundColor DarkGray } } catch {}
+    Write-Host "   ---- wsl -l -v ----" -ForegroundColor DarkGray
+    try { (wsl.exe -l -v 2>&1) | ForEach-Object { Write-Host ("   " + ($_ -replace "`0", "")) -ForegroundColor DarkGray } } catch {}
+}
+
+# Register the distro WITHOUT the interactive OOBE.
+#
+# WHY (real field incident, Windows 10 19045): on Windows 10 the inbox wsl.exe's
+# `wsl --install -d Ubuntu --no-launch` downloads/installs the Ubuntu Store
+# package but NEVER registers the distro - on Win10 registration (rootfs
+# extraction) only happens on the launcher's first run, which --no-launch
+# deliberately skips. Result: the distro never exists, Test-DistroUsable never
+# passes, and the installer reboot-loops forever ("keeps downloading WSL and
+# asking to restart"). A reboot cannot fix this. On Windows 11 / Store WSL the
+# install registers the distro directly, so the bug never showed there.
+#
+# Two OOBE-free registration paths:
+#   (a) the Ubuntu appx launcher's headless mode: `ubuntu.exe install --root`
+#       (registers with root as the only/default user - exactly what we want),
+#   (b) rootfs import: download Ubuntu's official WSL rootfs tarball and
+#       `wsl --import` it (no Microsoft Store dependency at all - also covers
+#       Store-blocked corporate networks).
+function Register-DistroNoOobe([string]$d) {
+    # (a) Appx launcher (uses the package `wsl --install` already downloaded).
+    $launcher = $null
+    foreach ($name in @("ubuntu.exe", "ubuntu2404.exe", "ubuntu2204.exe")) {
+        $cmd = Get-Command $name -ErrorAction SilentlyContinue
+        if ($cmd) { $launcher = $cmd.Source; break }
+    }
+    if ($launcher) {
+        Write-Step "Registering $d headlessly via launcher: `"$launcher`" install --root"
+        & $launcher install --root
+        Write-Host "   launcher install exit=$LASTEXITCODE"
+        if (Test-DistroUsable $d) { return }
+    } else {
+        Write-WarnLine "No Ubuntu appx launcher found (ubuntu.exe) - using rootfs import."
+    }
+
+    # (b) Rootfs import fallback.
+    $work = Join-Path $env:LOCALAPPDATA "EnvisoftWebX"
+    $vhdDir = Join-Path $work "wsl"
+    New-Item -ItemType Directory -Force -Path $vhdDir | Out-Null
+    $tar = Join-Path $work "ubuntu-jammy-rootfs.tar.gz"
+    $url = "https://cloud-images.ubuntu.com/wsl/jammy/current/ubuntu-jammy-wsl-amd64-ubuntu22.04lts.rootfs.tar.gz"
+
+    if (-not (Test-Path $tar) -or (Get-Item $tar).Length -lt 100MB) {
+        Write-Step "Downloading Ubuntu rootfs (~450 MB) from cloud-images.ubuntu.com ..."
+        $curl = Get-Command curl.exe -ErrorAction SilentlyContinue   # ships with Win10 1803+
+        if ($curl) {
+            & $curl.Source -fL --retry 3 --retry-delay 5 -o $tar $url
+            if ($LASTEXITCODE -ne 0) { throw "Rootfs download failed (curl exit $LASTEXITCODE): $url" }
+        } else {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+            $prevProgress = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
+            try { Invoke-WebRequest -Uri $url -OutFile $tar -UseBasicParsing } finally { $ProgressPreference = $prevProgress }
+        }
+    }
+
+    # A half-registered distro (launcher died mid-extraction) blocks --import
+    # with "a distribution with the supplied name already exists" -> clear it.
+    # Safe: we only reach this point during a fresh install of a broken distro.
+    if (Test-DistroRegistered $d) {
+        Write-WarnLine "Removing half-registered distro '$d' before import ..."
+        wsl.exe --unregister $d *> $null
+    }
+
+    Write-Step "Importing $d from rootfs (wsl --import) ..."
+    wsl.exe --import $d $vhdDir $tar --version 2
+    Write-Host "   wsl --import exit=$LASTEXITCODE"
+}
+
 # Can the distro resolve a public host? (DNS sanity check, no hard fail)
 function Test-WslDns([string]$d) {
     $prev = $ErrorActionPreference
@@ -132,10 +218,27 @@ if (-not (Test-DistroUsable $Distro)) {
     Start-Sleep -Seconds 5
 
     if (-not (Test-DistroUsable $Distro)) {
-        # Kernel/distro becomes active after a reboot -> install.ps1 re-arms
-        # RunOnce, reboots and resumes automatically after login.
-        Write-WarnLine "WSL2 installed - a REBOOT is required to activate it (will auto-resume)."
-        exit 10
+        if (-not (Test-DistroRegistered $Distro)) {
+            # Windows 10 path: the distro was downloaded but never registered
+            # (--no-launch skips registration there). A reboot can NOT fix this;
+            # register it ourselves (launcher --root, then rootfs import).
+            Register-DistroNoOobe $Distro
+        }
+        if (-not (Test-DistroUsable $Distro)) {
+            Write-WslDiag
+            if (Test-DistroRegistered $Distro) {
+                # Registered but not runnable -> kernel/VM platform genuinely
+                # needs the reboot. install.ps1 re-arms the resume task and
+                # guards against looping (max 3).
+                Write-WarnLine "WSL2 installed - a REBOOT is required to activate it (will auto-resume)."
+                exit 10
+            }
+            # Still no distro: rebooting again would just loop. Fail loudly with
+            # the diagnostics above in logs\install.log.
+            Write-Error ("Could not register the WSL distro '$Distro' (Store blocked? download failed?). " +
+                "See the wsl --status / wsl -l -v output above and logs\install.log.")
+            exit 1
+        }
     }
 }
 

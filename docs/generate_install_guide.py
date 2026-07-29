@@ -428,6 +428,23 @@ error_block(
      "Açamıyorsanız: bir Ubuntu 22.04/24.04 sunucu edinip Bölüm 4'ü izleyin."],
 )
 error_block(
+    "Windows 10: kurulum sürekli \"yeniden başlat\" istiyor, WSL'i tekrar tekrar indiriyor",
+    "Her yeniden başlatmadan sonra kurulum yine \"Ensuring Docker (WSL2 + CE)\" adımına dönüyor, "
+    "Ubuntu'yu yeniden indirip tekrar yeniden başlatma istiyor; kurulum hiç bitmiyor.",
+    "Windows 10'un kutu içi wsl.exe'sinde \"wsl --install --no-launch\" Ubuntu paketini indirir ama "
+    "distroyu KAYIT ETMEZ (kayıt ancak ilk açılışta olur). Distro hiç oluşmadığı için kurulum "
+    "\"reboot gerek\" sanıp döngüye girer. (Windows 11'de görülmez; güncel installer bu durumu "
+    "kendisi düzeltir — bu hata eski installer sürümlerine aittir.)",
+    ["Güncel sais-setup sürümünü kullanın (distroyu OOBE'siz kendisi kayıt eder).",
+     "Eski installer ile takılan makinede: EnvisoftWebX oturumunda YÖNETİCİ PowerShell açın ve "
+     "sırayla çalıştırın (distro kullanıcı-bazlı kaydedildiği için mutlaka EnvisoftWebX oturumunda):",
+    ],
+    "wsl -l -v                      # Ubuntu listede yok ise:\n"
+    "ubuntu.exe install --root      # distroyu kullanici sorusu sormadan kaydeder\n"
+    "wsl -d Ubuntu -- echo ok       # \"ok\" yazmali\n"
+    "Start-ScheduledTask -TaskName EnvisoftWebX-Install   # kurulumu kaldigi yerden surdur",
+)
+error_block(
     "Kurulum scripti 2. adımda sessizce duruyor (eski sürüm)",
     "Linux scripti \"Yapılandırma üretiliyor\" satırından sonra hiçbir şey demeden çıkıyor.",
     "Eski script sürümünde bir kabuk (SIGPIPE) hatası vardı.",
@@ -490,6 +507,7 @@ table(
     ["Belirti", "Olası sebep", "Çözüm"],
     [
         ["wsl tanınmıyor / 0x80370102", "Sanallaştırma / nested kapalı", "VT-x/AMD-V veya nested aç; olmuyorsa Linux sunucu"],
+        ["Win10: sürekli reboot + WSL indirme", "Distro kayıt edilmiyor (--no-launch)", "ubuntu.exe install --root (EnvisoftWebX oturumu); güncel setup"],
         ["404 dashboard", "Caddy config yüklenmemiş", "restart caddy"],
         ["502 Bad Gateway", "Web başlıyor / çökmüş", "ps + logs web; 30-60 sn bekle"],
         ["400 DisallowedHost", "Domain ALLOWED_HOSTS'ta yok", ".env'e ekle + up -d (Bölüm 5.4)"],

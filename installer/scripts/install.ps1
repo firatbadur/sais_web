@@ -193,7 +193,9 @@ try {
         $count = 0
         if (Test-Path $counterFile) { $count = [int](Get-Content $counterFile -Raw) }
         if ($count -ge 3) {
-            throw "WSL2 still not ready after several reboots ($count). Check that virtualization (BIOS VT-x / AMD-V) is enabled."
+            throw ("WSL2 still not ready after several reboots ($count). Check that virtualization " +
+                "(BIOS VT-x / AMD-V) is enabled, then inspect the 'wsl --status' / 'wsl -l -v' " +
+                "diagnostics in logs\install.log (run as the $SvcUser account).")
         }
         ($count + 1) | Set-Content $counterFile
 
