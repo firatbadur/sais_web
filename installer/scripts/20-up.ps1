@@ -18,6 +18,44 @@ param(
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "_common.ps1")
 
+# --- Port 80/443 preflight ---------------------------------------------------
+# Real field incident: the site PC had IIS installed; http.sys held port 80, so
+# WSL2's localhost relay and the external netsh portproxy could not bind.
+# Result: the stack was healthy inside WSL but http://localhost/dashboard/
+# answered with an IIS 404. IIS serves nothing we need on these boxes ->
+# stop + disable it outright (W3SVC and its parent WAS). Anything ELSE holding
+# 80/443 is only warned about (we won't kill unknown software automatically).
+$w3svc = Get-Service W3SVC -ErrorAction SilentlyContinue
+if ($w3svc) {
+    Write-Step "IIS detected - stopping and disabling it (it conflicts with ports 80/443) ..."
+    foreach ($svcName in @("W3SVC", "WAS")) {
+        $svc = Get-Service $svcName -ErrorAction SilentlyContinue
+        if ($svc) {
+            try { Stop-Service $svcName -Force -ErrorAction Stop } catch {}
+            try { Set-Service $svcName -StartupType Disabled } catch {}
+        }
+    }
+    Start-Sleep -Seconds 2   # let http.sys release the bindings
+    Write-Ok "IIS stopped and disabled (W3SVC/WAS)."
+}
+
+foreach ($port in 80, 443) {
+    $names = @()
+    try {
+        $conns = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue
+        foreach ($ownerPid in ($conns | Select-Object -ExpandProperty OwningProcess -Unique)) {
+            try { $names += (Get-Process -Id $ownerPid -ErrorAction Stop).ProcessName } catch { $names += "pid:$ownerPid" }
+        }
+        $names = @($names | Select-Object -Unique)
+    } catch {}
+    # 'wslhost' = WSL2's own localhost relay (our stack from a previous attempt).
+    $foreign = @($names | Where-Object { $_ -ne "wslhost" })
+    if ($foreign.Count) {
+        Write-WarnLine "Port $port is held by: $($foreign -join ', ') - the dashboard may be unreachable on this port."
+        Write-WarnLine "Stop/disable that application and restart the machine; the stack re-binds automatically."
+    }
+}
+
 Assert-Docker
 
 # The pull downloads hundreds of MB; make sure the network is actually up first

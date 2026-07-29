@@ -469,6 +469,18 @@ error_block(
 
 h2("7.3 Web erişimi (404 / 502 / 400)")
 error_block(
+    "localhost/dashboard IIS 404 sayfası gösteriyor (Windows)",
+    "Kurulum başarıyla bitti ama http://localhost/dashboard/ \"HTTP Hatası 404.0\" veren bir IIS "
+    "sayfası açıyor (sayfada \"IIS Web Core\" / C:\\inetpub\\wwwroot yazar).",
+    "Makinede IIS kurulu ve 80 portunu tutuyor; Caddy'nin 80/443 yayını ve dış erişim köprüsü "
+    "(portproxy) bağlanamıyor. Güncel installer IIS'i kurulumda otomatik durdurup devre dışı bırakır; "
+    "bu hata eski installer sürümlerinde veya IIS'in sonradan açılması durumunda görülür.",
+    ["Yönetici PowerShell'de IIS'i durdurup devre dışı bırakın ve makineyi yeniden başlatın:"],
+    "Stop-Service W3SVC -Force\nSet-Service W3SVC -StartupType Disabled\n"
+    "Stop-Service WAS -Force -ErrorAction SilentlyContinue\nSet-Service WAS -StartupType Disabled\n"
+    "Restart-Computer",
+)
+error_block(
     "Dashboard'da 404 (sayfa bulunamadı)",
     "http://SUNUCU_IP/dashboard/ açılınca 404 dönüyor.",
     "Caddy, web'in ürettiği yapılandırmayı yüklemeden başlamış; stok yapılandırmayı sunuyor.",
@@ -514,6 +526,7 @@ table(
         ["wsl tanınmıyor / 0x80370102", "Sanallaştırma / nested kapalı", "VT-x/AMD-V veya nested aç; olmuyorsa Linux sunucu"],
         ["Win10: sürekli reboot + WSL indirme", "Distro kayıt edilmiyor (--no-launch)", "ubuntu.exe install --root (EnvisoftWebX oturumu); güncel setup"],
         ["404 dashboard", "Caddy config yüklenmemiş", "restart caddy"],
+        ["IIS 404 sayfası (Windows)", "IIS 80 portunu tutuyor", "W3SVC+WAS durdur ve devre dışı bırak, reboot"],
         ["502 Bad Gateway", "Web başlıyor / çökmüş", "ps + logs web; 30-60 sn bekle"],
         ["400 DisallowedHost", "Domain ALLOWED_HOSTS'ta yok", ".env'e ekle + up -d (Bölüm 5.4)"],
         ["Sonsuz yönlendirme", "Cloudflare Flexible", "DNS only veya Full (strict)"],

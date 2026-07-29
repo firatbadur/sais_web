@@ -439,7 +439,10 @@ başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows ser
   → up -d; **ağ-kopması dayanıklı**: pull öncesi + kopunca `Wait-ForInternet` (ekranda uyarı, 30 dk'ya
   kadar bekler) + 8 deneme — katmanlar önbellekten sürer; saha deneyimi: pull ortasında internet
   kesilince "short read/unexpected EOF" tüm kurulumu düşürüyordu. Hata anında resume task silinmez →
-  `Start-ScheduledTask EnvisoftWebX-Install` ile kaldığı yerden sürer) → `30-firstrun` (seed_initial/sais/admin + WebSettings bootstrap, marker ile idempotent) →
+  `Start-ScheduledTask EnvisoftWebX-Install` ile kaldığı yerden sürer. **Port 80/443 preflight
+  (saha deneyimi):** sahada IIS kuruluysa http.sys 80'i tutar → WSL localhost relay + portproxy
+  bağlanamaz, `localhost/dashboard` IIS 404 verir; `20-up` başında IIS (W3SVC+WAS) otomatik
+  durdurulup Disabled yapılır, 80/443'ü tutan başka process varsa isimle uyarılır) → `30-firstrun` (seed_initial/sais/admin + WebSettings bootstrap, marker ile idempotent) →
   `40-register-service` (NSSM `SAISScada` → `sais-stack.ps1`).
 - **Docker erişimi**: tüm `docker compose` çağrıları WSL2 içinde çalışır
   ([_common.ps1](installer/scripts/_common.ps1) sarmalayıcıları); compose + `.env` Windows'ta `C:\SAIS`,
