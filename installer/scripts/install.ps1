@@ -256,6 +256,12 @@ catch {
     Write-Host $_.Exception.Message -ForegroundColor Red
     if ($_.ScriptStackTrace) { Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray }
     Write-Host "Full log: $(Join-Path $logDir 'install.log')" -ForegroundColor Yellow
+    if ($Resume) {
+        # Phase 2 failure: everything done so far is kept (Docker, cached image
+        # layers, .env). The resume task is only removed on success, so:
+        Write-Host "The install is NOT lost - fix the issue (e.g. network), then resume with:" -ForegroundColor Yellow
+        Write-Host "  Start-ScheduledTask -TaskName $ResumeTask     (or simply restart the machine)" -ForegroundColor Yellow
+    }
 }
 finally {
     # Answers are needed across reboots (Phase 1 -> Phase 2, and WSL reboots);

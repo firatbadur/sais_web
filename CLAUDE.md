@@ -436,7 +436,10 @@ başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows ser
   answers JSON → [install.ps1](installer/scripts/install.ps1) orkestratör → `00-ensure-docker`
   (WSL2+Docker CE; reboot gerekirse RunOnce ile devam) → `10-configure` (env.template → `.env`, secret +
   PostgreSQL şifresi üret, domain'den wildcard türet) → `20-up` (gömülü read-only GHCR token ile login → pull
-  → up -d) → `30-firstrun` (seed_initial/sais/admin + WebSettings bootstrap, marker ile idempotent) →
+  → up -d; **ağ-kopması dayanıklı**: pull öncesi + kopunca `Wait-ForInternet` (ekranda uyarı, 30 dk'ya
+  kadar bekler) + 8 deneme — katmanlar önbellekten sürer; saha deneyimi: pull ortasında internet
+  kesilince "short read/unexpected EOF" tüm kurulumu düşürüyordu. Hata anında resume task silinmez →
+  `Start-ScheduledTask EnvisoftWebX-Install` ile kaldığı yerden sürer) → `30-firstrun` (seed_initial/sais/admin + WebSettings bootstrap, marker ile idempotent) →
   `40-register-service` (NSSM `SAISScada` → `sais-stack.ps1`).
 - **Docker erişimi**: tüm `docker compose` çağrıları WSL2 içinde çalışır
   ([_common.ps1](installer/scripts/_common.ps1) sarmalayıcıları); compose + `.env` Windows'ta `C:\SAIS`,

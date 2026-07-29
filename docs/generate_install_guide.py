@@ -457,8 +457,13 @@ error_block(
     "\"connection reset by peer\" / imaj indirme yarıda kopuyor",
     "docker pull sırasında bağlantı kopuyor (özellikle IPv6 üzerinde).",
     "Geçici ağ sorunu. İndirilen katmanlar önbelleğe alındığından tekrar denemek kaldığı yerden sürer.",
-    ["Güncel script bunu otomatik 5 kez dener.",
-     "Elle tekrar denemek isterseniz aşağıdaki komutu birkaç kez çalıştırın:"],
+    ["Güncel kurulumlar bunu kendisi tolere eder: Windows installer internet kopunca ekranda uyarı "
+     "gösterip bağlantının gelmesini bekler (30 dk'ya kadar) ve indirmeyi 8 kez kaldığı yerden dener; "
+     "Linux scripti 5 kez dener.",
+     "Eski Windows installer'da kurulum bu hatayla kesilirse: internet gelince EnvisoftWebX "
+     "oturumunda 'Start-ScheduledTask -TaskName EnvisoftWebX-Install' çalıştırın (veya makineyi "
+     "yeniden başlatın) — kurulum kaldığı yerden, inen katmanları koruyarak devam eder.",
+     "Linux'ta elle tekrar denemek isterseniz aşağıdaki komutu birkaç kez çalıştırın:"],
     "cd /opt/envisoft\nfor i in 1 2 3 4 5; do docker compose -f docker-compose.prod.yml --env-file .env pull && break; sleep 4; done",
 )
 
@@ -512,7 +517,7 @@ table(
         ["502 Bad Gateway", "Web başlıyor / çökmüş", "ps + logs web; 30-60 sn bekle"],
         ["400 DisallowedHost", "Domain ALLOWED_HOSTS'ta yok", ".env'e ekle + up -d (Bölüm 5.4)"],
         ["Sonsuz yönlendirme", "Cloudflare Flexible", "DNS only veya Full (strict)"],
-        ["İmaj indirme koptu", "Geçici ağ / IPv6", "pull'u tekrarla (önbellekten sürer)"],
+        ["İmaj indirme koptu", "Geçici ağ / IPv6", "Güncel setup bekler+tekrarlar; eskide Start-ScheduledTask EnvisoftWebX-Install"],
         ["Sertifika alınamadı", "DNS/port/rate-limit", "DNS + 80/443 + caddy log"],
     ],
     widths=[2.3, 2.0, 3.0],

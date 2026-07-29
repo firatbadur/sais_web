@@ -14,7 +14,7 @@
 
 $script:WslDistro = "Ubuntu"
 
-# Every WSL call that touches Docker runs as ROOT — explicitly, never relying on
+# Every WSL call that touches Docker runs as ROOT - explicitly, never relying on
 # the distro's *default* user.
 #
 # WHY (real field incident): 00-ensure-docker installs the distro with
@@ -96,7 +96,7 @@ function Test-DockerReady {
     }
 }
 
-# Run an arbitrary bash command inside the WSL distro (as root — see $WslUser).
+# Run an arbitrary bash command inside the WSL distro (as root - see $WslUser).
 function Invoke-Wsl([string]$bash) {
     wsl.exe -d $script:WslDistro -u $script:WslUser -- bash -lc "$bash"
     if ($LASTEXITCODE -ne 0) {
@@ -132,6 +132,35 @@ function Invoke-Manage([string]$InstallDir, [string]$manageArgs, [string]$envInl
 function Get-ComposeBash([string]$InstallDir, [string]$composeArgs) {
     $wslDir = ConvertTo-WslPath $InstallDir
     return "cd '$wslDir' && docker compose --env-file .env -f $script:ComposeFile $composeArgs"
+}
+
+# Quick reachability probe: DNS-resolve + TCP-connect to a public host (5s cap).
+# TcpClient.BeginConnect with a hostname covers BOTH failure modes (dead DNS and
+# dead route), which is exactly what an image pull needs to work.
+function Test-Internet([string]$TestHost = "ghcr.io", [int]$TestPort = 443) {
+    try {
+        $c = New-Object System.Net.Sockets.TcpClient
+        $iar = $c.BeginConnect($TestHost, $TestPort, $null, $null)
+        $ok = $iar.AsyncWaitHandle.WaitOne(5000)
+        if ($ok -and $c.Connected) { $c.EndConnect($iar); $c.Close(); return $true }
+        $c.Close()
+        return $false
+    } catch {
+        return $false
+    }
+}
+
+# Block until the internet is reachable, with a LOUD on-screen warning so the
+# operator knows the install is WAITING for the network - not stuck/crashed
+# (real field incident: the connection dropped mid image-pull and the install
+# died with "short read / unexpected EOF"). Returns $false after TimeoutSec.
+function Wait-ForInternet([int]$TimeoutSec = 1800, [string]$Reason = "") {
+    if (Test-Internet) { return $true }
+    $why = ""
+    if ($Reason) { $why = " ($Reason)" }
+    Write-WarnLine "NO INTERNET CONNECTION$why - the install now WAITS for the network to come back."
+    Write-WarnLine "This is not an error yet: it resumes AUTOMATICALLY as soon as the connection returns (up to $([int]($TimeoutSec/60)) min)."
+    return (Wait-WithSpin "Waiting for internet (ghcr.io:443)" -TimeoutSec $TimeoutSec -CheckEverySec 10 -Check { Test-Internet })
 }
 
 # ----------------------------------------------------------------------------
