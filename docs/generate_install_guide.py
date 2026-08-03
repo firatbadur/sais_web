@@ -406,7 +406,8 @@ h2("Loglar")
 code("docker compose -f docker-compose.prod.yml --env-file .env logs -f web")
 h2("Otomatik başlatma servisi")
 bullet("**Linux:** systemctl status envisoft-webx")
-bullet("**Windows:** Hizmetler (services.msc) → EnvisoftWebX")
+bullet("**Windows:** Hizmetler (services.msc) → EnvisoftWebX-SerialBridge (seri köprü); "
+       "yığın otomatik başlatma Görev Zamanlayıcı → EnvisoftWebX görevi ile yapılır")
 callout("Yeniden başlatma testi (önerilir)",
         "Kurulumdan sonra sunucuyu bir kez yeniden başlatın (reboot) ve açılışta uygulamanın "
         "kendiliğinden geldiğini doğrulayın — gerçek elektrik kesintisi senaryosu.", kind="ok")
@@ -519,7 +520,30 @@ error_block(
     "cd /opt/envisoft\ndocker compose -f docker-compose.prod.yml --env-file .env logs -f caddy",
 )
 
-h2("7.5 Hızlı başvuru tablosu")
+h2("7.5 Seri port (COM) bağlantıları — Windows")
+error_block(
+    "Seri (COM) bağlantı \"bağlantı açılamadı\" veriyor",
+    "Dashboard'da Modbus RTU/ASCII (Serial) bağlantı tanımlı; Modbus Poll gibi bir programla "
+    "cihaz okunabiliyor ama sistemde sensörler \"bağlantı açılamadı\" hatasında.",
+    "Uygulama Docker/WSL2 içinde çalışır ve COM portunu doğrudan açamaz. Bu iş host'taki "
+    "EnvisoftWebX-SerialBridge Windows servisine aittir: seri ayarları dashboard'dan okur "
+    "(C:\\EnvisoftWebX\\bridge\\serial-bridge.json) ve COM portunu TCP'ye aynalar. Servis "
+    "çalışmıyorsa veya COM portu başka bir program tarafından tutuluyorsa bağlantı kurulamaz.",
+    ["Hizmetler (services.msc) → EnvisoftWebX-SerialBridge servisi 'Çalışıyor' olmalı; değilse başlatın.",
+     "C:\\EnvisoftWebX\\bridge\\serial-bridge.json içinde bağlantınız listeleniyor mu bakın "
+     "(dashboard'da bağlantıyı kaydedince saniyeler içinde güncellenir).",
+     "C:\\EnvisoftWebX\\bridge\\status.json içinde com_open=true olmalı; false ise last_error "
+     "alanına bakın (yanlış COM numarası, port başka programda açık vb.).",
+     "Modbus Poll / başka bir SCADA programı aynı COM portunu açık tutuyorsa kapatın — COM "
+     "portları tek programa aittir.",
+     "Aygıt Yöneticisi'nde COM numarasının dashboard'daki ile aynı olduğunu doğrulayın "
+     "(USB-seri çeviriciler takıldığı porta göre numara değiştirebilir).",
+     "C:\\EnvisoftWebX\\.env dosyasında SERIAL_BRIDGE_HOST satırı dolu olmalı (kurulum/açılışta "
+     "otomatik yazılır); boşsa makineyi yeniden başlatın.",
+     "Servis logu: C:\\EnvisoftWebX\\logs\\serial-bridge.log"],
+)
+
+h2("7.6 Hızlı başvuru tablosu")
 table(
     ["Belirti", "Olası sebep", "Çözüm"],
     [
@@ -532,6 +556,7 @@ table(
         ["Sonsuz yönlendirme", "Cloudflare Flexible", "DNS only veya Full (strict)"],
         ["İmaj indirme koptu", "Geçici ağ / IPv6", "Güncel setup bekler+tekrarlar; eskide Start-ScheduledTask EnvisoftWebX-Install"],
         ["Sertifika alınamadı", "DNS/port/rate-limit", "DNS + 80/443 + caddy log"],
+        ["Seri bağlantı açılamıyor", "SerialBridge servisi kapalı / COM meşgul", "Servisi başlat; status.json + serial-bridge.log kontrol (Bölüm 7.5)"],
     ],
     widths=[2.3, 2.0, 3.0],
 )

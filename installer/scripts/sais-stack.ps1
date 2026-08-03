@@ -126,6 +126,14 @@ while ($true) {
         #     Must run BEFORE `up -d` so a changed value recreates the containers.
         Update-EnvFingerprint $InstallDir
 
+        # 0c) Serial bridge host: containers reach the host's SerialBridge
+        #     service at the WSL gateway IP; it changes with the WSL IP on every
+        #     boot, so refresh BEFORE `up -d` (env change -> recreate).
+        #     NOTE: the serial bridge listens with its own TcpListener - NEVER
+        #     move it to netsh portproxy (Set-PortProxy resets ALL entries).
+        $gw = Get-WslGatewayIp $Distro
+        if ($gw) { Update-EnvVar $InstallDir "SERIAL_BRIDGE_HOST" $gw }
+
         # 1) Make sure the Docker daemon is up inside the distro.
         wsl.exe -d $Distro -u root -- bash -lc "service docker start 2>/dev/null || systemctl start docker 2>/dev/null || (pgrep dockerd >/dev/null || (dockerd >/var/log/dockerd.log 2>&1 &)); sleep 2" *> $null
 

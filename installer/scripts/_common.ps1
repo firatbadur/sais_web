@@ -76,6 +76,54 @@ function ConvertTo-WslPath([string]$winPath) {
     return "/mnt/$drive$rest"
 }
 
+# Default gateway as seen from INSIDE the distro = the Windows host's address
+# on the WSL NAT switch = the address containers reach the host on (used by the
+# serial bridge: SERIAL_BRIDGE_HOST). Parses "default via <ip> dev eth0 ...".
+function Get-WslGatewayIp([string]$Distro = $script:WslDistro) {
+    try {
+        $out = (wsl.exe -d $Distro -u root -- ip route show default 2>$null | Out-String)
+        if ($out -match 'via\s+(\d+\.\d+\.\d+\.\d+)') {
+            $gw = $Matches[1]
+            # Mirrored-networking guard: under networkingMode=mirrored the WSL
+            # "gateway" is the LAN router, NOT this host -> using it would point
+            # the containers at the router. Skip in that case.
+            $hostGw = ""
+            try {
+                $route = Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
+                    Sort-Object RouteMetric | Select-Object -First 1
+                if ($route) { $hostGw = $route.NextHop }
+            } catch { }
+            if ($hostGw -and $gw -eq $hostGw) { return "" }
+            return $gw
+        }
+    } catch { }
+    return ""
+}
+
+# Replace-or-append KEY=VALUE in InstallDir\.env. Writes only when the value
+# actually changes (avoids needless container recreate on `up -d`); UTF-8 no
+# BOM + LF endings (the file is read inside WSL/Linux).
+function Update-EnvVar([string]$InstallDir, [string]$Key, [string]$Value) {
+    try {
+        $envPath = Join-Path $InstallDir ".env"
+        if (-not (Test-Path $envPath)) { return }
+        $content = Get-Content -Raw -Encoding UTF8 $envPath
+        $line = "$Key=$Value"
+        $pattern = '(?m)^' + [regex]::Escape($Key) + '=.*$'
+        if ($content -match $pattern) {
+            $new = [regex]::Replace($content, $pattern, $line)
+        } else {
+            $sep = if ($content.EndsWith("`n")) { "" } else { "`n" }
+            $new = $content + $sep + $line + "`n"
+        }
+        if ($new -ne $content) {
+            $new = $new -replace "`r`n", "`n"
+            $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText($envPath, $new, $utf8NoBom)
+        }
+    } catch { }
+}
+
 # Is Docker running inside the WSL distro?
 # IMPORTANT: redirect docker's stderr INSIDE bash (docker info >/dev/null 2>&1),
 # never via a PowerShell-side `*>`/`2>`. Under ErrorActionPreference='Stop' a

@@ -97,6 +97,12 @@ for ($try = 1; $try -le $maxPull; $try++) {
     }
 }
 
+# Serial bridge host: write the WSL gateway IP into .env BEFORE the first
+# `up -d`, so serial (COM) connections work from the very first boot (the
+# sais-stack loop refreshes it on every later boot).
+$gw = Get-WslGatewayIp
+if ($gw) { Update-EnvVar $InstallDir "SERIAL_BRIDGE_HOST" $gw }
+
 Invoke-WslSpin "Starting the stack (docker compose up -d)" `
     (Get-ComposeBash $InstallDir "up -d")
 

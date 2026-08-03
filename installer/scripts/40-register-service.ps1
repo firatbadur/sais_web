@@ -71,3 +71,44 @@ Register-ScheduledTask -TaskName $ServiceName -Action $action -Trigger $trigger 
 Start-ScheduledTask -TaskName $ServiceName -ErrorAction SilentlyContinue
 
 Write-Ok "Auto-start configured (logon task '$ServiceName' for '$bareUser')."
+
+# --- Serial bridge service (COM -> TCP mirror for the containers) -------------
+# Unlike the stack task, this is a real NSSM service under LOCAL SYSTEM: COM
+# ports and TcpListener are session-independent and need no WSL, so the
+# per-user constraint documented above does NOT apply here. NSSM gives crash
+# restart supervision for free; nssm.exe is already shipped in the payload.
+$bridgeSvc = "$ServiceName-SerialBridge"
+$bridgeScript = Join-Path $InstallDir "scripts\serial-bridge.ps1"
+$bridgeDir = Join-Path $InstallDir "bridge"
+New-Item -ItemType Directory -Force -Path $bridgeDir | Out-Null
+
+if (Test-Path $nssm) {
+    Write-Step "Registering serial bridge service: $bridgeSvc"
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    & $nssm stop $bridgeSvc 2>&1 | Out-Null          # idempotent re-install
+    & $nssm remove $bridgeSvc confirm 2>&1 | Out-Null
+    $ErrorActionPreference = $prev
+
+    $bridgeArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$bridgeScript`" -InstallDir `"$InstallDir`" -ConfigDir `"$bridgeDir`""
+    & $nssm install $bridgeSvc $psExe $bridgeArgs | Out-Null
+    & $nssm set $bridgeSvc AppDirectory $InstallDir | Out-Null
+    & $nssm set $bridgeSvc AppStdout (Join-Path $InstallDir "logs\serial-bridge-svc.log") | Out-Null
+    & $nssm set $bridgeSvc AppStderr (Join-Path $InstallDir "logs\serial-bridge-svc.log") | Out-Null
+    & $nssm set $bridgeSvc AppRotateFiles 1 | Out-Null
+    & $nssm set $bridgeSvc AppRotateBytes 5242880 | Out-Null
+    & $nssm set $bridgeSvc Start SERVICE_AUTO_START | Out-Null
+    & $nssm set $bridgeSvc Description "Envisoft WebX - mirrors serial (COM) connections to TCP for the Docker stack." | Out-Null
+    & $nssm start $bridgeSvc 2>&1 | Out-Null
+
+    # Inbound firewall for the bridge listen range (8900-18899 covers
+    # SERIAL_BRIDGE_PORT_BASE + pk % 10000). Existence check on purpose --
+    # do not accumulate duplicate rules across re-installs.
+    if (-not (Get-NetFirewallRule -DisplayName "EnvisoftWebX SerialBridge" -ErrorAction SilentlyContinue)) {
+        New-NetFirewallRule -DisplayName "EnvisoftWebX SerialBridge" -Direction Inbound `
+            -Protocol TCP -LocalPort "8900-18899" -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    }
+    Write-Ok "Serial bridge service registered ($bridgeSvc)."
+} else {
+    Write-WarnLine "nssm.exe not found; serial bridge service NOT registered (serial connections will not work)."
+}

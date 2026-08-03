@@ -83,6 +83,11 @@ if ($LicenseMode -eq "licensed") {
     $graceHours = "720"
 }
 
+# Serial bridge shared dir: the web container renders serial-bridge.json here
+# (bind mount /bridge); the host EnvisoftWebX-SerialBridge service reads it.
+$bridgeDir = Join-Path $InstallDir "bridge"
+New-Item -ItemType Directory -Force -Path $bridgeDir | Out-Null
+
 $map = @{
     "__GHCR_IMAGE__"          = $GhcrImage
     "__IMAGE_TAG__"           = $ImageTag
@@ -96,6 +101,7 @@ $map = @{
     "__LICENSE_KEY__"         = $LicenseKey
     "__LICENSE_URL__"         = $LicenseUrl
     "__LICENSE_GRACE_HOURS__" = $graceHours
+    "__SERIAL_BRIDGE_HOST_DIR__" = (ConvertTo-WslPath $bridgeDir)
 }
 foreach ($k in $map.Keys) {
     $content = $content.Replace($k, $map[$k])

@@ -426,6 +426,50 @@ Dış erişim (`https://sais-tesis1.envisoft.com.tr` gibi) bir **Caddy** servisi
   uyarısı + log spam'i üretiyordu).
 - `.env`: `CADDY_CONFIG_PATH`, `CADDY_CERT_DIR`, `CADDY_UPSTREAM`.
 
+## Seri köprü (COM → TCP; Docker/WSL2'de seri Modbus)
+
+Container Windows COM portunu **açamaz** (WSL2 seri geçirmez, compose'da `devices:` yok, "COM5"
+Linux'ta anlamsız) → seri bağlantılar sahada "bağlantı açılamadı" veriyordu (Zile AAT/HACH vakası).
+Çözüm **şeffaf seri köprü**: kullanıcı dashboard'da bugünkü gibi "Modbus RTU (Serial) + COM5"
+tanımlar, gerisi otomatik. Config **DB'den** gelir, elle dosya düzenlenmez.
+
+- **Akış**: `Connection` (transport=serial, is_enabled) → [api/serial_bridge.py](api/serial_bridge.py)
+  `apply()` `SERIAL_BRIDGE_DIR`/serial-bridge.json'ı atomik üretir (Caddyfile deseni; tetik:
+  Connection `post_save`/`post_delete` sinyali + startup `render_serial_bridge` komutu) → host'taki
+  **`EnvisoftWebX-SerialBridge`** NSSM servisi ([installer/scripts/serial-bridge.ps1](installer/scripts/serial-bridge.ps1),
+  PS 5.1 + inline C#: SerialPort+TcpListener) dosyayı 5 sn'de bir izler, her seri bağlantı için
+  COM↔TCP aynası açar → worker [scada_io/bridge_redirect.py](scada_io/bridge_redirect.py)
+  `maybe_redirect` ile factory'de bağlantıyı **şeffafça** `modbus_rtu→modbus_rtu_over_tcp`
+  (`modbus_ascii→modbus_ascii_over_tcp`; `ascii_custom` kendi reader'ında `socket://` açar)
+  yoluna, `SERIAL_BRIDGE_HOST:<port>` hedefine çevirir.
+- **Port formülü (tek doğruluk kaynağı)**: `api.serial_bridge.listen_port_for(pk)` =
+  `SERIAL_BRIDGE_PORT_BASE(8900) + pk % 10000` → firewall aralığı 8900-18899 ("EnvisoftWebX
+  SerialBridge" kuralı, 40-register-service). Renderer duplicate-port guard'lı.
+- **Redirect yalnız `SERIAL_BRIDGE_HOST` doluysa** — Windows sahada `20-up.ps1` + her boot'ta
+  `sais-stack.ps1` (adım 0c) WSL gateway IP'sini (`Get-WslGatewayIp`, container'ların host'a
+  ulaştığı adres; mirrored-network guard'lı) `Update-EnvVar` ile `.env`'e yazar. Dev/Linux'ta boş →
+  davranış birebir eski (seri port doğrudan açılır; Linux'ta istenirse compose `devices:` eşlemesi).
+- **Çoklu istemci zorunlu**: köprü ≤8 TCP istemci kabul eder (prefork 4 worker + canlı-test aynı
+  porta bağlanır; tek-istemci thrash yaratır), trafiği seri porta **transaction bazında** serileştirir
+  (`serialLock` + istek 20ms gap toplama + yanıt idle-gap/timeout_ms deadline; yanıt YALNIZ isteği
+  atan istemciye döner). COM açılışı backoff'lu (1→30sn); başarısız port-bind 60 sn'de bir retry.
+- **Durum**: köprü ~10 sn'de bir `status.json` yazar → dashboard `api_serial_bridge_status`
+  endpoint'i okur, Bağlantılar listesinde seri satırlara rozet (yeşil köprü OK / kırmızı hata /
+  "servis yanıt vermiyor"). Log: `C:\EnvisoftWebX\logs\serial-bridge.log`.
+- **Tuzaklar**: (1) köprü **asla `netsh portproxy` kullanmaz** — `Set-PortProxy` her turda tüm
+  portproxy kayıtlarını resetler; doğrudan TcpListener. (2) `connection_pool._apply_keepalive`
+  `reader.connection`'a bakar (redirect kopyası transport=tcp) — `connection` parametresine geri
+  döndürme. (3) Köprü hatasında `Connection.last_error_message` köprü IP:port'unu gösterir (COM5
+  değil) — operatör teşhisi için rozet + status.json esastır. (4) serial-bridge.ps1 ASCII-only +
+  PS 5.1 parse-clean kalmalı (CI gate'i), C# kısmı C# 5 uyumlu (string interpolation yok).
+- **Mevcut sahalara dağıtım**: imaj Watchtower ile gelir ama host script'leri gelmez — eski sahada
+  serial-bridge.ps1 + NSSM kaydı + compose `/bridge` mount'u elle (veya yeni setup exe upgrade)
+  uygulanmalı.
+- `.env`: `SERIAL_BRIDGE_HOST` (otomatik), `SERIAL_BRIDGE_PORT_BASE`, `SERIAL_BRIDGE_DIR` (container
+  içi, default `/bridge`), `SERIAL_BRIDGE_HOST_DIR` (host bind-mount kaynağı; Windows'ta
+  `/mnt/c/EnvisoftWebX/bridge`). Compose senkron kuralı: `/bridge` mount + `render_serial_bridge`
+  komutu dev+prod+install-linux.sh heredoc'unda birlikte güncellenir.
+
 ## Windows installer paketi (next-next-next)
 
 Saha kurulumu tek `sais-setup-vX.Y.Z.exe` (Inno Setup) ile yapılır → [installer/](installer/). Sihirbaz

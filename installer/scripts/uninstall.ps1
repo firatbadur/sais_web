@@ -33,12 +33,20 @@ Set-ItemProperty -Path $winlogon -Name "AutoAdminLogon" -Value "0" -ErrorAction 
 Remove-ItemProperty -Path $winlogon -Name "DefaultPassword" -ErrorAction SilentlyContinue
 Remove-ItemProperty -Path $winlogon -Name "DefaultUserName" -ErrorAction SilentlyContinue
 
-# Remove any old NSSM service from previous installer versions.
+# Remove NSSM services: serial bridge + any legacy stack service.
 $nssm = Join-Path $InstallDir "nssm.exe"
 if (Test-Path $nssm) {
-    Write-Step "Removing legacy NSSM service: $ServiceName"
-    & $nssm stop $ServiceName *> $null
-    & $nssm remove $ServiceName confirm *> $null
+    Write-Step "Removing NSSM services: $ServiceName-SerialBridge / $ServiceName (legacy)"
+    foreach ($svc in @("$ServiceName-SerialBridge", $ServiceName)) {
+        & $nssm stop $svc *> $null
+        & $nssm remove $svc confirm *> $null
+    }
+}
+
+# Remove firewall rules created by the installer / stack loop.
+Write-Step "Removing firewall rules..."
+foreach ($rule in @("EnvisoftWebX SerialBridge", "EnvisoftWebX HTTP", "EnvisoftWebX HTTPS")) {
+    Remove-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue
 }
 
 Write-Step "Stopping containers..."
