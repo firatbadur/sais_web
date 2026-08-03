@@ -67,6 +67,9 @@ services:
       - pg_backups:/backups
       - report_files:/reports
       - caddy_config:/etc/caddy
+      # Seri köprü config'i (serial-bridge.json) — host servisi buradan okur.
+      # Windows sahada .env SERIAL_BRIDGE_HOST_DIR=/mnt/c/EnvisoftWebX/bridge.
+      - ${SERIAL_BRIDGE_HOST_DIR:-./bridge_shared}:/bridge
     # Dev'de doğrudan erişim için web :8000 publish KORUNUR; Caddy ayrıca 80/443'te.
     ports:
       - "8000:8000"
@@ -78,6 +81,7 @@ services:
              python manage.py seed_periodic_tasks &&
              (python manage.py refresh_license || true) &&
              (python manage.py render_caddyfile || true) &&
+             (python manage.py render_serial_bridge || true) &&
              gunicorn sais_web.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile - --error-logfile -"
 
   # Dev reverse proxy — lokal doğrulama için (internal/self-signed mod).

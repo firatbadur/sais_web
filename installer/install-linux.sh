@@ -195,6 +195,13 @@ CADDY_CONFIG_PATH=/etc/caddy/Caddyfile
 CADDY_CERT_DIR=/etc/caddy/certs
 CADDY_UPSTREAM=web:8000
 
+# Seri köprü (yalnız Windows/WSL2 sahalarında kullanılır)
+# Linux'ta BOŞ bırak: seri port container'a devices: eşlemesiyle doğrudan verilebilir,
+# köprü/redirect gerekmez.
+SERIAL_BRIDGE_HOST=
+SERIAL_BRIDGE_PORT_BASE=8900
+SERIAL_BRIDGE_HOST_DIR=
+
 # PostgreSQL (bundled container)
 POSTGRES_DB=envisoft
 POSTGRES_USER=envisoft
@@ -320,6 +327,7 @@ services:
       - report_files:/reports
       - caddy_config:/etc/caddy
       - /etc/machine-id:/host/machine-id:ro
+      - ${SERIAL_BRIDGE_HOST_DIR:-./bridge_shared}:/bridge
     expose:
       - "8000"
     labels:
@@ -332,6 +340,7 @@ services:
              python manage.py seed_periodic_tasks &&
              (python manage.py refresh_license || true) &&
              (python manage.py render_caddyfile || true) &&
+             (python manage.py render_serial_bridge || true) &&
              gunicorn sais_web.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile - --error-logfile -"
 
   caddy:

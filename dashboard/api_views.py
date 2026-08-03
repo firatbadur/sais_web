@@ -800,6 +800,54 @@ def connection_toggle(request):
 
 
 @login_required
+def serial_bridge_status(request):
+    """Seri köprü (host COM→TCP servisi) durum özeti.
+
+    Host'taki EnvisoftWebX-SerialBridge servisi ~10 sn'de bir
+    ``SERIAL_BRIDGE_DIR/status.json`` yazar; burada okunup bağlantı listesi
+    rozetleri için connection_id anahtarlı dict'e çevrilir. Dosya yoksa veya
+    damgası 60 sn'den eskiyse ``stale=true`` döner (servis çalışmıyor demektir).
+    """
+    import datetime as _dt
+    import json as _json
+    import os
+
+    from django.conf import settings as dj_settings
+    from django.utils.dateparse import parse_datetime
+
+    enabled = bool(getattr(dj_settings, "SERIAL_BRIDGE_HOST", ""))
+    directory = getattr(dj_settings, "SERIAL_BRIDGE_DIR", "") or ""
+    bridges: dict[str, dict] = {}
+    stale = True
+    ts_iso = None
+
+    path = os.path.join(directory, "status.json") if directory else ""
+    if path and os.path.isfile(path):
+        try:
+            with open(path, encoding="utf-8-sig") as fh:
+                data = _json.load(fh)
+            ts_iso = data.get("ts")
+            ts = parse_datetime(ts_iso) if ts_iso else None
+            if ts is not None:
+                if timezone.is_naive(ts):
+                    ts = timezone.make_aware(ts, _dt.timezone.utc)
+                stale = (timezone.now() - ts).total_seconds() > 60
+            for entry in data.get("bridges", []):
+                cid = entry.get("connection_id")
+                if cid is not None:
+                    bridges[str(cid)] = entry
+        except (OSError, ValueError):
+            pass  # yarım yazım/bozuk dosya → stale kalır
+
+    return JsonResponse({
+        "enabled": enabled,
+        "stale": stale,
+        "ts": ts_iso,
+        "bridges": bridges,
+    })
+
+
+@login_required
 def station_parameters(request):
     """İstasyona ait parametre listesi — rapor formu select2'sini doldurur.
 

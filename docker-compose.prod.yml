@@ -88,6 +88,10 @@ services:
       # Lisans node-lock: host makine kimliği salt-okunur; parmak izi container
       # içinde bundan hesaplanır (.env düzenleyerek atlatma engellenir).
       - /etc/machine-id:/host/machine-id:ro
+      # Seri köprü config'i — Windows'ta host EnvisoftWebX-SerialBridge servisi
+      # buradan okur (.env SERIAL_BRIDGE_HOST_DIR=/mnt/c/EnvisoftWebX/bridge);
+      # Linux sahada kullanılmaz, default alt dizin zararsızdır.
+      - ${SERIAL_BRIDGE_HOST_DIR:-./bridge_shared}:/bridge
     # NOT: web artık host'a publish edilmez; ingress Caddy (80/443) üzerinden.
     expose:
       - "8000"
@@ -101,6 +105,7 @@ services:
              python manage.py seed_periodic_tasks &&
              (python manage.py refresh_license || true) &&
              (python manage.py render_caddyfile || true) &&
+             (python manage.py render_serial_bridge || true) &&
              gunicorn sais_web.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile - --error-logfile -"
 
   # Reverse proxy + otomatik HTTPS. Domain/SSL dashboard'dan (WebSettings) yönetilir;

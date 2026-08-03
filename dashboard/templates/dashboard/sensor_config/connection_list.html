@@ -42,11 +42,14 @@
                 </thead>
                 <tbody>
                     {% for c in connections %}
-                        <tr>
+                        <tr data-conn-id="{{ c.pk }}" data-transport="{{ c.transport }}">
                             <td>{{ c.pk }}</td>
                             <td>{{ c.station.name|default:"-" }}</td>
                             <td class="fw-semibold">{{ c.name }}</td>
-                            <td><span class="badge badge-light-info">{{ c.protocol }}</span></td>
+                            <td>
+                                <span class="badge badge-light-info">{{ c.protocol }}</span>
+                                <span class="js-bridge-badge badge d-none ms-1"></span>
+                            </td>
                             <td class="text-muted">{{ c.host|default:c.serial_port|default:"-" }}{% if c.port %}:{{ c.port }}{% endif %}</td>
                             <td class="text-end">{{ c.scangroup_total }}</td>
                             <td class="text-end">{{ c.sensor_total }}</td>
@@ -167,6 +170,45 @@
             btn.disabled = false;
         });
     });
+})();
+</script>
+
+<script>
+// Seri köprü durumu — yalnız seri bağlantı varsa tek seferlik sorgu.
+// Host'taki EnvisoftWebX-SerialBridge servisi status.json yazar; endpoint okur.
+(function () {
+    const serialRows = document.querySelectorAll('tr[data-transport="serial"]');
+    if (!serialRows.length) return;
+
+    fetch("{% url 'dashboard:api_serial_bridge_status' %}")
+        .then(r => r.json())
+        .then(d => {
+            if (!d.enabled) return;  // köprü yönlendirmesi kapalı (dev/Linux)
+            serialRows.forEach(row => {
+                const badge = row.querySelector('.js-bridge-badge');
+                if (!badge) return;
+                const entry = d.bridges[row.dataset.connId];
+                badge.classList.remove('d-none');
+                if (d.stale) {
+                    badge.className = 'js-bridge-badge badge badge-light-danger ms-1';
+                    badge.textContent = "{% trans 'Köprü: servis yanıt vermiyor' %}";
+                    badge.title = "{% trans 'EnvisoftWebX-SerialBridge Windows servisini kontrol edin.' %}";
+                } else if (!entry) {
+                    badge.className = 'js-bridge-badge badge badge-light-secondary ms-1';
+                    badge.textContent = "{% trans 'Köprü: kayıt yok' %}";
+                } else if (entry.com_open) {
+                    badge.className = 'js-bridge-badge badge badge-light-success ms-1';
+                    badge.textContent = "{% trans 'Köprü' %} :" + entry.listen_port;
+                    badge.title = (entry.com_port || '') +
+                        " — {% trans 'istemci' %}: " + (entry.client_count || 0);
+                } else {
+                    badge.className = 'js-bridge-badge badge badge-light-danger ms-1';
+                    badge.textContent = "{% trans 'Köprü: port açılamadı' %}";
+                    badge.title = entry.last_error || '';
+                }
+            });
+        })
+        .catch(() => {});
 })();
 </script>
 {% endblock %}

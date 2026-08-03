@@ -221,6 +221,8 @@ urlpatterns = [
     path("api/system-alarms/status/", api_views.system_alarms_status, name="api_system_alarms_status"),
     path("api/connection-toggle/", api_views.connection_toggle,
          name="api_connection_toggle"),
+    path("api/serial-bridge/status/", api_views.serial_bridge_status,
+         name="api_serial_bridge_status"),
     path("api/api-logs/<int:pk>/", api_views.api_log_detail, name="api_api_log_detail"),
     path("api/backups/status/", api_views.backup_status, name="api_backup_status"),
     path("api/backups/<int:pk>/download/", api_views.backup_download, name="api_backup_download"),
