@@ -9,3 +9,6 @@ class ApiConfig(AppConfig):
         # Sensör eklenince otomatik alarm tanımı oluştur (post_save signal).
         from . import alarm_autocreate
         alarm_autocreate.connect()
+        # Connection değişince seri köprü config'ini yeniden üret.
+        from . import serial_bridge
+        serial_bridge.connect_signals()

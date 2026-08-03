@@ -22,6 +22,8 @@ def build_reader(connection) -> ProtocolReader:
     Bilinmeyen protokol için ValueError fırlatır — `dispatch_polls`
     çağıran tarafta yakalanır ve connection error olarak işaretlenir.
     """
+    from ..bridge_redirect import maybe_redirect
+    connection = maybe_redirect(connection)
     cls = _READERS.get(connection.protocol)
     if cls is None:
         raise ValueError(f"Desteklenmeyen protokol: {connection.protocol}")

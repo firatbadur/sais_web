@@ -117,7 +117,9 @@ def get_reader(connection) -> Optional[ProtocolReader]:
             _safe_close(reader)
             return None
 
-        _apply_keepalive(reader, connection)
+        # NOT connection: build_reader seri bağlantıyı köprüye yönlendirmiş
+        # olabilir (bridge_redirect) — gate reader'ın gördüğü transport'a bakmalı.
+        _apply_keepalive(reader, reader.connection)
         _POOL[connection.pk] = reader
         _FAILURES[connection.pk] = 0
         _LAST_USED[connection.pk] = time.monotonic()

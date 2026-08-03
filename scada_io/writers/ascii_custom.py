@@ -32,17 +32,23 @@ class AsciiCustomWriter(ProtocolWriter):
 
         timeout_sec = max(0.1, (self.connection.timeout_ms or 2000) / 1000.0)
         try:
-            self._serial = serial.Serial(
-                port=self.connection.serial_port,
-                baudrate=self.connection.baudrate or 9600,
-                parity=_PARITY_MAP.get(self.connection.parity or 0, "N"),
-                stopbits=self.connection.stop_bits or 1,
-                bytesize=self.connection.byte_size or 8,
-                timeout=timeout_sec,
-                xonxoff=bool(self.connection.xonxoff),
-                rtscts=bool(self.connection.rtscts),
-                dsrdtr=bool(self.connection.dsrdtr),
-            )
+            if self.connection.transport == "tcp":
+                # Köprülenmiş seri (bridge_redirect) veya gerçek ascii-over-TCP —
+                # bkz. readers/ascii_custom.py.
+                url = f"socket://{self.connection.host}:{self.connection.port}"
+                self._serial = serial.serial_for_url(url, timeout=timeout_sec)
+            else:
+                self._serial = serial.Serial(
+                    port=self.connection.serial_port,
+                    baudrate=self.connection.baudrate or 9600,
+                    parity=_PARITY_MAP.get(self.connection.parity or 0, "N"),
+                    stopbits=self.connection.stop_bits or 1,
+                    bytesize=self.connection.byte_size or 8,
+                    timeout=timeout_sec,
+                    xonxoff=bool(self.connection.xonxoff),
+                    rtscts=bool(self.connection.rtscts),
+                    dsrdtr=bool(self.connection.dsrdtr),
+                )
             self.connected = self._serial.is_open
         except Exception as exc:  # noqa: BLE001
             self.last_error = f"{type(exc).__name__}: {exc}"

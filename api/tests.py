@@ -120,3 +120,96 @@ class LicenseEnforcementTests(TestCase):
         )
         with override_settings(LICENSE_BOOTSTRAP_GRACE_HOURS=999999, BUILD_EPOCH=0):
             self.assertFalse(licensing.license_active())
+
+
+# ---------------------------------------------------------------------------
+# Seri köprü config renderer (api/serial_bridge.py)
+# ---------------------------------------------------------------------------
+
+import json
+import os
+import tempfile
+
+from api import serial_bridge
+from api.models import Connection, Station
+
+
+class SerialBridgeRenderTests(TestCase):
+    def setUp(self):
+        self.station = Station.objects.create(name="Test Tesis")
+        self.tmpdir = tempfile.mkdtemp()
+
+    def _conn(self, name, **kw):
+        defaults = dict(
+            station=self.station, name=name, protocol="modbus_rtu",
+            transport="serial", serial_port="COM5", baudrate=9600,
+            parity=2, stop_bits=1, byte_size=8, timeout_ms=3000,
+            is_enabled=True,
+        )
+        defaults.update(kw)
+        return Connection.objects.create(**defaults)
+
+    def _read_config(self):
+        path = os.path.join(self.tmpdir, serial_bridge.CONFIG_FILENAME)
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+
+    def test_only_enabled_serial_connections_rendered(self):
+        keep = self._conn("seri-acik")
+        self._conn("seri-kapali", is_enabled=False)
+        self._conn("tcp-baglanti", protocol="modbus_tcp", transport="tcp",
+                   serial_port="", host="10.0.0.1")
+        with override_settings(SERIAL_BRIDGE_DIR=self.tmpdir):
+            ok, err = serial_bridge.apply()
+        self.assertTrue(ok)
+        cfg = self._read_config()
+        self.assertEqual(len(cfg["bridges"]), 1)
+        entry = cfg["bridges"][0]
+        self.assertEqual(entry["connection_id"], keep.pk)
+        self.assertEqual(entry["com_port"], "COM5")
+        self.assertEqual(entry["parity"], "E")  # 2 → Even
+        self.assertEqual(entry["timeout_ms"], 3000)
+        self.assertEqual(entry["listen_port"],
+                         serial_bridge.listen_port_for(keep.pk))
+
+    def test_defaults_applied_for_null_fields(self):
+        conn = self._conn("bos-alanlar", baudrate=None, parity=None,
+                          stop_bits=None, byte_size=None)
+        with override_settings(SERIAL_BRIDGE_DIR=self.tmpdir):
+            serial_bridge.apply()
+        entry = self._read_config()["bridges"][0]
+        self.assertEqual(entry["baudrate"], 9600)
+        self.assertEqual(entry["parity"], "N")
+        self.assertEqual(entry["stopbits"], 1)
+        self.assertEqual(entry["bytesize"], 8)
+        self.assertEqual(entry["connection_id"], conn.pk)
+
+    def test_missing_dir_skips_silently(self):
+        self._conn("seri")
+        with override_settings(SERIAL_BRIDGE_DIR="/olmayan/dizin/xyz"):
+            ok, err = serial_bridge.apply()
+        self.assertTrue(ok)
+        self.assertEqual(err, "skipped")
+
+    def test_empty_bridges_still_written(self):
+        with override_settings(SERIAL_BRIDGE_DIR=self.tmpdir):
+            ok, _ = serial_bridge.apply()
+        self.assertTrue(ok)
+        self.assertEqual(self._read_config()["bridges"], [])
+
+    def test_signal_rerenders_on_save(self):
+        with override_settings(SERIAL_BRIDGE_DIR=self.tmpdir):
+            conn = self._conn("sinyal-testi")
+            cfg = self._read_config()
+            self.assertEqual(len(cfg["bridges"]), 1)
+            conn.is_enabled = False
+            conn.save()
+            self.assertEqual(self._read_config()["bridges"], [])
+            conn.delete()  # post_delete de render etmeli (dosya güncel kalır)
+            self.assertEqual(self._read_config()["bridges"], [])
+
+    def test_listen_port_formula(self):
+        with override_settings(SERIAL_BRIDGE_PORT_BASE=8900):
+            self.assertEqual(serial_bridge.listen_port_for(5), 8905)
+            self.assertEqual(serial_bridge.listen_port_for(70005), 8905)
+            self.assertEqual(serial_bridge.listen_port_for(9999), 18899)

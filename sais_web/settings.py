@@ -79,6 +79,18 @@ CADDY_CONFIG_PATH = os.getenv("CADDY_CONFIG_PATH", "/etc/caddy/Caddyfile")
 CADDY_CERT_DIR = os.getenv("CADDY_CERT_DIR", "/etc/caddy/certs")
 CADDY_UPSTREAM = os.getenv("CADDY_UPSTREAM", "web:8000")
 
+# ---- Seri köprü (Windows host COM → TCP aynası) ----
+# Docker/WSL2 saha kurulumlarında container COM portunu açamaz; host'taki
+# EnvisoftWebX-SerialBridge servisi seri bağlantıları TCP'ye aynalar.
+# api.serial_bridge Connection tablosundan serial-bridge.json üretir (SERIAL_BRIDGE_DIR,
+# web'e bind-mount'lu /bridge); scada_io.bridge_redirect SERIAL_BRIDGE_HOST doluysa
+# seri bağlantıları şeffafça <host>:<PORT_BASE + pk % 10000>'a yönlendirir.
+# SERIAL_BRIDGE_HOST'u sahada sais-stack.ps1 yazar (WSL gateway IP); dev/Linux'ta boş
+# bırakılır → redirect kapalı, seri port doğrudan açılır.
+SERIAL_BRIDGE_HOST = (os.getenv("SERIAL_BRIDGE_HOST", "") or "").strip()
+SERIAL_BRIDGE_PORT_BASE = int(os.getenv("SERIAL_BRIDGE_PORT_BASE", "8900"))
+SERIAL_BRIDGE_DIR = os.getenv("SERIAL_BRIDGE_DIR", "/bridge")
+
 # ---- Lisanslama ----
 # Lisans bitince app hiçbir iş yapmaz (polling/komut/SIM/Envisoft durur, dashboard
 # kilitlenir). İmzalı (Ed25519) token'lar uzaktan (LICENSE_URL manifest) çekilir,

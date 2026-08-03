@@ -304,3 +304,127 @@ class VerdictTests(SimpleTestCase):
         text, level = verdict(0.2, rates)
         self.assertEqual(level, "warn")
         self.assertIn("Karışık", text)
+
+
+# ---------------------------------------------------------------------------
+# Seri köprü redirect (bridge_redirect + factory hook)
+# ---------------------------------------------------------------------------
+
+from unittest import mock  # noqa: E402
+
+from django.test import override_settings  # noqa: E402
+
+from api.models import Connection  # noqa: E402
+
+from .bridge_redirect import maybe_redirect  # noqa: E402
+from .readers.ascii_custom import AsciiCustomReader  # noqa: E402
+from .readers.factory import build_reader  # noqa: E402
+from .readers.modbus_serial import ModbusSerialReader  # noqa: E402
+from .readers.modbus_tcp import ModbusTcpReader  # noqa: E402
+from .writers.ascii_custom import AsciiCustomWriter  # noqa: E402
+from .writers.factory import build_writer  # noqa: E402
+from .writers.modbus_tcp import ModbusTcpWriter  # noqa: E402
+
+
+def _serial_conn(pk=5, protocol="modbus_rtu", **kw):
+    """Kaydedilmemiş (in-memory) seri Connection."""
+    defaults = dict(
+        id=pk, name="test", protocol=protocol, transport="serial",
+        serial_port="COM5", baudrate=9600, parity=0, stop_bits=1, byte_size=8,
+        timeout_ms=2000, retry_count=3,
+    )
+    defaults.update(kw)
+    return Connection(**defaults)
+
+
+@override_settings(SERIAL_BRIDGE_HOST="172.20.240.1", SERIAL_BRIDGE_PORT_BASE=8900)
+class BridgeRedirectTests(SimpleTestCase):
+    def test_rtu_redirected_to_tcp_reader(self):
+        conn = _serial_conn(pk=5, protocol="modbus_rtu")
+        reader = build_reader(conn)
+        self.assertIsInstance(reader, ModbusTcpReader)
+        self.assertEqual(reader.connection.host, "172.20.240.1")
+        self.assertEqual(reader.connection.port, 8905)
+        self.assertEqual(reader.connection.protocol, "modbus_rtu_over_tcp")
+        self.assertEqual(reader.connection.transport, "tcp")
+
+    def test_original_instance_untouched(self):
+        conn = _serial_conn(pk=5, protocol="modbus_rtu")
+        build_reader(conn)
+        self.assertEqual(conn.protocol, "modbus_rtu")
+        self.assertEqual(conn.transport, "serial")
+        self.assertEqual(conn.serial_port, "COM5")
+        self.assertEqual(conn.host, "")
+
+    def test_ascii_maps_to_ascii_over_tcp(self):
+        reader = build_reader(_serial_conn(pk=7, protocol="modbus_ascii"))
+        self.assertIsInstance(reader, ModbusTcpReader)
+        self.assertEqual(reader.connection.protocol, "modbus_ascii_over_tcp")
+        self.assertEqual(reader.connection.port, 8907)
+
+    def test_ascii_custom_keeps_class_flips_transport(self):
+        reader = build_reader(_serial_conn(pk=9, protocol="ascii_custom"))
+        self.assertIsInstance(reader, AsciiCustomReader)
+        self.assertEqual(reader.connection.transport, "tcp")
+        self.assertEqual(reader.connection.host, "172.20.240.1")
+        self.assertEqual(reader.connection.port, 8909)
+
+    def test_large_pk_modulo(self):
+        bridged = maybe_redirect(_serial_conn(pk=70005))
+        self.assertEqual(bridged.port, 8905)
+
+    def test_tcp_connection_not_redirected(self):
+        conn = Connection(
+            id=3, name="t", protocol="modbus_tcp", transport="tcp",
+            host="10.0.0.5", port=502,
+        )
+        self.assertIs(maybe_redirect(conn), conn)
+
+    def test_writer_redirected(self):
+        writer = build_writer(_serial_conn(pk=5, protocol="modbus_rtu"))
+        self.assertIsInstance(writer, ModbusTcpWriter)
+        self.assertEqual(writer.connection.port, 8905)
+        self.assertEqual(writer.connection.protocol, "modbus_rtu_over_tcp")
+
+    def test_writer_ascii_custom(self):
+        writer = build_writer(_serial_conn(pk=9, protocol="ascii_custom"))
+        self.assertIsInstance(writer, AsciiCustomWriter)
+        self.assertEqual(writer.connection.transport, "tcp")
+
+
+@override_settings(SERIAL_BRIDGE_HOST="")
+class BridgeRedirectDisabledTests(SimpleTestCase):
+    def test_identity_when_host_empty(self):
+        conn = _serial_conn()
+        self.assertIs(maybe_redirect(conn), conn)
+        reader = build_reader(conn)
+        self.assertIsInstance(reader, ModbusSerialReader)
+        self.assertIs(reader.connection, conn)
+
+
+class AsciiSocketUrlTests(SimpleTestCase):
+    def test_tcp_transport_uses_socket_url(self):
+        conn = Connection(
+            id=4, name="t", protocol="ascii_custom", transport="tcp",
+            host="10.1.1.5", port=8907, timeout_ms=2000,
+        )
+        fake = mock.MagicMock()
+        fake.is_open = True
+        with mock.patch("serial.serial_for_url", return_value=fake) as sfu, \
+                mock.patch("serial.Serial") as ser:
+            reader = AsciiCustomReader(conn)
+            self.assertTrue(reader.open())
+            sfu.assert_called_once()
+            self.assertEqual(sfu.call_args[0][0], "socket://10.1.1.5:8907")
+            ser.assert_not_called()
+
+    def test_serial_transport_uses_serial(self):
+        conn = _serial_conn(pk=4, protocol="ascii_custom")
+        fake = mock.MagicMock()
+        fake.is_open = True
+        with mock.patch("serial.Serial", return_value=fake) as ser, \
+                mock.patch("serial.serial_for_url") as sfu:
+            reader = AsciiCustomReader(conn)
+            self.assertTrue(reader.open())
+            ser.assert_called_once()
+            sfu.assert_not_called()
