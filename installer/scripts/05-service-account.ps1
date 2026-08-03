@@ -127,12 +127,45 @@ Write-Ok "Auto-login enabled for $($env:COMPUTERNAME)\$SvcUser."
 # --- Enable WSL2 Windows features (system-wide) ------------------------------
 # Done here as the installing admin so the service account's `wsl --install`
 # (in 00-ensure-docker, after the reboot) does not need to enable features.
+#
+# Field incident (reinstall after uninstall): if setup is launched from the
+# still-open session of the DELETED service account (uninstall removed it, the
+# session stayed logged in, setup recreated the account with a NEW SID), DISM
+# returns "access denied" (COMException) even though the process is elevated
+# (the HKLM writes above succeed). In that ghost-session state we cannot fix
+# DISM - but on a REINSTALL WSL is typically already functional, so the
+# features are clearly enabled: warn and continue instead of failing the
+# whole install. If WSL does not work either, fail with a clear reboot hint.
 Write-Step "Enabling WSL2 Windows features (system-wide)..."
+$dismFailed = $false
 foreach ($feature in @("Microsoft-Windows-Subsystem-Linux", "VirtualMachinePlatform")) {
-    $state = (Get-WindowsOptionalFeature -Online -FeatureName $feature -ErrorAction SilentlyContinue).State
-    if ($state -ne "Enabled") {
-        Write-Step "Enabling $feature ..."
-        Enable-WindowsOptionalFeature -Online -FeatureName $feature -NoRestart -All | Out-Null
+    try {
+        $state = (Get-WindowsOptionalFeature -Online -FeatureName $feature -ErrorAction Stop).State
+        if ($state -ne "Enabled") {
+            Write-Step "Enabling $feature ..."
+            Enable-WindowsOptionalFeature -Online -FeatureName $feature -NoRestart -All -ErrorAction Stop | Out-Null
+        }
+    } catch {
+        $dismFailed = $true
+        Write-WarnLine "DISM failed for ${feature}: $($_.Exception.Message)"
+    }
+}
+if ($dismFailed) {
+    $wslWorks = $false
+    try {
+        wsl.exe --status *> $null
+        if ($LASTEXITCODE -eq 0) { $wslWorks = $true }
+    } catch { }
+    if ($wslWorks) {
+        Write-WarnLine "DISM query failed but WSL is already functional (reinstall) - continuing."
+    } else {
+        Write-Host ""
+        Write-Host "================  INSTALL ERROR  ================" -ForegroundColor Red
+        Write-Host "Could not enable the WSL2 Windows features (DISM: access denied)." -ForegroundColor Red
+        Write-Host "If you launched setup right after an uninstall from the EnvisoftWebX" -ForegroundColor Red
+        Write-Host "session, that session belongs to the DELETED account: REBOOT the" -ForegroundColor Red
+        Write-Host "machine first, then run setup again from a fresh session." -ForegroundColor Red
+        exit 1
     }
 }
 Write-Ok "WSL2 features enabled (a reboot activates them + switches to '$SvcUser')."
