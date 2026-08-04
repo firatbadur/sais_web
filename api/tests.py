@@ -213,3 +213,65 @@ class SerialBridgeRenderTests(TestCase):
             self.assertEqual(serial_bridge.listen_port_for(5), 8905)
             self.assertEqual(serial_bridge.listen_port_for(70005), 8905)
             self.assertEqual(serial_bridge.listen_port_for(9999), 18899)
+
+
+# ---------------------------------------------------------------------------
+# Aggregate — geçerli veri (quality) filtresi testleri
+# ---------------------------------------------------------------------------
+from django.core.management import call_command
+
+from api.models import Reading, ReadingFifteenMin, Sensor
+
+
+class AggregateQualityFilterTests(TestCase):
+    """avg/min/max yalnız geçerli (bad/uncertain olmayan) okumalardan hesaplanmalı.
+
+    Yıkama/bakım overlay'i quality="uncertain", geçersiz/alarm quality="bad"
+    yazar (scada_io.persistence) — bu satırlar ortalamayı çarpıtmamalı
+    (ör. yıkama sırasında sensör suyla temas etmiyor). count/bad_count ise
+    tüm satırları saymaya devam eder.
+    """
+
+    def setUp(self):
+        station = Station.objects.create(name="Agg Tesis")
+        conn = Connection.objects.create(
+            station=station, name="agg-conn", protocol="modbus_tcp",
+            transport="tcp", host="127.0.0.1", is_enabled=True,
+        )
+        self.sensor = Sensor.objects.create(connection=conn)
+        # Aynı 15dk bucket'ına düşen okumalar (komutun [now-2h, now) penceresi
+        # içinde kalması için 1 saat geriden başlat)
+        self.t0 = (timezone.now() - datetime.timedelta(hours=1)).replace(
+            minute=0, second=30, microsecond=0)
+
+    def _reading(self, value, quality, offset_min=0):
+        return Reading.objects.create(
+            sensor=self.sensor, value=value, quality=quality,
+            time_iso=self.t0 + datetime.timedelta(minutes=offset_min),
+        )
+
+    def test_uncertain_and_bad_excluded_from_stats(self):
+        self._reading(10.0, "good", 0)
+        self._reading(20.0, "good", 1)
+        self._reading(900.0, "uncertain", 2)   # yıkama overlay
+        self._reading(999.0, "bad", 3)          # geçersiz/alarm
+        call_command("aggregate_readings", bucket="15m", hours=2)
+
+        agg = ReadingFifteenMin.objects.get(sensor=self.sensor)
+        self.assertEqual(agg.avg_value, 15.0)
+        self.assertEqual(agg.min_value, 10.0)
+        self.assertEqual(agg.max_value, 20.0)
+        self.assertEqual(agg.count, 4)       # tüm satırlar sayılır
+        self.assertEqual(agg.bad_count, 1)   # yalnız quality="bad"
+
+    def test_bucket_with_no_valid_readings_has_null_stats(self):
+        self._reading(900.0, "uncertain", 0)
+        self._reading(950.0, "uncertain", 1)
+        call_command("aggregate_readings", bucket="15m", hours=2)
+
+        agg = ReadingFifteenMin.objects.get(sensor=self.sensor)
+        self.assertIsNone(agg.avg_value)
+        self.assertIsNone(agg.min_value)
+        self.assertIsNone(agg.max_value)
+        self.assertEqual(agg.count, 2)
+        self.assertEqual(agg.bad_count, 0)

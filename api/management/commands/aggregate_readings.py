@@ -41,6 +41,14 @@ from api.models import (
 
 BUCKETS = ("5m", "15m", "hour", "day")
 
+# avg/min/max hesabına GİRMEYEN kalite düzeyleri. Yıkama/bakım overlay'i
+# quality="uncertain", geçersiz/alarm okumaları quality="bad" yazar
+# (scada_io.persistence.persist_reading) — sensör suyla temas etmediği veya
+# değer güvenilmez olduğu için bu satırlar bucket istatistiğini çarpıtır
+# (ör. yıkama sırasında ortalamanın aniden yükselmesi). count/bad_count'ta
+# yine sayılırlar; bucket'ta hiç geçerli okuma yoksa avg/min/max None kalır.
+EXCLUDED_QUALITIES = frozenset({"bad", "uncertain"})
+
 
 def floor_5m(dt: datetime) -> datetime:
     """En yakın 5 dakikalık bucket'a yuvarla (aşağı)."""
@@ -147,7 +155,11 @@ class Command(BaseCommand):
 
             new_rows = []
             for (sensor_id, bucket_start), rows in grouped.items():
-                values = [r["value"] for r in rows if r["value"] is not None]
+                values = [
+                    r["value"] for r in rows
+                    if r["value"] is not None
+                    and r.get("quality") not in EXCLUDED_QUALITIES
+                ]
                 bad_count = sum(1 for r in rows if r.get("quality") == "bad")
                 if not values:
                     avg_v = min_v = max_v = None
