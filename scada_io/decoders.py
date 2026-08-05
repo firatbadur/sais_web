@@ -5,10 +5,23 @@ Modbus register listesi ↔ Python değer dönüşümü.
 bool/bit/string/raw) ile `Sensor.byte_order` (big/little) ve `word_order`
 (big/little) parametrelerini dikkate alır.
 
-byte_order = byte içi sıralama (host vs network).
-word_order = çok-register'lı tipler için register'ların (16-bit word)
-  sıralaması. Endustride yaygın "swap" kombinasyonları tüm 4 case
-  desteklenir.
+byte_order = HER BİR register (16-bit word) İÇİNDEKİ byte sıralaması.
+  'big' = wire'daki doğal Modbus sırası (high byte önce), 'little' = register
+  içi byte swap.
+word_order = çok-register'lı tipler için register'ların sıralaması.
+  'big' = high word önce (doğal), 'little' = word swap.
+
+32-bit float için 4 kombinasyon ↔ Modbus Poll gösterim eşlemesi:
+
+  | Wire formatı | Modbus Poll adı            | byte_order | word_order |
+  |--------------|----------------------------|------------|------------|
+  | ABCD         | Big-endian                 | big        | big        |
+  | CDAB         | Little-endian byte swap    | big        | little     |
+  | BADC         | Big-endian byte swap       | little     | big        |
+  | DCBA         | Little-endian              | little     | little     |
+
+Not: byte_order tek-register tiplerde de (int16/uint16) uygulanır — 'little'
+register'ın iki byte'ını takas eder (nadir cihazlarda görülür).
 """
 from __future__ import annotations
 
@@ -33,16 +46,27 @@ _STRUCT_FMT = {
 }
 
 
-def _byte_endian_char(byte_order: str) -> str:
-    return ">" if byte_order == "big" else "<"
-
-
 def _ordered_words(regs: list[int], word_order: str) -> list[int]:
     """Word swap. word_order='big' (high word first) doğal Modbus sırası;
     'little' yaygın CDAB swap'ı."""
     if word_order == "little":
         return list(reversed(regs))
     return list(regs)
+
+
+def _apply_byte_order(words: list[int], byte_order: str) -> list[int]:
+    """byte_order='little' ise her register'ın iki byte'ını takas et."""
+    if byte_order == "little":
+        return [((w & 0xFF) << 8) | ((w >> 8) & 0xFF) for w in words]
+    return list(words)
+
+
+def _words_to_bytes(words: list[int]) -> bytes:
+    return b"".join(struct.pack(">H", w & 0xFFFF) for w in words)
+
+
+def _bytes_to_words(data: bytes) -> list[int]:
+    return [struct.unpack(">H", data[i:i + 2])[0] for i in range(0, len(data), 2)]
 
 
 def decode_registers(
@@ -76,15 +100,12 @@ def decode_registers(
 
     # String: registers[0..N] → 2 byte/register; null-byte'lar trim'lenir
     if dt == "string":
-        endian = _byte_endian_char(byte_order)
-        words = _ordered_words(regs, word_order)
-        raw_bytes = b"".join(struct.pack(endian + "H", w & 0xFFFF) for w in words)
-        return raw_bytes.rstrip(b"\x00").decode("ascii", errors="replace")
+        words = _apply_byte_order(_ordered_words(regs, word_order), byte_order)
+        return _words_to_bytes(words).rstrip(b"\x00").decode("ascii", errors="replace")
 
     if dt == "raw":
-        endian = _byte_endian_char(byte_order)
-        words = _ordered_words(regs, word_order)
-        return b"".join(struct.pack(endian + "H", w & 0xFFFF) for w in words).hex()
+        words = _apply_byte_order(_ordered_words(regs, word_order), byte_order)
+        return _words_to_bytes(words).hex()
 
     if dt not in _STRUCT_FMT:
         raise ValueError(f"Desteklenmeyen data_type: {data_type}")
@@ -93,10 +114,8 @@ def decode_registers(
     if len(regs) < needed:
         raise ValueError(f"{dt} {needed} register gerektirir; {len(regs)} verildi")
 
-    words = _ordered_words(regs[:needed], word_order)
-    endian = _byte_endian_char(byte_order)
-    packed = b"".join(struct.pack(endian + "H", w & 0xFFFF) for w in words)
-    return struct.unpack(endian + _STRUCT_FMT[dt], packed)[0]
+    words = _apply_byte_order(_ordered_words(regs[:needed], word_order), byte_order)
+    return struct.unpack(">" + _STRUCT_FMT[dt], _words_to_bytes(words))[0]
 
 
 def decode_sensor_from_batch(
@@ -183,11 +202,10 @@ def encode_value(
         return [base & 0xFFFF]
 
     if dt == "string":
-        endian = _byte_endian_char(byte_order)
         b = str(value).encode("ascii", errors="replace")
         if len(b) % 2:
             b += b"\x00"
-        words = [struct.unpack(endian + "H", b[i:i + 2])[0] for i in range(0, len(b), 2)]
+        words = _apply_byte_order(_bytes_to_words(b), byte_order)
         return _ordered_words(words, word_order)
 
     if dt == "raw":
@@ -197,18 +215,14 @@ def encode_value(
             raw_bytes = bytes(value)
         else:
             raise ValueError("raw değer hex-string veya bytes olmalı")
-        endian = _byte_endian_char(byte_order)
         if len(raw_bytes) % 2:
             raw_bytes += b"\x00"
-        words = [struct.unpack(endian + "H", raw_bytes[i:i + 2])[0]
-                 for i in range(0, len(raw_bytes), 2)]
+        words = _apply_byte_order(_bytes_to_words(raw_bytes), byte_order)
         return _ordered_words(words, word_order)
 
     if dt not in _STRUCT_FMT:
         raise ValueError(f"Desteklenmeyen data_type: {data_type}")
 
-    endian = _byte_endian_char(byte_order)
-    packed = struct.pack(endian + _STRUCT_FMT[dt], value)
-    words = [struct.unpack(endian + "H", packed[i:i + 2])[0]
-             for i in range(0, len(packed), 2)]
+    packed = struct.pack(">" + _STRUCT_FMT[dt], value)
+    words = _apply_byte_order(_bytes_to_words(packed), byte_order)
     return _ordered_words(words, word_order)

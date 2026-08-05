@@ -133,12 +133,50 @@ class DecoderTests(SimpleTestCase):
             "AB",
         )
 
-    # ---- byte_order combinations ----
+    # ---- byte_order / word_order kombinasyonları ----
     #
-    # Not: byte_order tek-register tipler için (uint16/int16/bool/bit) etkisizdir
-    # çünkü pymodbus zaten register'ı integer olarak çözmüş olur. byte_order
-    # multi-register tiplerde (float32, int32 vb.) anlam kazanır — float32
-    # word_swap testi byte_order davranışını implicit olarak test eder.
+    # byte_order = register İÇİ byte sırası (little = byte swap),
+    # word_order = register sırası (little = word swap). float32 için
+    # 4 wire formatı: ABCD=big/big, CDAB=big/little, BADC=little/big,
+    # DCBA=little/little (Modbus Poll "Little-endian").
+
+    def test_float32_dcba_little_little(self):
+        # Wire DCBA: tam ters çevrilmiş byte dizisi (Modbus Poll "Little-endian")
+        be = struct.pack(">f", 7.25)          # A B C D
+        dcba = be[::-1]                        # D C B A
+        regs = _to_regs(dcba, ">")             # [DC, BA]
+        self.assertAlmostEqual(
+            decode_registers(regs, "float32", byte_order="little", word_order="little"),
+            7.25, places=4,
+        )
+
+    def test_float32_badc_little_big(self):
+        # Wire BADC: her word içinde byte swap, word sırası doğal
+        be = struct.pack(">f", 1234.5)         # A B C D
+        badc = bytes([be[1], be[0], be[3], be[2]])
+        regs = _to_regs(badc, ">")             # [BA, DC]
+        self.assertAlmostEqual(
+            decode_registers(regs, "float32", byte_order="little", word_order="big"),
+            1234.5, places=3,
+        )
+
+    def test_float32_all_orders_round_trip(self):
+        for bo in ("big", "little"):
+            for wo in ("big", "little"):
+                regs = encode_value(-42.75, "float32", byte_order=bo, word_order=wo)
+                self.assertAlmostEqual(
+                    decode_registers(regs, "float32", byte_order=bo, word_order=wo),
+                    -42.75, places=4, msg=f"{bo}/{wo}",
+                )
+
+    def test_uint16_byte_swap(self):
+        # Tek register'da byte_order='little' iki byte'ı takas eder
+        self.assertEqual(
+            decode_registers([0x1234], "uint16", byte_order="little"), 0x3412
+        )
+        self.assertEqual(
+            decode_registers([0x1234], "uint16", byte_order="big"), 0x1234
+        )
 
     def test_int32_word_swap_round_trip(self):
         original = 1_000_000
