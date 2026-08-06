@@ -78,8 +78,8 @@ Invoke-WslSpin "Logging in to GHCR ($GhcrUser)" $login
 $maxPull = 8
 for ($try = 1; $try -le $maxPull; $try++) {
     try {
-        Invoke-WslSpin "Pulling images (web/db/redis/caddy - attempt $try/$maxPull, resumes from cache)" `
-            (Get-ComposeBash $InstallDir "pull")
+        Invoke-WslSpin "Pulling images (web/db/redis/caddy, ~1-2 GB total - attempt $try/$maxPull, resumes from cache)" `
+            (Get-ComposeBash $InstallDir "pull") -ProgressHint "docker-pull"
         break
     } catch {
         if ($try -eq $maxPull) {

@@ -446,6 +446,21 @@ error_block(
     "Start-ScheduledTask -TaskName EnvisoftWebX-Install   # kurulumu kaldigi yerden surdur",
 )
 error_block(
+    "Kurulum \"Ensuring Docker (WSL2 + CE)\" adımında saatlerce sessiz kalıyor (Windows)",
+    "Kurulum penceresi \"[1/5] Ensuring Docker\" satırında takılı; install.log'a saatlerdir tek "
+    "satır bile yazılmıyor, indirme trafiği yok.",
+    "WSL platformu makinede henüz kurulu/güncel değilse wsl.exe her çağrıldığında \"Press any key "
+    "to install Windows Subsystem for Linux\" diye İNTERAKTİF bir onay ekranı açar. Kurulum gizli "
+    "serviste çalıştığı için kimse tuşa basamaz ve ilk wsl çağrısı sonsuza dek bekler. (Güncel "
+    "installer bunu kendisi çözer: tüm wsl çağrıları zaman sınırlıdır, gerekirse WSL paketi GitHub'dan "
+    "MSI olarak indirilip sessiz kurulur; ilerleme MB/GB olarak ekranda gösterilir.)",
+    ["Güncel sais-setup sürümünü kullanın (takılma otomatik aşılır, ilerleme canlı görünür).",
+     "Eski installer ile takılan makinede: YÖNETİCİ PowerShell açın ve sırayla çalıştırın:"],
+    "wsl --update                   # acilan \"Press any key\" ekranini onaylayin / bekleyin\n"
+    "wsl --status                   # artik prompt acmadan cevap vermeli\n"
+    "shutdown /r /t 0               # yeniden baslatin; kurulum kaldigi yerden otomatik surer",
+)
+error_block(
     "Kurulum scripti 2. adımda sessizce duruyor (eski sürüm)",
     "Linux scripti \"Yapılandırma üretiliyor\" satırından sonra hiçbir şey demeden çıkıyor.",
     "Eski script sürümünde bir kabuk (SIGPIPE) hatası vardı.",

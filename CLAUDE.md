@@ -516,6 +516,24 @@ başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows ser
   durumunda; kayıt hiç yapılamıyorsa `wsl --status`/`wsl -l -v` teşhisini loga basıp hard-fail.
   Sahada elle kurtarma: EnvisoftWebX oturumunda `ubuntu.exe install --root` +
   `Start-ScheduledTask EnvisoftWebX-Install`.
+- **TUZAK — WSL platformu kurulu değilken wsl.exe İNTERAKTİF prompt açar (saha deneyimi, Win11
+  26100):** WSL güncel/kurulu değilse HER `wsl.exe` çağrısı "Press any key to install Windows
+  Subsystem for Linux" onay ekranı gösterir → gizli servis oturumunda kimse tuşa basamaz, ilk probe
+  (`Test-DockerReady`) kurulumu **saatlerce sıfır-log** bloklar. Çözüm [_common.ps1](installer/scripts/_common.ps1)
+  + [00-ensure-docker.ps1](installer/scripts/00-ensure-docker.ps1): tüm wsl.exe probe'ları
+  `Invoke-NativeCapture` ile **zaman sınırlı** (stdin boş dosyaya yönlendirilir, timeout'ta process
+  tree `taskkill` ile öldürülür, timeout = "hazır değil"); `wsl --update`/`--install`/`--import`
+  `Invoke-NativeSpin` ile koşar (heartbeat + hard timeout); `wsl --update` bitmezse fallback
+  `Install-WslFromMsi` — microsoft/WSL GitHub release'inden x64 MSI indirilip `msiexec /qn` ile
+  sessiz kurulur (Store bağımlılığı yok). Ayrıca `$env:WSL_UTF8=1` (UTF-16 NUL çöpünü keser) ve
+  PS 5.1 tuzağı: `Start-Process -PassThru` sonrası `$p.Handle`'a dokunulmadan `ExitCode` null okunur.
+- **Canlı kurulum ilerlemesi (operatör "boş ekrana bakmasın")**: uzun adımlar artık 5-6 sn'de bir
+  install.log'a **heartbeat satırı** yazar: geçen süre + adımın step-log'undaki son gerçek satır
+  (docker'ın kendi `Downloading 12.3MB/45.6MB` çıktısı, apt ilerlemesi...) + docker pull'da
+  `[layers done/total]` sayacı (`Invoke-WslSpin -ProgressHint docker-pull`). Dosya indirmeleri
+  (`Invoke-DownloadSpin`: Ubuntu rootfs, WSL MSI) "123 MB / 450 MB (27%)" formatında ilerleme basar
+  (toplam boyut HEAD isteğinden). [progress-window.ps1](installer/scripts/progress-window.ps1)
+  progress bar altına gri bir **canlı detay satırı** ekler — son heartbeat, detaylar açılmadan görünür.
 - **Admin (rol=1)**: [users/seed_admin_user](users/management/commands/seed_admin_user.py) non-interactive
   (env `DJANGO_SUPERUSER_*`) — `createsuperuser --noinput` CustomUser `rol` alanını set edemediği için.
 - **DB**: **PostgreSQL 16** (açık kaynak, lisans gerektirmez; bundled `postgres:16` container). Şifre installer'da otomatik üretilir (`POSTGRES_PASSWORD`).

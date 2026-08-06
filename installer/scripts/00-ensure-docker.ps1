@@ -32,34 +32,59 @@ if (-not $isAdmin) {
     exit 1
 }
 
+# ALL wsl.exe probes below are TIME-BOXED via Invoke-NativeCapture (_common).
+# Real field incident (Win11 26100): with the WSL platform not yet installed,
+# EVERY wsl.exe invocation shows an interactive "Press any key to install
+# Windows Subsystem for Linux" stub prompt. In the hidden service session
+# nobody can press a key -> the first probe hung the install for hours with
+# zero log output. A killed/timed-out probe simply counts as "not ready".
+
 # Does a command actually run inside the distro? (filters out the WSL stub)
 function Test-DistroUsable([string]$d) {
-    try {
-        $out = wsl.exe -d $d -- echo __WSLOK__ 2>$null
-        return ($out -match "__WSLOK__")
-    } catch {
-        return $false
-    }
+    $r = Invoke-NativeCapture "wsl.exe" "-d $d -- echo __WSLOK__" 60
+    return ((-not $r.TimedOut) -and ($r.Output -match "__WSLOK__"))
 }
 
 # Is the distro REGISTERED at all? (wsl -l -q; strip the interleaved NULs that
 # wsl.exe's UTF-16 output leaves when captured by Windows PowerShell)
 function Test-DistroRegistered([string]$d) {
-    try {
-        $list = (wsl.exe -l -q 2>$null) | ForEach-Object { ($_ -replace "`0", "").Trim() } | Where-Object { $_ }
-        return (@($list) -contains $d)
-    } catch {
-        return $false
-    }
+    $r = Invoke-NativeCapture "wsl.exe" "-l -q" 45
+    if ($r.TimedOut) { return $false }
+    $list = ($r.Output -split "[`r`n]+") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+    return (@($list) -contains $d)
 }
 
 # Dump WSL state into the install log so a failed site can be diagnosed from
 # logs\install.log alone (no remote session needed).
 function Write-WslDiag {
     Write-Host "   ---- wsl --status ----" -ForegroundColor DarkGray
-    try { (wsl.exe --status 2>&1) | ForEach-Object { Write-Host ("   " + ($_ -replace "`0", "")) -ForegroundColor DarkGray } } catch {}
+    $r = Invoke-NativeCapture "wsl.exe" "--status" 30
+    ($r.Output -split "[`r`n]+") | Where-Object { $_ } | ForEach-Object { Write-Host "   $_" -ForegroundColor DarkGray }
     Write-Host "   ---- wsl -l -v ----" -ForegroundColor DarkGray
-    try { (wsl.exe -l -v 2>&1) | ForEach-Object { Write-Host ("   " + ($_ -replace "`0", "")) -ForegroundColor DarkGray } } catch {}
+    $r = Invoke-NativeCapture "wsl.exe" "-l -v" 30
+    ($r.Output -split "[`r`n]+") | Where-Object { $_ } | ForEach-Object { Write-Host "   $_" -ForegroundColor DarkGray }
+}
+
+# Fallback when `wsl --update` cannot finish (interactive stub prompt, Store
+# blocked, servicing stuck): download the official WSL MSI straight from the
+# microsoft/WSL GitHub release and install it silently. Fully non-interactive,
+# no Microsoft Store dependency, with live download progress.
+function Install-WslFromMsi {
+    Write-Step "Falling back to direct WSL MSI install (github.com/microsoft/WSL) ..."
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/microsoft/WSL/releases/latest" `
+        -UseBasicParsing -Headers @{ "User-Agent" = "EnvisoftWebX-Installer" }
+    $asset = $rel.assets | Where-Object { $_.name -match '\.x64\.msi$' } | Select-Object -First 1
+    if (-not $asset) { throw "No x64 MSI asset found in the latest microsoft/WSL release." }
+    $msi = Join-Path $env:TEMP $asset.name
+    Invoke-DownloadSpin -Label "Downloading WSL package ($($asset.name))" `
+        -Url $asset.browser_download_url -OutFile $msi -ExpectedBytes ([long]$asset.size)
+    $r = Invoke-NativeSpin "Installing WSL package (msiexec /qn)" "msiexec.exe" "/i `"$msi`" /qn /norestart" -TimeoutSec 900
+    # 3010 = success, reboot required (handled by the normal exit-10 path).
+    if ($r.TimedOut -or ($r.ExitCode -ne 0 -and $r.ExitCode -ne 3010)) {
+        throw "WSL MSI install failed (timeout=$($r.TimedOut) exit=$($r.ExitCode))."
+    }
+    Write-Ok "WSL platform installed from MSI."
 }
 
 # Register the distro WITHOUT the interactive OOBE.
@@ -104,15 +129,7 @@ function Register-DistroNoOobe([string]$d) {
 
     if (-not (Test-Path $tar) -or (Get-Item $tar).Length -lt 100MB) {
         Write-Step "Downloading Ubuntu rootfs (~450 MB) from cloud-images.ubuntu.com ..."
-        $curl = Get-Command curl.exe -ErrorAction SilentlyContinue   # ships with Win10 1803+
-        if ($curl) {
-            & $curl.Source -fL --retry 3 --retry-delay 5 -o $tar $url
-            if ($LASTEXITCODE -ne 0) { throw "Rootfs download failed (curl exit $LASTEXITCODE): $url" }
-        } else {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-            $prevProgress = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
-            try { Invoke-WebRequest -Uri $url -OutFile $tar -UseBasicParsing } finally { $ProgressPreference = $prevProgress }
-        }
+        Invoke-DownloadSpin -Label "Downloading Ubuntu rootfs" -Url $url -OutFile $tar
     }
 
     # A half-registered distro (launcher died mid-extraction) blocks --import
@@ -124,8 +141,8 @@ function Register-DistroNoOobe([string]$d) {
     }
 
     Write-Step "Importing $d from rootfs (wsl --import) ..."
-    wsl.exe --import $d $vhdDir $tar --version 2
-    Write-Host "   wsl --import exit=$LASTEXITCODE"
+    $imp = Invoke-NativeSpin "Importing $d rootfs" "wsl.exe" "--import $d `"$vhdDir`" `"$tar`" --version 2" -TimeoutSec 1800
+    Write-Host "   wsl --import exit=$($imp.ExitCode)"
 }
 
 # Can the distro resolve a public host? (DNS sanity check, no hard fail)
@@ -201,19 +218,28 @@ if (-not (Test-DistroUsable $Distro)) {
         } catch { Start-Sleep -Seconds 3 }
     }
 
-    # Install WSL2 + distro (wsl --install also enables features). --no-launch
-    # skips the interactive Ubuntu user setup (we use root). Output is NOT
-    # suppressed so progress/diagnostics are visible. One retry covers a
-    # still-settling network right after the reboot-resume.
-    Write-Step "Installing WSL2 + $Distro (wsl --install) ..."
-    wsl.exe --update; Write-Host "   wsl --update exit=$LASTEXITCODE"
-    wsl.exe --set-default-version 2; Write-Host "   wsl --set-default-version exit=$LASTEXITCODE"
-    wsl.exe --install -d $Distro --no-launch; Write-Host "   wsl --install exit=$LASTEXITCODE"
-    if ($LASTEXITCODE -ne 0) {
+    # Install WSL2 + distro. All wsl.exe calls run through Invoke-NativeSpin:
+    # heartbeat progress lines (elapsed + live output tail) land in the install
+    # log, and a hard timeout kills a hung call (interactive stub prompt)
+    # instead of blocking forever. --no-launch skips the interactive Ubuntu
+    # user setup (we use root).
+    Write-Step "Updating the WSL platform (first install downloads a few hundred MB) ..."
+    $upd = Invoke-NativeSpin "Updating WSL platform (wsl --update)" "wsl.exe" "--update" -TimeoutSec 1500
+    if ($upd.TimedOut -or $upd.ExitCode -ne 0) {
+        Write-WarnLine "wsl --update did not complete (timeout=$($upd.TimedOut) exit=$($upd.ExitCode))."
+        Install-WslFromMsi
+    }
+    $null = Invoke-NativeCapture "wsl.exe" "--set-default-version 2" 60
+
+    Write-Step "Installing the $Distro distro (downloads ~350-700 MB) ..."
+    $inst = Invoke-NativeSpin "Installing $Distro (wsl --install --no-launch)" "wsl.exe" `
+        "--install -d $Distro --no-launch" -TimeoutSec 2400
+    if ($inst.TimedOut -or $inst.ExitCode -ne 0) {
         Write-WarnLine "wsl --install failed (network not ready?) - retrying once in 8s ..."
         Start-Sleep -Seconds 8
-        wsl.exe --update
-        wsl.exe --install -d $Distro --no-launch; Write-Host "   wsl --install retry exit=$LASTEXITCODE"
+        $null = Invoke-NativeSpin "Updating WSL platform (retry)" "wsl.exe" "--update" -TimeoutSec 1500
+        $null = Invoke-NativeSpin "Installing $Distro (retry)" "wsl.exe" `
+            "--install -d $Distro --no-launch" -TimeoutSec 2400
     }
     Start-Sleep -Seconds 5
 

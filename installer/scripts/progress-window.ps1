@@ -70,6 +70,7 @@ $script:worker = Start-Process -FilePath $psExe -ArgumentList $workerArgs -Windo
 $script:lastStep = if ($Resume) { "Resuming setup..." } else { "Starting setup..." }
 $script:progress = -1     # -1 => marquee (unknown); 0..100 => determinate
 $script:terminal = $false
+$script:lastDetail = ""   # latest heartbeat/status line (live sub-step detail)
 
 function Update-StepFromLine([string]$line) {
     if ($line -match '\[Phase 1\]')      { $script:lastStep = "Preparing service account and WSL..." }
@@ -87,7 +88,7 @@ $form.FormBorderStyle = "FixedDialog"
 $form.StartPosition = "CenterScreen"
 $form.MaximizeBox = $false
 $form.MinimizeBox = $true
-$form.ClientSize = New-Object System.Drawing.Size(560, 165)
+$form.ClientSize = New-Object System.Drawing.Size(560, 185)
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 try {
     $icoPath = Join-Path $installDir "EnvisoftWebX.ico"
@@ -114,15 +115,26 @@ $bar.Style = "Marquee"
 $bar.MarqueeAnimationSpeed = 30
 $form.Controls.Add($bar)
 
+# Live sub-step detail: latest heartbeat line from the worker log (elapsed,
+# MB/GB downloaded, docker layer counters) - visible WITHOUT opening details.
+$lblDetail = New-Object System.Windows.Forms.Label
+$lblDetail.Text = ""
+$lblDetail.Location = New-Object System.Drawing.Point(22, 104)
+$lblDetail.Size = New-Object System.Drawing.Size(516, 16)
+$lblDetail.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+$lblDetail.ForeColor = [System.Drawing.Color]::DimGray
+$lblDetail.AutoEllipsis = $true
+$form.Controls.Add($lblDetail)
+
 $btnDetails = New-Object System.Windows.Forms.Button
 $btnDetails.Text = "Show details"
-$btnDetails.Location = New-Object System.Drawing.Point(22, 118)
+$btnDetails.Location = New-Object System.Drawing.Point(22, 138)
 $btnDetails.Size = New-Object System.Drawing.Size(110, 28)
 $form.Controls.Add($btnDetails)
 
 $btnClose = New-Object System.Windows.Forms.Button
 $btnClose.Text = "Close"
-$btnClose.Location = New-Object System.Drawing.Point(438, 118)
+$btnClose.Location = New-Object System.Drawing.Point(438, 138)
 $btnClose.Size = New-Object System.Drawing.Size(100, 28)
 $btnClose.Enabled = $false
 $form.Controls.Add($btnClose)
@@ -133,7 +145,7 @@ $txtLog.ReadOnly = $true
 $txtLog.ScrollBars = "Vertical"
 $txtLog.WordWrap = $false
 $txtLog.Font = New-Object System.Drawing.Font("Consolas", 8)
-$txtLog.Location = New-Object System.Drawing.Point(22, 158)
+$txtLog.Location = New-Object System.Drawing.Point(22, 178)
 $txtLog.Size = New-Object System.Drawing.Size(516, 280)
 $txtLog.Visible = $false
 $txtLog.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
@@ -143,11 +155,11 @@ $form.Controls.Add($txtLog)
 $btnDetails.Add_Click({
     if ($txtLog.Visible) {
         $txtLog.Visible = $false
-        $form.ClientSize = New-Object System.Drawing.Size(560, 165)
+        $form.ClientSize = New-Object System.Drawing.Size(560, 185)
         $btnDetails.Text = "Show details"
     } else {
         $txtLog.Visible = $true
-        $form.ClientSize = New-Object System.Drawing.Size(560, 455)
+        $form.ClientSize = New-Object System.Drawing.Size(560, 475)
         $btnDetails.Text = "Hide details"
     }
 })
@@ -176,6 +188,7 @@ function Set-Final([string]$state) {
     $bar.Style = "Blocks"
     $bar.Value = 100
     $btnClose.Enabled = $true
+    $lblDetail.Text = ""
     switch ($state) {
         "done"            { $lblHeader.Text = "Installation complete"; $lblStep.Text = "Envisoft WebX is ready. You can close this window." }
         "failed"          { $lblHeader.Text = "Installation failed";   $lblStep.Text = "Something went wrong. Click 'Show details' for the full log."; $bar.ForeColor = [System.Drawing.Color]::Firebrick }
@@ -193,8 +206,11 @@ $timer.Add_Tick({
     if ($new) {
         foreach ($line in ($new -split "`r?`n")) {
             if ($line -match '^\>\> ') { Update-StepFromLine $line }
+            elseif ($line -match '^\s+\.\.\.\s+(.+)$') { $script:lastDetail = $Matches[1] }
+            elseif ($line -match '^\s+\[(OK|!)\]\s+(.+)$') { $script:lastDetail = $Matches[2] }
         }
         $lblStep.Text = $script:lastStep
+        $lblDetail.Text = $script:lastDetail
         if ($script:progress -ge 0 -and $bar.Style -ne "Blocks") { $bar.Style = "Blocks" }
         if ($script:progress -ge 0) { $bar.Value = [Math]::Min(100, $script:progress) }
         $txtLog.AppendText($new)
