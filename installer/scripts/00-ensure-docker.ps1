@@ -185,11 +185,13 @@ function Repair-WslDns([string]$d) {
     }
 }
 
+Write-Step "Checking existing Docker/WSL state (takes up to 90s; a hung wsl.exe is killed automatically) ..."
 if (Test-DockerReady) {
     Write-Ok "Docker is already available (running inside $Distro)."
     exit 0
 }
 
+Write-Step "Docker not ready - probing the $Distro distro (up to 60s) ..."
 if (-not (Test-DistroUsable $Distro)) {
     Write-Step "WSL2 not ready - checking Windows features..."
 
