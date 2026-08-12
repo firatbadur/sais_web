@@ -870,6 +870,7 @@
             id: state.screenId,
             name: state.name || $("mimic-name").value || "Adsız Mimik",
             description: ($("mimic-desc") ? $("mimic-desc").value : "") || "",
+            kind: "2d",   // sunucu varsayilani da 2d; acikca gonderiyoruz
             width: state.width, height: state.height, background: state.background,
             data: canvas.toJSON(SER_PROPS),
             thumbnail: makeThumbnail()

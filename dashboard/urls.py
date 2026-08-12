@@ -104,6 +104,12 @@ urlpatterns = [
     path("admin-pages/mimic/editor/", views.MimicEditorView.as_view(), name="mimic_editor_new"),
     path("admin-pages/mimic/editor/<int:pk>/", views.MimicEditorView.as_view(),
          name="mimic_editor_edit"),
+    # 3B (Three.js) editör — ayrı route, aynı model (MimicScreen.kind="3d")
+    path("admin-pages/mimic/editor3d/", views.Mimic3DEditorView.as_view(),
+         name="mimic3d_editor_new"),
+    path("admin-pages/mimic/editor3d/<int:pk>/", views.Mimic3DEditorView.as_view(),
+         name="mimic3d_editor_edit"),
+    # Görüntüleyici TEK route — şablon (2B/3B) view içinde kind'a göre seçilir
     path("admin-pages/mimic/viewer/<int:pk>/", views.MimicViewerView.as_view(),
          name="mimic_viewer"),
     path("admin-pages/notifications/", views.NotificationCenterView.as_view(),

@@ -1,0 +1,44 @@
+{% load static i18n %}<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'tr' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ screen.name }} · {% trans "3B Mimik" %}</title>
+    <link rel="shortcut icon" href="{% static 'images/logo/icon.png' %}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700">
+    <link href="{% static 'dashboard/plugins/global/plugins.bundle.css' %}" rel="stylesheet">
+    <link href="{% static 'dashboard/css/style.bundle.css' %}" rel="stylesheet">
+    {% include "dashboard/mimic/_m3d_shell.html" %}
+    <style>
+        .stub { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
+        .stub .box { max-width: 620px; text-align: center; }
+        .stub h1 { color: var(--mx-head); font-size: 22px; margin: 16px 0 10px; }
+        .stub p { font-size: 14px; line-height: 1.65; }
+        .stub .meta { color: var(--mx-muted); font-size: 12px; margin-top: 18px;
+            font-family: ui-monospace, Menlo, Consolas, monospace; }
+    </style>
+</head>
+<body>
+<div class="stub">
+    <div class="box">
+        <i class="ki-duotone ki-cube-3" style="font-size:64px;color:var(--mx-accent)">
+            <span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+        <h1>{{ screen.name }}</h1>
+        <p>{% trans "3B canlı görüntüleyici kuruluyor. Bu ekran şu an yalnızca tür-bazlı şablon yönlendirmesini doğrulayan bir iskelet." %}</p>
+        <div class="meta">kind=3d · screen #{{ screen.pk }}</div>
+        <div class="d-flex gap-2 justify-content-center mt-6">
+            <a class="mx-btn" href="{% url 'dashboard:admin_mimic' %}">
+                <i class="ki-duotone ki-arrow-left"><span class="path1"></span><span class="path2"></span></i>
+                {% trans "Galeriye Dön" %}
+            </a>
+            {% if user.is_superuser or user.rol == 1 %}
+            <a class="mx-btn btn-accent" href="{% url 'dashboard:mimic3d_editor_edit' screen.pk %}">
+                <i class="ki-duotone ki-pencil"><span class="path1"></span><span class="path2"></span></i>
+                {% trans "Düzenle" %}
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+</body>
+</html>

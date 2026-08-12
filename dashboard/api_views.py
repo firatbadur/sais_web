@@ -3318,23 +3318,34 @@ def setup_save(request):
 
 @login_required
 def mimic_screen_list(request):
-    """Kayıtlı mimik tasarımlarının listesi (galeri + editör 'Aç' diyaloğu)."""
+    """Kayıtlı mimik tasarımlarının listesi (galeri + editör 'Aç' diyaloğu).
+
+    ``?kind=2d|3d`` verilirse yalnız o tür döner (editörlerin 'Aç' diyaloğu
+    kendi türünü ister). **Varsayılan filtrelemez** — buton "Başka Mimik Aç"
+    hedef dropdown'u her iki türü listelemelidir (2B↔3B çapraz gezinme).
+    """
     denied = _require_admin(request)
     if denied:
         return denied
     from dashboard.models import MimicScreen
 
+    qs = MimicScreen.objects.select_related("created_by").order_by("-updated_at")
+    kind = (request.GET.get("kind") or "").strip().lower()
+    if kind in (MimicScreen.KIND_2D, MimicScreen.KIND_3D):
+        qs = qs.filter(kind=kind)
+
     items = [{
         "id": m.id,
         "name": m.name,
         "description": m.description,
+        "kind": m.kind,
         "width": m.width,
         "height": m.height,
         "is_template": m.is_template,
         "thumbnail": m.thumbnail,
         "updated_at": timezone.localtime(m.updated_at).strftime("%d.%m.%Y %H:%M"),
         "created_by": (m.created_by.get_username() if m.created_by else None),
-    } for m in MimicScreen.objects.select_related("created_by").order_by("-updated_at")]
+    } for m in qs]
     return JsonResponse({"ok": True, "results": items})
 
 
@@ -3351,14 +3362,36 @@ def mimic_screen_get(request):
         return JsonResponse({"ok": False, "error": "Tasarım bulunamadı."}, status=404)
     return JsonResponse({"ok": True, "screen": {
         "id": m.id, "name": m.name, "description": m.description,
+        "kind": m.kind,
         "width": m.width, "height": m.height, "background": m.background,
         "is_template": m.is_template, "data": m.data,
     }})
 
 
+#: ``MimicScreen.data`` için üst sınır — PostgreSQL jsonb sınırı çok yukarıda
+#: ama belge her kayıtta ve her görüntüleyici sayfasında (inline json_script)
+#: taşınır; 3B sahnelerde kontrolsüz büyüme sayfayı öldürür.
+#:
+#: **Django'nun ``DATA_UPLOAD_MAX_MEMORY_SIZE``'ının (varsayılan 2.5 MB) ALTINDA
+#: tutulmalı** — aksi halde bu kontrole hiç ulaşılmaz, istek Django tarafından
+#: opak bir 400 ile reddedilir (kullanıcı ne olduğunu anlamaz). Ölçek: 300
+#: nesneli bir 3B sahne ~250 KB, 2 MB ~2400 nesne demek; editör 500 nesnede
+#: kaydı zaten bloke ediyor → sınır fiilen ulaşılmaz, yalnız emniyet kemeri.
+MIMIC_DATA_MAX_BYTES = 2 * 1024 * 1024
+
+#: Gövde limitini aşan istekler için ortak Türkçe mesaj (iki yol da aynı şeyi der).
+MIMIC_TOO_BIG_MSG = ("Tasarım verisi çok büyük (üst sınır 2 MB). Nesne sayısını "
+                     "azaltın veya sahneyi birkaç mimiğe bölün.")
+
+
 @login_required
 def mimic_screen_save(request):
-    """Mimik tasarımı oluştur/güncelle (Fabric.js canvas JSON + thumbnail)."""
+    """Mimik tasarımı oluştur/güncelle (2B tuval JSON'u veya 3B sahne belgesi).
+
+    ``kind`` **yalnız oluşturmada** yazılır; sonradan değiştirilemez (yanlış
+    renderer'ın belgesi kayda düşerse her okuyucu kırılır). 2B editör ``kind``
+    göndermese de varsayılan ``2d`` olduğundan mevcut kayıt yolu etkilenmez.
+    """
     import json
 
     denied = _require_admin(request)
@@ -3367,10 +3400,20 @@ def mimic_screen_save(request):
     if request.method != "POST":
         return JsonResponse({"ok": False, "error": "Desteklenmeyen method."}, status=405)
 
+    from django.core.exceptions import RequestDataTooBig
+
     from dashboard.models import MimicScreen
 
     try:
-        payload = json.loads(request.body or "{}")
+        body = request.body
+    except RequestDataTooBig:
+        # Gövde Django'nun DATA_UPLOAD_MAX_MEMORY_SIZE'ını aştı: istek buraya
+        # gelmiş olsa da body okunamaz. Django'nun opak 400'ü yerine aynı
+        # Türkçe mesajı ver (kullanıcı neyi düzeltmesi gerektiğini bilsin).
+        return JsonResponse({"ok": False, "error": MIMIC_TOO_BIG_MSG}, status=413)
+
+    try:
+        payload = json.loads(body or "{}")
     except (ValueError, TypeError):
         return JsonResponse({"ok": False, "error": "Geçersiz JSON."}, status=400)
 
@@ -3382,13 +3425,26 @@ def mimic_screen_save(request):
     if not isinstance(data, dict):
         return JsonResponse({"ok": False, "error": "Geçersiz tuval verisi."}, status=400)
 
+    raw_size = len(json.dumps(data, separators=(",", ":")).encode("utf-8"))
+    if raw_size > MIMIC_DATA_MAX_BYTES:
+        return JsonResponse({
+            "ok": False,
+            "error": "%s (mevcut: %.1f MB)" % (MIMIC_TOO_BIG_MSG, raw_size / 1048576.0),
+        }, status=413)
+
     m_id = payload.get("id")
+    kind = (payload.get("kind") or "").strip().lower()
     if m_id:
         m = MimicScreen.objects.filter(pk=m_id).first()
         if m is None:
             return JsonResponse({"ok": False, "error": "Tasarım bulunamadı."}, status=404)
+        if kind and kind != m.kind:
+            return JsonResponse({"ok": False, "error": "Tasarım türü değiştirilemez."},
+                                status=400)
     else:
         m = MimicScreen(created_by=request.user)
+        m.kind = (kind if kind in (MimicScreen.KIND_2D, MimicScreen.KIND_3D)
+                  else MimicScreen.KIND_2D)
 
     m.name = name
     m.description = (payload.get("description") or "").strip()
@@ -3447,8 +3503,10 @@ def mimic_menu(request):
     items = [{
         "id": m.id,
         "name": m.name,
+        "kind": m.kind,
         "is_template": m.is_template,
-    } for m in MimicScreen.objects.order_by("is_template", "name")]
+    } for m in MimicScreen.objects.only("id", "name", "kind", "is_template")
+                                  .order_by("is_template", "name")]
     return JsonResponse({"ok": True, "results": items})
 
 
