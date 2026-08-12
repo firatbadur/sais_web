@@ -269,16 +269,6 @@ STORAGES = {
     },
 }
 
-# 3B mimik editoru ESM kullanir (importmap + three.js). Vendor dosyalari kendi
-# aralarinda GORELI import yapar (./three.core.js, ./Pass.js, ../shaders/...).
-# ManifestStaticFilesStorage bu specifier'lari varsayilan olarak yeniden
-# yazmadigindan tarayici hash'SIZ adi ister -> o kopyalarin diskte KALMASI
-# zorunlu. True yapmak 3B editoru YALNIZ DEBUG=0'da (uretimde) kirar; dev'de
-# hicbir belirti vermez. -> DOKUNMA.
-# (Ikinci katman: sais_web/storage.py dizin-kapsamli ESM patterns override'i
-#  goreli importlari hash'li adlara yeniden yazar. Iki katman bagimsizdir.)
-WHITENOISE_KEEP_ONLY_HASHED_FILES = False
-
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

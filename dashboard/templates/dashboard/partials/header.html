@@ -312,7 +312,6 @@
     var I18N = {
         empty:    "{% trans 'Henüz mimik ekranı yok.' %}",
         template: "{% trans 'Şablon' %}",
-        threeD:   "{% trans '3B' %}",
         err:      "{% trans 'Liste alınamadı.' %}"
     };
 
@@ -330,16 +329,12 @@
         if (!items.length) { listEl.innerHTML = info(I18N.empty); return; }
         listEl.innerHTML = items.map(function (m) {
             var url = VIEWER_BASE.replace(/0\/$/, m.id + '/');
-            var is3d = m.kind === '3d';
-            var badge = is3d
-                ? '<span class="badge badge-light-primary fs-9 ms-2">' + I18N.threeD + '</span>' : '';
-            badge += m.is_template
+            var badge = m.is_template
                 ? '<span class="badge badge-light-info fs-9 ms-2">' + I18N.template + '</span>' : '';
             return '<div class="menu-item">'
                 + '<a href="' + url + '" target="_blank" rel="noopener" '
                 + 'class="menu-link px-3 py-2 d-flex align-items-center">'
-                + '<i class="ki-outline ' + (is3d ? 'ki-cube-3' : 'ki-abstract-26')
-                + ' fs-4 me-3 text-primary"></i>'
+                + '<i class="ki-outline ki-abstract-26 fs-4 me-3 text-primary"></i>'
                 + '<span class="flex-grow-1 text-gray-800 text-truncate">' + esc(m.name) + '</span>'
                 + badge + '</a></div>';
         }).join('');

@@ -870,7 +870,6 @@
             id: state.screenId,
             name: state.name || $("mimic-name").value || "Adsız Mimik",
             description: ($("mimic-desc") ? $("mimic-desc").value : "") || "",
-            kind: "2d",   // sunucu varsayilani da 2d; acikca gonderiyoruz
             width: state.width, height: state.height, background: state.background,
             data: canvas.toJSON(SER_PROPS),
             thumbnail: makeThumbnail()
@@ -895,12 +894,38 @@
         }).catch(function () { toast("Sunucuya ulaşılamadı.", "danger"); });
     }
 
+    /**
+     * Fabric 5.3 tuzagi: JSON'da `styles` ANAHTARI YOKSA yuklenen metin
+     * objesinde `styles` **undefined** kalir (bos nesneye varsayilmaz).
+     * Sonrasinda HER `toObject()` cagrisi `fabric.util.stylesToArray` icinde
+     * "Cannot read properties of undefined (reading '0')" ile patlar; bu da
+     * kaydetmeyi, PNG/SVG/JSON disa aktarmayi, kopyala-yapistirmayi ve yukleme
+     * sonrasi ilk `pushUndo()` cagrisini birden bozar -> yukleme zinciri yarida
+     * kesildigi icin ekran "0 nesne" gorunur.
+     *
+     * Python tarafinda uretilen belgeler (seed_mimic_templates) `styles`
+     * yazmadigi icin YERLESIK SABLON bu yuzden editorde acilamiyordu. Kaynak
+     * duzeltildi; bu fonksiyon eski/harici kayitlari da yuklemede guvenli hale
+     * getirir. Grup icleri dahil ozyinelemeli calisir.
+     */
+    function repairTextStyles(data) {
+        function walk(list) {
+            (list || []).forEach(function (o) {
+                if (!o || typeof o !== "object") return;
+                if (typeof o.type === "string" && /text/i.test(o.type)
+                    && (o.styles === undefined || o.styles === null)) {
+                    o.styles = {};
+                }
+                if (Array.isArray(o.objects)) walk(o.objects);
+            });
+        }
+        if (data && Array.isArray(data.objects)) walk(data.objects);
+        return data;
+    }
+
     function loadData(data) {
         suspend = true;
-        // Fabric tuzagi: `styles` anahtari olmayan metin objeleri yuklendikten
-        // sonra HER toObject() cagrisini (kaydet/export/undo) patlatir. Eski ve
-        // Python tarafinda uretilen belgeleri yuklemeden once onar.
-        MimicCore.repair2dDocument(data);
+        repairTextStyles(data);
         canvas.loadFromJSON(data, function () {
             rebuildBoundary();
             applyBackground();

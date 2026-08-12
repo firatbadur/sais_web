@@ -87,42 +87,24 @@ class Document(models.Model):
 
 
 class MimicScreen(models.Model):
-    """Kullanıcı tasarımı SCADA/HMI mimik ekranı (2B veya 3B).
+    """Kullanıcı tasarımı SCADA/HMI mimik ekranı.
 
-    Tamamen dashboard arayüzüne özgü bir tasarım editörü özelliğidir. Tasarım
-    türü `kind` alanıyla ayrılır ve **oluşturulduktan sonra değiştirilemez**:
+    Tamamen dashboard arayüzüne özgü bir tasarım editörü özelliğidir. Editör
+    (Fabric.js tabanlı) tuvali bir JSON belge olarak `data` alanında saklar;
+    `thumbnail` küçük bir base64 PNG önizlemesidir (galeri kartlarında gösterilir).
 
-    * ``2d`` — Fabric.js tuval editörü; `data` = ``canvas.toJSON()`` belgesi.
-    * ``3d`` — Three.js sahne editörü; `data` = ``mimic3d/1`` sahne belgesi
-      (nesne listesi + sahne/kamera/ışık ayarları + görüş noktaları).
-
-    `thumbnail` küçük bir base64 önizlemedir (galeri kartlarında gösterilir).
-    Animasyon/etiket bağlama meta verisi her iki türde de objenin kendi `scada`
-    özelliğinde `data` JSON içinde tutulur (aynı şema) → gerçek `Sensor`
-    etiketlerine bağlanır, canlı değerler `api_mimic_tags` ile beslenir.
+    Bu fazda mimikler SCADA çekirdeğine **bağlı değildir** — yalnız tasarlanıp
+    saklanır, görüntülenir, simüle edilir. Animasyon/etiket bağlama meta verisi
+    her objenin kendi `scada` özelliğinde `data` JSON içinde tutulur; ileride
+    gerçek `Sensor`/`SensorLatest` değerlerine bağlanabilir.
     """
-
-    KIND_2D = "2d"
-    KIND_3D = "3d"
-    KIND_CHOICES = [
-        (KIND_2D, _("2B (Fabric.js)")),
-        (KIND_3D, _("3B (Three.js)")),
-    ]
 
     name = models.CharField(_("Ekran Adı"), max_length=150)
     description = models.TextField(_("Açıklama"), blank=True, default="")
 
-    kind = models.CharField(
-        _("Tasarım Türü"), max_length=2, choices=KIND_CHOICES, default=KIND_2D,
-        db_index=True,
-        help_text=_("2B: Fabric.js tuval editörü. 3B: Three.js sahne editörü. "
-                    "Kayıt oluşturulduktan sonra DEĞİŞTİRİLEMEZ."),
-    )
-
     data = models.JSONField(
-        _("Tuval / Sahne Verisi"), default=dict, blank=True,
-        help_text=_("2B'de Fabric.js canvas.toJSON() çıktısı; 3B'de mimic3d/1 "
-                    "sahne belgesi (objeler + bağlama meta verisi)."),
+        _("Tuval Verisi"), default=dict, blank=True,
+        help_text=_("Fabric.js canvas.toJSON() çıktısı (objeler + bağlama meta verisi)."),
     )
     thumbnail = models.TextField(
         _("Önizleme (base64 PNG)"), blank=True, default="",
@@ -155,8 +137,3 @@ class MimicScreen(models.Model):
 
     def __str__(self):
         return self.name
-
-    @property
-    def is_3d(self):
-        """Three.js sahnesi mi? (view/şablon yönlendirmesinin tek doğruluk kaynağı)"""
-        return self.kind == self.KIND_3D

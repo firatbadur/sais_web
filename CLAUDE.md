@@ -851,31 +851,21 @@ tasarlar. Bu faz **SCADA'ya bağlı değildir** — tasarımlar saklanır, simü
 animasyon etiketleri (tag) serbest metindir, ileride gerçek `Sensor`/`SensorLatest`'e bağlanabilir.
 Tamamen dashboard arayüzüne özgü → `dashboard/`.
 
-> **İKİ TASARIM TÜRÜ.** Aynı galeri hem **2B (Fabric.js)** hem **3B (Three.js)** mimikleri
-> listeler; ayrım `MimicScreen.kind` (`"2d"`/`"3d"`) ile yapılır. Bu bölüm 2B editörü anlatır;
-> 3B için aşağıdaki **"3B Mimik Editörü (Three.js)"** bölümüne bakın. İki tür aynı modeli, aynı
-> API endpoint'lerini, aynı `scada` bağlama şemasını ve aynı viewer route'unu paylaşır.
-
-- **Model** [dashboard/models.py](dashboard/models.py) `MimicScreen`: `kind` (`2d`/`3d`, default
-  `2d`, **oluşturulduktan sonra değiştirilemez**), `data` (2B'de Fabric `canvas.toJSON`, 3B'de
-  `mimic3d/1` sahne belgesi), `thumbnail` (base64 önizleme), `width/height/background`,
-  `is_template` (silinemez), `created_by`. Migration `dashboard/0002_mimicscreen` +
-  `0003_mimicscreen_kind`. Jazzmin admin'e **kayıtlı değildir** (yönetim dashboard'dan yapılır).
-- **PAYLAŞILAN ÇEKİRDEK** [mimic_core.js](dashboard/static/dashboard/js/mimic_core.js)
-  (`window.MimicCore`, klasik script): güvenli ifade motoru (shunting-yard, `eval` YOK),
-  `AUTO_OVERRIDE`+`autoKind` sembol sınıflandırması, `scadaDefaults`/`normalizeScada`, `TagBag`,
-  buton semantiği, `ANIM_KINDS_2D/3D`. **2B ve 3B motorlar bunu paylaşır** — iki `autoKind`
-  kopyası olsaydı bir sembol yalnız birine eklendiğinde aynı mimik iki renderer'da sessizce farklı
-  animasyon gösterirdi (HMI'da yanlış gösterim). `mimic_runtime.js`'den ÖNCE yüklenmeli; 3B tarafı
-  `mimic_core_esm.js` adaptörüyle `import ... from "mimic/core"` yazar.
-  Ayrıca `repair2dDocument`: **Fabric tuzağı** — `styles` anahtarı olmayan metin objeleri
-  yüklendikten sonra HER `toObject()` çağrısını (kaydet/export/undo) patlatır; yükleme yolunda
-  onarılır, `seed_mimic_templates` de artık `styles={}` yazar.
-- **PAYLAŞILAN ETKİLEŞİM KATMANI** [mimic_menu_ui.js](dashboard/static/dashboard/js/mimic_menu_ui.js)
-  + [_menu_ui.html](dashboard/templates/dashboard/mimic/_menu_ui.html): tıklama menüsü, rapor
-  modalı (DataTables + ApexCharts), kontrol diyalogu, "başka mimik aç". **2B ve 3B viewer aynı
-  kodu kullanır**; yalnız "tıklanan nesneyi nasıl buldukları" ayrışır (Fabric event vs raycaster).
-  Çeviriler JS'te değil include'un kurduğu `window.MIMIC_MENU_I18N` sözlüğünde.
+- **Model** [dashboard/models.py](dashboard/models.py) `MimicScreen`: `data` (Fabric
+  `canvas.toJSON`), `thumbnail` (base64 PNG galeri önizleme), `width/height/background`,
+  `is_template` (silinemez), `created_by`. Migration `dashboard/0002_mimicscreen`. Jazzmin admin'e
+  **kayıtlı değildir** (yönetim dashboard'dan yapılır).
+- **TUZAK — metin objelerinde `styles` ZORUNLU (Fabric 5.3):** JSON'da `styles` anahtarı YOKSA
+  yüklenen metin objesinde `styles` **undefined** kalır (boş sözlüğe varsayılmaz) ve sonrasında
+  HER `toObject()` çağrısı `fabric.util.stylesToArray` içinde patlar → kaydetme, PNG/SVG/JSON dışa
+  aktarma, kopyala-yapıştır ve yükleme sonrası ilk `pushUndo()` birden bozulur; yükleme zinciri
+  yarıda kesildiği için ekran **"0 nesne"** görünür. Yerleşik şablon (Python'da üretiliyor) tam bu
+  yüzden editörde açılamıyordu. İki katman: `seed_mimic_templates` artık `styles={}` yazar, ayrıca
+  editör (`mimic_editor.js` → `repairTextStyles`) ve görüntüleyici yüklemeden önce eski/harici
+  belgeleri onarır. `dashboard/tests.py` bu regresyonu kilitler.
+- **Veri boyutu sınırı**: `mimic_screen_save` `data`'yı **2 MB** ile sınırlar (413 + Türkçe mesaj) ve
+  `RequestDataTooBig`'i yakalar. Sınır bilinçli olarak Django'nun `DATA_UPLOAD_MAX_MEMORY_SIZE`
+  değerinin (2.5 MB) ALTINDA — aksi halde kontrole hiç ulaşılmaz, istek opak bir 400 ile reddedilir.
 - **Gerçek SCADA etiketleri**: `Sensor.tag` (api/, otomatik üretilir — `save()` boşsa parametre
   kodundan benzersiz tag türetir; migration `0025`/`0026` mevcutları doldurur). Sensör listesi +
   Jazzmin admin'de görünür. Editör tag alanı `/dashboard/api/mimic/tags/`'ten (gerçek sensör tag +
@@ -957,96 +947,6 @@ Tamamen dashboard arayüzüne özgü → `dashboard/`.
   sınırı (`boundary`) `excludeFromExport+isHelper` ile kaydedilmez, yüklemede JS yeniden kurar.
   PNG/thumbnail dışa aktarımı `withIdentityVpt` ile viewport transform sıfırlanarak yapılır (zoom/pan
   hizasızlığını önler).
-
-## 3B Mimik Editörü (Three.js)
-
-2B (Fabric) editörün **paralel** 3B ikizi: tesisi gerçek geometrisiyle, kamera ile gezilebilir bir
-sahne olarak tasarlayıp izleme. 2B editör **kaldırılmadı**; ikisi aynı galeride, aynı modelde
-(`MimicScreen.kind`), aynı API'lerde ve aynı `scada` bağlama şemasında yaşar.
-
-- **Yönlendirme (tek doğruluk kaynağı `kind` kolonu)**: editörler ayrı route
-  (`mimic3d_editor_new`/`mimic3d_editor_edit` → `admin-pages/mimic/editor3d/[<pk>/]`, rol=1), ama
-  **görüntüleyici TEK route'tur** (`mimic_viewer`) ve şablonu `MimicScreen.kind` seçer
-  ([views.py](dashboard/views.py) `MimicViewerView.get_template_names`, memoize'li — o metot
-  `get_context_data`'dan ÖNCE çalışır). Bu tek karar sayesinde header "Mimik" menüsü, galeri
-  linkleri ve **2B↔3B çapraz `openMimic` gezinmesi** ek kod gerektirmez.
-  **Çapraz-tür koruması**: yanlış editöre açılan kayıt 302 ile doğru editöre yönlenir — yoksa eski
-  bir bookmark 3B belgesini Fabric'e yükler ve kayıtta belge sessizce ezilir (veri kaybı).
-- **API**: yeni endpoint YOK. `mimic_screen_save` `kind`'ı yalnız oluşturmada yazar (sonradan 400)
-  ve **2 MB** veri sınırı uygular (413; Django'nun `DATA_UPLOAD_MAX_MEMORY_SIZE`'ı 2.5 MB olduğu
-  için sınır onun ALTINDA tutulur, `RequestDataTooBig` de yakalanıp aynı Türkçe mesaj döner).
-  `list`/`get`/`menu` yanıtlarına `kind` eklendi; `list`'e opsiyonel `?kind=` filtresi (varsayılan
-  filtrelemez — openMimic hedef listesi iki türü de göstermeli).
-- **three.js r185 vendored** → [plugins/custom/three/](dashboard/static/dashboard/plugins/custom/three/)
-  (18 dosya, ~2.4 MB, minify DEĞİL). **Vendor dosyalarını DÜZENLEMEYİN**; yükseltme prosedürü ve
-  neden-hangi-dosya listesi `VENDOR.md`'de. ESM + `<script type="importmap">`
-  ([_three_importmap.html](dashboard/templates/dashboard/mimic/_three_importmap.html), dokümanda TEK
-  ve ilk modülden ÖNCE). **KURAL: importmap'e yalnız diskte VAR OLAN dosya yazılır** — DEBUG=0'da
-  `{% static %}` eksik dosyada `ValueError` fırlatıp sayfayı 500 yapar (dev'de belirti vermez).
-- **Üretim ESM sertleştirmesi (iki bağımsız katman)**: `settings.WHITENOISE_KEEP_ONLY_HASHED_FILES
-  = False` (**DOKUNMA** — `True` yapmak 3B editörü yalnız üretimde kırar) + [storage.py](sais_web/storage.py)
-  içinde **dizin-kapsamlı** ESM `patterns` override'ı (vendor dosyaları birbirini göreli import
-  eder). Global `*.js` ASLA açılmaz: DOTALL import regex'i minify Metronic bundle'larını bozabilir.
-  Glob'lar hem `/` hem `\` varyantıyla yazılır (`post_process` yolları OS ayırıcısıyla gelir).
-- **Sahne belgesi (`data`, kind=3d)**: `mimic3d/1` — düz nesne listesi + `parent` id referansı
-  (iç içe DEĞİL), birim **metre**, **Y yukarı**, **taban y=0**. `scene` (arka plan/ızgara/zemin/
-  ışık/gölge/tone mapping), `camera`, `viewpoints` (viewer üst barında buton), `paths`, `objects`,
-  `meta`. Nesne tipleri: `symbol | primitive | group | label | button | import | sceneBinding`
-  (bilinmeyen tip yüklemede UYARIYLA atlanır). `scada` bloğu 2B ile **birebir aynı** + `axis`,
-  `pathId`, `viewpointId`, `orient`. **TEK BİRİM FARKI: `moveRange` 2B'de piksel (60), 3B'de metre
-  (1.0).** Transformlar ve kamera 4 ondalığa yuvarlanır (tur dönüşü byte-identik olsun, undo
-  yığınına gereksiz adım girmesin).
-- **Modüller** [js/mimic3d/](dashboard/static/dashboard/js/mimic3d/): `core/` (scene, doc, scene_io,
-  factory, dispose, selection, history, camera_ops, render_loop), `edit/` (transform, ops),
-  `io/` (persist, screenshot, gltf), `ui/` (inspector, outliner, palette, sim_panel, toast),
-  `boot.js` (editör kontrolcüsü), `viewer3d.js`. Sembol kütüphanesi
-  [mimic3d_symbols.js](dashboard/static/dashboard/js/mimic3d_symbols.js) ve runtime
-  [mimic3d_runtime.js](dashboard/static/dashboard/js/mimic3d_runtime.js) üst dizinde (viewer `ui/`
-  ve `edit/` yüklemez).
-- **Sembol kütüphanesi**: 35 prosedürel sembol, 7 kategori, **2B ile AYNI `symbolKey` isim alanı**
-  → `autoKind` değişmeden çalışır (10 sınıfın hepsi temsil edilir). Sözleşme: `THREE.Group`, taban
-  y=0 + X/Z merkezli (`buildSymbol` içinde **genel normalizasyon**), animasyonlu çocuklar
-  `userData.role` (kapalı küme: rotor·needle·liquid·liquidSurface·bubbles·flow·carousel·spray·
-  doorLeafL/R·indicator·label·buttonFace), boyanabilir gövdeler `userData.tintable`, rol
-  parametreleri grup üzerinde (`liqBottom/liqTop/spinAxis/needleAxis/needleMin-Max/doorTravel`),
-  yalnız paylaşılan `MAT.*` material'ları. Kapalı hazneler yarı saydam (`MAT.shell`) — aksi halde
-  seviye animasyonu görünmez. Palet ikonları SVG değil **gerçek 3B render** (sessionStorage cache).
-  Bilinmeyen `symbolKey` → yer tutucu küp (sahne yine açılır).
-- **Animasyon (26)**: 11 genel (2B semantiğiyle birebir: colorState/fillThreshold/blink/rotate/
-  level/visibility/opacity/moveX/moveY/text + auto), 8 sembole-özel `auto` (2B'deki `after:render`
-  overlay'lerinin mesh/material karşılığı: water/aeration/spin/gauge/flow/carousel/washbar/door),
-  **7 yeni 3B**: moveZ, rotateAxis, scaleAxis, emissive, tilt, pathFollow, cameraTour.
-  `stop()` her şeyi geri yükler (transform, material renk/opaklık/emissive, sıvı, rotor/ibre,
-  etiket metni, tur öncesi kamera).
-- **Performans (mütevazı saha PC'si hedefi)**: **ihtiyaç-üzerine render** — boşta editör 0 fps;
-  `runtime.needsFrame()` yalnız zaman-bazlı animasyon varsa sürekli frame ister, yani yalnız
-  değer-eşlemeli bir viewer 4 saniyelik poll başına TEK frame çizer. Ayrıca ≤300 nesne uyarısı /
-  500'de kayıt bloke, `pixelRatio ≤ 1.5`, gölge default `medium`, **"Düşük Efekt" toggle'ı** (`L`),
-  durum çubuğunda FPS + **sızıntı kanaryası** (geometri/doku sayısı). Viewer postprocessing
-  (EffectComposer/OutlinePass) **yüklemez**.
-- **3B'ye özgü tuzaklar (hepsi ölçümle yakalandı, kod içinde yorumlu)**:
-  (1) Çoklu seçimde nesneleri gizmo pivotuna `attach` etmek onları `contentRoot` dışına çıkarır →
-  `toDoc` görmez → **kaydetmek seçili nesneleri kaybeder**; bu yüzden pivot yerine delta-transform
-  kullanılır (sahne grafiği hiç değişmez). (2) `pmrem.fromScene()` bir **RenderTarget** döndürür;
-  yalnız `.texture.dispose()` sızdırır + preset değişmediyse PMREM yeniden üretilmez.
-  (3) Paylaşılan palet material'ı: `ensureOwnMaterials` olmadan bir pompayı boyamak hepsini boyar.
-  (4) `preserveDrawingBuffer:false` → PNG çekiminde render ve `toDataURL` **aynı tick'te** olmalı.
-  (5) `transparent=true` yazılmadan `opacity` sessizce yok sayılır. (6) Karşılaştırma ifadeleri
-  0/1 döndürür → eşik 1 olmalı (editörde uyarı metni var).
-- **Yerleşik şablon**: `python manage.py seed_mimic3d_templates` (idempotent) — "SAIS Atıksu Tesisi
-  — Örnek 3B HMI" (31 nesne: terfi→havalandırma→çöktürme hattı, dozaj ünitesi, analiz paneli, saha
-  ekipmanları, 4 görüş noktası). Startup'ta otomatik çağrılmaz (2B seed'iyle aynı konvansiyon).
-- **Testler**: [dashboard/tests.py](dashboard/tests.py) (23 test) tür değişmezliğini, viewer şablon
-  yönlendirmesini, çapraz-tür redirect'lerini, API payload'larını ve seed idempotency'sini kilitler.
-  Three.js davranışı tarayıcı tabanlı süitlerle doğrulanır (bkz. P1–P6 commit mesajları).
-- **Cython/obfuscation etkisi YOK**: `build/cythonize_app.py` yalnız `*.py` derler.
-- **Ertelenenler**: 3B arayüzün EN `.po` çevirileri (~250 yeni string; Rapor Stüdyosu'nda olduğu
-  gibi TR ile ship edildi). Windows'ta `xgettext` bulunmadığından `makemessages`
-  çalıştırılamıyor — çeviri turu Linux/Docker'da `makemessages` + `compilemessages` ile yapılmalı.
-  **Not:** `mimic_menu_ui.js`'e taşınan metinler msgid olarak DEĞİŞMEDİĞİ için mevcut EN
-  çevirileri geçerliliğini korur (yalnız `.po` içindeki konum yorumları bayatlar).
-  Ayrıca GLB/GLTF **içe** aktarma (dışa aktarma var) ve outliner'da sürükle-bırak ile
-  yeniden-ebeveynleme sonraki fazlara bırakıldı.
 
 ## Rapor Stüdyosu (Aveva Reports benzeri raporlama editörü)
 

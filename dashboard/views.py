@@ -1094,10 +1094,6 @@ class MimicDashboardView(AdminRequiredMixin, ListView):
 
     Editör SCADA'ya bağlı değildir (bu faz); tasarımlar `MimicScreen` olarak
     saklanır, simüle edilebilir, JSON/PNG/SVG olarak dışa aktarılabilir.
-
-    Galeri **hem 2B hem 3B** tasarımları listeler (`MimicScreen.kind`); kartlar
-    türe göre doğru editöre yönlenir, "Görüntüle" ise tek `mimic_viewer`
-    route'unu kullanır (şablon seçimi `MimicViewerView`'da yapılır).
     """
     template_name = "dashboard/admin_pages/mimic.html"
     context_object_name = "screens"
@@ -1105,43 +1101,21 @@ class MimicDashboardView(AdminRequiredMixin, ListView):
     def get_queryset(self):
         from .models import MimicScreen
         # defer("data"): galeri kartları yalnız ad/thumbnail/tarih gösteriyor;
-        # sahne/tuval belgesi (3B'de yüzlerce KB) her kart için çekilmesin.
+        # tuval belgesini (büyük JSON) her kart için çekmenin anlamı yok.
         return (MimicScreen.objects
                 .select_related("created_by")
                 .defer("data")
                 .order_by("-updated_at"))
 
-    def get_context_data(self, **kwargs):
-        from .models import MimicScreen
-        ctx = super().get_context_data(**kwargs)
-        screens = ctx.get("screens") or []
-        ctx["count_3d"] = sum(1 for s in screens if s.is_3d)
-        ctx["count_2d"] = len(screens) - ctx["count_3d"]
-        ctx["KIND_3D"] = MimicScreen.KIND_3D
-        return ctx
 
+class MimicEditorView(AdminRequiredMixin, TemplateView):
+    """Standalone tam-ekran mimik tasarım editörü (Fabric.js).
 
-class _MimicEditorBase(AdminRequiredMixin, TemplateView):
-    """2B/3B editör view'ları için ortak taban.
-
-    `expects_3d` sınıf bayrağı hangi renderer'ın beklendiğini söyler; `pk`
-    verilen kayıt karşı türdeyse **doğru editöre 302 ile yönlendirilir**. Bu
-    koruma zorunludur: eski bir bookmark 3B sahne belgesini Fabric editörüne
-    yüklerse kayıtta belge sessizce Fabric JSON'una ezilir (geri dönüşü olmayan
-    veri kaybı).
+    Dashboard iskeleti (header/sidebar) **olmadan** kendi tasarım ortamı
+    chrome'uyla render eder; galeriden yeni sekmede açılır. `pk` verilirse o
+    mimik düzenleme modunda yüklenir, yoksa boş tuval.
     """
-    expects_3d = False
-    other_url_name = ""
-
-    def get(self, request, *args, **kwargs):
-        from django.shortcuts import redirect
-        from .models import MimicScreen
-        pk = self.kwargs.get("pk")
-        if pk:
-            screen = MimicScreen.objects.filter(pk=pk).only("id", "kind").first()
-            if screen is not None and screen.is_3d != self.expects_3d:
-                return redirect(self.other_url_name, pk=pk)
-        return super().get(request, *args, **kwargs)
+    template_name = "dashboard/mimic/editor.html"
 
     def get_context_data(self, **kwargs):
         from .models import MimicScreen
@@ -1152,60 +1126,23 @@ class _MimicEditorBase(AdminRequiredMixin, TemplateView):
         return ctx
 
 
-class MimicEditorView(_MimicEditorBase):
-    """Standalone tam-ekran mimik tasarım editörü (2B — Fabric.js).
-
-    Dashboard iskeleti (header/sidebar) **olmadan** kendi tasarım ortamı
-    chrome'uyla render eder; galeriden yeni sekmede açılır. `pk` verilirse o
-    mimik düzenleme modunda yüklenir, yoksa boş tuval.
-    """
-    template_name = "dashboard/mimic/editor.html"
-    expects_3d = False
-    other_url_name = "dashboard:mimic3d_editor_edit"
-
-
-class Mimic3DEditorView(_MimicEditorBase):
-    """Standalone tam-ekran mimik tasarım editörü (3B — Three.js).
-
-    2B editörün ikizi; tuval yerine bir 3B sahne (metre birimli, Y-yukarı)
-    düzenlenir. Sahne belgesi `mimic3d/1` şemasıyla `MimicScreen.data`'ya
-    yazılır, tag bağlama/animasyon şeması (`scada`) 2B ile **birebir aynıdır**.
-    """
-    template_name = "dashboard/mimic/editor3d.html"
-    expects_3d = True
-    other_url_name = "dashboard:mimic_editor_edit"
-
-
 class MimicViewerView(RoleRequiredMixin, TemplateView):
-    """Standalone tam-ekran mimik görüntüleyici (salt-okunur, canlı).
+    """Standalone tam-ekran mimik görüntüleyici / simülatör (salt-okunur).
 
-    Kaydedilmiş bir mimiği render edip canlı sensör değerleriyle animasyonları
-    sürer; düzenleme araçları yoktur. Yeni sekmede açılır; her rol
+    Kaydedilmiş bir mimiği render edip simülasyon modunda animasyonları
+    canlandırır; düzenleme araçları yoktur. Yeni sekmede açılır; her rol
     görüntüleyebilir.
-
-    **Tek route, iki renderer:** şablon `MimicScreen.kind`'a göre seçilir. Bu
-    sayede header "Mimik" menüsü, galeri linkleri ve mimik→mimik `openMimic`
-    gezinmesi 2B↔3B çapraz olarak ek kod gerektirmeden çalışır.
     """
-    _screen = None
-
-    def screen(self):
-        # get_template_names() get_context_data()'dan ÖNCE çağrılır → memoize.
-        if self._screen is None:
-            from django.http import Http404
-            from .models import MimicScreen
-            self._screen = MimicScreen.objects.filter(pk=self.kwargs.get("pk")).first()
-            if self._screen is None:
-                raise Http404("Mimik bulunamadı.")
-        return self._screen
-
-    def get_template_names(self):
-        return ["dashboard/mimic/viewer3d.html" if self.screen().is_3d
-                else "dashboard/mimic/viewer.html"]
+    template_name = "dashboard/mimic/viewer.html"
 
     def get_context_data(self, **kwargs):
+        from django.http import Http404
+        from .models import MimicScreen
         ctx = super().get_context_data(**kwargs)
-        ctx["screen"] = self.screen()
+        screen = MimicScreen.objects.filter(pk=self.kwargs.get("pk")).first()
+        if screen is None:
+            raise Http404("Mimik bulunamadı.")
+        ctx["screen"] = screen
         return ctx
 
 

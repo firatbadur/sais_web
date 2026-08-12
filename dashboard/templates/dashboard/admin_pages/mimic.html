@@ -24,9 +24,6 @@
         transition: border-color .15s, background .15s;
     }
     .new-card:hover { border-color: var(--bs-primary); background: var(--bs-primary-bg-subtle, rgba(0,158,247,.06)); }
-    /* 3B kartlarinin onizlemesi fotografik → koyu zemin daha iyi okunur */
-    [data-kind="3d"] .mimic-thumb { background: #12161d; }
-    [data-kind="3d"] .mimic-thumb .empty-ico { color: #6c7a8c; }
 </style>
 {% endblock %}
 
@@ -42,69 +39,35 @@
             <div>
                 <h2 class="fw-bold mb-1">{% trans "SCADA Mimik Tasarım Stüdyosu" %}</h2>
                 <div class="text-muted fs-7">
-                    {% trans "Profesyonel HMI/SCADA mimik ekranları tasarlayın — vana, pompa, tank, enstrüman kütüphanesi, animasyon ve simülasyon. 2B tuval veya 3B sahne olarak; tasarımlar yeni sekmede tam ekran editörde açılır." %}
+                    {% trans "Profesyonel HMI/SCADA mimik ekranları tasarlayın — vana, pompa, tank, enstrüman kütüphanesi, animasyon ve simülasyon. Tasarımlar yeni sekmede tam ekran editörde açılır." %}
                 </div>
             </div>
         </div>
-        <div class="d-flex gap-2">
-            <a href="{% url 'dashboard:mimic_editor_new' %}" target="_blank" rel="noopener"
-               class="btn btn-primary">
-                <i class="ki-duotone ki-plus fs-2"></i>{% trans "Yeni Mimik Oluştur" %}
-            </a>
-            <a href="{% url 'dashboard:mimic3d_editor_new' %}" target="_blank" rel="noopener"
-               class="btn btn-light-primary">
-                <i class="ki-duotone ki-cube-3 fs-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>{% trans "Yeni 3B Tasarım" %}
-            </a>
-        </div>
+        <a href="{% url 'dashboard:mimic_editor_new' %}" target="_blank" rel="noopener"
+           class="btn btn-primary">
+            <i class="ki-duotone ki-plus fs-2"></i>{% trans "Yeni Mimik Oluştur" %}
+        </a>
     </div>
 </div>
 
-<ul class="nav nav-line-tabs nav-line-tabs-2x fs-6 mb-6" id="kind-tabs">
-    <li class="nav-item">
-        <a class="nav-link active" href="#" data-kind-filter="all">
-            {% trans "Tümü" %} <span class="badge badge-light ms-1">{{ screens|length }}</span></a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="#" data-kind-filter="2d">
-            {% trans "2B" %} <span class="badge badge-light ms-1">{{ count_2d }}</span></a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" href="#" data-kind-filter="3d">
-            {% trans "3B" %} <span class="badge badge-light ms-1">{{ count_3d }}</span></a>
-    </li>
-</ul>
-
 <div class="row g-6" id="mimic-grid">
-    <!-- Yeni kart (2B) -->
-    <div class="col-md-6 col-lg-4 col-xl-3" data-kind="2d">
+    <!-- Yeni kart -->
+    <div class="col-md-6 col-lg-4 col-xl-3">
         <a href="{% url 'dashboard:mimic_editor_new' %}" target="_blank" rel="noopener"
            class="new-card text-decoration-none">
             <div class="text-center">
                 <i class="ki-duotone ki-plus-square fs-3x text-primary mb-3"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
-                <div class="fw-semibold text-gray-700">{% trans "Boş tuvalde başla (2B)" %}</div>
-            </div>
-        </a>
-    </div>
-    <!-- Yeni kart (3B) -->
-    <div class="col-md-6 col-lg-4 col-xl-3" data-kind="3d">
-        <a href="{% url 'dashboard:mimic3d_editor_new' %}" target="_blank" rel="noopener"
-           class="new-card text-decoration-none">
-            <div class="text-center">
-                <i class="ki-duotone ki-cube-3 fs-3x text-primary mb-3"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
-                <div class="fw-semibold text-gray-700">{% trans "Boş sahnede başla (3B)" %}</div>
+                <div class="fw-semibold text-gray-700">{% trans "Boş tuvalde başla" %}</div>
             </div>
         </a>
     </div>
 
     {% for s in screens %}
-    {% if s.is_3d %}{% url 'dashboard:mimic3d_editor_edit' s.id as edit_url %}{% else %}{% url 'dashboard:mimic_editor_edit' s.id as edit_url %}{% endif %}
-    <div class="col-md-6 col-lg-4 col-xl-3" data-screen-card="{{ s.id }}" data-kind="{{ s.kind }}">
+    <div class="col-md-6 col-lg-4 col-xl-3" data-screen-card="{{ s.id }}">
         <div class="card mimic-card h-100">
-            <a href="{{ edit_url }}" target="_blank" rel="noopener" class="mimic-thumb">
+            <a href="{% url 'dashboard:mimic_editor_edit' s.id %}" target="_blank" rel="noopener" class="mimic-thumb">
                 {% if s.thumbnail %}
                     <img src="{{ s.thumbnail }}" alt="{{ s.name }}">
-                {% elif s.is_3d %}
-                    <i class="ki-duotone ki-cube-3 fs-3x empty-ico"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
                 {% else %}
                     <i class="ki-duotone ki-picture fs-3x empty-ico"><span class="path1"></span><span class="path2"></span></i>
                 {% endif %}
@@ -112,11 +75,10 @@
             <div class="card-body p-4">
                 <div class="d-flex align-items-start justify-content-between">
                     <div class="me-2 overflow-hidden">
-                        <a href="{{ edit_url }}" target="_blank" rel="noopener"
+                        <a href="{% url 'dashboard:mimic_editor_edit' s.id %}" target="_blank" rel="noopener"
                            class="fw-bold text-gray-900 text-hover-primary d-block text-truncate">{{ s.name }}</a>
                         <div class="text-muted fs-8 mt-1">
                             {{ s.width }}×{{ s.height }}px · {{ s.updated_at|date:"d.m.Y H:i" }}
-                            {% if s.is_3d %}<span class="badge badge-light-primary ms-1">{% trans "3B" %}</span>{% endif %}
                             {% if s.is_template %}<span class="badge badge-light-info ms-1">{% trans "Şablon" %}</span>{% endif %}
                         </div>
                         {% if s.description %}<div class="text-muted fs-8 text-truncate mt-1">{{ s.description }}</div>{% endif %}
@@ -126,7 +88,8 @@
                             <i class="ki-duotone ki-dots-vertical fs-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
                         </button>
                         <div class="dropdown-menu dropdown-menu-end fs-7">
-                            <a class="dropdown-item" target="_blank" rel="noopener" href="{{ edit_url }}">
+                            <a class="dropdown-item" target="_blank" rel="noopener"
+                               href="{% url 'dashboard:mimic_editor_edit' s.id %}">
                                 <i class="ki-duotone ki-pencil fs-5 me-2"><span class="path1"></span><span class="path2"></span></i>{% trans "Düzenle" %}</a>
                             <a class="dropdown-item" target="_blank" rel="noopener"
                                href="{% url 'dashboard:mimic_viewer' s.id %}">
@@ -141,7 +104,7 @@
                     </div>
                 </div>
                 <div class="d-flex gap-2 mt-4">
-                    <a href="{{ edit_url }}" target="_blank" rel="noopener"
+                    <a href="{% url 'dashboard:mimic_editor_edit' s.id %}" target="_blank" rel="noopener"
                        class="btn btn-sm btn-light-primary flex-grow-1">
                         <i class="ki-duotone ki-pencil fs-4"><span class="path1"></span><span class="path2"></span></i>{% trans "Düzenle" %}</a>
                     <a href="{% url 'dashboard:mimic_viewer' s.id %}" target="_blank" rel="noopener"
@@ -170,28 +133,6 @@
         return v ? v.pop() : '';
     }
     const CSRF = getCookie('csrftoken');
-
-    // --- Tur filtresi (2B / 3B) — tamamen client-side, secim hatirlanir ---
-    const KIND_LS = 'mimic.gallery.kind';
-    const tabs = document.querySelectorAll('#kind-tabs [data-kind-filter]');
-    function applyKind(kind) {
-        document.querySelectorAll('#mimic-grid > [data-kind]').forEach(function (el) {
-            el.classList.toggle('d-none', kind !== 'all' && el.dataset.kind !== kind);
-        });
-        tabs.forEach(function (t) {
-            t.classList.toggle('active', t.dataset.kindFilter === kind);
-        });
-        try { localStorage.setItem(KIND_LS, kind); } catch (e) { /* private mode */ }
-    }
-    tabs.forEach(function (t) {
-        t.addEventListener('click', function (e) {
-            e.preventDefault();
-            applyKind(t.dataset.kindFilter);
-        });
-    });
-    let savedKind = 'all';
-    try { savedKind = localStorage.getItem(KIND_LS) || 'all'; } catch (e) { /* noop */ }
-    applyKind(['all', '2d', '3d'].indexOf(savedKind) >= 0 ? savedKind : 'all');
 
     // JSON indir
     document.querySelectorAll('.js-mimic-download').forEach(function (a) {

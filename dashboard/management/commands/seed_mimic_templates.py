@@ -89,8 +89,9 @@ def _circle(left, top, r, fill=BODY, stroke=EDGE, sw=2, name="circle",
 # bozar -> yukleme zinciri yarida kesilir, ekran "0 nesne" gorunur. Bu sablon
 # tam bu yuzden editorde acilamiyordu.
 #
-# Ikinci savunma yukleme tarafinda: MimicCore.repair2dDocument (eski kayitlar
-# icin), ama kaynagi da dogru uretiyoruz.
+# Ikinci savunma yukleme tarafinda: editorde `repairTextStyles` (mimic_editor.js)
+# ve goruntuleyicide ayni onarim -- eski/harici kayitlar icin. Yine de kaynagi
+# dogru uretiyoruz.
 _TEXT_STYLES = {}
 
 
