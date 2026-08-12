@@ -536,6 +536,22 @@ başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows ser
   progress bar altına gri bir **canlı detay satırı** ekler — son heartbeat, detaylar açılmadan görünür.
 - **Admin (rol=1)**: [users/seed_admin_user](users/management/commands/seed_admin_user.py) non-interactive
   (env `DJANGO_SUPERUSER_*`) — `createsuperuser --noinput` CustomUser `rol` alanını set edemediği için.
+- **İKİ AYRI PAROLA — nerede saklı / nasıl öğrenilir (sık sorulan):**
+  1. **Windows servis hesabı `EnvisoftWebX`** (local admin, auto-login; WSL2 yalnız oturum açık
+     interaktif session'da çalıştığı için gerekli). Parolayı **installer üretir**
+     ([05-service-account.ps1](installer/scripts/05-service-account.ps1) `New-ServicePassword`, 24 karakter,
+     RNG + shell-safe alfabe); hiçbir dosyaya/log'a yazılmaz. **Tek saklandığı yer registry, düz metin:**
+     `HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\DefaultPassword` (`AutoAdminLogon=1`).
+     Öğrenmek için admin PowerShell:
+     `(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultPassword`.
+     Bu registry değeri **tek doğruluk kaynağıdır** — [sais-stack.ps1](installer/scripts/sais-stack.ps1)
+     `Sync-ServicePassword` her boot döngüsünde gerçek hesap parolasını ona göre yeniden dayatır (+ hesap
+     `passwordchg:no`/`PasswordNeverExpires`) → **elle `net user` ile değiştirmek geri alınır**; değiştireceksen
+     registry'yi de birlikte güncelle. Kiosk/appliance deseni: fiziksel güvenli SCADA panosu varsayımı.
+  2. **Dashboard admin parolası** — sihirbazda operatör girer, `install-answers.json`'a yazılır, kurulum
+     **başarıyla bitince silinir** ([install.ps1](installer/scripts/install.ps1) `finally` bloğu; kurulum
+     yarıda kaldıysa `C:\EnvisoftWebX\install-answers.json` hâlâ durur). DB'de yalnız Django hash'i → **geri
+     okunamaz**; unutulursa `python manage.py changepassword` / yeni `seed_admin_user` ile sıfırlanır.
 - **DB**: **PostgreSQL 16** (açık kaynak, lisans gerektirmez; bundled `postgres:16` container). Şifre installer'da otomatik üretilir (`POSTGRES_PASSWORD`).
 - **GHCR image private** → installer'a `read:packages` scope'lu token build-time gömülür (release.yml
   `windows-installer` job, repo secret `INSTALLER_GHCR_TOKEN`). Asıl kullanım gate'i **Ed25519 lisans**,
