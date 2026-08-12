@@ -37,6 +37,8 @@ $logDir = Join-Path $installDir "logs"
 try { New-Item -ItemType Directory -Force -Path $logDir | Out-Null } catch {}
 $LogFile = Join-Path $logDir "install.log"
 $StatusFile = Join-Path $logDir "install-status.txt"
+$ProgressFile = Join-Path $logDir "install-progress.txt"
+try { Remove-Item $ProgressFile -Force -ErrorAction SilentlyContinue } catch {}
 
 # --- Hide our own console window (belt-and-suspenders with Inno runhidden) ----
 try {
@@ -210,11 +212,21 @@ $timer.Add_Tick({
             elseif ($line -match '^\s+\[(OK|!)\]\s+(.+)$') { $script:lastDetail = $Matches[2] }
         }
         $lblStep.Text = $script:lastStep
-        $lblDetail.Text = $script:lastDetail
         if ($script:progress -ge 0 -and $bar.Style -ne "Blocks") { $bar.Style = "Blocks" }
         if ($script:progress -ge 0) { $bar.Value = [Math]::Min(100, $script:progress) }
         $txtLog.AppendText($new)
     }
+
+    # Live status: prefer the progress side-channel file (rewritten every 1-2s
+    # by the running step, bypasses transcript buffering); fall back to the
+    # latest heartbeat line parsed from the log above.
+    try {
+        if (Test-Path $ProgressFile) {
+            $live = [System.IO.File]::ReadAllText($ProgressFile).Trim()
+            if ($live) { $script:lastDetail = $live }
+        }
+    } catch {}
+    $lblDetail.Text = $script:lastDetail
 
     $status = ""
     try { if (Test-Path $StatusFile) { $status = (Get-Content -Raw $StatusFile -ErrorAction SilentlyContinue).Trim() } } catch {}

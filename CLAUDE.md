@@ -527,13 +527,18 @@ başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows ser
   `Install-WslFromMsi` — microsoft/WSL GitHub release'inden x64 MSI indirilip `msiexec /qn` ile
   sessiz kurulur (Store bağımlılığı yok). Ayrıca `$env:WSL_UTF8=1` (UTF-16 NUL çöpünü keser) ve
   PS 5.1 tuzağı: `Start-Process -PassThru` sonrası `$p.Handle`'a dokunulmadan `ExitCode` null okunur.
-- **Canlı kurulum ilerlemesi (operatör "boş ekrana bakmasın")**: uzun adımlar artık 5-6 sn'de bir
-  install.log'a **heartbeat satırı** yazar: geçen süre + adımın step-log'undaki son gerçek satır
-  (docker'ın kendi `Downloading 12.3MB/45.6MB` çıktısı, apt ilerlemesi...) + docker pull'da
-  `[layers done/total]` sayacı (`Invoke-WslSpin -ProgressHint docker-pull`). Dosya indirmeleri
-  (`Invoke-DownloadSpin`: Ubuntu rootfs, WSL MSI) "123 MB / 450 MB (27%)" formatında ilerleme basar
-  (toplam boyut HEAD isteğinden). [progress-window.ps1](installer/scripts/progress-window.ps1)
-  progress bar altına gri bir **canlı detay satırı** ekler — son heartbeat, detaylar açılmadan görünür.
+- **Canlı kurulum ilerlemesi (tek güncellenen satır, `install-progress.txt` yan kanalı)**: adım
+  çıktısı child-stdout → pipe → `Out-Host` → `Start-Transcript` zincirinden akar ve **transcript
+  yazıcısı tamponlar** (ölçüldü: birkaç KB birikince / adım bitince flush) → log'a dayalı canlı
+  gösterim dakikalarca gecikir. Bu yüzden uzun adımlar (`Invoke-WslSpin` / `Invoke-NativeSpin` /
+  `Invoke-DownloadSpin` / `Wait-WithSpin`) her 1-2 sn'de `logs/install-progress.txt`'i **tek satır**
+  olarak yeniden yazar (doğrudan `WriteAllText`, tampona takılmaz): etiket + geçen süre + step-log'un
+  son gerçek satırı (docker `Downloading 12.3MB/45.6MB`, apt...) + pull'da `[layers done/total]`
+  (`-ProgressHint docker-pull`) + indirmelerde "123 MB / 450 MB (27%)" (toplam boyut HEAD'den).
+  [progress-window.ps1](installer/scripts/progress-window.ps1) bar altındaki gri **canlı durum
+  satırını** bu dosyadan günceller (log parse fallback). install.log'a aynı bilgi **30 sn'de bir**
+  özet heartbeat olarak düşer (satır spam'i yok, kalıcı kayıt var). Env: `ENVISOFT_PROGRESS_FILE`
+  (install.ps1 export eder, step child'ları miras alır).
 - **Admin (rol=1)**: [users/seed_admin_user](users/management/commands/seed_admin_user.py) non-interactive
   (env `DJANGO_SUPERUSER_*`) — `createsuperuser --noinput` CustomUser `rol` alanını set edemediği için.
 - **İKİ AYRI PAROLA — nerede saklı / nasıl öğrenilir (sık sorulan):**

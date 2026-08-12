@@ -39,6 +39,26 @@ $script:ComposeFile = "docker-compose.prod.yml"
 # builds simply ignore it (we still strip NULs everywhere as a fallback).
 $env:WSL_UTF8 = "1"
 
+# LIVE progress side-channel. install.ps1 exports ENVISOFT_PROGRESS_FILE (a tiny
+# single-line file next to install.log); every long-running helper below rewrites
+# it on each beat and the progress window shows it as ONE updating status line.
+#
+# WHY a separate file: step output travels child-stdout -> pipe -> Out-Host ->
+# Start-Transcript, and the TRANSCRIPT WRITER BUFFERS (measured: flushes only
+# every few KB / on stop). Heartbeat lines therefore reach install.log in bursts,
+# minutes late - useless as live feedback. This file is written directly
+# (open-write-close, no buffering) so the UI label is always current. The
+# transcript log keeps a THROTTLED heartbeat (every ~30s) as the permanent record.
+$script:ProgressFile = $env:ENVISOFT_PROGRESS_FILE
+
+function Write-LiveProgress([string]$Text) {
+    if (-not $script:ProgressFile) { return }
+    try {
+        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        [System.IO.File]::WriteAllText($script:ProgressFile, $Text, $utf8NoBom)
+    } catch {}
+}
+
 # True when our stdout is a pipe (e.g. a step running as a child process whose
 # output the installer captures via `| Out-Host`). In that case an in-place `\r`
 # spinner does NOT rewrite the line - it floods the console one line per frame.
@@ -59,14 +79,17 @@ function Write-SpinEnd([string]$Tag, [string]$Label, [int]$Elapsed, [string]$Col
     $msg = "   [{0}] {1}  ({2}s)             " -f $Tag, $Label, $Elapsed
     if (-not $script:SpinRedirected) { $msg = "`r" + $msg }
     Write-Host $msg -ForegroundColor $Color
+    Write-LiveProgress ("[{0}] {1} ({2}s)" -f $Tag, $Label, $Elapsed)
 }
 
 function Write-Step([string]$msg) {
     Write-Host ">> $msg" -ForegroundColor Cyan
+    Write-LiveProgress $msg
 }
 
 function Write-Ok([string]$msg) {
     Write-Host "   [OK] $msg" -ForegroundColor Green
+    Write-LiveProgress "[OK] $msg"
 }
 
 function Write-WarnLine([string]$msg) {
@@ -239,7 +262,8 @@ function Invoke-NativeSpin {
     $spin = @('|', '/', '-', '\')
     $i = 0
     $t0 = Get-Date
-    $lastBeat = -999
+    $lastBeat = 0   # intro line already printed; first log heartbeat at +30s
+    $lastLive = -999
     if ($script:SpinRedirected) { Write-Host ("   ... {0} ..." -f $Label) -ForegroundColor Cyan }
     while (-not $p.HasExited) {
         $el = [int]((Get-Date) - $t0).TotalSeconds
@@ -248,18 +272,19 @@ function Invoke-NativeSpin {
             Write-SpinEnd "!" "$Label TIMED OUT after ${el}s (process killed)" $el "Yellow"
             return @{ TimedOut = $true; ExitCode = -1; Log = $out }
         }
-        if ($script:SpinRedirected) {
-            if (($el - $lastBeat) -ge 6) {
-                $tail = Get-TailLine $out
-                if (-not $tail) { $tail = Get-TailLine $err }
-                $line = "   ... {0} ({1}s)" -f $Label, $el
-                if ($tail) { $line += " :: $tail" }
-                Write-Host $line -ForegroundColor DarkCyan
+        if (($el - $lastLive) -ge 2) {
+            $tail = Get-TailLine $out
+            if (-not $tail) { $tail = Get-TailLine $err }
+            $live = "{0} ({1}s)" -f $Label, $el
+            if ($tail) { $live += " :: $tail" }
+            Write-LiveProgress $live
+            $lastLive = $el
+            if ($script:SpinRedirected -and ($el - $lastBeat) -ge 30) {
+                Write-Host "   ... $live" -ForegroundColor DarkCyan
                 $lastBeat = $el
             }
-        } else {
-            Write-SpinFrame $spin[$i % 4] $Label $el
         }
+        if (-not $script:SpinRedirected) { Write-SpinFrame $spin[$i % 4] $Label $el }
         Start-Sleep -Milliseconds 250
         $i++
     }
@@ -313,7 +338,8 @@ function Invoke-DownloadSpin {
     } -ArgumentList $Url, $OutFile
 
     $t0 = Get-Date
-    $lastBeat = -999
+    $lastBeat = 0   # intro line already printed; first log heartbeat at +30s
+    $lastLive = -999
     $spin = @('|', '/', '-', '\')
     $i = 0
     if ($script:SpinRedirected) { Write-Host ("   ... {0} ..." -f $Label) -ForegroundColor Cyan }
@@ -331,14 +357,15 @@ function Invoke-DownloadSpin {
             $pct = [int](100 * $cur / $ExpectedBytes)
             $prog = "{0} / {1} ({2}%)" -f (Format-Bytes $cur), (Format-Bytes $ExpectedBytes), $pct
         }
-        if ($script:SpinRedirected) {
-            if (($el - $lastBeat) -ge 5) {
+        if (($el - $lastLive) -ge 1) {
+            Write-LiveProgress ("{0} - {1} ({2}s)" -f $Label, $prog, $el)
+            $lastLive = $el
+            if ($script:SpinRedirected -and ($el - $lastBeat) -ge 30) {
                 Write-Host ("   ... {0} - {1} ({2}s)" -f $Label, $prog, $el) -ForegroundColor DarkCyan
                 $lastBeat = $el
             }
-        } else {
-            Write-SpinFrame $spin[$i % 4] "$Label - $prog" $el
         }
+        if (-not $script:SpinRedirected) { Write-SpinFrame $spin[$i % 4] "$Label - $prog" $el }
         Start-Sleep -Milliseconds 500
         $i++
     }
@@ -494,25 +521,28 @@ function Invoke-WslSpin {
         $spin = @('|', '/', '-', '\')
         $i = 0
         $t0 = Get-Date
-        $lastBeat = -999
+        $lastBeat = 0   # intro line already printed; first log heartbeat at +30s
         if ($script:SpinRedirected) { Write-Host ("   ... {0} ..." -f $lbl) -ForegroundColor Cyan }
+        $lastLive = -999
         while ($job.State -eq 'Running') {
             $el = [int]((Get-Date) - $t0).TotalSeconds
-            if ($script:SpinRedirected) {
-                # Heartbeat WITH live detail: elapsed + the step log's current
-                # last line (docker's own byte counters, apt progress, ...) so
-                # the operator sees real progress instead of a frozen label.
-                if (($el - $lastBeat) -ge 6) {
-                    $line = "   ... {0} ({1}s)" -f $lbl, $el
-                    if ($ProgressHint -eq 'docker-pull') { $line += (Get-PullStats $log) }
-                    $tail = Get-TailLine $log
-                    if ($tail) { $line += " :: $tail" }
-                    Write-Host $line -ForegroundColor DarkCyan
+            # ONE updating status line for the UI (live file, every 2s): label +
+            # elapsed + the step log's current last line (docker's own byte
+            # counters, apt progress, ...). The transcript gets the same line
+            # only every 30s - a permanent record without line-spam.
+            if (($el - $lastLive) -ge 2) {
+                $live = "{0} ({1}s)" -f $lbl, $el
+                if ($ProgressHint -eq 'docker-pull') { $live += (Get-PullStats $log) }
+                $tail = Get-TailLine $log
+                if ($tail) { $live += " :: $tail" }
+                Write-LiveProgress $live
+                $lastLive = $el
+                if ($script:SpinRedirected -and ($el - $lastBeat) -ge 30) {
+                    Write-Host "   ... $live" -ForegroundColor DarkCyan
                     $lastBeat = $el
                 }
-            } else {
-                Write-SpinFrame $spin[$i % 4] $lbl $el
             }
+            if (-not $script:SpinRedirected) { Write-SpinFrame $spin[$i % 4] $lbl $el }
             Start-Sleep -Milliseconds 200
             $i++
         }
@@ -560,7 +590,8 @@ function Wait-WithSpin {
     $deadline = $t0.AddSeconds($TimeoutSec)
     $nextCheck = $t0
     $ready = $false
-    $lastBeat = -999
+    $lastBeat = 0   # intro line already printed; first log heartbeat at +30s
+    $lastLive = -999
     if ($script:SpinRedirected) { Write-Host ("   ... {0} ..." -f $Label) -ForegroundColor Cyan }
     while ((Get-Date) -lt $deadline) {
         if ((Get-Date) -ge $nextCheck) {
@@ -569,14 +600,15 @@ function Wait-WithSpin {
             $nextCheck = (Get-Date).AddSeconds($CheckEverySec)
         }
         $el = [int]((Get-Date) - $t0).TotalSeconds
-        if ($script:SpinRedirected) {
-            if (($el - $lastBeat) -ge 12) {
+        if (($el - $lastLive) -ge 2) {
+            Write-LiveProgress ("{0} ({1}s)" -f $Label, $el)
+            $lastLive = $el
+            if ($script:SpinRedirected -and ($el - $lastBeat) -ge 30) {
                 Write-Host ("   ... {0} ({1}s)" -f $Label, $el) -ForegroundColor DarkCyan
                 $lastBeat = $el
             }
-        } else {
-            Write-SpinFrame $spin[$i % 4] $Label $el
         }
+        if (-not $script:SpinRedirected) { Write-SpinFrame $spin[$i % 4] $Label $el }
         Start-Sleep -Milliseconds 250
         $i++
     }
@@ -588,3 +620,4 @@ function Wait-WithSpin {
     }
     return $ready
 }
+

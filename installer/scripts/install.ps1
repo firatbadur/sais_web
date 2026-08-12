@@ -74,6 +74,13 @@ $logDir = Join-Path $baseDir "logs"
 try { New-Item -ItemType Directory -Force -Path $logDir | Out-Null } catch {}
 try { Start-Transcript -Path (Join-Path $logDir "install.log") -Append | Out-Null } catch {}
 
+# Live-progress side channel: step children (which inherit this env var) rewrite
+# this single-line file on every beat; the progress window shows it as ONE
+# updating status line. Bypasses the transcript writer's buffering (which
+# delivers log lines only in multi-KB bursts - measured), so the UI stays live.
+$env:ENVISOFT_PROGRESS_FILE = Join-Path $logDir "install-progress.txt"
+try { Remove-Item $env:ENVISOFT_PROGRESS_FILE -Force -ErrorAction SilentlyContinue } catch {}
+
 $rebooting = $false
 $success = $false
 
