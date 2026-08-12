@@ -9,56 +9,168 @@
     <link href="{% static 'dashboard/plugins/global/plugins.bundle.css' %}" rel="stylesheet">
     <link href="{% static 'dashboard/css/style.bundle.css' %}" rel="stylesheet">
 
-    {# Tema koprusu + --mx-* degiskenleri + yetenek kapisi (2B ile ayni isimler) #}
+    {# Tema köprüsü + --mx-* değişkenleri + importmap/WebGL2 yetenek kapısı #}
     {% include "dashboard/mimic/_m3d_shell.html" %}
 
-    {# importmap ILK modulden ONCE ve dokumanda TEK olmali #}
+    {# importmap İLK modülden ÖNCE ve dokümanda TEK olmalı #}
     {% include "dashboard/mimic/_three_importmap.html" %}
 
     <style>
-        /* ===================== TIER 1 (ust serit) ===================== */
+        /* ===================== TIER 1 (üst şerit) ===================== */
         .mx-tier1 { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
             background: var(--mx-panel); border-bottom: 1px solid var(--mx-border);
             flex: 0 0 auto; z-index: 31; }
-        .mx-brand { display: flex; align-items: center; gap: 9px; font-weight: 700; color: var(--mx-head); }
+        .mx-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--mx-head);
+            white-space: nowrap; }
         .mx-brand i { color: var(--mx-accent); }
         .mx-name { background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-head);
-            border-radius: 8px; padding: 0 12px; height: 40px; min-width: 240px; font-weight: 600; }
+            border-radius: 8px; padding: 0 12px; height: 38px; min-width: 220px; font-weight: 600; }
         .mx-name:focus { outline: none; border-color: var(--mx-accent); }
         .mx-dirty { width: 8px; height: 8px; border-radius: 50%; background: var(--mx-accent); display: none; }
         body.dirty .mx-dirty { display: block; }
         .mx-spacer { flex: 1; }
-        .mx-tag { font-size: 11px; font-weight: 700; letter-spacing: .4px; padding: 3px 8px;
+        .mx-tag { font-size: 11px; font-weight: 700; letter-spacing: .4px; padding: 3px 7px;
             border-radius: 6px; background: rgba(0,158,247,.14); color: var(--mx-accent); }
 
-        /* ===================== GOVDE ===================== */
+        /* ===================== TIER 2 (ribbon) ===================== */
+        .mx-ribbon { display: flex; flex-wrap: wrap; align-items: stretch; background: var(--mx-panel);
+            border-bottom: 1px solid var(--mx-border); flex: 0 0 auto; padding: 2px 4px; z-index: 30; }
+        .r-group { display: flex; flex-direction: column; align-items: center; padding: 3px 8px 2px;
+            border-right: 1px solid var(--mx-border); }
+        .r-items { display: flex; gap: 2px; align-items: flex-start; }
+        .r-caption { font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--mx-muted);
+            margin-top: 3px; font-weight: 700; }
+        .r-tile { display: flex; flex-direction: column; align-items: center; gap: 4px;
+            min-width: 54px; max-width: 92px; padding: 6px 7px; border-radius: 7px; cursor: pointer;
+            background: transparent; border: 1px solid transparent; color: var(--mx-text); transition: .12s; }
+        .r-tile:hover { background: var(--mx-panel-2); border-color: var(--mx-border); color: var(--mx-head); }
+        .r-tile i { font-size: 24px; }
+        .r-tile > span { font-size: 10.5px; text-align: center; line-height: 1.1; white-space: nowrap; }
+        .r-tile.on { background: rgba(0,158,247,.16); border-color: var(--mx-accent); color: var(--mx-accent); }
+        .r-tile.disabled { opacity: .4; pointer-events: none; }
+        .r-tile.primary { background: var(--mx-accent); border-color: var(--mx-accent); color: #fff; }
+        .r-tile.primary:hover { background: #0089d6; color: #fff; }
+        .r-mini { background: transparent; border: 1px solid var(--mx-border); color: var(--mx-text);
+            border-radius: 6px; padding: 5px 8px; cursor: pointer; font-size: 11.5px; min-width: 34px; }
+        .r-mini:hover { background: var(--mx-panel-2); color: var(--mx-head); }
+        .r-grid3 { display: grid; grid-template-columns: repeat(3, auto); gap: 2px; }
+        .r-row { display: flex; gap: 3px; align-items: center; }
+        .r-toggle { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--mx-muted);
+            cursor: pointer; user-select: none; white-space: nowrap; }
+        .r-sel { background: var(--mx-panel-2); border: 1px solid var(--mx-border); color: var(--mx-text);
+            border-radius: 6px; padding: 4px 6px; font-size: 11.5px; }
+
+        /* ===================== GÖVDE ===================== */
         .mx-body { flex: 1; display: flex; min-height: 0; }
+        .mx-left { width: 214px; flex: 0 0 auto; background: var(--mx-panel);
+            border-right: 1px solid var(--mx-border); display: flex; flex-direction: column; min-height: 0; }
+        .mx-right { width: 296px; flex: 0 0 auto; background: var(--mx-panel);
+            border-left: 1px solid var(--mx-border); display: flex; flex-direction: column; min-height: 0; }
         .mx-center { flex: 1; position: relative; min-width: 0; background: var(--mx-cv-b); }
         #m3d-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
-        /* Ekranin altinda yuzen gorunum kontrolleri (2B'deki #view-controls dengi) */
-        .mx-viewbar { position: absolute; right: 14px; bottom: 14px; display: flex; gap: 6px;
+        .p-head { padding: 8px 11px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .4px; color: var(--mx-muted); border-bottom: 1px solid var(--mx-border); }
+        .p-scroll { flex: 1; overflow-y: auto; min-height: 0; }
+
+        /* outliner */
+        .ol-row { display: flex; align-items: center; gap: 5px; padding: 4px 8px 4px 6px;
+            cursor: pointer; font-size: 12.5px; color: var(--mx-text); border-bottom: 1px solid transparent; }
+        .ol-row:hover { background: var(--mx-panel-2); }
+        .ol-row.sel { background: rgba(0,158,247,.16); color: var(--mx-head); }
+        .ol-caret { width: 12px; text-align: center; color: var(--mx-muted); font-size: 10px; }
+        .ol-ico { font-size: 15px; color: var(--mx-accent); }
+        .ol-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ol-btn { font-size: 11px; opacity: .55; padding: 0 2px; }
+        .ol-btn:hover { opacity: 1; }
+        .ol-btn.off, .ol-btn.on { opacity: 1; }
+        .ol-empty { padding: 16px 12px; font-size: 12px; color: var(--mx-muted); line-height: 1.5; }
+
+        /* sağ panel */
+        .rp-tabs { display: flex; border-bottom: 1px solid var(--mx-border); }
+        .rp-tab { flex: 1; padding: 9px 4px; text-align: center; font-size: 11.5px; font-weight: 600;
+            color: var(--mx-muted); cursor: pointer; border-bottom: 2px solid transparent; }
+        .rp-tab:hover { color: var(--mx-head); }
+        .rp-tab.active { color: var(--mx-accent); border-bottom-color: var(--mx-accent); }
+        .rp-pane { display: none; padding: 10px 11px 20px; }
+        .rp-pane.active { display: block; }
+        .f-sec { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+            color: var(--mx-muted); margin: 13px 0 7px; padding-bottom: 4px;
+            border-bottom: 1px solid var(--mx-border); }
+        .f-sec:first-child { margin-top: 2px; }
+        .f-row { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+        .f-row label { flex: 0 0 76px; font-size: 11.5px; color: var(--mx-muted); }
+        .f-row input, .f-row select { flex: 1; min-width: 0; background: var(--mx-panel-2);
+            border: 1px solid var(--mx-border); color: var(--mx-head); border-radius: 6px;
+            padding: 5px 7px; font-size: 12px; }
+        .f-row input[type=color] { padding: 2px; height: 28px; cursor: pointer; }
+        .f-row input[type=checkbox] { flex: 0 0 auto; width: 15px; height: 15px; }
+        .f-3 { display: flex; gap: 5px; }
+        .f-3 input { flex: 1; min-width: 0; }
+        .f-hint { font-size: 11px; color: var(--mx-muted); line-height: 1.45; margin: 4px 0 8px; }
+        .f-info { font-size: 12px; color: var(--mx-head); font-weight: 600; padding: 7px 9px;
+            background: var(--mx-panel-2); border-radius: 7px; margin-bottom: 9px; }
+
+        /* seçime göre görünürlük (2B editördeki body-class deseni) */
+        .only-sel, .only-primitive, .only-label, .only-button, .only-symbol,
+        .only-anim-axis, .only-anim-range, .only-anim-colors, .only-anim-text,
+        .only-anim-speed, .only-openmimic { display: none; }
+        body.has-selection .only-sel { display: block; }
+        body.sel-primitive .only-primitive { display: block; }
+        body.sel-label .only-label { display: block; }
+        body.sel-button .only-button { display: block; }
+        body.sel-symbol .only-symbol { display: block; }
+        body.anim-axis .only-anim-axis { display: block; }
+        body.anim-range .only-anim-range { display: block; }
+        body.anim-colors .only-anim-colors { display: block; }
+        body.anim-text .only-anim-text { display: block; }
+        body.anim-speed .only-anim-speed { display: block; }
+        body.btn-openmimic .only-openmimic { display: block; }
+
+        /* yüzen görünüm çubuğu */
+        .mx-viewbar { position: absolute; right: 14px; bottom: 14px; display: flex; gap: 5px;
             background: var(--mx-panel); border: 1px solid var(--mx-border); border-radius: 10px;
-            padding: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+            padding: 5px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
         .vb { background: transparent; border: 1px solid transparent; color: var(--mx-text);
-            border-radius: 7px; height: 32px; min-width: 38px; padding: 0 9px; font-size: 12px;
+            border-radius: 7px; height: 30px; min-width: 34px; padding: 0 8px; font-size: 11.5px;
             font-weight: 600; cursor: pointer; }
         .vb:hover { background: var(--mx-hover); color: var(--mx-head); }
         .vb.on { background: rgba(0,158,247,.16); border-color: var(--mx-accent); color: var(--mx-accent); }
-        .vb-sep { width: 1px; background: var(--mx-border); margin: 2px 2px; }
+        .vb-sep { width: 1px; background: var(--mx-border); margin: 2px 1px; }
 
-        /* ===================== DURUM CUBUGU ===================== */
-        .mx-status { flex: 0 0 auto; display: flex; align-items: center; gap: 18px; padding: 5px 12px;
+        /* durum çubuğu */
+        .mx-status { flex: 0 0 auto; display: flex; align-items: center; gap: 16px; padding: 4px 12px;
             background: var(--mx-panel); border-top: 1px solid var(--mx-border);
             font-size: 11px; color: var(--mx-muted); }
         .mx-status b { color: var(--mx-text); font-weight: 600; }
-        .mx-status .warn { color: #f1b44c; }
+        .mx-status b.warn { color: #f1b44c; }
         .mx-status .hint { margin-left: auto; }
 
-        /* Masaustu-only uyarisi: TransformControls parmakla kullanilamaz; viewer
-           tablette calisir ama EDITOR icin durustce uyariyoruz. */
+        /* Aç modalı */
+        .mx-modal { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 9000;
+            display: none; align-items: center; justify-content: center; }
+        .mx-modal.show { display: flex; }
+        .mx-mbox { width: 780px; max-width: 94vw; max-height: 84vh; background: var(--mx-panel);
+            border: 1px solid var(--mx-border); border-radius: 12px; display: flex; flex-direction: column;
+            overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.45); }
+        .mx-mhead { padding: 13px 16px; border-bottom: 1px solid var(--mx-border); display: flex;
+            align-items: center; font-weight: 700; color: var(--mx-head); }
+        .mx-mbody { padding: 14px 16px; overflow-y: auto;
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+        .op-card { border: 1px solid var(--mx-border); border-radius: 9px; overflow: hidden;
+            cursor: pointer; background: var(--mx-panel-2); }
+        .op-card:hover { border-color: var(--mx-accent); }
+        .op-card img { width: 100%; height: 92px; object-fit: cover; display: block; background: #12161d; }
+        .op-noimg { height: 92px; display: flex; align-items: center; justify-content: center;
+            color: var(--mx-muted); font-weight: 700; background: #12161d; }
+        .op-meta { padding: 7px 9px; font-size: 12px; color: var(--mx-head); }
+        .op-meta span { display: block; font-size: 10.5px; color: var(--mx-muted); margin-top: 2px; }
+        .mx-x { background: transparent; border: 0; color: var(--mx-muted); font-size: 17px;
+            cursor: pointer; margin-left: auto; }
+
+        /* masaüstü-only uyarısı */
         .mx-narrow { display: none; background: rgba(241,180,76,.14); color: #f1b44c;
-            border-bottom: 1px solid var(--mx-border); padding: 7px 12px; font-size: 12px;
+            border-bottom: 1px solid var(--mx-border); padding: 6px 12px; font-size: 12px;
             font-weight: 600; align-items: center; gap: 8px; }
         @media (max-width: 1023px) { .mx-narrow { display: flex; } }
         .mx-narrow button { margin-left: auto; background: transparent; border: 0; color: inherit;
@@ -69,29 +181,127 @@
 
 <div class="mx-tier1">
     <div class="mx-brand">
-        <i class="ki-duotone ki-cube-3 fs-1"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
-        <span>{% trans "3B Mimik" %}</span>
-        <span class="mx-tag">3B</span>
+        <i class="ki-duotone ki-cube-3 fs-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+        <span>{% trans "3B Mimik" %}</span><span class="mx-tag">3B</span>
     </div>
     <input type="text" class="mx-name" id="m3d-name" autocomplete="off"
            value="{% if screen %}{{ screen.name }}{% else %}{% trans 'Adsız 3B Sahne' %}{% endif %}"
            placeholder="{% trans 'Sahne adı' %}">
-    <span class="mx-dirty" id="m3d-dirty" title="{% trans 'Kaydedilmemiş değişiklik' %}"></span>
+    <span class="mx-dirty" title="{% trans 'Kaydedilmemiş değişiklik' %}"></span>
     <div class="mx-spacer"></div>
     <button class="mx-btn" id="m3d-theme" title="{% trans 'Tema' %}">
         <i class="ki-duotone ki-night-day"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span><span class="path6"></span><span class="path7"></span><span class="path8"></span><span class="path9"></span><span class="path10"></span></i>
     </button>
     <a class="mx-btn" href="{% url 'dashboard:admin_mimic' %}">
-        <i class="ki-duotone ki-arrow-left"><span class="path1"></span><span class="path2"></span></i>
-        {% trans "Galeri" %}
+        <i class="ki-duotone ki-arrow-left"><span class="path1"></span><span class="path2"></span></i>{% trans "Galeri" %}
     </a>
     {% if screen %}
-    <a class="mx-btn btn-success" id="m3d-view" target="_blank" rel="noopener"
-       href="{% url 'dashboard:mimic_viewer' screen.pk %}">
-        <i class="ki-duotone ki-eye"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
-        {% trans "Görüntüle" %}
+    <a class="mx-btn btn-success" target="_blank" rel="noopener" href="{% url 'dashboard:mimic_viewer' screen.pk %}">
+        <i class="ki-duotone ki-eye"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>{% trans "Görüntüle" %}
     </a>
     {% endif %}
+    <button class="mx-btn btn-accent" id="m3d-save">
+        <i class="ki-duotone ki-check"><span class="path1"></span></i>{% trans "Kaydet" %}
+    </button>
+</div>
+
+<div class="mx-ribbon">
+    <div class="r-group">
+        <div class="r-items">
+            <div class="r-tile" id="m3d-new"><i class="ki-duotone ki-file-added"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Yeni" %}</span></div>
+            <div class="r-tile" id="m3d-open"><i class="ki-duotone ki-folder-up"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Aç" %}</span></div>
+            <div class="r-tile" id="m3d-saveas"><i class="ki-duotone ki-copy"></i><span>{% trans "Farklı Kaydet" %}</span></div>
+        </div>
+        <div class="r-caption">{% trans "Dosya" %}</div>
+    </div>
+
+    <div class="r-group">
+        <div class="r-items">
+            <div class="r-tile" id="m3d-undo"><i class="ki-duotone ki-arrow-circle-left"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Geri Al" %}</span></div>
+            <div class="r-tile" id="m3d-redo"><i class="ki-duotone ki-arrow-circle-right"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Yinele" %}</span></div>
+            <div class="r-tile" id="m3d-duplicate"><i class="ki-duotone ki-copy-success"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Çoğalt" %}</span></div>
+            <div class="r-tile" id="m3d-delete"><i class="ki-duotone ki-trash"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i><span>{% trans "Sil" %}</span></div>
+        </div>
+        <div class="r-caption">{% trans "Düzen" %}</div>
+    </div>
+
+    <div class="r-group">
+        <div class="r-items">
+            <div class="r-tile" data-add-prim="box"><i class="ki-duotone ki-cube-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i><span>{% trans "Kutu" %}</span></div>
+            <div class="r-tile" data-add-prim="cylinder"><i class="ki-duotone ki-abstract-8"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Silindir" %}</span></div>
+            <div class="r-tile" data-add-prim="sphere"><i class="ki-duotone ki-abstract-25"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Küre" %}</span></div>
+            <div class="r-tile" data-add-prim="cone"><i class="ki-duotone ki-abstract-14"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Koni" %}</span></div>
+            <div class="r-tile" data-add-prim="pipe"><i class="ki-duotone ki-abstract-18"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Boru" %}</span></div>
+            <div class="r-tile" data-add-prim="plane"><i class="ki-duotone ki-element-plus"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i><span>{% trans "Düzlem" %}</span></div>
+            <div class="r-tile" id="m3d-add-label"><i class="ki-duotone ki-text"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i><span>{% trans "Etiket" %}</span></div>
+            <div class="r-tile accent" id="m3d-add-button"><i class="ki-duotone ki-toggle-on-circle"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Buton" %}</span></div>
+        </div>
+        <div class="r-caption">{% trans "Ekle" %}</div>
+    </div>
+
+    <div class="r-group">
+        <div class="r-items">
+            <div class="r-tile on" id="m3d-mode-translate" title="W"><i class="ki-duotone ki-arrows-loop"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Taşı" %}</span></div>
+            <div class="r-tile" id="m3d-mode-rotate" title="E"><i class="ki-duotone ki-arrows-circle"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Döndür" %}</span></div>
+            <div class="r-tile" id="m3d-mode-scale" title="R"><i class="ki-duotone ki-maximize"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i><span>{% trans "Ölçekle" %}</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px;padding:2px 4px">
+                <button class="r-mini" id="m3d-space" title="X">{% trans "Dünya" %}</button>
+                <label class="r-toggle"><input type="checkbox" id="m3d-snap" checked>{% trans "Kilit" %}</label>
+                <select class="r-sel" id="m3d-snap-step" title="{% trans 'Kilitleme adımı (m)' %}">
+                    <option value="0.05">0.05 m</option>
+                    <option value="0.1">0.10 m</option>
+                    <option value="0.25" selected>0.25 m</option>
+                    <option value="0.5">0.50 m</option>
+                    <option value="1">1.00 m</option>
+                </select>
+            </div>
+        </div>
+        <div class="r-caption">{% trans "Dönüştür" %}</div>
+    </div>
+
+    <div class="r-group">
+        <div class="r-items">
+            <div class="r-tile" id="m3d-group"><i class="ki-duotone ki-folder"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Grupla" %}</span></div>
+            <div class="r-tile" id="m3d-ungroup"><i class="ki-duotone ki-folder-down"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Çöz" %}</span></div>
+            <div class="r-tile" id="m3d-ground" title="{% trans 'Nesneyi zemine (y=0) indir' %}"><i class="ki-duotone ki-arrow-down"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Zemine Oturt" %}</span></div>
+            <div class="r-tile" id="m3d-surface" title="{% trans 'Altındaki yüzeye yasla' %}"><i class="ki-duotone ki-exit-down"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Yüzeye Yasla" %}</span></div>
+            <div class="r-tile" id="m3d-rot180"><i class="ki-duotone ki-arrow-two-diagonals"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Yansıt" %}</span></div>
+        </div>
+        <div class="r-caption">{% trans "Yerleştir" %}</div>
+    </div>
+
+    <div class="r-group">
+        <div class="r-items">
+            <div class="r-grid3">
+                <button class="r-mini" data-align="x:min" title="{% trans 'X ekseninde sola' %}">X⇤</button>
+                <button class="r-mini" data-align="x:center" title="{% trans 'X ortala' %}">X⇔</button>
+                <button class="r-mini" data-align="x:max" title="{% trans 'X ekseninde sağa' %}">X⇥</button>
+                <button class="r-mini" data-align="y:max" title="{% trans 'Y üste (Y yukarı)' %}">Y⇧</button>
+                <button class="r-mini" data-align="y:center" title="{% trans 'Y ortala' %}">Y⇕</button>
+                <button class="r-mini" data-align="y:min" title="{% trans 'Y alta' %}">Y⇩</button>
+                <button class="r-mini" data-align="z:min" title="{% trans 'Z öne' %}">Z⇤</button>
+                <button class="r-mini" data-align="z:center" title="{% trans 'Z ortala' %}">Z⇔</button>
+                <button class="r-mini" data-align="z:max" title="{% trans 'Z arkaya' %}">Z⇥</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:3px;padding:2px 4px">
+                <button class="r-mini" data-distribute="x" title="{% trans 'X ekseninde eşit dağıt (≥3)' %}">↔ X</button>
+                <button class="r-mini" data-distribute="z" title="{% trans 'Z ekseninde eşit dağıt (≥3)' %}">↔ Z</button>
+                <button class="r-mini" data-distribute="y" title="{% trans 'Y ekseninde eşit dağıt (≥3)' %}">↔ Y</button>
+            </div>
+        </div>
+        <div class="r-caption">{% trans "Hizala & Dağıt" %}</div>
+    </div>
+
+    <div class="r-group">
+        <div class="r-items">
+            <div class="r-tile" id="m3d-export-png"><i class="ki-duotone ki-picture"><span class="path1"></span><span class="path2"></span></i><span>PNG ×2</span></div>
+            <div class="r-tile" id="m3d-export-glb"><i class="ki-duotone ki-cube-3"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i><span>GLB</span></div>
+            <div class="r-tile" id="m3d-export-json"><i class="ki-duotone ki-file-down"><span class="path1"></span><span class="path2"></span></i><span>JSON</span></div>
+            <div class="r-tile" id="m3d-import-json"><i class="ki-duotone ki-file-up"><span class="path1"></span><span class="path2"></span></i><span>{% trans "İçe Aktar" %}</span></div>
+            <input type="file" id="m3d-file-json" accept=".json" style="display:none">
+        </div>
+        <div class="r-caption">{% trans "Dışa / İçe Aktar" %}</div>
+    </div>
 </div>
 
 <div class="mx-narrow">
@@ -101,33 +311,265 @@
 </div>
 
 <div class="mx-body">
+    <!-- SOL: sahne ağacı (P4'te sembol kütüphanesi bunun üstüne gelir) -->
+    <div class="mx-left">
+        <div class="p-head">{% trans "Sahne Ağacı" %}</div>
+        <div class="p-scroll" id="m3d-outliner"></div>
+    </div>
+
+    <!-- ORTA: tuval -->
     <div class="mx-center">
         <canvas id="m3d-canvas"></canvas>
         <div class="mx-viewbar">
-            <button class="vb" data-view="iso" title="{% trans 'İzometrik' %}">{% trans "İzo" %}</button>
-            <button class="vb" data-view="front" title="{% trans 'Ön' %}">{% trans "Ön" %}</button>
-            <button class="vb" data-view="back" title="{% trans 'Arka' %}">{% trans "Arka" %}</button>
-            <button class="vb" data-view="left" title="{% trans 'Sol' %}">{% trans "Sol" %}</button>
-            <button class="vb" data-view="right" title="{% trans 'Sağ' %}">{% trans "Sağ" %}</button>
-            <button class="vb" data-view="top" title="{% trans 'Üst' %}">{% trans "Üst" %}</button>
+            <button class="vb" data-view="iso">{% trans "İzo" %}</button>
+            <button class="vb" data-view="front">{% trans "Ön" %}</button>
+            <button class="vb" data-view="back">{% trans "Arka" %}</button>
+            <button class="vb" data-view="left">{% trans "Sol" %}</button>
+            <button class="vb" data-view="right">{% trans "Sağ" %}</button>
+            <button class="vb" data-view="top">{% trans "Üst" %}</button>
             <div class="vb-sep"></div>
-            <button class="vb" id="m3d-toggle-grid" title="{% trans 'Izgara (G)' %}">
-                <i class="ki-duotone ki-element-11 fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i>
-            </button>
-            <button class="vb" id="m3d-toggle-spin" title="{% trans 'Sürekli render testi' %}">
-                <i class="ki-duotone ki-arrows-circle fs-4"><span class="path1"></span><span class="path2"></span></i>
-            </button>
+            <button class="vb" id="m3d-fit" title="{% trans 'Tümünü sığdır' %}">⤢</button>
+            <button class="vb" id="m3d-fit-sel" title="{% trans 'Seçime sığdır (F)' %}">⊙</button>
+            <button class="vb on" id="m3d-toggle-grid" title="{% trans 'Izgara (G)' %}">#</button>
+            <button class="vb" id="m3d-lowfx" title="{% trans 'Düşük efekt modu (L)' %}">⚡</button>
+        </div>
+    </div>
+
+    <!-- SAĞ: özellik / animasyon / sahne -->
+    <div class="mx-right">
+        <div class="rp-tabs">
+            <div class="rp-tab active" data-pane="rp-props">{% trans "Özellik" %}</div>
+            <div class="rp-tab" data-pane="rp-anim">{% trans "Animasyon" %}</div>
+            <div class="rp-tab" data-pane="rp-scene">{% trans "Sahne" %}</div>
+        </div>
+        <div class="p-scroll">
+            <!-- ÖZELLİK -->
+            <div class="rp-pane active" id="rp-props">
+                <div class="f-info" id="ip-info">{% trans "Seçim yok" %}</div>
+                <div class="only-sel">
+                    <div class="f-sec">{% trans "Kimlik" %}</div>
+                    <div class="f-row"><label>{% trans "Ad" %}</label><input type="text" id="ip-name"></div>
+
+                    <div class="f-sec">{% trans "Konum (m)" %}</div>
+                    <div class="f-3">
+                        <input type="number" id="ip-x" step="0.05" title="X">
+                        <input type="number" id="ip-y" step="0.05" title="Y">
+                        <input type="number" id="ip-z" step="0.05" title="Z">
+                    </div>
+                    <div class="f-sec">{% trans "Dönüş (°)" %}</div>
+                    <div class="f-3">
+                        <input type="number" id="ip-rx" step="5" title="X">
+                        <input type="number" id="ip-ry" step="5" title="Y">
+                        <input type="number" id="ip-rz" step="5" title="Z">
+                    </div>
+                    <div class="f-sec">{% trans "Ölçek" %}</div>
+                    <div class="f-3">
+                        <input type="number" id="ip-sx" step="0.05" title="X">
+                        <input type="number" id="ip-sy" step="0.05" title="Y">
+                        <input type="number" id="ip-sz" step="0.05" title="Z">
+                    </div>
+                </div>
+
+                <div class="only-primitive">
+                    <div class="f-sec">{% trans "Geometri" %}</div>
+                    <div class="f-row"><label>{% trans "Şekil" %}</label>
+                        <select id="ip-prim">
+                            <option value="box">{% trans "Kutu" %}</option>
+                            <option value="sphere">{% trans "Küre" %}</option>
+                            <option value="cylinder">{% trans "Silindir" %}</option>
+                            <option value="cone">{% trans "Koni" %}</option>
+                            <option value="torus">{% trans "Halka" %}</option>
+                            <option value="plane">{% trans "Düzlem" %}</option>
+                            <option value="pipe">{% trans "Boru" %}</option>
+                            <option value="arrow">{% trans "Ok" %}</option>
+                        </select></div>
+                    <div class="f-row"><label>{% trans "Genişlik" %}</label><input type="number" id="ig-w" step="0.1"></div>
+                    <div class="f-row"><label>{% trans "Yükseklik" %}</label><input type="number" id="ig-h" step="0.1"></div>
+                    <div class="f-row"><label>{% trans "Derinlik" %}</label><input type="number" id="ig-d" step="0.1"></div>
+                    <div class="f-row"><label>{% trans "Yarıçap" %}</label><input type="number" id="ig-r" step="0.05"></div>
+                    <div class="f-row"><label>{% trans "Uzunluk" %}</label><input type="number" id="ig-len" step="0.1"></div>
+                    <div class="f-row"><label>{% trans "Segment" %}</label><input type="number" id="ig-seg" step="2" min="4"></div>
+                </div>
+
+                <div class="only-symbol">
+                    <div class="f-sec">{% trans "Sembol" %}</div>
+                    <div class="f-row"><label>{% trans "Anahtar" %}</label><input type="text" id="ip-symbolkey" readonly></div>
+                </div>
+
+                <div class="only-primitive only-symbol" id="ip-mat-sec">
+                    <div class="f-sec">{% trans "Malzeme" %}</div>
+                    <div class="f-row"><label>{% trans "Renk" %}</label><input type="color" id="im-color"></div>
+                    <div class="f-row"><label>{% trans "Metaliklik" %}</label><input type="range" id="im-metal" min="0" max="1" step="0.05"></div>
+                    <div class="f-row"><label>{% trans "Pürüz" %}</label><input type="range" id="im-rough" min="0" max="1" step="0.05"></div>
+                    <div class="f-row"><label>{% trans "Opaklık" %}</label><input type="range" id="im-opacity" min="0.05" max="1" step="0.05"></div>
+                    <div class="f-row"><label>{% trans "Tel kafes" %}</label><input type="checkbox" id="im-wire"></div>
+                </div>
+
+                <div class="only-label">
+                    <div class="f-sec">{% trans "Etiket" %}</div>
+                    <div class="f-row"><label>{% trans "Metin" %}</label><input type="text" id="il-text"></div>
+                    <div class="f-row"><label>{% trans "Punto" %}</label><input type="number" id="il-size" step="8"></div>
+                    <div class="f-row"><label>{% trans "Yazı rengi" %}</label><input type="color" id="il-color"></div>
+                    <div class="f-row"><label>{% trans "Zemin" %}</label><input type="color" id="il-bg"></div>
+                    <div class="f-row"><label>{% trans "Zemin op." %}</label><input type="range" id="il-bgop" min="0" max="1" step="0.05"></div>
+                    <div class="f-row"><label>{% trans "Genişlik" %}</label><input type="number" id="il-w" step="0.1"></div>
+                    <div class="f-row"><label>{% trans "Yükseklik" %}</label><input type="number" id="il-h" step="0.05"></div>
+                    <div class="f-row"><label>{% trans "Kameraya dön" %}</label><input type="checkbox" id="il-billboard"></div>
+                    <div class="f-hint">{% trans "Değer göstergesi için Animasyon sekmesinde etiket seçin ve animasyonu “metin” yapın." %}</div>
+                </div>
+
+                <div class="only-button">
+                    <div class="f-sec">{% trans "Buton" %}</div>
+                    <div class="f-row"><label>{% trans "Yazı" %}</label><input type="text" id="ib-label"></div>
+                    <div class="f-row"><label>{% trans "Zemin" %}</label><input type="color" id="ib-bg"></div>
+                    <div class="f-row"><label>{% trans "Yazı rengi" %}</label><input type="color" id="ib-fg"></div>
+                    <div class="f-row"><label>{% trans "Genişlik" %}</label><input type="number" id="ib-w" step="0.1"></div>
+                    <div class="f-row"><label>{% trans "Yükseklik" %}</label><input type="number" id="ib-h" step="0.05"></div>
+                    <div class="f-row"><label>{% trans "Davranış" %}</label>
+                        <select id="ib-action">
+                            <option value="toggle">{% trans "Aç/Kapat (toggle)" %}</option>
+                            <option value="momentary">{% trans "Basılı tut (momentary)" %}</option>
+                            <option value="set">{% trans "Değer ata" %}</option>
+                            <option value="openMimic">{% trans "Başka Mimik Aç" %}</option>
+                        </select></div>
+                    <div class="f-row"><label>{% trans "Atanan değer" %}</label><input type="number" id="ib-setvalue"></div>
+                    <div class="only-openmimic">
+                        <div class="f-row"><label>{% trans "Hedef mimik" %}</label><select id="ib-link-target"></select></div>
+                        <div class="f-row"><label>{% trans "Açılış" %}</label>
+                            <select id="ib-link-mode">
+                                <option value="modal">{% trans "Sayfa içi pencere" %}</option>
+                                <option value="newtab">{% trans "Yeni sekme" %}</option>
+                                <option value="same">{% trans "Aynı sekme" %}</option>
+                            </select></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ANİMASYON -->
+            <div class="rp-pane" id="rp-anim">
+                <div class="f-hint">{% trans "Etiket bağlama şeması 2B mimiklerle birebir aynıdır; aynı sensör etiketleri kullanılır." %}</div>
+                <div class="f-sec">{% trans "Etiket Bağlama" %}</div>
+                <div class="f-row"><label>{% trans "Etiket" %}</label>
+                    <input type="text" id="b-tag" list="m3d-tag-options" autocomplete="off"></div>
+                <datalist id="m3d-tag-options"></datalist>
+                <div class="f-row"><label>{% trans "İfade" %}</label><input type="text" id="b-expr"
+                    placeholder="Pompa1 || Pompa2"></div>
+                <div class="f-row"><label>{% trans "Animasyon" %}</label>
+                    <select id="b-anim">
+                        <option value="auto">{% trans "auto (sembole özel)" %}</option>
+                        <option value="none">{% trans "yok" %}</option>
+                        <option value="colorState">colorState</option>
+                        <option value="fillThreshold">fillThreshold</option>
+                        <option value="blink">blink</option>
+                        <option value="rotate">rotate</option>
+                        <option value="level">level</option>
+                        <option value="visibility">visibility</option>
+                        <option value="opacity">opacity</option>
+                        <option value="moveX">moveX</option>
+                        <option value="moveY">moveY</option>
+                        <option value="moveZ">moveZ (3B)</option>
+                        <option value="rotateAxis">rotateAxis (3B)</option>
+                        <option value="scaleAxis">scaleAxis (3B)</option>
+                        <option value="emissive">emissive (3B)</option>
+                        <option value="tilt">tilt (3B)</option>
+                        <option value="pathFollow">pathFollow (3B)</option>
+                        <option value="cameraTour">cameraTour (3B)</option>
+                        <option value="text">text</option>
+                    </select></div>
+                <div class="only-anim-axis">
+                    <div class="f-row"><label>{% trans "Eksen" %}</label>
+                        <select id="b-axis"><option value="x">X</option><option value="y" selected>Y</option><option value="z">Z</option></select></div>
+                </div>
+                <div class="f-sec">{% trans "Parametreler" %}</div>
+                <div class="only-anim-range">
+                    <div class="f-row"><label>{% trans "Min" %}</label><input type="number" id="b-min" step="0.1"></div>
+                    <div class="f-row"><label>{% trans "Maks" %}</label><input type="number" id="b-max" step="0.1"></div>
+                    <div class="f-row"><label>{% trans "Mesafe (m)" %}</label><input type="number" id="b-moverange" step="0.1"></div>
+                </div>
+                <div class="f-row"><label>{% trans "Eşik" %}</label><input type="number" id="b-threshold" step="0.5"></div>
+                <div class="only-anim-speed">
+                    <div class="f-row"><label>{% trans "Hız" %}</label><input type="number" id="b-speed" step="0.1"></div>
+                </div>
+                <div class="only-anim-colors">
+                    <div class="f-row"><label>{% trans "Aktif renk" %}</label><input type="color" id="b-oncolor"></div>
+                    <div class="f-row"><label>{% trans "Pasif renk" %}</label><input type="color" id="b-offcolor"></div>
+                </div>
+                <div class="only-anim-text">
+                    <div class="f-row"><label>{% trans "Birim" %}</label><input type="text" id="b-unit"></div>
+                    <div class="f-row"><label>{% trans "Ondalık" %}</label><input type="number" id="b-decimals" step="1" min="0" max="6"></div>
+                    <div class="f-row"><label>{% trans "Birimi göster" %}</label><input type="checkbox" id="b-showunit"></div>
+                </div>
+                <div class="f-sec">{% trans "Etkileşim Menüsü" %}</div>
+                <div class="f-hint">{% trans "Görüntüleyicide bu nesneye tıklanınca açılacak menü (varsayılan kapalı)." %}</div>
+                <div class="f-row"><label>{% trans "Etkin" %}</label><input type="checkbox" id="b-menu-enabled"></div>
+                <div class="f-row"><label>{% trans "Historik" %}</label><input type="checkbox" id="b-menu-historic"></div>
+                <div class="f-row"><label>{% trans "Veri raporu" %}</label><input type="checkbox" id="b-menu-report"></div>
+                <div class="f-row"><label>{% trans "Günlük özet" %}</label><input type="checkbox" id="b-menu-daily"></div>
+                <div class="f-row"><label>{% trans "Kontrol" %}</label><input type="checkbox" id="b-menu-control"></div>
+            </div>
+
+            <!-- SAHNE -->
+            <div class="rp-pane" id="rp-scene">
+                <div class="f-sec">{% trans "Arka Plan" %}</div>
+                <div class="f-row"><label>{% trans "Mod" %}</label>
+                    <select id="sc-bg-mode">
+                        <option value="gradient">{% trans "Gradyan" %}</option>
+                        <option value="solid">{% trans "Düz renk" %}</option>
+                    </select></div>
+                <div class="f-row"><label>{% trans "Üst" %}</label><input type="color" id="sc-bg-top"></div>
+                <div class="f-row"><label>{% trans "Alt" %}</label><input type="color" id="sc-bg-bottom"></div>
+                <div class="f-row"><label>{% trans "Düz renk" %}</label><input type="color" id="sc-bg-color"></div>
+                <div class="f-row"><label>{% trans "Sis" %}</label><input type="checkbox" id="sc-fog"></div>
+
+                <div class="f-sec">{% trans "Izgara & Zemin" %}</div>
+                <div class="f-row"><label>{% trans "Izgara" %}</label><input type="checkbox" id="sc-grid-visible"></div>
+                <div class="f-row"><label>{% trans "Boyut (m)" %}</label><input type="number" id="sc-grid-size" step="4" min="4" max="200"></div>
+                <div class="f-row"><label>{% trans "Zemin" %}</label><input type="checkbox" id="sc-ground-visible"></div>
+                <div class="f-row"><label>{% trans "Zemin rengi" %}</label><input type="color" id="sc-ground-color"></div>
+
+                <div class="f-sec">{% trans "Işık & Gölge" %}</div>
+                <div class="f-row"><label>{% trans "Ortam ışığı" %}</label><input type="range" id="sc-amb" min="0" max="2" step="0.05"></div>
+                <div class="f-row"><label>{% trans "Yönlü ışık" %}</label><input type="range" id="sc-dir" min="0" max="3" step="0.05"></div>
+                <div class="f-row"><label>{% trans "Pozlama" %}</label><input type="range" id="sc-exposure" min="0.2" max="2" step="0.05"></div>
+                <div class="f-row"><label>{% trans "Gölge" %}</label>
+                    <select id="sc-shadow-quality">
+                        <option value="off">{% trans "Kapalı" %}</option>
+                        <option value="low">{% trans "Düşük" %}</option>
+                        <option value="medium">{% trans "Orta" %}</option>
+                        <option value="high">{% trans "Yüksek" %}</option>
+                    </select></div>
+                <div class="f-row"><label>{% trans "Ortam haritası" %}</label>
+                    <select id="sc-env">
+                        <option value="room">{% trans "Oda (önerilen)" %}</option>
+                        <option value="none">{% trans "Yok" %}</option>
+                    </select></div>
+                <div class="f-hint">{% trans "Gölge kalitesi ve düşük efekt modu saha bilgisayarlarındaki performansı doğrudan etkiler. Sahne ayarları tasarımın parçasıdır — açık/koyu temada aynı görünür." %}</div>
+
+                <div class="f-sec">{% trans "Açıklama" %}</div>
+                <div class="f-row"><input type="text" id="m3d-desc" placeholder="{% trans 'Kısa açıklama' %}"
+                    value="{% if screen %}{{ screen.description }}{% endif %}"></div>
+            </div>
         </div>
     </div>
 </div>
 
 <div class="mx-status">
     <span>{% trans "Nesne" %}: <b id="m3d-count">0</b></span>
+    <span>{% trans "Seçili" %}: <b id="m3d-sel">0</b></span>
+    <span>{% trans "Geri al" %}: <b id="m3d-undo-depth">0</b></span>
+    <span>{% trans "Belge" %}: <b id="m3d-bytes">0 KB</b></span>
     <span>FPS: <b id="m3d-fps">0</b></span>
-    <span title="{% trans 'Sızıntı kanaryası: nesne sayısı sabitken artmamalı' %}">
-        {% trans "Geometri/Doku" %}: <b id="m3d-geo">0 / 0</b></span>
-    <span>{% trans "Çizim çağrısı" %}: <b id="m3d-calls">0</b></span>
-    <span class="hint">{% trans "Sol tuş: döndür · Orta tuş / sağ tuş: kaydır · Tekerlek: yakınlaştır" %}</span>
+    <span title="{% trans 'Sızıntı kanaryası: nesne sayısı sabitken artmamalı' %}">{% trans "Geo/Doku" %}: <b id="m3d-geo">0 / 0</b></span>
+    <span>{% trans "Çizim" %}: <b id="m3d-calls">0</b></span>
+    <span class="hint">{% trans "W/E/R taşı·döndür·ölçekle · X dünya/yerel · F seçime sığdır · G ızgara · Del sil" %}</span>
+</div>
+
+<!-- Aç modalı -->
+<div class="mx-modal" id="m3d-open-modal">
+    <div class="mx-mbox">
+        <div class="mx-mhead">{% trans "3B Sahne Aç" %}<button class="mx-x" id="m3d-open-close">✕</button></div>
+        <div class="mx-mbody" id="m3d-open-list"></div>
+    </div>
 </div>
 
 {{ screen.data|json_script:"m3d-initial-data" }}
@@ -155,6 +597,16 @@
         }
     };
 </script>
+{% comment %}
+mimic_core.js: 2B+3B paylaşılan çekirdek (ifade motoru, autoKind, buton
+semantiği). ESM adaptörü (mimic/core) bunu window.MimicCore'dan okuduğu için
+modülden ÖNCE ve klasik script olarak yüklenir.
+
+NOT: Django'da `{# ... #}` yorumu TEK SATIRLIKTIR; çok satırlı yazılırsa
+sonraki satırlar HTML'e METİN olarak sızar (sayfanın altında görünür).
+Çok satırlı yorum için `{% comment %}` kullanılmalı.
+{% endcomment %}
+<script src="{% static 'dashboard/js/mimic_core.js' %}"></script>
 <script type="module" src="{% static 'dashboard/js/mimic3d/boot.js' %}"></script>
 </body>
 </html>

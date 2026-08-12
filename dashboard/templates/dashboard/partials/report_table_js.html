@@ -1,6 +1,13 @@
 {% load i18n %}
-{# Ortak rapor JS: flatpickr (TR) + DataTables (export) + FOUC reveal.
-   Parametre: order_col (varsayılan 0) — başlangıç sıralama kolonu. #}
+{% comment %}
+Ortak rapor JS: flatpickr (TR) + DataTables (export) + FOUC reveal.
+Parametre: order_col (varsayılan 0) — başlangıç sıralama kolonu.
+
+NOT: Django'da `{# ... #}` yorumu TEK SATIRLIKTIR (lexer regex'i re.DOTALL
+DEĞİL) — çok satırlı yazılırsa yorumun tamamı sayfaya METİN olarak sızar.
+Bu blok tam olarak o yüzden `{% comment %}`e çevrildi (6 rapor/log sayfasında
+"Ortak rapor JS: ... #}" metni görünüyordu). Çok satırlı yorum = {% comment %}.
+{% endcomment %}
 <script>
 (function () {
     const flatpickrTR = {

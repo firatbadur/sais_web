@@ -128,8 +128,7 @@
     <div id="v-wrap"><canvas id="v-canvas"></canvas></div>
 </div>
 
-{# Tıklama menüsü + kontrol diyalogu + rapor modalı + mimik iframe modalı —
-   3B viewer ile PAYLAŞILAN DOM (davranış: mimic_menu_ui.js). #}
+{# 3B viewer ile PAYLAŞILAN etkileşim DOM'u (davranış: mimic_menu_ui.js) #}
 {% include "dashboard/mimic/_menu_ui.html" %}
 
 {{ screen.data|json_script:"v-data" }}

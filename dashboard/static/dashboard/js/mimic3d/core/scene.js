@@ -173,10 +173,24 @@ export function makeStage(canvas, opts) {
 
     // --- ortam haritasi (PMREM) ---
     // `metalness` degerlerinin firca celigi gibi okunmasini SAGLAYAN sey budur;
-    // yoksa metaller siyah cikar. Bir kez uretilir, generator hemen dispose.
-    let envTexture = null;
+    // yoksa metaller siyah cikar.
+    //
+    // IKI TUZAK (olcumle yakalandi):
+    //  1. `pmrem.fromScene()` bir **WebGLRenderTarget** dondurur. Yalniz
+    //     `.texture.dispose()` cagirmak render target'in kendisini (framebuffer +
+    //     derinlik tamponu) SERBEST BIRAKMAZ -> her yeniden uretimde
+    //     `renderer.info.memory.textures` +1 birikir. Render target'in kendisi
+    //     dispose edilmeli.
+    //  2. PMREM uretimi PAHALIDIR (bir sahne render eder). Her sahne-ayari
+    //     degisikliginde (renk kaydiricisi, izgara toggle'i, HER UNDO) yeniden
+    //     uretmek gereksiz; preset/yogunluk degismediyse atlanir.
+    let envRT = null;
+    let envKey = null;
     function buildEnvironment(preset, intensity) {
-        if (envTexture) { envTexture.dispose(); envTexture = null; }
+        const key = String(preset) + "|" + String(intensity);
+        if (envKey === key) return;                     // degismedi -> yeniden uretme
+        envKey = key;
+        if (envRT) { envRT.dispose(); envRT = null; }
         if (preset === "none") {
             scene.environment = null;
             scene.environmentIntensity = 1;
@@ -184,10 +198,10 @@ export function makeStage(canvas, opts) {
         }
         const pmrem = new THREE.PMREMGenerator(renderer);
         const room = new RoomEnvironment();
-        envTexture = pmrem.fromScene(room, 0.04).texture;
+        envRT = pmrem.fromScene(room, 0.04);
         room.dispose();
         pmrem.dispose();
-        scene.environment = envTexture;
+        scene.environment = envRT.texture;
         scene.environmentIntensity = intensity == null ? 0.55 : intensity;
     }
 
@@ -359,7 +373,7 @@ export function makeStage(canvas, opts) {
 
     stage.dispose = function () {
         controls.dispose();
-        if (envTexture) { envTexture.dispose(); envTexture = null; }
+        if (envRT) { envRT.dispose(); envRT = null; }
         sky.geometry.dispose();
         sky.material.dispose();
         groundGeo.dispose();
