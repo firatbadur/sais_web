@@ -1,44 +1,201 @@
-{% load static i18n %}<!DOCTYPE html>
+{% load static i18n dashboard_extras %}<!DOCTYPE html>
 <html lang="{{ LANGUAGE_CODE|default:'tr' }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ screen.name }} · {% trans "3B Mimik" %}</title>
     <link rel="shortcut icon" href="{% static 'images/logo/icon.png' %}">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700">
+    <link href="{% static 'dashboard/plugins/custom/datatables/datatables.bundle.css' %}" rel="stylesheet">
     <link href="{% static 'dashboard/plugins/global/plugins.bundle.css' %}" rel="stylesheet">
     <link href="{% static 'dashboard/css/style.bundle.css' %}" rel="stylesheet">
+
+    {# Tema köprüsü + --mx-* değişkenleri + importmap/WebGL2 yetenek kapısı #}
     {% include "dashboard/mimic/_m3d_shell.html" %}
+    {# importmap İLK modülden ÖNCE ve dokümanda TEK #}
+    {% include "dashboard/mimic/_three_importmap.html" %}
+
     <style>
-        .stub { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
-        .stub .box { max-width: 620px; text-align: center; }
-        .stub h1 { color: var(--mx-head); font-size: 22px; margin: 16px 0 10px; }
-        .stub p { font-size: 14px; line-height: 1.65; }
-        .stub .meta { color: var(--mx-muted); font-size: 12px; margin-top: 18px;
-            font-family: ui-monospace, Menlo, Consolas, monospace; }
+        /* ===================== ÜST BAR ===================== */
+        .v-top { display: flex; align-items: center; gap: 9px; padding: 7px 13px;
+            background: var(--mx-panel); border-bottom: 1px solid var(--mx-border); flex: 0 0 auto;
+            flex-wrap: wrap; }
+        .v-top .name { font-weight: 700; color: var(--mx-head); }
+        .v-top .tag3d { font-size: 10.5px; font-weight: 700; letter-spacing: .4px; padding: 2px 6px;
+            border-radius: 5px; background: rgba(0,158,247,.14); color: var(--mx-accent); }
+        .v-top .desc { color: var(--mx-muted); font-size: 12px; }
+        .v-spacer { flex: 1; }
+        .v-btn { background: var(--mx-bg); border: 1px solid var(--mx-border); color: var(--mx-text);
+            border-radius: 6px; padding: 6px 11px; font-size: 12.5px; cursor: pointer;
+            display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+        .v-btn:hover { background: var(--mx-border); color: var(--mx-head); }
+
+        /* Canlı veri durum göstergesi (2B viewer ile aynı görsel dil) */
+        .v-ind { display: inline-flex; align-items: center; gap: 7px; font-size: 12px;
+            color: var(--mx-muted); padding: 5px 11px; border: 1px solid var(--mx-border);
+            border-radius: 20px; background: var(--mx-bg); }
+        .v-ind .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--mx-muted); }
+        .v-ind.ok { color: #2fb574; border-color: rgba(47,181,116,.4); }
+        .v-ind.ok .dot { background: #2fb574; animation: vpulse 1.8s infinite; }
+        .v-ind.err { color: #e4544c; border-color: rgba(228,84,76,.4); }
+        .v-ind.err .dot { background: #e4544c; }
+        @keyframes vpulse {
+            0% { box-shadow: 0 0 0 0 rgba(47,181,116,.55); }
+            70% { box-shadow: 0 0 0 7px rgba(47,181,116,0); }
+            100% { box-shadow: 0 0 0 0 rgba(47,181,116,0); }
+        }
+        .v-clock { font-size: 13px; font-weight: 600; color: var(--mx-head);
+            font-variant-numeric: tabular-nums; min-width: 64px; text-align: center; }
+        .v-vps { display: flex; gap: 5px; flex-wrap: wrap; }
+
+        /* ===================== GÖVDE ===================== */
+        .v-body { flex: 1; position: relative; min-height: 0; }
+        #v3d-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+        #v3d-warn { display: none; position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+            background: rgba(228,84,76,.16); color: #e4544c; border: 1px solid rgba(228,84,76,.4);
+            padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; z-index: 20; }
+
+        /* ===== Paylaşılan etkileşim DOM'unun stilleri (2B viewer ile aynı) ===== */
+        .vm-menu { position: fixed; z-index: 9000; min-width: 220px; background: var(--mx-panel);
+            border: 1px solid var(--mx-border); border-radius: 9px; box-shadow: 0 12px 34px rgba(0,0,0,.32);
+            padding: 6px; display: none; }
+        .vm-menu.show { display: block; }
+        .vm-title { font-size: 11px; font-weight: 700; color: var(--mx-head); padding: 6px 9px 4px; }
+        .vm-title small { display: block; font-weight: 500; color: var(--mx-muted); margin-top: 2px; }
+        .vm-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 6px;
+            cursor: pointer; color: var(--mx-text); font-size: 13px; }
+        .vm-item:hover { background: var(--mx-bg); color: var(--mx-head); }
+        .vm-item .ic { width: 16px; text-align: center; opacity: .8; }
+        .vm-sep { height: 1px; background: var(--mx-border); margin: 5px 4px; }
+        .vm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 9100;
+            display: none; align-items: center; justify-content: center; }
+        .vm-overlay.show { display: flex; }
+        .vm-dialog { width: 340px; max-width: 92vw; background: var(--mx-panel);
+            border: 1px solid var(--mx-border); border-radius: 12px;
+            box-shadow: 0 20px 50px rgba(0,0,0,.4); overflow: hidden; }
+        .vm-dhead { padding: 14px 16px; border-bottom: 1px solid var(--mx-border);
+            font-weight: 700; color: var(--mx-head); }
+        .vm-dhead small { display: block; font-weight: 500; font-size: 12px; color: var(--mx-muted);
+            margin-top: 3px; }
+        .vm-dbody { padding: 16px; }
+        .vm-cur { font-size: 13px; color: var(--mx-muted); margin-bottom: 14px; }
+        .vm-cur b { color: var(--mx-head); font-size: 15px; }
+        .vm-btns { display: flex; gap: 8px; }
+        .vm-cbtn { flex: 1; padding: 11px; border-radius: 8px; border: 1px solid var(--mx-border);
+            cursor: pointer; font-size: 13px; font-weight: 600; color: #fff; }
+        .vm-cbtn.on { background: #2fb574; border-color: #2fb574; }
+        .vm-cbtn.off { background: #e4544c; border-color: #e4544c; }
+        .vm-cbtn:disabled { opacity: .5; cursor: not-allowed; }
+        .vm-setrow { display: flex; gap: 8px; margin-top: 12px; }
+        .vm-setrow input { flex: 1; padding: 9px 11px; border-radius: 8px;
+            border: 1px solid var(--mx-border); background: var(--mx-bg); color: var(--mx-text);
+            font-size: 13px; }
+        .vm-setrow button { padding: 9px 14px; border-radius: 8px; border: 1px solid var(--mx-accent);
+            background: var(--mx-accent); color: #fff; font-weight: 600; cursor: pointer; }
+        .vm-dfoot { padding: 12px 16px; border-top: 1px solid var(--mx-border); display: flex;
+            justify-content: space-between; align-items: center; gap: 10px; }
+        .vm-note { font-size: 12px; color: var(--mx-muted); }
+        .vm-note.ok { color: #2fb574; } .vm-note.err { color: #e4544c; }
+        .vm-close { background: var(--mx-bg); border: 1px solid var(--mx-border); color: var(--mx-text);
+            border-radius: 7px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+        .vm-rdialog { width: 1000px; max-width: 96vw; max-height: 90vh; background: var(--mx-panel);
+            border: 1px solid var(--mx-border); border-radius: 12px;
+            box-shadow: 0 20px 50px rgba(0,0,0,.45); display: flex; flex-direction: column;
+            overflow: hidden; }
+        .vm-rhead { padding: 13px 16px; border-bottom: 1px solid var(--mx-border); display: flex;
+            align-items: center; gap: 10px; }
+        .vm-rhead .t { font-weight: 700; color: var(--mx-head); }
+        .vm-rhead .t small { font-weight: 500; color: var(--mx-muted); margin-left: 6px; }
+        .vm-rbody { padding: 14px 16px; overflow: auto; }
+        .vm-rbody .dt-buttons { margin-bottom: 10px; display: flex; align-items: center;
+            flex-wrap: wrap; gap: 6px; }
+        .vm-rbody .dt-chartbtn { margin-left: auto; }
+        .vm-mdialog { width: 1100px; max-width: 96vw; height: 82vh; background: var(--mx-panel);
+            border: 1px solid var(--mx-border); border-radius: 12px; display: flex;
+            flex-direction: column; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.45); }
+        .vm-mhead { padding: 11px 15px; border-bottom: 1px solid var(--mx-border); display: flex;
+            align-items: center; gap: 9px; font-weight: 700; color: var(--mx-head); }
+        .vm-mhead i { color: var(--mx-accent); }
+        .vm-miframe { flex: 1; width: 100%; border: 0; background: var(--mx-bg); }
+        .vm-x { background: transparent; border: 0; color: var(--mx-muted); font-size: 17px;
+            cursor: pointer; }
+
+        /* Dokunmatik: menü ve diyaloglar küçük ekranda tam genişlik */
+        @media (max-width: 767px) {
+            .vm-menu { min-width: 0; left: 8px !important; right: 8px; width: auto; }
+            .v-top { gap: 6px; padding: 6px 9px; }
+            .v-top .desc, .v-vps { display: none; }
+        }
     </style>
 </head>
 <body>
-<div class="stub">
-    <div class="box">
-        <i class="ki-duotone ki-cube-3" style="font-size:64px;color:var(--mx-accent)">
-            <span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
-        <h1>{{ screen.name }}</h1>
-        <p>{% trans "3B canlı görüntüleyici kuruluyor. Bu ekran şu an yalnızca tür-bazlı şablon yönlendirmesini doğrulayan bir iskelet." %}</p>
-        <div class="meta">kind=3d · screen #{{ screen.pk }}</div>
-        <div class="d-flex gap-2 justify-content-center mt-6">
-            <a class="mx-btn" href="{% url 'dashboard:admin_mimic' %}">
-                <i class="ki-duotone ki-arrow-left"><span class="path1"></span><span class="path2"></span></i>
-                {% trans "Galeriye Dön" %}
-            </a>
-            {% if user.is_superuser or user.rol == 1 %}
-            <a class="mx-btn btn-accent" href="{% url 'dashboard:mimic3d_editor_edit' screen.pk %}">
-                <i class="ki-duotone ki-pencil"><span class="path1"></span><span class="path2"></span></i>
-                {% trans "Düzenle" %}
-            </a>
-            {% endif %}
-        </div>
-    </div>
+
+<div class="v-top">
+    <span class="name">{{ screen.name }}</span>
+    <span class="tag3d">3B</span>
+    {% if screen.description %}<span class="desc">{{ screen.description }}</span>{% endif %}
+    <span class="v-ind" id="v3d-ind"><span class="dot"></span><span id="v3d-ind-txt">{% trans "Bağlanıyor…" %}</span></span>
+    <span class="v-clock" id="v3d-clock">--:--:--</span>
+    <div class="v-vps" id="v3d-viewpoints"></div>
+    <div class="v-spacer"></div>
+    <button class="v-btn" id="v3d-theme" title="{% trans 'Tema' %}">
+        <i class="ki-duotone ki-night-day fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span><span class="path6"></span><span class="path7"></span><span class="path8"></span><span class="path9"></span><span class="path10"></span></i>
+    </button>
+    <button class="v-btn" id="v3d-fit">
+        <i class="ki-duotone ki-maximize fs-5"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i>{% trans "Sığdır" %}
+    </button>
+    <button class="v-btn" id="v3d-full">
+        <i class="ki-duotone ki-arrow-up-right fs-5"><span class="path1"></span><span class="path2"></span></i><span>{% trans "Tam Ekran" %}</span>
+    </button>
+    {% if user.is_superuser or user.rol == 1 %}
+    <a class="v-btn" href="{% url 'dashboard:mimic3d_editor_edit' screen.pk %}">
+        <i class="ki-duotone ki-pencil fs-5"><span class="path1"></span><span class="path2"></span></i>{% trans "Düzenle" %}
+    </a>
+    {% endif %}
 </div>
+
+<div class="v-body">
+    <canvas id="v3d-canvas"></canvas>
+    <div id="v3d-warn"></div>
+</div>
+
+{# 2B viewer ile PAYLAŞILAN etkileşim DOM'u + çeviri sözlüğü #}
+{% include "dashboard/mimic/_menu_ui.html" %}
+
+{{ screen.data|json_script:"v3d-data" }}
+<script>
+    window.V3D_CFG = {
+        tagsUrl:       "{% url 'dashboard:api_mimic_tags' %}",
+        reportDataUrl: "{% url 'dashboard:api_mimic_report' %}",
+        controlUrl:    "{% url 'dashboard:api_mimic_control' %}",
+        viewerTpl:     "{% url 'dashboard:mimic_viewer' 0 %}",
+        csrf: "{{ csrf_token }}",
+        canControl: {% if user|has_role:"1" or user|has_role:"2" %}true{% else %}false{% endif %},
+        locale: "{{ LANGUAGE_CODE|default:'tr' }}",
+        embedded: (window.self !== window.top),
+        i18n: {
+            live:    "{% trans 'Canlı' %}",
+            offline: "{% trans 'Bağlantı yok' %}",
+            glLost:  "{% trans 'Grafik bağlamı kayboldu' %}",
+            doc2d:   "{% trans 'Bu kayıt 2B mimik belgesi — 3B görüntüleyicide açılamaz.' %}"
+        },
+        initial: {
+            data: (function () {
+                var el = document.getElementById("v3d-data");
+                if (!el) return null;
+                try { return JSON.parse(el.textContent); } catch (e) { return null; }
+            })()
+        }
+    };
+</script>
+<script src="{% static 'dashboard/plugins/global/plugins.bundle.js' %}"></script>
+<script src="{% static 'dashboard/plugins/custom/datatables/datatables.bundle.js' %}"></script>
+{% comment %}
+mimic_core.js: ESM adaptörü (mimic/core) bunu window.MimicCore'dan okur →
+modülden ÖNCE, klasik script olarak. mimic_menu_ui.js ise 2B viewer ile
+paylaşılan tıklama menüsü / rapor modalı / kontrol diyalogu katmanı.
+{% endcomment %}
+<script src="{% static 'dashboard/js/mimic_core.js' %}"></script>
+<script src="{% static 'dashboard/js/mimic_menu_ui.js' %}"></script>
+<script type="module" src="{% static 'dashboard/js/mimic3d/viewer3d.js' %}"></script>
 </body>
 </html>
