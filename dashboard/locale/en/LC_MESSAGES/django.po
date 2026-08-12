@@ -3558,3 +3558,96 @@ msgstr "Data Report"
 
 msgid "Sütun sayısı %(n)s ile sınırlandı; daha az sensör seçerek daralt."
 msgstr "Columns capped at %(n)s; narrow it by selecting fewer sensors."
+
+msgid "Parametre Tanımları"
+msgstr "Parameter Definitions"
+
+msgid "Tüm Parametreler"
+msgstr "All Parameters"
+
+msgid "Yeni Parametre"
+msgstr "New Parameter"
+
+msgid "Parametre Düzenle"
+msgstr "Edit Parameter"
+
+msgid "Parametre Sil"
+msgstr "Delete Parameter"
+
+msgid "Parametreyi Sil"
+msgstr "Delete the Parameter"
+
+msgid "Parametre yok."
+msgstr "No parameters."
+
+msgid "Görünen Ad"
+msgstr "Display Name"
+
+msgid "Kod Adı"
+msgstr "Code Name"
+
+msgid "Tüm tesisler"
+msgstr "All facilities"
+
+msgid "Ad, kod veya birim ara..."
+msgstr "Search name, code or unit..."
+
+msgid "Range (Min/Max)"
+msgstr "Range (Min/Max)"
+
+msgid "Geçerli Veri (Min/Max)"
+msgstr "Valid Data (Min/Max)"
+
+msgid "Ölçüm Sınırları"
+msgstr "Measurement Limits"
+
+msgid "Kanal Eşlemesi"
+msgstr "Channel Mapping"
+
+msgid "Listeye Dön"
+msgstr "Back to List"
+
+msgid "Tag"
+msgstr "Tag"
+
+msgid "Parametre oluşturuldu."
+msgstr "Parameter created."
+
+msgid "Parametre güncellendi."
+msgstr "Parameter updated."
+
+msgid "Parametre silindi."
+msgstr "Parameter deleted."
+
+msgid "Parametre = ölçülen büyüklük tanımı (pH, debi, sıcaklık...). Sensörler bu tanıma bağlanır; rapor ve dashboard başlıkları buradaki \"Görünen Ad\" ile gösterilir."
+msgstr "A parameter is the definition of a measured quantity (pH, flow, temperature...). Sensors are bound to it; report and dashboard headings use the \"Display Name\" set here."
+
+msgid "\"Görünen Ad\" dashboard ve raporlarda kullanılır; \"Kod Adı\" Bakanlık/Envisoft kanal eşlemesi içindir ve benzersiz olmalıdır."
+msgstr "\"Display Name\" is used in the dashboard and reports; \"Code Name\" is for the Ministry/Envisoft channel mapping and must be unique."
+
+msgid "Range Min/Max sensör simülasyonunda ve grafik ölçeğinde; Geçerli Veri Min/Max ise ölçümün geçerlilik kontrolünde kullanılır."
+msgstr "Range Min/Max is used for sensor simulation and chart scaling; Valid Data Min/Max is used for measurement validity checks."
+
+msgid "Bu parametreye bağlı sensör yok. Silme işlemi geri alınamaz."
+msgstr "No sensors are bound to this parameter. Deletion cannot be undone."
+
+msgid "Bu parametreye bağlı sensörler var; önce onları silin veya başka bir parametreye taşıyın."
+msgstr "Sensors are bound to this parameter; delete them first or move them to another parameter."
+
+msgid "Kullanıcıya (dashboard/rapor) gösterilen okunabilir ad. Örn. \"Çözünmüş Oksijen\"."
+msgstr "Human-readable name shown to users (dashboard/reports). E.g. \"Dissolved Oxygen\"."
+
+msgid "Kod adı — Bakanlık/Envisoft kanal kodu. Örn. \"CozunmusOksijen\"."
+msgstr "Code name — Ministry/Envisoft channel code. E.g. \"CozunmusOksijen\"."
+
+msgid "İsteğe bağlı. Parametre kapsamı sensörlerden çözülür; bu alan yalnız bilgilendirme amaçlıdır."
+msgstr "Optional. Parameter scope is resolved from sensors; this field is informational only."
+
+msgid "Bu kod adına sahip başka bir parametre var."
+msgstr "Another parameter already uses this code name."
+
+msgid "<b>%(name)s</b> parametresini silmek istediğinize emin misiniz?"
+msgstr "Are you sure you want to delete <b>%(name)s</b>?"
+
+msgid "Bu parametreye bağlı %(counter)s sensör var; silme işlemi engellendi. Önce sensörleri silin veya başka bir parametreye taşıyın."
+msgstr "%(counter)s sensor(s) are bound to this parameter; deletion is blocked. Delete the sensors first or move them to another parameter."

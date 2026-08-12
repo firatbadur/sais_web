@@ -1,0 +1,87 @@
+{% extends "dashboard/base.html" %}
+{% load i18n %}
+
+{% block title %}{% if object %}{% trans "Parametre Düzenle" %}{% else %}{% trans "Yeni Parametre" %}{% endif %}{% endblock %}
+{% block page_title %}{% if object %}{% trans "Parametre Düzenle" %}{% else %}{% trans "Yeni Parametre" %}{% endif %}{% endblock %}
+
+{% block content %}
+<form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    {# --- Kimlik --- #}
+    <div class="card mb-6">
+        <div class="card-header"><h3 class="card-title">{% trans "Kimlik" %}</h3></div>
+        <div class="card-body">
+            <div class="alert alert-light-info d-flex align-items-center mb-6">
+                <i class="ki-outline ki-information fs-2 text-info me-3"></i>
+                <div class="text-gray-700 fs-7">
+                    {% trans "\"Görünen Ad\" dashboard ve raporlarda kullanılır; \"Kod Adı\" Bakanlık/Envisoft kanal eşlemesi içindir ve benzersiz olmalıdır." %}
+                </div>
+            </div>
+            <div class="row">
+                {% include "dashboard/sensor_config/_field.html" with field=form.parameter_txt %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.parameter_name %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.unit %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.unit_txt %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.station %}
+            </div>
+        </div>
+    </div>
+
+    {# --- Ölçüm Sınırları --- #}
+    <div class="card mb-6">
+        <div class="card-header"><h3 class="card-title">{% trans "Ölçüm Sınırları" %}</h3></div>
+        <div class="card-body">
+            <div class="alert alert-light-warning d-flex align-items-center mb-6">
+                <i class="ki-outline ki-information fs-2 text-warning me-3"></i>
+                <div class="text-gray-700 fs-7">
+                    {% trans "Range Min/Max sensör simülasyonunda ve grafik ölçeğinde; Geçerli Veri Min/Max ise ölçümün geçerlilik kontrolünde kullanılır." %}
+                </div>
+            </div>
+            <div class="row">
+                {% include "dashboard/sensor_config/_field.html" with field=form.min_range %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.max_range %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.gec_min %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.gec_max %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.olcum_min %}
+                {% include "dashboard/sensor_config/_field.html" with field=form.olcum_max %}
+            </div>
+        </div>
+    </div>
+
+    {# --- Kanal Eşlemesi (collapse) --- #}
+    <div class="card mb-6">
+        <div class="card-header collapsible cursor-pointer rotate collapsed" data-bs-toggle="collapse" data-bs-target="#pc_channel">
+            <h3 class="card-title">{% trans "Kanal Eşlemesi" %}</h3>
+            <div class="card-toolbar rotate-180"><i class="ki-outline ki-down fs-1"></i></div>
+        </div>
+        <div id="pc_channel" class="collapse">
+            <div class="card-body">
+                <div class="row">
+                    {% include "dashboard/sensor_config/_field.html" with field=form.channel_number %}
+                    {% include "dashboard/sensor_config/_field.html" with field=form.device_channel_id %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 mb-10">
+        <a href="{% url 'dashboard:sensorcfg_parameters' %}" class="btn btn-light">{% trans "İptal" %}</a>
+        <button type="submit" class="btn btn-primary">{% trans "Kaydet" %}</button>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// FK alanlarını aranabilir select2 yap (Metronik plugin'leri global yüklü).
+document.addEventListener("DOMContentLoaded", function () {
+    if (window.jQuery && jQuery.fn.select2) {
+        jQuery('[data-control="select2"]').select2({ width: '100%' });
+    }
+});
+</script>
+{% endblock %}

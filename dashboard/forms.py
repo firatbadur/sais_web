@@ -502,6 +502,58 @@ class ParameterQuickForm(forms.ModelForm):
         _apply_metronic_classes(self)
 
 
+class ParameterConfigForm(forms.ModelForm):
+    """Sensör Ayarları → Parametre Tanımları ekle/düzenle (tam alan seti).
+
+    `ParameterQuickForm`'un (sihirbaz modalı) aksine tüm alanları kapsar:
+    kimlik + birim + kanal eşlemesi + geçerli veri / ölçüm / range sınırları.
+    Görünen ad (`parameter_txt`) zorunlu; kod adı (`parameter_name`) Bakanlık/
+    Envisoft kanal koduyla eşleştiği için benzersizliği burada doğrulanır.
+    """
+
+    class Meta:
+        from api.models import Parameter  # lazy
+
+        model = Parameter
+        fields = (
+            "parameter_txt", "parameter_name", "station",
+            "unit", "unit_txt",
+            "channel_number", "device_channel_id",
+            "min_range", "max_range",
+            "gec_min", "gec_max",
+            "olcum_min", "olcum_max",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["parameter_txt"].required = True
+        self.fields["parameter_txt"].help_text = _(
+            "Kullanıcıya (dashboard/rapor) gösterilen okunabilir ad. Örn. \"Çözünmüş Oksijen\"."
+        )
+        self.fields["parameter_name"].help_text = _(
+            "Kod adı — Bakanlık/Envisoft kanal kodu. Örn. \"CozunmusOksijen\"."
+        )
+        self.fields["station"].help_text = _(
+            "İsteğe bağlı. Parametre kapsamı sensörlerden çözülür; bu alan yalnız "
+            "bilgilendirme amaçlıdır."
+        )
+        _apply_metronic_classes(self)
+        self.fields["station"].widget.attrs["data-control"] = "select2"
+
+    def clean_parameter_name(self):
+        from api.models import Parameter  # lazy
+
+        value = (self.cleaned_data.get("parameter_name") or "").strip()
+        if not value:
+            return value
+        qs = Parameter.objects.filter(parameter_name__iexact=value)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError(_("Bu kod adına sahip başka bir parametre var."))
+        return value
+
+
 class DocumentUploadForm(forms.ModelForm):
     """Doküman yükleme — yalnızca belge dosyalarına izin verir (resim/video yasak)."""
 

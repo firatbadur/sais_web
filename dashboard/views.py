@@ -61,6 +61,7 @@ from .forms import (
     DocumentUploadForm,
     NotificationSettingsForm,
     PreferencesForm,
+    ParameterConfigForm,
     ProfileForm,
     SensorConfigForm,
     WebSettingsForm,
@@ -1382,6 +1383,118 @@ class SensorConfigDeleteView(OperatorRequiredMixin, DeleteView):
         log_event(
             EventType.CONFIG,
             f"Sensör silindi: {label}",
+            severity="warning", request=self.request,
+        )
+        return response
+
+
+class ParameterConfigListView(OperatorRequiredMixin, ListView):
+    """Sensör Ayarları → Parametre Tanımları listesi.
+
+    Parametre = ölçülen büyüklük (pH, debi, sıcaklık...) tanımı; sensörler
+    bu tanıma bağlanır. Sensör listesiyle aynı iskelet: arama + istasyon
+    filtresi + sayfalama, satır başına düzenle/sil.
+    """
+    model = Parameter
+    template_name = "dashboard/sensor_config/parameter_list.html"
+    context_object_name = "parameters"
+    paginate_by = 50
+
+    def get_queryset(self):
+        qs = (
+            super().get_queryset()
+            .select_related("station")
+            .annotate(sensor_total=Count("sensors", distinct=True))
+        )
+        q = (self.request.GET.get("q") or "").strip()
+        if q:
+            qs = qs.filter(
+                Q(parameter_txt__icontains=q)
+                | Q(parameter_name__icontains=q)
+                | Q(unit__icontains=q)
+            )
+        station_id = (self.request.GET.get("station") or "").strip()
+        if station_id.isdigit():
+            qs = qs.filter(station_id=int(station_id))
+        return qs.order_by("parameter_txt", "parameter_name", "id")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["stations"] = Station.objects.order_by("name")
+        ctx["q"] = (self.request.GET.get("q") or "").strip()
+        ctx["station_id"] = (self.request.GET.get("station") or "").strip()
+        return ctx
+
+
+class ParameterConfigCreateView(OperatorRequiredMixin, CreateView):
+    model = Parameter
+    form_class = ParameterConfigForm
+    template_name = "dashboard/sensor_config/parameter_form.html"
+    success_url = reverse_lazy("dashboard:sensorcfg_parameters")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, _("Parametre oluşturuldu."))
+        log_event(
+            EventType.CONFIG,
+            f"Parametre oluşturuldu: {self.object.display_name} (#{self.object.pk})",
+            severity="warning", request=self.request,
+        )
+        return response
+
+
+class ParameterConfigUpdateView(OperatorRequiredMixin, UpdateView):
+    model = Parameter
+    form_class = ParameterConfigForm
+    template_name = "dashboard/sensor_config/parameter_form.html"
+    success_url = reverse_lazy("dashboard:sensorcfg_parameters")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, _("Parametre güncellendi."))
+        log_event(
+            EventType.CONFIG,
+            f"Parametre güncellendi: {self.object.display_name} (#{self.object.pk})",
+            severity="warning", request=self.request,
+        )
+        return response
+
+
+class ParameterConfigDeleteView(OperatorRequiredMixin, DeleteView):
+    """Parametre silme.
+
+    `Sensor.parameter` CASCADE olduğundan bağlı sensörü olan bir parametreyi
+    silmek sensörleri + tüm geçmiş okumalarını da siler. Bu yüzden **bağlı
+    sensör varsa silme reddedilir**; önce sensörler taşınmalı/silinmelidir.
+    """
+    model = Parameter
+    template_name = "dashboard/sensor_config/parameter_confirm_delete.html"
+    success_url = reverse_lazy("dashboard:sensorcfg_parameters")
+    context_object_name = "parameter"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["sensors"] = (
+            self.object.sensors.select_related("connection", "connection__station")
+            .order_by("id")[:50]
+        )
+        ctx["sensor_total"] = self.object.sensors.count()
+        return ctx
+
+    def form_valid(self, form):
+        if self.object.sensors.exists():
+            messages.error(
+                self.request,
+                _("Bu parametreye bağlı sensörler var; önce onları silin veya "
+                  "başka bir parametreye taşıyın."),
+            )
+            return redirect("dashboard:sensorcfg_parameters")
+        label = self.object.display_name
+        response = super().form_valid(form)
+        messages.success(self.request, _("Parametre silindi."))
+        log_event(
+            EventType.CONFIG,
+            f"Parametre silindi: {label}",
             severity="warning", request=self.request,
         )
         return response

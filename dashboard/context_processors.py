@@ -75,6 +75,8 @@ MENU = [
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Sensörler"), "url_name": "dashboard:sensorcfg_sensors",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
+            {"label": _("Parametre Tanımları"), "url_name": "dashboard:sensorcfg_parameters",
+             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Sensör Testi"), "url_name": "dashboard:sensorcfg_test",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("İletişim Tanılama"), "url_name": "dashboard:sensorcfg_comm_diagnostics",
