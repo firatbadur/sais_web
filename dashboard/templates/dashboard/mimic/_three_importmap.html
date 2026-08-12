@@ -1,0 +1,38 @@
+{% comment %}
+three.js ESM importmap'i — editor3d.html + viewer3d.html BUNU include eder
+(iki sablon drift etmesin).
+
+KURALLAR:
+  * Dokumanda TEK importmap olabilir ve ilk <script type="module">'den ONCE
+    gelmelidir. Ikinci bir importmap Chrome/Firefox'ta sessizce yok sayilir.
+  * Addon'lar tek tek eslenir (prefix "three/addons/" yerine): boylece hepsi
+    {% static %} ile hash'lenir (tam cache-busting) ve dosya eksikse hata
+    collectstatic'te cikar, sahada degil.
+  * Pass.js / ShaderPass.js / MaskPass.js / CopyShader.js / OutputShader.js /
+    BufferGeometryUtils.js / SkeletonUtils.js girdi GEREKTIRMEZ — onlara yalniz
+    goreli import ile ulasilir (bkz. plugins/custom/three/VENDOR.md).
+
+  * ZORUNLU KURAL — buraya YALNIZ diskte VAR OLAN dosya yazilir. DEBUG=0'da
+    {% static %} eksik dosya icin `ValueError: The file ... could not be found`
+    firlatir ve SAYFA 500 dondurur (`manifest_strict=False` yalniz manifest
+    aramalarini affeder; `hashed_name()` diskte olmayan dosyada patlar). Dev'de
+    (DEBUG=1) hicbir belirti vermez -> yalniz uretimde ortaya cikan bir sinif.
+    Yeni bir 3B modulu eklerken dosyayi yazdiktan SONRA girdisini ekleyin.
+{% endcomment %}
+{% load static %}
+<script type="importmap">
+{
+  "imports": {
+    "three": "{% static 'dashboard/plugins/custom/three/build/three.module.js' %}",
+    "three/addons/controls/OrbitControls.js": "{% static 'dashboard/plugins/custom/three/addons/controls/OrbitControls.js' %}",
+    "three/addons/controls/TransformControls.js": "{% static 'dashboard/plugins/custom/three/addons/controls/TransformControls.js' %}",
+    "three/addons/environments/RoomEnvironment.js": "{% static 'dashboard/plugins/custom/three/addons/environments/RoomEnvironment.js' %}",
+    "three/addons/exporters/GLTFExporter.js": "{% static 'dashboard/plugins/custom/three/addons/exporters/GLTFExporter.js' %}",
+    "three/addons/loaders/GLTFLoader.js": "{% static 'dashboard/plugins/custom/three/addons/loaders/GLTFLoader.js' %}",
+    "three/addons/postprocessing/EffectComposer.js": "{% static 'dashboard/plugins/custom/three/addons/postprocessing/EffectComposer.js' %}",
+    "three/addons/postprocessing/RenderPass.js": "{% static 'dashboard/plugins/custom/three/addons/postprocessing/RenderPass.js' %}",
+    "three/addons/postprocessing/OutlinePass.js": "{% static 'dashboard/plugins/custom/three/addons/postprocessing/OutlinePass.js' %}",
+    "three/addons/postprocessing/OutputPass.js": "{% static 'dashboard/plugins/custom/three/addons/postprocessing/OutputPass.js' %}"
+  }
+}
+</script>
