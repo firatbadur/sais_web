@@ -21,7 +21,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
-import { LIMITS, SHADOW_QUALITY, defaultCamera, defaultScene } from "./doc.js";
+import { LIMITS, SHADOW_QUALITY, defaultCamera, defaultScene, r4 } from "./doc.js";
 
 const TONE_MAPPING = {
     none: THREE.NoToneMapping,
@@ -345,16 +345,23 @@ export function makeStage(canvas, opts) {
 
     stage.readCameraSettings = function () {
         const cs = stage.cameraSettings;
+        // 4 ondaliga YUVARLA (0.1 mm). Ham float yazmak uc soruna yol aciyordu:
+        //  (1) belge tur donusu byte-identik OLMUYOR (float -> string -> float
+        //      son basamagi kaydiriyor) -> "kaydet/yukle guvenli" garantisi zayif,
+        //  (2) ayni kamera durumu farkli snapshot uretiyor -> undo yiginina
+        //      gereksiz adim eklenir (history'nin tekrar filtresi kacar),
+        //  (3) her deger 17 haneye kadar sisiyor.
+        // Nesne transformlari (scene_io.entryOf) zaten r4 ile yuvarlaniyor.
         return {
             type: "perspective",
-            fov: camera.fov, near: camera.near, far: camera.far,
-            position: camera.position.toArray(),
-            target: controls.target.toArray(),
+            fov: r4(camera.fov), near: r4(camera.near), far: r4(camera.far),
+            position: camera.position.toArray().map(r4),
+            target: controls.target.toArray().map(r4),
             orthoZoom: cs.orthoZoom || 40,
             limits: {
-                minDistance: controls.minDistance,
-                maxDistance: controls.maxDistance,
-                maxPolarAngle: controls.maxPolarAngle,
+                minDistance: r4(controls.minDistance),
+                maxDistance: r4(controls.maxDistance),
+                maxPolarAngle: r4(controls.maxPolarAngle),
             },
         };
     };

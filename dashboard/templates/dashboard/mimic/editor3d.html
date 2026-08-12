@@ -70,8 +70,29 @@
         #m3d-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
         .p-head { padding: 8px 11px; font-size: 11px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: .4px; color: var(--mx-muted); border-bottom: 1px solid var(--mx-border); }
+            letter-spacing: .4px; color: var(--mx-muted); border-bottom: 1px solid var(--mx-border);
+            flex: 0 0 auto; }
         .p-scroll { flex: 1; overflow-y: auto; min-height: 0; }
+        /* Sol panel iki bolme: kutuphane (esnek) + sahne agaci (sabit yukseklik) */
+        .sp-scroll { flex: 1 1 auto; }
+        .ol-scroll { flex: 0 0 34%; border-top: 0; }
+
+        /* sembol paleti */
+        .sp-search { padding: 7px 9px; border-bottom: 1px solid var(--mx-border); flex: 0 0 auto; }
+        .sp-search input { width: 100%; background: var(--mx-panel-2); border: 1px solid var(--mx-border);
+            color: var(--mx-head); border-radius: 6px; padding: 5px 8px; font-size: 12px; }
+        .sp-search input:focus { outline: none; border-color: var(--mx-accent); }
+        .sp-group { padding: 7px 10px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .3px; color: var(--mx-muted); }
+        .sp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 0 7px 6px; }
+        .sp-item { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 2px;
+            border: 1px solid transparent; border-radius: 7px; cursor: grab; background: var(--mx-panel-2); }
+        .sp-item:hover { border-color: var(--mx-accent); background: var(--mx-hover); }
+        .sp-item:active { cursor: grabbing; }
+        .sp-thumb { width: 46px; height: 46px; background-size: contain; background-repeat: no-repeat;
+            background-position: center; }
+        .sp-item span { font-size: 9.5px; line-height: 1.1; text-align: center; color: var(--mx-text);
+            overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 
         /* outliner */
         .ol-row { display: flex; align-items: center; gap: 5px; padding: 4px 8px 4px 6px;
@@ -311,10 +332,16 @@
 </div>
 
 <div class="mx-body">
-    <!-- SOL: sahne ağacı (P4'te sembol kütüphanesi bunun üstüne gelir) -->
+    <!-- SOL: sembol kütüphanesi (üst) + sahne ağacı (alt) -->
     <div class="mx-left">
-        <div class="p-head">{% trans "Sahne Ağacı" %}</div>
-        <div class="p-scroll" id="m3d-outliner"></div>
+        <div class="p-head">{% trans "Sembol Kütüphanesi" %}</div>
+        <div class="sp-search">
+            <input type="text" id="m3d-palette-search" placeholder="{% trans 'Sembol ara…' %}"
+                   autocomplete="off">
+        </div>
+        <div class="p-scroll sp-scroll" id="m3d-palette"></div>
+        <div class="p-head" style="border-top:1px solid var(--mx-border)">{% trans "Sahne Ağacı" %}</div>
+        <div class="p-scroll ol-scroll" id="m3d-outliner"></div>
     </div>
 
     <!-- ORTA: tuval -->

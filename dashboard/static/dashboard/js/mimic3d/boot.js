@@ -28,7 +28,11 @@ import { makeScreenshot } from "./io/screenshot.js";
 import { exportGLB } from "./io/gltf.js";
 import { makeInspector } from "./ui/inspector.js";
 import { makeOutliner } from "./ui/outliner.js";
+import { makePalette } from "./ui/palette.js";
 import { toast } from "./ui/toast.js";
+// Sembol kutuphanesi: 2B ile AYNI symbolKey isim alani -> autoKind ve animasyon
+// semantigi degismeden tasinir (bkz. mimic_core.js).
+import { M3D_SYMBOLS, buildSymbol, symbolMeta, symbolThumbURL } from "mimic3d/symbols";
 
 const CFG = window.M3D_CONFIG || {};
 
@@ -81,8 +85,7 @@ export function boot() {
 
     const factoryCtx = {
         renderer: stage.renderer,
-        // P4'te sembol kutuphanesi buraya baglanir.
-        buildSymbol: null,
+        buildSymbol: buildSymbol,
     };
 
     function currentDoc() {
@@ -265,6 +268,20 @@ export function boot() {
             torus: "Halka", plane: "Düzlem", pipe: "Boru", arrow: "Ok",
         })[p] || p;
     }
+    /**
+     * Sembol ekle. `at` verilmezse kameranin baktigi zemin noktasina birakilir
+     * (surukle-birak zemin isiniyla nokta verir).
+     */
+    function addSymbol(key, at) {
+        const meta = symbolMeta(key);
+        return addEntry({
+            type: "symbol", symbolKey: key, name: (meta && meta.name) || key,
+            // Semboller icin varsayilan `auto`: autoKind sembole gore dogru
+            // animasyonu (water/spin/flow/tint/gauge...) kendisi secer.
+            scada: { anim: "auto" },
+        }, at ? { at: at } : null);
+    }
+
     function addLabel() {
         const o = addEntry({
             type: "label", name: "Etiket",
@@ -341,6 +358,25 @@ export function boot() {
         },
     });
     function refreshOutliner() { outliner.refresh(stage.contentRoot, selection); }
+
+    // Sembol paleti — ikonlar gercek 3B render'dan uretilir (sessionStorage cache).
+    const palette = makePalette($("m3d-palette"), $("m3d-palette-search"), {
+        symbols: M3D_SYMBOLS,
+        thumb: (key) => {
+            try { return symbolThumbURL(key, stage.renderer, 96); }
+            catch (e) { return ""; }
+        },
+        onAdd: (key) => addSymbol(key, null),
+    });
+    palette.bindCanvasDrop(canvas, (key, cx, cy) => {
+        // Birakma noktasi: zemin duzlemine isin + snap adimina yuvarla.
+        const p = selection.pickGround(cx, cy);
+        const step = transform.snap().step || 0.25;
+        const at = p
+            ? new THREE.Vector3(Math.round(p.x / step) * step, 0, Math.round(p.z / step) * step)
+            : null;
+        addSymbol(key, at);
+    });
 
     const inspector = makeInspector(stage, selection, {
         invalidate: () => loop.invalidate(),
@@ -825,8 +861,9 @@ export function boot() {
     // Teshis/test kancasi.
     window.__m3d = {
         THREE, stage, loop, selection, transform, ops, cam, history, persist,
-        shots, inspector, outliner, toast,
-        currentDoc, applyDoc, rebuildObject, addEntry, addPrimitive, addLabel, addButton,
+        shots, inspector, outliner, palette, toast,
+        symbols: { M3D_SYMBOLS, buildSymbol, symbolMeta },
+        currentDoc, applyDoc, rebuildObject, addEntry, addPrimitive, addLabel, addButton, addSymbol,
         docMap: () => docMap(stage.contentRoot),
         isDirty: () => dirty,
         markDirty, pushUndo, updateStatus, refreshOutliner,
