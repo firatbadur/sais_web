@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import logging
 
+from django.db import IntegrityError, transaction
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,6 +58,24 @@ def _get_logtype(name: str):
         lt, _ = LogType.objects.get_or_create(name=name)
         _LOGTYPE_CACHE[name] = lt
     return lt
+
+
+def clear_logtype_cache():
+    """Process-local ``LogType`` önbelleğini boşalt.
+
+    Önbellek **PK taşıyan nesneler** tuttuğu için, altındaki satırlar yok
+    olduğunda bayatlar. Bu iki gerçek durumda olur:
+
+    * **Veritabanı geri yükleme** (``restore_database``) hedef DB'yi drop + create
+      eder; çalışan web/worker süreci eski PK'ları taşımaya devam eder →
+      sonraki her ``log_event`` FK ihlaliyle düşer ve ``except`` onu yutar, yani
+      **denetim kaydı süreç yeniden başlatılana dek SESSİZCE durur**.
+    * Test izolasyonu: her ``TestCase`` işlemi geri alır.
+
+    ``log_event`` FK ihlalinde bunu kendisi çağırıp bir kez yeniden dener; dış
+    kod (geri yükleme sonrası, testlerde ``setUp``) açıkça da çağırabilir.
+    """
+    _LOGTYPE_CACHE.clear()
 
 
 def client_ip(request) -> str | None:
@@ -106,8 +126,7 @@ def log_event(
         elif user is not None and not username:
             username = user.get_username()
 
-        return SystemLog.objects.create(
-            type=_get_logtype(event_type),
+        fields = dict(
             severity=severity if severity in {SEVERITY_INFO, SEVERITY_WARNING, SEVERITY_CRITICAL} else SEVERITY_INFO,
             user=user,
             username=(username or "")[:150] or None,
@@ -115,6 +134,16 @@ def log_event(
             station=station,
             description=(description or "")[:1000],
         )
+        try:
+            return SystemLog.objects.create(type=_get_logtype(event_type), **fields)
+        except IntegrityError:
+            # Bayat LogType önbelleği (DB geri yüklendi / test rollback'i) →
+            # önbelleği boşalt, satırı yeniden çöz ve BİR KEZ yeniden dene.
+            # Bu olmadan denetim kaydı, süreç yeniden başlatılana dek sessizce
+            # durur (bkz. clear_logtype_cache docstring'i).
+            clear_logtype_cache()
+            with transaction.atomic():
+                return SystemLog.objects.create(type=_get_logtype(event_type), **fields)
     except Exception:  # noqa: BLE001 — olay kaydı asıl akışı kesmesin
         logger.exception("log_event yazılamadı: type=%s", event_type)
         return None
