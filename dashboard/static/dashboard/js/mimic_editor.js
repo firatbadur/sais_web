@@ -897,6 +897,10 @@
 
     function loadData(data) {
         suspend = true;
+        // Fabric tuzagi: `styles` anahtari olmayan metin objeleri yuklendikten
+        // sonra HER toObject() cagrisini (kaydet/export/undo) patlatir. Eski ve
+        // Python tarafinda uretilen belgeleri yuklemeden once onar.
+        MimicCore.repair2dDocument(data);
         canvas.loadFromJSON(data, function () {
             rebuildBoundary();
             applyBackground();

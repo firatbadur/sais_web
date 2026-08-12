@@ -79,16 +79,33 @@ def _circle(left, top, r, fill=BODY, stroke=EDGE, sw=2, name="circle",
     return o
 
 
+# Metin objelerinde `styles` ZORUNLU (bos sozluk olsa bile).
+#
+# Fabric 5.3, JSON'da `styles` anahtari YOKSA yuklenen objede `styles`'i
+# **undefined** birakir (bos nesneye varsaymaz); sonrasinda her `toObject()`
+# cagrisi `fabric.util.stylesToArray` icinde "Cannot read properties of
+# undefined (reading '0')" ile patlar. Bu; kaydetme, PNG/SVG/JSON disa aktarma,
+# kopyala-yapistir ve editorun yukleme sonrasi ilk `pushUndo()` cagrisini birden
+# bozar -> yukleme zinciri yarida kesilir, ekran "0 nesne" gorunur. Bu sablon
+# tam bu yuzden editorde acilamiyordu.
+#
+# Ikinci savunma yukleme tarafinda: MimicCore.repair2dDocument (eski kayitlar
+# icin), ama kaynagi da dogru uretiyoruz.
+_TEXT_STYLES = {}
+
+
 def _text(left, top, text, size=14, fill="#181c32", weight="normal", name="text"):
     return _base(type="i-text", left=left, top=top, text=text, fontSize=size,
                  fill=fill, stroke=None, fontWeight=weight, fontFamily="Inter, Arial",
-                 textAlign="left", name=name, scada={"tag": "", "anim": "none"})
+                 textAlign="left", name=name, styles=dict(_TEXT_STYLES),
+                 scada={"tag": "", "anim": "none"})
 
 
 def _value(left, top, w, text, fill=GREEN, size=22, scada=None):
     return _base(type="textbox", left=left, top=top, width=w, text=text,
                  fontSize=size, fill=fill, stroke=None, textAlign="center",
                  fontWeight="bold", fontFamily="monospace", name="value",
+                 styles=dict(_TEXT_STYLES),
                  scada=scada or {"tag": "", "anim": "none"})
 
 

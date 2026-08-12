@@ -1,0 +1,97 @@
+{% comment %}
+Mimik goruntuleyicilerinin PAYLASILAN etkilesim DOM'u — 2B (viewer.html) ve
+3B (viewer3d.html) ayni id'leri kullanir, davranis `mimic_menu_ui.js`'te.
+
+Icerik: tiklama aksiyon menusu + kontrol diyalogu + rapor modali (DataTables +
+ApexCharts) + "baska mimik" iframe modali.
+
+CSS bilincli olarak sablonlarda kalir (her viewer kendi chrome'una gore
+--mx-* degiskenleriyle stiller); burada YALNIZ yapi vardir.
+{% endcomment %}
+{% load i18n %}
+
+<!-- Tıklama aksiyon menüsü -->
+<div class="vm-menu" id="vm-menu"></div>
+
+<!-- Kontrol diyalogu -->
+<div class="vm-overlay" id="vm-overlay">
+    <div class="vm-dialog">
+        <div class="vm-dhead" id="vm-dtitle">{% trans "Kontrol" %}<small id="vm-dsub"></small></div>
+        <div class="vm-dbody">
+            <div class="vm-cur" id="vm-dcur"></div>
+            <div class="vm-btns">
+                <button class="vm-cbtn on" id="vm-bon">{% trans "AKTİF (Aç)" %}</button>
+                <button class="vm-cbtn off" id="vm-boff">{% trans "PASİF (Kapat)" %}</button>
+            </div>
+            <div class="vm-setrow">
+                <input type="number" id="vm-setval" placeholder="{% trans 'Değer (0/1)' %}" step="1">
+                <button id="vm-setbtn">{% trans "Değer Ata" %}</button>
+            </div>
+        </div>
+        <div class="vm-dfoot">
+            <span class="vm-note" id="vm-note"></span>
+            <button class="vm-close" id="vm-dclose">{% trans "Kapat" %}</button>
+        </div>
+    </div>
+</div>
+
+<!-- Rapor modal (tablo + export + grafik) -->
+<div class="vm-overlay" id="vm-rovl">
+    <div class="vm-rdialog">
+        <div class="vm-rhead">
+            <span class="t" id="vm-rtitle"></span>
+            <button class="vm-x" id="vm-rclose" title="{% trans 'Kapat' %}" style="margin-left:auto;">✕</button>
+        </div>
+        <div class="vm-rbody">
+            <div id="vm-rloading">{% trans "Yükleniyor…" %}</div>
+            <table id="vm-rtable" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-2 w-100" style="display:none;"></table>
+            <div id="vm-rchartwrap" style="display:none;"><div id="vm-rchart-el" style="height:440px;"></div></div>
+        </div>
+    </div>
+</div>
+
+<!-- Başka mimik → sayfa içi modal (iframe) -->
+<div class="vm-overlay" id="vm-movl">
+    <div class="vm-mdialog">
+        <div class="vm-mhead">
+            <i class="ki-duotone ki-abstract-26"><span class="path1"></span><span class="path2"></span></i>
+            <span id="vm-mtitle">{% trans "Mimik" %}</span>
+            <button class="vm-x" id="vm-mclose" title="{% trans 'Kapat' %}" style="margin-left:auto;">✕</button>
+        </div>
+        <iframe class="vm-miframe" id="vm-miframe" title="{% trans 'Mimik' %}"></iframe>
+    </div>
+</div>
+
+<script>
+    // mimic_menu_ui.js'in ihtiyac duydugu TUM cevrilebilir metinler.
+    // JS dosyasinda Django etiketi bulunamaz -> sozluk burada kurulur; iki
+    // viewer da bu include'u kullandigi icin ceviriler tek yerde yasar.
+    window.MIMIC_MENU_I18N = {
+        historic: "{% trans 'Historik Trend' %}",
+        report:   "{% trans 'Veri Raporu' %}",
+        daily:    "{% trans 'Günlük Özet' %}",
+        control:  "{% trans 'Kontrol' %}",
+        sending:  "{% trans 'Gönderiliyor…' %}",
+        sent:     "{% trans 'Komut kuyruğa alındı.' %}",
+        cerror:   "{% trans 'Komut gönderilemedi.' %}",
+        notctrl:  "{% trans 'Bu etiket kontrol edilemez (dijital çıkış değil).' %}",
+        loading:  "{% trans 'Yükleniyor…' %}",
+        error:    "{% trans 'Hata' %}",
+        unreachable: "{% trans 'Sunucuya ulaşılamadı.' %}",
+        copy:     "{% trans 'Kopyala' %}",
+        print:    "{% trans 'Yazdır' %}",
+        chart:    "{% trans 'Grafik' %}",
+        table:    "{% trans 'Tablo' %}",
+        noChartData: "{% trans 'Grafik için sayısal veri yok.' %}",
+        current:  "{% trans 'Anlık değer' %}",
+        badValue: "{% trans 'Geçerli bir değer girin.' %}",
+        colValue: "{% trans 'Değer' %}",
+        colAvg:   "{% trans 'Ortalama' %}",
+        dt: {
+            info: "_TOTAL_ {% trans 'kayıttan _START_ – _END_' %}",
+            infoEmpty: "{% trans '0 kayıt' %}",
+            zeroRecords: "{% trans 'Kayıt bulunamadı' %}",
+            emptyTable: "{% trans 'Veri yok' %}"
+        }
+    };
+</script>

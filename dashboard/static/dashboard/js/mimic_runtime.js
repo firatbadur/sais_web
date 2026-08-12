@@ -1,5 +1,5 @@
 /* ===========================================================================
- * mimic_runtime.js — Mimik animasyon / simülasyon motoru
+ * mimic_runtime.js — 2B (Fabric.js) mimik animasyon / simülasyon motoru
  * ---------------------------------------------------------------------------
  * Editör "Simülasyon" modu ve standalone görüntüleyici tarafından paylaşılır.
  * Bir fabric.Canvas + etiket(tag) değer haritası alır; her objenin `scada`
@@ -7,132 +7,31 @@
  * doluluk, görünürlük, metin, hareket, saydamlık) sürer.
  *
  * Bağlama şeması (obj.scada):
- *   { tag, anim, min, max, onColor, offColor, threshold, speed,
- *     unit, decimals, moveRange }
+ *   { tag, expr, anim, min, max, onColor, offColor, threshold, speed,
+ *     unit, decimals, showUnit, moveRange, menu, action... }
+ *
+ * RENDERER'DAN BAĞIMSIZ YARISI `mimic_core.js`'TE (window.MimicCore):
+ * ifade motoru, `autoKind`/`AUTO_OVERRIDE` sınıflandırması, sayısal
+ * yardımcılar, etiket torbası ve buton semantiği — 3B (Three.js) motoruyla
+ * PAYLAŞILIR. İki kopya tutulsa bir sembol yalnız birine eklendiğinde aynı
+ * mimik iki renderer'da sessizce farklı animasyon gösterirdi.
+ * Bu dosyada YALNIZ Fabric'e özgü kısım kalır: overlay çizimleri
+ * (WATER_SHAPES/FLOW_PATHS + draw*), snapshot/restore, leaf boyama, tick.
+ *
+ * YÜKLEME SIRASI: mimic_core.js bu dosyadan ÖNCE yüklenmelidir.
  * ======================================================================== */
 (function () {
     "use strict";
 
-    function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-    function ratioOf(val, mn, mx) {
-        if (mx === mn) return 0;
-        return clamp((val - mn) / (mx - mn), 0, 1);
+    var C = window.MimicCore;
+    if (!C) {
+        throw new Error("mimic_core.js yüklenmedi — mimic_runtime.js'den ÖNCE "
+            + "<script src=\"...dashboard/js/mimic_core.js\"></script> olmalı.");
     }
-    function num(v, d) { v = Number(v); return isNaN(v) ? d : v; }
-    function frac(x) { return x - Math.floor(x); }
-    function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
-
-    // --------------------------------------------------------------------- //
-    // Güvenli ifade değerlendirici (çoklu sensör bağlama).
-    //   Örn: "Pompa1 || Pompa2"  ·  "pH > 8 && pH < 9"  ·  "(A + B) / 2"
-    // Sadece sayı, etiket adı ve şu operatörler: || && ! > < >= <= == != + - * / ( )
-    // eval YOK → keyfi JS çalıştırılamaz. Sonuç sayı (doğru=1 / yanlış=0).
-    // --------------------------------------------------------------------- //
-    var PREC = { "!": 7, "*": 6, "/": 6, "+": 5, "-": 5, ">": 4, "<": 4, ">=": 4, "<=": 4, "==": 3, "!=": 3, "&&": 2, "||": 1 };
-    var EXPR_CACHE = {};
-    function tokenize(s) {
-        var toks = [], i = 0, n = s.length, two, c;
-        var two2 = { ">=": 1, "<=": 1, "==": 1, "!=": 1, "&&": 1, "||": 1 };
-        while (i < n) {
-            c = s.charAt(i);
-            if (c === " " || c === "\t") { i++; continue; }
-            two = s.substr(i, 2);
-            if (two2[two]) { toks.push({ t: "op", v: two }); i += 2; continue; }
-            if ("()!+-*/><".indexOf(c) >= 0) { toks.push({ t: "op", v: c }); i++; continue; }
-            if ((c >= "0" && c <= "9") || c === ".") {
-                var j = i; while (j < n && ((s.charAt(j) >= "0" && s.charAt(j) <= "9") || s.charAt(j) === ".")) j++;
-                toks.push({ t: "num", v: parseFloat(s.slice(i, j)) }); i = j; continue;
-            }
-            if (/[A-Za-z_]/.test(c)) {
-                var k = i; while (k < n && /[A-Za-z0-9_]/.test(s.charAt(k))) k++;
-                toks.push({ t: "id", v: s.slice(i, k) }); i = k; continue;
-            }
-            i++;
-        }
-        return toks;
-    }
-    function compileExpr(expr) {
-        if (EXPR_CACHE[expr] !== undefined) return EXPR_CACHE[expr];
-        var toks = tokenize(expr), out = [], ops = [], idx, tk, top;
-        try {
-            for (idx = 0; idx < toks.length; idx++) {
-                tk = toks[idx];
-                if (tk.t === "num" || tk.t === "id") out.push(tk);
-                else if (tk.v === "(") ops.push(tk);
-                else if (tk.v === ")") {
-                    while (ops.length && ops[ops.length - 1].v !== "(") out.push(ops.pop());
-                    ops.pop();
-                } else {
-                    while (ops.length) {
-                        top = ops[ops.length - 1];
-                        if (top.v === "(") break;
-                        if (PREC[top.v] > PREC[tk.v] || (PREC[top.v] === PREC[tk.v] && tk.v !== "!")) out.push(ops.pop());
-                        else break;
-                    }
-                    ops.push(tk);
-                }
-            }
-            while (ops.length) out.push(ops.pop());
-        } catch (e) { out = null; }
-        EXPR_CACHE[expr] = out;
-        return out;
-    }
-    function evalExpr(expr, tags) {
-        var rpn = compileExpr(expr); if (!rpn) return 0;
-        var st = [], i, tk, a, b, op, r;
-        for (i = 0; i < rpn.length; i++) {
-            tk = rpn[i];
-            if (tk.t === "num") { st.push(tk.v); continue; }
-            if (tk.t === "id") { var v = Number(tags[tk.v]); st.push(isNaN(v) ? 0 : v); continue; }
-            op = tk.v;
-            if (op === "!") { a = st.pop() || 0; st.push(a == 0 ? 1 : 0); continue; }
-            b = st.pop() || 0; a = st.pop() || 0;
-            switch (op) {
-                case "+": r = a + b; break; case "-": r = a - b; break;
-                case "*": r = a * b; break; case "/": r = b === 0 ? 0 : a / b; break;
-                case ">": r = a > b ? 1 : 0; break; case "<": r = a < b ? 1 : 0; break;
-                case ">=": r = a >= b ? 1 : 0; break; case "<=": r = a <= b ? 1 : 0; break;
-                case "==": r = a == b ? 1 : 0; break; case "!=": r = a != b ? 1 : 0; break;
-                case "&&": r = (a != 0 && b != 0) ? 1 : 0; break;
-                case "||": r = (a != 0 || b != 0) ? 1 : 0; break;
-                default: r = 0;
-            }
-            st.push(r);
-        }
-        return st.length ? st[st.length - 1] : 0;
-    }
-    function exprTags(expr) {
-        return tokenize(expr).filter(function (t) { return t.t === "id"; }).map(function (t) { return t.v; });
-    }
-
-    // --------------------------------------------------------------------- //
-    // Sembole özel ("auto") animasyon sınıflandırması — symbolKey'e göre.
-    //   water   : tank/havuz → seviye + dalga overlay
-    //   aeration: su + yükselen kabarcıklar
-    //   spin    : pompa/motor/fan → merkezde dönen rotor overlay
-    //   gauge   : gösterge ibresi
-    //   flow    : boru → akış çizgileri
-    //   tint    : vana/lamba/pano → durum rengi (gövde boyanır)
-    //   blink   : alarm/çakar → yanıp sönme
-    // --------------------------------------------------------------------- //
-    var AUTO_OVERRIDE = {
-        gauge: "gauge", rotameter: "gauge", transmitter: "tint", analyzer: "tint",
-        aeration: "aeration", flow_arrow: "flow", screw_conveyor: "flow",
-        beacon: "blink", alarm_horn: "blink", emergency_stop: "blink",
-        gas_detector: "blink", lamp: "tint", value_display: "tint",
-        flow_cell: "water", sample_cell: "water", sample_fridge: "carousel",
-        wash_bar: "washbar", door: "door"
-    };
-    function autoKind(o) {
-        var k = o.symbolKey || "";
-        if (AUTO_OVERRIDE[k]) return AUTO_OVERRIDE[k];
-        if (/^(tank|reactor|basin|clarifier|wet_well|grit|weir|open_channel)/.test(k)) return "water";
-        if (/^(pump|motor|fan|mixer|blower|compressor|dosing_pump|uf_module|ro_membrane)/.test(k)) return "spin";
-        if (/^(pipe|union|flange|expansion|strainer)/.test(k)) return "flow";
-        if (/^(valve|solenoid|lamp|pushbutton|switch|ups|plc|cabinet|hmi|rtu|breaker|vfd|generator|solar|energy|level_switch|float)/.test(k)) return "tint";
-        return "tint";
-    }
-    var OVERLAY_KINDS = { water: 1, aeration: 1, spin: 1, gauge: 1, flow: 1, carousel: 1, washbar: 1, door: 1 };
+    // Paylaşılan çekirdekten yerel takma adlar (aşağıdaki kod değişmeden çalışır).
+    var clamp = C.clamp, ratioOf = C.ratioOf, num = C.num, frac = C.frac, nowMs = C.nowMs;
+    var evalExpr = C.evalExpr, exprTags = C.exprTags;
+    var autoKind = C.autoKind, OVERLAY_KINDS = C.OVERLAY_KINDS;
 
     // --------------------------------------------------------------------- //
     // Overlay çizimleri (sahne koordinatında; viewport transform uygulanmış halde)
@@ -386,9 +285,9 @@
             });
         }
         // Objenin sürücü değeri: ifade (çoklu sensör) varsa onu değerlendir,
-        // yoksa tek etiketin değeri.
+        // yoksa tek etiketin değeri. (Semantik çekirdekte — 3B ile aynı.)
         function valueOf(sc) {
-            return (sc.expr && sc.expr.trim()) ? evalExpr(sc.expr, tags) : num(tags[sc.tag], 0);
+            return C.valueOf(sc, tags);
         }
 
         function snapshot(obj) {
@@ -555,33 +454,16 @@
             },
             isRunning: function () { return running; },
             // HMI buton aksiyonları — bağlı etikete (scada.tag) değer uygular.
-            pressButton: function (o) {
-                var sc = o.scada || {}; if (!sc.tag) return;
-                var act = sc.action || "toggle";
-                if (act === "toggle") tags[sc.tag] = (Number(tags[sc.tag]) > 0) ? 0 : 100;
-                else if (act === "set") tags[sc.tag] = Number(sc.setValue == null ? 100 : sc.setValue);
-                else tags[sc.tag] = Number(sc.pressValue == null ? 100 : sc.pressValue); // momentary
-            },
-            releaseButton: function (o) {
-                var sc = o.scada || {}; if (!sc.tag) return;
-                if ((sc.action || "toggle") === "momentary")
-                    tags[sc.tag] = Number(sc.releaseValue == null ? 0 : sc.releaseValue);
-            },
+            // Semantik çekirdekte (3B butonlarıyla birebir aynı davranış).
+            pressButton: function (o) { C.pressButton(o.scada || {}, tags); },
+            releaseButton: function (o) { C.releaseButton(o.scada || {}, tags); },
             setTag: function (name, val) { tags[name] = Number(val); },
             setTags: function (obj) { tags = Object.assign({}, obj); },
             // Etiket değerlerini sıfırla — her yeni simülasyon eski değerlerle
             // başlamasın (temiz başlangıç).
             reset: function () { tags = {}; },
             getTags: function () { return tags; },
-            tagList: function () {
-                var set = {};
-                bound().forEach(function (o) {
-                    var sc = o.scada;
-                    if (sc.expr && sc.expr.trim()) exprTags(sc.expr).forEach(function (t) { set[t] = true; });
-                    else if (sc.tag) set[sc.tag] = true;
-                });
-                return Object.keys(set);
-            }
+            tagList: function () { return C.tagListFrom(bound()); }
         };
     }
 
