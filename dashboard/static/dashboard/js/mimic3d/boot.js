@@ -29,7 +29,9 @@ import { exportGLB } from "./io/gltf.js";
 import { makeInspector } from "./ui/inspector.js";
 import { makeOutliner } from "./ui/outliner.js";
 import { makePalette } from "./ui/palette.js";
+import { makeSimPanel } from "./ui/sim_panel.js";
 import { toast } from "./ui/toast.js";
+import { Mimic3DRuntime } from "mimic3d/runtime";
 // Sembol kutuphanesi: 2B ile AYNI symbolKey isim alani -> autoKind ve animasyon
 // semantigi degismeden tasinir (bkz. mimic_core.js).
 import { M3D_SYMBOLS, buildSymbol, symbolMeta, symbolThumbURL } from "mimic3d/symbols";
@@ -59,6 +61,10 @@ export function boot() {
         const moving = stage.controls.update();
         if (moving) loop.requestContinuous("orbit");
         else loop.releaseContinuous("orbit");
+        // Runtime yalniz ZAMAN-BAZLI animasyon varken surekli frame ister
+        // (deger-eslemeli sahne: poll basina tek frame).
+        if (runtime && runtime.needsFrame()) loop.requestContinuous("runtime");
+        else loop.releaseContinuous("runtime");
 
         // Outline composer YALNIZ secim varken ve dusuk-efekt kapaliyken;
         // aksi halde duz render (bedava performans).
@@ -74,6 +80,7 @@ export function boot() {
     /* ------------------------------------------------------------------ */
     let baseDoc = defaultDoc();        // sahne/kamera disi alanlar (viewpoints, paths)
     let dirty = false;
+    let runtime = null;                // asagida kurulur (loop ondan once tanimli)
 
     function markDirty() {
         if (!dirty) { dirty = true; document.body.classList.add("dirty"); }
@@ -798,6 +805,53 @@ export function boot() {
     window.addEventListener("resize", () => stage.resize());
 
     /* ------------------------------------------------------------------ */
+    /* Simulasyon (runtime)                                                */
+    /* ------------------------------------------------------------------ */
+    runtime = Mimic3DRuntime({
+        root: stage.contentRoot,
+        invalidate: () => loop.invalidate(),
+        camera: stage.camera,
+        controls: stage.controls,
+        // cameraTour + pathFollow belgedeki gorus noktalari/yollari kullanir.
+        get viewpoints() { return baseDoc.viewpoints || []; },
+        get paths() { return baseDoc.paths || []; },
+    });
+
+    const simPanel = makeSimPanel({
+        panel: $("m3d-sim-panel"),
+        tags: $("m3d-sim-tags"),
+        auto: $("m3d-sim-auto"),
+        live: $("m3d-sim-live"),
+        btn: $("m3d-sim"),
+    }, {
+        runtime: runtime,
+        tagsUrl: CFG.urls.tags,
+        toast: toast,
+        onStart: () => {
+            // Simulasyonda duzenleme kapali: gizmo gizlenir, secim temizlenir.
+            selection.clear();
+            loop.invalidate();
+        },
+        onStop: () => { refreshOutliner(); inspector.sync(); loop.invalidate(); },
+    });
+
+    // Simulasyonda butona tiklamak etiketi surer (2B'deki press/release).
+    canvas.addEventListener("pointerdown", (e) => {
+        if (!runtime.isRunning() || e.button !== 0) return;
+        const hit = selection.pick(e.clientX, e.clientY);
+        if (hit && hit.object.userData.docType === "button") {
+            runtime.pressButton(hit.object);
+            canvas.__pressed = hit.object;
+        }
+    });
+    canvas.addEventListener("pointerup", () => {
+        if (canvas.__pressed) {
+            runtime.releaseButton(canvas.__pressed);
+            canvas.__pressed = null;
+        }
+    });
+
+    /* ------------------------------------------------------------------ */
     /* Gercek sensor etiketleri + mimik listesi                             */
     /* ------------------------------------------------------------------ */
     // Etiket bağlama alanı gerçek `Sensor.tag` degerleriyle beslenir (2B
@@ -861,7 +915,7 @@ export function boot() {
     // Teshis/test kancasi.
     window.__m3d = {
         THREE, stage, loop, selection, transform, ops, cam, history, persist,
-        shots, inspector, outliner, palette, toast,
+        shots, inspector, outliner, palette, toast, runtime, simPanel,
         symbols: { M3D_SYMBOLS, buildSymbol, symbolMeta },
         currentDoc, applyDoc, rebuildObject, addEntry, addPrimitive, addLabel, addButton, addSymbol,
         docMap: () => docMap(stage.contentRoot),

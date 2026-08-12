@@ -58,6 +58,18 @@ export const MAT = {
     get edge() { return mat("edge", P.EDGE, 0.20, 0.60); },
     get metal() { return mat("metal", P.METAL, 0.85, 0.35); },
     get steel() { return mat("steel", P.STEEL, 0.70, 0.40); },
+    /**
+     * KAPALI HAZNE GOVDESI — yari saydam.
+     *
+     * Neden: kapali bir celik tank icindeki suyu tamamen gizler; sahada
+     * olculdu -> `tank_vertical` + `water` animasyonu HICBIR gorsel geri
+     * bildirim vermiyordu (operator seviyeyi goremiyor). SCADA mimiklerinde
+     * hazneler bu yuzden gelenekse "cam gibi" cizilir. FrontSide + depthWrite
+     * korunur: sivi once (opak) cizilir, kabuk uzerine harmanlanir.
+     */
+    get shell() {
+        return mat("shell", P.STEEL, 0.45, 0.35, { transparent: true, opacity: 0.42 });
+    },
     get dark() { return mat("dark", P.DARK, 0.30, 0.70); },
     get concrete() { return mat("concrete", P.CONCRETE, 0.05, 0.90); },
     get white() { return mat("white", P.WHITE, 0.05, 0.50); },
@@ -442,7 +454,7 @@ B.mixer = () => {
 B.tank_vertical = () => {
     const g = group();
     const r = 0.75, h = 2.0;
-    g.add(cyl(r, r, h, MAT.steel, { pos: [0, 0.10 + h / 2, 0], tintable: true }));
+    g.add(cyl(r, r, h, MAT.shell, { pos: [0, 0.10 + h / 2, 0], tintable: true }));
     g.add(cyl(r * 1.05, r * 1.05, 0.10, MAT.dark, { pos: [0, 0.05, 0], receive: true }));
     g.add(cyl(r * 0.35, r * 0.35, 0.10, MAT.metal, { pos: [0, 0.10 + h + 0.05, 0] }));
     liquidCylinder(g, r * 0.94, h * 0.92, 0.14);
@@ -451,8 +463,8 @@ B.tank_vertical = () => {
 B.tank_cone = () => {
     const g = group();
     const r = 0.7, h = 1.5;
-    g.add(cyl(r, r, h, MAT.steel, { pos: [0, 0.62 + h / 2, 0], tintable: true }));
-    g.add(cone(r, 0.56, MAT.steel, { pos: [0, 0.34, 0], rot: [Math.PI, 0, 0] }));
+    g.add(cyl(r, r, h, MAT.shell, { pos: [0, 0.62 + h / 2, 0], tintable: true }));
+    g.add(cone(r, 0.56, MAT.shell, { pos: [0, 0.34, 0], rot: [Math.PI, 0, 0] }));
     for (let i = 0; i < 3; i++) {
         const a = (i / 3) * Math.PI * 2;
         g.add(cyl(0.04, 0.04, 0.62, MAT.metal,
@@ -493,7 +505,7 @@ B.clarifier = () => {
 B.wet_well = () => {
     const g = group();
     const r = 1.0, h = 1.2;
-    g.add(cyl(r, r, h, MAT.concrete, { pos: [0, h / 2, 0], tintable: true, receive: true }));
+    g.add(cyl(r, r, h, MAT.shell, { pos: [0, h / 2, 0], tintable: true, receive: true }));
     g.add(torus(r, 0.07, MAT.dark, { pos: [0, h, 0], rot: [Math.PI / 2, 0, 0], noShadow: true }));
     liquidCylinder(g, r * 0.93, h * 0.9, 0.06);
     return g;

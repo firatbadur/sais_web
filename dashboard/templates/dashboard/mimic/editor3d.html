@@ -148,6 +148,31 @@
         body.anim-speed .only-anim-speed { display: block; }
         body.btn-openmimic .only-openmimic { display: block; }
 
+        /* simülasyon paneli (sol altta yüzer) */
+        .mx-sim { position: absolute; left: 14px; bottom: 14px; width: 260px; max-height: 60%;
+            background: var(--mx-panel); border: 1px solid var(--mx-border); border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(0,0,0,.3); display: none; flex-direction: column;
+            overflow: hidden; }
+        .mx-sim.show { display: flex; }
+        .sim-head { padding: 8px 11px; font-size: 11.5px; font-weight: 700; color: var(--mx-head);
+            border-bottom: 1px solid var(--mx-border); display: flex; align-items: center; gap: 6px; }
+        .sim-head i { color: var(--mx-accent); font-size: 16px; }
+        .sim-opts { display: flex; gap: 12px; padding: 7px 11px; border-bottom: 1px solid var(--mx-border); }
+        .sim-chk { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--mx-text);
+            cursor: pointer; }
+        .sim-list { flex: 1; overflow-y: auto; padding: 6px 9px; min-height: 0; }
+        .sim-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+        .sim-tag { flex: 0 0 74px; font-size: 10.5px; color: var(--mx-muted); overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap; }
+        .sim-row input[type=range] { flex: 1; min-width: 0; }
+        .sim-val { flex: 0 0 34px; text-align: right; font-size: 10.5px; color: var(--mx-head);
+            font-variant-numeric: tabular-nums; }
+        .sim-empty, .sim-hint { padding: 8px 11px; font-size: 11px; color: var(--mx-muted); line-height: 1.4; }
+        .sim-hint { border-top: 1px solid var(--mx-border); }
+        /* Simülasyon modunda düzenleme araçları pasif (izleme modu) */
+        body.sim-mode .mx-ribbon, body.sim-mode .mx-right, body.sim-mode .mx-left { opacity: .45;
+            pointer-events: none; }
+
         /* yüzen görünüm çubuğu */
         .mx-viewbar { position: absolute; right: 14px; bottom: 14px; display: flex; gap: 5px;
             background: var(--mx-panel); border: 1px solid var(--mx-border); border-radius: 10px;
@@ -221,6 +246,9 @@
         <i class="ki-duotone ki-eye"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>{% trans "Görüntüle" %}
     </a>
     {% endif %}
+    <button class="mx-btn" id="m3d-sim" title="{% trans 'Simülasyonu başlat' %}">
+        <i class="ki-duotone ki-play"><span class="path1"></span><span class="path2"></span></i>{% trans "Simülasyon" %}
+    </button>
     <button class="mx-btn btn-accent" id="m3d-save">
         <i class="ki-duotone ki-check"><span class="path1"></span></i>{% trans "Kaydet" %}
     </button>
@@ -347,6 +375,21 @@
     <!-- ORTA: tuval -->
     <div class="mx-center">
         <canvas id="m3d-canvas"></canvas>
+
+        <!-- Simülasyon paneli (yalnız simülasyon modunda görünür) -->
+        <div class="mx-sim" id="m3d-sim-panel">
+            <div class="sim-head">
+                <i class="ki-duotone ki-pulse"><span class="path1"></span><span class="path2"></span></i>
+                {% trans "Simülasyon" %}
+            </div>
+            <div class="sim-opts">
+                <label class="sim-chk"><input type="checkbox" id="m3d-sim-auto">{% trans "Otomatik" %}</label>
+                <label class="sim-chk"><input type="checkbox" id="m3d-sim-live">{% trans "Canlı veri" %}</label>
+            </div>
+            <div class="sim-list" id="m3d-sim-tags"></div>
+            <div class="sim-hint">{% trans "Butonlara tıklayarak etiket sürebilirsiniz." %}</div>
+        </div>
+
         <div class="mx-viewbar">
             <button class="vb" data-view="iso">{% trans "İzo" %}</button>
             <button class="vb" data-view="front">{% trans "Ön" %}</button>
@@ -481,6 +524,7 @@
                 <datalist id="m3d-tag-options"></datalist>
                 <div class="f-row"><label>{% trans "İfade" %}</label><input type="text" id="b-expr"
                     placeholder="Pompa1 || Pompa2"></div>
+                <div class="f-hint">{% trans "İfade doluysa etiket yerine o kullanılır. Karşılaştırma/mantık ifadeleri (>, &&, ||) sonuç olarak 0 veya 1 döndürür — bu durumda Eşik değerini 1 (veya daha küçük) yapın, aksi halde animasyon hiç tetiklenmez." %}</div>
                 <div class="f-row"><label>{% trans "Animasyon" %}</label>
                     <select id="b-anim">
                         <option value="auto">{% trans "auto (sembole özel)" %}</option>
