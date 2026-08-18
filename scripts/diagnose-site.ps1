@@ -141,6 +141,24 @@ if (Test-Path $composeFile) {
     Emit "[HATA] $composeFile bulunamadi." "Red"
 }
 
+# --------------------------------------------- 4b) DB MOTORU UYUMU (KRITIK)
+# Sistem v0.4.0'da MSSQL -> PostgreSQL 16'ya gecti. MSSQL doneminden kalma bir
+# sahada "Simdi Guncelle" yeni (PG) imaji cekerse app DB'ye HIC baglanamaz:
+# psycopg localhost:5432'ye gider, MSSQL 1433'te durur -> gunicorn hic ayaga
+# kalkmaz -> Caddy her istege 502 verir. MSSQL verisine dokunulmaz (migrate
+# calisamadigi icin sema bozulmaz) -> IMAGE_TAG ile geri donmek guvenlidir.
+Section "4b) Veritabani motoru <-> imaj uyumu"
+$dbImage = (Wsl "docker ps -a --filter 'name=sais_web-db-1' --format '{{.Image}}'" | Out-String).Trim()
+Emit "  db container imaji : $dbImage"
+if ($dbImage -match "mssql") {
+    Emit "[KRITIK] Saha MSSQL kullaniyor ama v0.4.0+ imajlari PostgreSQL bekler." "Red"
+    Emit "         Bu sahada 'Simdi Guncelle' app'i DB'siz birakir (502)." "Red"
+    Emit "         Cozum: .env'de IMAGE_TAG=v0.3.8 (son MSSQL surumu) -> up -d." "Yellow"
+    Emit "         Kalici cozum: export_config/import_config ile PostgreSQL'e planli gocus." "Yellow"
+} elseif ($dbImage -match "postgres") {
+    Emit "  [OK] PostgreSQL - guncel imajlarla uyumlu." "Green"
+}
+
 # --------------------------------------------------------------- 5) loglar
 Section "5) Container loglari (son $Lines satir)"
 $allLogs = ""
@@ -195,6 +213,7 @@ $rules = @(
     @{ p = 'duplicate key value violates unique constraint';                   m = "[KRITIK] Migration veri catismasi (or. Sensor.tag benzersizlik doldurma). Ilgili migration adi loglarda hemen ustte." },
     @{ p = 'column .* does not exist|relation .* does not exist|UndefinedTable|UndefinedColumn'; m = "[KRITIK] Kod semadan ILERI: migrate tamamlanmadi ya da worker/beat eski sema ile kosuyor. Once web'in migrate adimini tamamla." },
     @{ p = 'password authentication failed|FATAL:  role .* does not exist';    m = "[KRITIK] DB kimlik hatasi: .env POSTGRES_PASSWORD ile pg_data volume'undeki parola uyusmuyor (parola ancak ILK acilista yazilir)." },
+    @{ p = 'port 5432 failed: Connection refused|Veritabani .* olusturulamadi'; m = "[KRITIK] App PostgreSQL'e (localhost:5432) baglanamiyor. Bolum 3'te POSTGRES_* bos ve bolum 4b'de db=mssql ise: saha MSSQL doneminden kalma, yeni imaj uyumsuz -> IMAGE_TAG=v0.3.8 ile geri don." },
     @{ p = 'could not translate host name|Connection refused.*5432|db.*not ready'; m = "[UYARI] DB container'a ulasilamiyor; 'db' saglikli mi (bolum 1) bak." },
     @{ p = 'Missing staticfiles manifest entry';                               m = "[KRITIK] collectstatic eksik/yarim -> her sayfa 500. Cozum: exec web python manage.py collectstatic --noinput --clear" },
     @{ p = 'Expected str, got SafeString|Expected .*, got ';                   m = "[KRITIK] Cython exact-type regresyonu (release imaji). build/cythonize_app.py '-X annotation_typing=False' ile derlenmeli; bu imaj hatali." },

@@ -286,6 +286,18 @@ yönetim komutu (`api/management/commands/`): `export_config` (MSSQL'deyken `dum
 `import_config` (yeni PG DB'de `loaddata` + **PostgreSQL sequence reset**). Taşınan/taşınmayan model
 listesi [api/config_migration.py](api/config_migration.py) `CONFIG_MODELS`'te (sabit).
 
+> **TUZAK — MSSQL döneminden kalma sahada "Şimdi Güncelle" app'i DB'siz bırakır (saha deneyimi,
+> Pazarcık, v0.3.8 → v1.3.0):** PostgreSQL geçişi **v0.4.0** ile geldi; **v0.3.8 ve öncesi MSSQL**
+> imajlarıdır. Böyle bir sahada dashboard'dan güncelleme yapılırsa Watchtower PG bekleyen imajı
+> çeker, `.env`'de `POSTGRES_*` olmadığı için psycopg **localhost:5432**'ye gider (MSSQL 1433'te),
+> `ensure_database` 40 denemeden sonra düşer → **gunicorn hiç ayağa kalkmaz**, Caddy her isteğe
+> **502** verir; worker/beat `migrate --check` döngüsünde bekler. **Veri güvende**: migrate hiç
+> çalışamadığı için MSSQL şemasına dokunulmaz → geri dönüş kayıpsızdır. **Kurtarma:** `.env`'de
+> `IMAGE_TAG=v0.3.8` + `up -d`. Sabit tag pinlendiğinden Watchtower o sahayı bir daha yükseltmez.
+> Kalıcı çözüm bu göçtür — **ama historian (`Reading`) taşınmaz**, sahada birikmiş Bakanlık geçmişi
+> yeni DB'de sıfırdan başlar; göç öncesi bunu müşteriyle netleştir. Teşhis: [scripts/diagnose-site.ps1](scripts/diagnose-site.ps1)
+> bölüm 4b (db imajı ↔ uygulama sürümü uyumu).
+
 **Sıra zorunlu** (seed'lerden ÖNCE import; aksi halde `Station.get_or_create(id=1)` gibi sabit-PK
 seed'lerle çakışır — `import_config` boşluk kontrolü bunu yakalar):
 ```
