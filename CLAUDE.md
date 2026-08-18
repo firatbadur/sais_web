@@ -314,7 +314,13 @@ python manage.py seed_initial_data && python manage.py seed_sais_data && python 
    zaten mevcut. `api.License`'ı **hariç tut**: eski/boş lisans kaydı yeni kuruluma taşınırsa
    `created_at` eski olacağından bootstrap grace dolmuş sayılıp saha anında kilitlenebilir; yeni
    sistemde `refresh_license` taze token çeksin.
-2. **Lisans önce hazırlanmalı.** v1.x'te enforcement kod sabiti; `.env`'de `LICENSE_KEY`/`LICENSE_URL`
+2. **Kaldırılmış alanlar `loaddata`'yı durdurur.** Eski export'ta o sürümde var olup bugün
+   olmayan alanlar bulunur (saha örneği: `Station has no field named 'domain'`) →
+   `import_config --ignore-removed-fields` ile geç (Django `--ignorenonexistent`). Bu bayrak
+   olmayan bir imaj sahadaysa: `loaddata <dosya> --ignorenonexistent` + ardından **mutlaka**
+   `shell -c "from api.management.commands.import_config import Command; Command()._reset_sequences()"`
+   — sequence reset atlanırsa import başarılı görünür, ilk yeni kayıtta duplicate-PK ile patlar.
+3. **Lisans önce hazırlanmalı.** v1.x'te enforcement kod sabiti; `.env`'de `LICENSE_KEY`/`LICENSE_URL`
    yoksa saha yalnız `LICENSE_BOOTSTRAP_GRACE_HOURS` (varsayılan **168 saat = 7 gün**) çalışır, sonra
    polling + SIM yayını durur. Göçten ÖNCE `license_tool.py issue` + manifest push yapılıp anahtar
    `.env`'e yazılmalı.

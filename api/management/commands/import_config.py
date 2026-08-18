@@ -42,6 +42,12 @@ class Command(BaseCommand):
             "--allow-nonempty", action="store_true",
             help="Boşluk kontrolünü atla (RİSKLİ — PK çakışmasına yol açabilir).",
         )
+        parser.add_argument(
+            "--ignore-removed-fields", action="store_true",
+            help="Export'ta olup bu sürümde KALDIRILMIŞ alan/modelleri atla "
+                 "(eski sürümden göç; ör. v0.3.8 'Station.domain'). loaddata "
+                 "--ignorenonexistent ile aynı davranış.",
+        )
 
     def handle(self, *args, **options):
         path = options["file"]
@@ -52,7 +58,7 @@ class Command(BaseCommand):
             self._assert_empty()
 
         self.stdout.write(f"Yükleniyor: {path} ...")
-        call_command("loaddata", path)
+        call_command("loaddata", path, ignorenonexistent=options["ignore_removed_fields"])
 
         self._reset_sequences()
         self.stdout.write(self.style.SUCCESS(
