@@ -229,6 +229,19 @@ docker-compose.prod.yml --env-file .env up -d`.
 (read:packages PAT) + `pull` + `up -d`; `-FirstRun`/`FIRST_RUN=1` ile bir kez
 `seed_initial_data` + `seed_sais_data` + superuser. Sonra admin'den saha-özel kayıtlar girilir.
 
+**Güncelleme sonrası saha açılmıyorsa (teşhis):** [scripts/diagnose-site.ps1](scripts/diagnose-site.ps1)
+— saha makinesinde yönetici PowerShell'de tek komut, **salt okuma**. WSL/Docker durumu + `compose ps -a`
++ restart sayacı/exit kodu + imaj digest & `APP_VERSION` + `.env` anahtar varlığı (değer gizli) +
+**host'taki compose dosyasının güncelliği** (Watchtower yalnız imajı yeniler; `caddy`/`report_files`/
+`/etc/machine-id`/`/bridge` eksikse compose eski) + 7 servisin logları + `migrate --check`/bekleyen
+migration + 80/443'ü tutan process; sonunda bilinen hata imzalarını (SECRET_KEY fail-hard,
+DisallowedHost, migration çakışması, `password authentication failed`, staticfiles manifest, Cython
+`Expected str, got SafeString`, GHCR `unauthorized`, docker.sock izni, OOM…) Türkçe teşhis + çözümle
+eşler. Çıktı `C:\EnvisoftWebX\logs\diagnose-<zaman>.txt`.
+**Eski sürüme dönerken kritik:** yeni imaj `migrate` ettiği için şema ileri gitmiştir; `IMAGE_TAG` ile
+geri inmek tek başına yetmez (eski kod yeni şemayla `UndefinedColumn` verir) — o sürümün DB yedeğiyle
+`restore_database` gerekir (bkz. sürüm-bilinçli geri yükleme).
+
 İlgili `.env` değişkenleri: `GHCR_IMAGE`, `IMAGE_TAG`, `WATCHTOWER_API_TOKEN` (dashboard "Şimdi Güncelle" HTTP API token'ı), `WEB_PORT`.
 
 ## Veritabanı yedekleme / geri yükleme (sürüm-bilinçli)
