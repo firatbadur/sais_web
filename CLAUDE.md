@@ -308,6 +308,17 @@ python manage.py migrate --noinput
 python manage.py import_config --file /tmp/config_export.json   # seed'lerden ÖNCE
 python manage.py seed_initial_data && python manage.py seed_sais_data && python manage.py seed_periodic_tasks
 ```
+**v0.3.8 (veya öncesi) sahadan göç — iki ek koşul:**
+1. **`export_config` o imajlarda YOK** (göç araçları v0.4.0 ile geldi). Fallback: eski sürüm
+   ayaktayken düz `dumpdata` ile `CONFIG_MODELS` listesini dök — listedeki tüm modeller v0.3.8'de
+   zaten mevcut. `api.License`'ı **hariç tut**: eski/boş lisans kaydı yeni kuruluma taşınırsa
+   `created_at` eski olacağından bootstrap grace dolmuş sayılıp saha anında kilitlenebilir; yeni
+   sistemde `refresh_license` taze token çeksin.
+2. **Lisans önce hazırlanmalı.** v1.x'te enforcement kod sabiti; `.env`'de `LICENSE_KEY`/`LICENSE_URL`
+   yoksa saha yalnız `LICENSE_BOOTSTRAP_GRACE_HOURS` (varsayılan **168 saat = 7 gün**) çalışır, sonra
+   polling + SIM yayını durur. Göçten ÖNCE `license_tool.py issue` + manifest push yapılıp anahtar
+   `.env`'e yazılmalı.
+
 `export_config` `use_natural_foreign_keys=True` kullanır: Django'nun yerleşik `auth.Permission` /
 `ContentType` referansları doğal anahtarla yazılır (migrate yeniden ürettiğinde PK farkı sorun
 olmaz); CONFIG modellerinin kendi FK'leri sayısal PK ile korunur. **Sequence reset atlanamaz** —
