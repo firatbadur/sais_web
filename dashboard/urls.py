@@ -112,6 +112,8 @@ urlpatterns = [
          name="admin_sim_settings"),
     path("admin-pages/sim-services/", views.SimServicesView.as_view(),
          name="admin_sim_services"),
+    path("admin-pages/sim-outbox/", views.SimOutboxView.as_view(),
+         name="admin_sim_outbox"),
     path("admin-pages/sim-data-report/", views.SimDataReportView.as_view(),
          name="admin_sim_data_report"),
 
@@ -225,6 +227,11 @@ urlpatterns = [
     # --- AJAX API (yönetici) ---
     path("api/system-control/status/", api_views.system_control_status,
          name="api_system_control_status"),
+    # Bakanlık veri gönderim kuyruğu (store-and-forward outbox)
+    path("api/sim/outbox/status/", api_views.sim_outbox_status,
+         name="api_sim_outbox_status"),
+    path("api/sim/outbox/action/", api_views.sim_outbox_action,
+         name="api_sim_outbox_action"),
     path("api/system-alarms/save/", api_views.system_alarms_save, name="api_system_alarms_save"),
     path("api/system-alarms/status/", api_views.system_alarms_status, name="api_system_alarms_status"),
     path("api/connection-toggle/", api_views.connection_toggle,

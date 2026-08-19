@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import datetime
 from typing import Any, Mapping, Optional
 from urllib.parse import urljoin
@@ -44,9 +45,11 @@ from django.conf import settings
 from sais_domain.models import SaisCabinet
 
 from .auth import (
+    acquire_login_lock,
     clear_session,
     double_md5,
     load_session,
+    release_login_lock,
     store_session,
 )
 from .base import BaseHttpClient
@@ -74,8 +77,30 @@ class SaisSimClient(BaseHttpClient):
         base_url: Optional[str] = None,
         timeout: Optional[int] = None,
         software_version: Optional[str] = None,
+        retries: Optional[int] = None,
     ) -> None:
-        super().__init__(timeout=timeout, verify_tls=True)
+        # Timeout + retry saha koşullarına göre `.env`'den ayarlanır; eskiden
+        # sabit 50 sn / retry yoktu ve Bakanlık yavaşlayınca dakika kaybediliyordu.
+        super().__init__(
+            timeout=(
+                timeout if timeout is not None
+                else int(getattr(settings, "SAIS_SIM_TIMEOUT", self.default_timeout))
+            ),
+            verify_tls=True,
+            connect_timeout=int(getattr(settings, "SAIS_SIM_CONNECT_TIMEOUT", 10)),
+            retries=(
+                retries if retries is not None
+                else int(getattr(settings, "SAIS_SIM_HTTP_RETRIES", 0))
+            ),
+            # Okuma timeout'u transport'ta TEKRARLANMAZ (Celery limit aritmetiği,
+            # bkz. settings.SAIS_SIM_HTTP_READ_RETRIES); kuyruk backoff'u yapar.
+            read_retries=int(getattr(settings, "SAIS_SIM_HTTP_READ_RETRIES", 0)),
+            backoff=float(getattr(settings, "SAIS_SIM_HTTP_BACKOFF", 2.0)),
+            backoff_max=int(getattr(settings, "SAIS_SIM_HTTP_BACKOFF_MAX", 30)),
+            retry_statuses=getattr(
+                settings, "SAIS_SIM_RETRY_STATUSES", (429, 500, 502, 503, 504),
+            ),
+        )
         self.cabinet = cabinet
         self.base_url = (
             base_url
@@ -87,6 +112,33 @@ class SaisSimClient(BaseHttpClient):
             or getattr(settings, "SAIS_SIM_SOFTWARE_VERSION", None)
             or self.DEFAULT_SOFTWARE_VERSION
         )
+        # Ağır sorgu uçları (GetMissingDates / GetDataByBetweenTwoDate) zaten
+        # 180 sn timeout kullanıyor; oraya normal retry sayısını uygulamak en
+        # kötü ~12 dk süren bir istek doğururdu (kullanıcı-tetikli SIM konsolu
+        # bunu bekleyemez). Bu yüzden ayrı, düşük-retry'li bir session tutulur.
+        self._long_query_retries = int(
+            getattr(settings, "SAIS_SIM_LONG_QUERY_RETRIES", 1)
+        )
+        self._long_session: Optional[requests.Session] = None
+
+    def _get_long_session(self) -> requests.Session:
+        """Ağır sorgu uçları için düşük-retry'li session (cookie'ler paylaşılır)."""
+        if self._long_session is None:
+            sess = requests.Session()
+            self._mount_retries(sess, self._long_query_retries)
+            # Ticket cookie'leri ana session'la ortak olmalı.
+            sess.cookies = self.session.cookies
+            self._long_session = sess
+        return self._long_session
+
+    def close(self) -> None:
+        if self._long_session is not None:
+            try:
+                self._long_session.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self._long_session = None
+        super().close()
 
     # ---------------------------------------------------------------- Auth
 
@@ -113,7 +165,32 @@ class SaisSimClient(BaseHttpClient):
 
         Başarılı olursa ticket string'i döner; hata durumunda
         ``SaisAuthError`` yükselir.
+
+        **Kilitli:** aynı kabin için eşzamanlı login'ler birbirinin ticket'ını
+        geçersiz kılıyordu (``clear_session`` + yarış). Kilidi alamayan çağıran
+        kısa süre bekleyip cache'te beliren ticket'ı kullanır; gerçek login'i
+        yalnız kilit sahibi yapar.
         """
+        if not acquire_login_lock(self.cabinet.id):
+            for _ in range(6):
+                time.sleep(0.5)
+                ticket, cookies = load_session(self.cabinet.id)
+                if ticket:
+                    if cookies:
+                        self.session.cookies.update(cookies)
+                    logger.debug(
+                        "SAIS login kilidi başkasındaydı; taze ticket kullanıldı "
+                        "(cabinet=%s)", self.cabinet.id,
+                    )
+                    return ticket
+            # Kilit sahibi başarısız/yavaş — kendimiz deneriz (kilit TTL ile düşer).
+        try:
+            return self._do_login(triggered_by=triggered_by)
+        finally:
+            release_login_lock(self.cabinet.id)
+
+    def _do_login(self, *, triggered_by: Any = None) -> str:
+        """Asıl login akışı (kilit sahibi tarafından çağrılır)."""
         clear_session(self.cabinet.id)
         self.session.cookies.clear()
 
@@ -180,6 +257,7 @@ class SaisSimClient(BaseHttpClient):
         timeout: Optional[int] = None,
         triggered_by: Any = None,
         log_component: Optional[str] = None,
+        long_query: bool = False,
     ) -> requests.Response:
         """Ticket-yenileme bilen POST sarmalayıcısı.
 
@@ -196,11 +274,13 @@ class SaisSimClient(BaseHttpClient):
         if timeout is not None:
             kwargs["timeout"] = timeout
 
+        sess = self._get_long_session() if long_query else None
         response = self.request(
             "POST", url,
             log_component=log_component,
             triggered_by=triggered_by,
             retry_count=0,
+            session=sess,
             **kwargs,
         )
         if response.status_code != 401:
@@ -218,6 +298,7 @@ class SaisSimClient(BaseHttpClient):
             log_component=log_component,
             triggered_by=triggered_by,
             retry_count=1,
+            session=sess,
             **kwargs,
         )
 
@@ -246,6 +327,7 @@ class SaisSimClient(BaseHttpClient):
             "/SAIS/GetMissingDates",
             params=params,
             timeout=self.MISSING_DATES_TIMEOUT,
+            long_query=True,
             triggered_by=triggered_by,
             log_component=f"{self.component}.get_missing_dates",
         )
@@ -266,6 +348,10 @@ class SaisSimClient(BaseHttpClient):
         çağıran sensör/parametre eşlemesini yapıp düz dict olarak verir.
         ``Readtime``, ``Stationid``, ``SoftwareVersion``, ``Period`` zarfı
         otomatik eklenir.
+
+        **Dönüş: HAM ZARF** (``{result, message, objects}``) — ``objects``
+        açılmaz. Bu uçta anlamlı bilgi ``result``/``message``'dadır; çağıran
+        ``sais_domain.sim_errors.classify_send_result`` ile yorumlar.
         """
         payload: dict[str, Any] = {
             "Readtime": readtime,
@@ -280,7 +366,14 @@ class SaisSimClient(BaseHttpClient):
             triggered_by=triggered_by,
             log_component=f"{self.component}.send_data",
         )
-        return self._unwrap(response, allow_non_dict=True)
+        # ``_unwrap`` DEĞİL ``_envelope``: Bakanlık'ın ret zarfı
+        # ``{"result": false, "message": "...", "objects": null}`` biçimindedir;
+        # ``_unwrap`` "objects" anahtarını görüp içeriğini (null) döndürdüğü için
+        # ret bilgisi YUTULUYORDU → çağıran her HTTP 200'ü kabul sayıyor,
+        # "SİM'e son iletim" damgası yanlışlıkla yeşil kalıyordu. Ham zarf
+        # döndürülür; kabul/ret ayrımı ``sais_domain.sim_errors`` ile yapılır.
+        # (``send_calibration`` / ``send_host_changed`` ile aynı sözleşme.)
+        return self._envelope(response)
 
     def send_diagnostic(
         self,
@@ -502,6 +595,7 @@ class SaisSimClient(BaseHttpClient):
             "/SAIS/GetDataByBetweenTwoDate",
             params=params,
             timeout=self.MISSING_DATES_TIMEOUT,
+            long_query=True,
             triggered_by=triggered_by,
             log_component=f"{self.component}.get_data_between",
         )

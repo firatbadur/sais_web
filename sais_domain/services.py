@@ -79,6 +79,10 @@ class SimSendDataPayload:
     readtime: str
     values: dict[str, Any] = field(default_factory=dict)
     period: int = 1
+    #: Payload'ın ait olduğu dakika (TZ-aware). ``readtime`` string'inin
+    #: makine-okunur karşılığı; gönderim kuyruğu (``SimOutboxEntry.readtime``)
+    #: sıralama + yaş hesabı için string değil datetime saklar.
+    readtime_dt: datetime | None = None
 
     @property
     def is_empty(self) -> bool:
@@ -145,6 +149,7 @@ def build_sim_payload(
         readtime=_format_readtime(readtime),
         values=values,
         period=period or cabinet.data_period or 1,
+        readtime_dt=readtime,
     )
 
 
@@ -280,6 +285,7 @@ def build_sim_payloads_for_times(
             readtime=_format_readtime(target),
             values=values,
             period=period or cabinet.data_period or 1,
+            readtime_dt=target,
         ))
 
     return payloads

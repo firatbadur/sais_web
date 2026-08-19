@@ -326,6 +326,82 @@
         <div class="card card-flush">
             <div class="card-header">
                 <h3 class="card-title">
+                    <i class="ki-outline ki-send fs-2 me-2 text-primary"></i>
+                    {% trans "Bakanlık Veri Gönderim Kuyruğu" %}
+                </h3>
+                <div class="card-toolbar">
+                    <span class="badge badge-light-secondary" id="outbox-state-badge">—</span>
+                    <a href="{% url 'dashboard:admin_sim_outbox' %}" class="btn btn-sm btn-light-primary ms-3">
+                        <i class="ki-outline ki-eye fs-4"></i>{% trans "Kuyruğu Aç" %}
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="text-muted fs-8 mb-4">
+                    {% trans "Dakikalık ölçümler önce kuyruğa yazılır, sonra Bakanlık'a gönderilir. Bir veri kabul edilene kadar sonraki dakikalar bekletilir (sıra korunur) — bu yüzden kuyrukta birikme, Bakanlık servisinin yanıt vermediğini gösterir." %}
+                </div>
+                <div class="row g-5">
+                    <div class="col-md-3">
+                        <div class="d-flex flex-column border border-dashed border-gray-300 rounded p-5">
+                            <span class="text-muted fs-8 mb-1">{% trans "Kuyrukta bekleyen" %}</span>
+                            <span class="fs-2 fw-bold text-gray-900" id="outbox-pending">—</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex flex-column border border-dashed border-gray-300 rounded p-5">
+                            <span class="text-muted fs-8 mb-1">{% trans "En eski bekleyen veri" %}</span>
+                            <span class="fs-5 fw-semibold text-gray-800" id="outbox-oldest">—</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex flex-column border border-dashed border-gray-300 rounded p-5">
+                            <span class="text-muted fs-8 mb-1">{% trans "24s iletilen" %}</span>
+                            <span class="fs-2 fw-bold text-success" id="outbox-sent">—</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex flex-column border border-dashed border-gray-300 rounded p-5">
+                            <span class="text-muted fs-8 mb-1">{% trans "24s reddedilen / süresi dolan" %}</span>
+                            <span class="fs-2 fw-bold text-danger" id="outbox-lost">—</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-danger mt-4 d-none" id="outbox-error">
+                    <span class="fw-semibold">{% trans "Kuyruk tıkalı:" %}</span>
+                    <span id="outbox-error-text"></span>
+                </div>
+
+                <div class="separator separator-dashed my-6"></div>
+
+                <form method="post" class="row g-5 align-items-end">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_accept_window">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">
+                            {% trans "Bakanlık Veri Kabul Penceresi (saat)" %}
+                        </label>
+                        <input type="number" name="sim_accept_window_hours" class="form-control"
+                               min="1" max="720" value="{{ switch.sim_accept_window_hours }}">
+                        <div class="form-text">
+                            {% trans "Bakanlık normalde son 48 saatlik veriyi kabul eder; bakım vb. durumlarda bu süreyi geçici olarak uzatabiliyor. Kuyrukta bu süreyi aşan veriler 'süresi doldu' işaretlenip atlanır. Bakanlık pencereyi uzattığında burayı artırın." %}
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="ki-outline ki-check fs-3"></i>{% trans "Kaydet" %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-5 mt-2">
+    <div class="col-12">
+        <div class="card card-flush">
+            <div class="card-header">
+                <h3 class="card-title">
                     <i class="ki-outline ki-arrows-circle fs-2 me-2 text-primary"></i>
                     {% trans "Eksik Veri Gönderim Servisi" %}
                 </h3>
@@ -339,7 +415,7 @@
             </div>
             <div class="card-body">
                 <div class="text-muted fs-8 mb-4">
-                    {% trans "Bakanlık'ın son 48 saatte eksik bildirdiği verileri her 6 saatte bir GetMissingDates ile sorgulayıp tarihsel okumalardan yeniden gönderir. 'SIM Veri İletimi' kapatılınca bu servis de durur." %}
+                    {% blocktrans %}Bakanlık'ın eksik bildirdiği verileri her 6 saatte bir GetMissingDates ile sorgulayıp tarihsel okumalardan doldurur ve gönderim kuyruğuna ekler (gönderimi kuyruk yapar). Kabul penceresi: {{ accept_window_hours }} saat. 'SIM Veri İletimi' kapatılınca bu servis de durur.{% endblocktrans %}
                 </div>
                 <div class="row g-5">
                     <div class="col-md-4">
@@ -363,7 +439,7 @@
                     </div>
                     <div class="col-md-4">
                         <div class="d-flex flex-column border border-dashed border-gray-300 rounded p-5">
-                            <span class="text-muted fs-8 mb-1">{% trans "Yeniden gönderilen" %}</span>
+                            <span class="text-muted fs-8 mb-1">{% trans "Kuyruğa alınan" %}</span>
                             <span class="fs-2 fw-bold text-success" id="missing-resent">{{ switch.last_missing_resent_count }}</span>
                         </div>
                     </div>
@@ -922,6 +998,41 @@
             </div>
         </div>
 
+        {# 6) Bakanlik gonderim kuyrugu #}
+        <div class="col-xl-6">
+            <div class="card card-flush h-100">
+                <div class="card-header min-h-45px">
+                    <h3 class="card-title fs-6 fw-bold">
+                        <i class="ki-outline ki-send fs-3 text-danger me-2"></i>{% trans "Bakanlık Veri Kuyruğu" %}
+                    </h3>
+                    <div class="card-toolbar">
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            <input class="form-check-input" type="checkbox" id="al-sim_queue_enabled">
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body pt-2">
+                    <div class="text-muted fs-8 mb-3">
+                        {% trans "Gönderim kuyruğu tıkandığında (baştaki veri iletilemiyor), dakika birikmesi eşiği aştığında veya Bakanlık veri reddettiğinde bildirir. Kabul penceresi dolmadan müdahale edilmezse veri kalıcı kaybolur." %}
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label fs-8 text-muted mb-1">{% trans "Tıkanma Eşiği (dk)" %}</label>
+                            <input type="number" class="form-control form-control-sm" id="al-sim_queue_blocked_minutes" min="1" max="1440">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fs-8 text-muted mb-1">{% trans "Birikim Eşiği (dakika sayısı)" %}</label>
+                            <input type="number" class="form-control form-control-sm" id="al-sim_queue_backlog_threshold" min="1" max="10000">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fs-8 text-muted mb-1">{% trans "Tekrar Bildirim (dk)" %}</label>
+                            <input type="number" class="form-control form-control-sm" id="al-sim_queue_cooldown_minutes" min="5" max="10080">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {# 2) SSL #}
         <div class="col-xl-6">
             <div class="card card-flush h-100">
@@ -1085,6 +1196,10 @@
             ago: "{% trans 'önce' %}",
             beatStale: "{% trans '2 dakikadan eski tetik, beat durmuş olabilir.' %}",
             missingPassive: "{% trans 'Pasif (SIM iletimi kapalı)' %}",
+            outboxFlowing: "{% trans 'Akıyor' %}",
+            outboxBacklog: "{% trans 'Birikiyor' %}",
+            outboxBlocked: "{% trans 'Tıkalı' %}",
+            outboxPaused: "{% trans 'Duraklatıldı (SIM kapalı)' %}",
         };
 
         function humanAgo(iso) {
@@ -1158,6 +1273,42 @@
                         document.getElementById("missing-error-text").textContent = data.missing_error;
                     } else {
                         mErr.classList.add("d-none");
+                    }
+                }
+                // ----- Bakanlık gönderim kuyruğu kartı -----
+                const setTxt = function (id, val) {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = (val === null || val === undefined) ? "—" : val;
+                };
+                setTxt("outbox-pending", data.outbox_pending);
+                setTxt("outbox-oldest", data.outbox_oldest);
+                setTxt("outbox-sent", data.outbox_sent_24h);
+                setTxt("outbox-lost", data.outbox_lost_24h);
+
+                const oBadge = document.getElementById("outbox-state-badge");
+                if (oBadge) {
+                    oBadge.className = "badge";
+                    if (!data.sim_enabled) {
+                        oBadge.classList.add("badge-light-warning");
+                        oBadge.textContent = I18N.outboxPaused;
+                    } else if (data.outbox_blocked_cabinets) {
+                        oBadge.classList.add("badge-light-danger");
+                        oBadge.textContent = I18N.outboxBlocked;
+                    } else if (data.outbox_pending > 5) {
+                        oBadge.classList.add("badge-light-warning");
+                        oBadge.textContent = I18N.outboxBacklog;
+                    } else {
+                        oBadge.classList.add("badge-light-success");
+                        oBadge.textContent = I18N.outboxFlowing;
+                    }
+                }
+                const oErr = document.getElementById("outbox-error");
+                if (oErr) {
+                    if (data.outbox_blocked_detail) {
+                        oErr.classList.remove("d-none");
+                        document.getElementById("outbox-error-text").textContent = data.outbox_blocked_detail;
+                    } else {
+                        oErr.classList.add("d-none");
                     }
                 }
             } catch (e) { /* network error — sessizce sıradaki tick'i bekle */ }
@@ -1474,8 +1625,8 @@
     function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     const $id = function (k) { return document.getElementById('al-' + k); };
 
-    const BOOLS = ['data_error_enabled', 'ssl_enabled', 'calibration_enabled', 'license_enabled', 'poweroff_enabled', 'notify_sms', 'notify_email'];
-    const NUMS = ['data_error_persist_minutes', 'data_error_cooldown_minutes', 'ssl_warn_days', 'calibration_interval_days', 'calibration_warn_days', 'license_warn_days', 'poweroff_min_minutes'];
+    const BOOLS = ['data_error_enabled', 'ssl_enabled', 'calibration_enabled', 'license_enabled', 'poweroff_enabled', 'sim_queue_enabled', 'notify_sms', 'notify_email'];
+    const NUMS = ['data_error_persist_minutes', 'data_error_cooldown_minutes', 'ssl_warn_days', 'calibration_interval_days', 'calibration_warn_days', 'license_warn_days', 'poweroff_min_minutes', 'sim_queue_blocked_minutes', 'sim_queue_backlog_threshold', 'sim_queue_cooldown_minutes'];
 
     // --- Formu doldur ---
     BOOLS.forEach(function (k) { const el = $id(k); if (el) el.checked = !!SETTINGS[k]; });

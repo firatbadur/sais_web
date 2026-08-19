@@ -9,6 +9,7 @@ from .models import (
     ScenarioRun,
     ScenarioRunLog,
     ScenarioStep,
+    SimOutboxEntry,
     SimStatusPolicy,
     SystemSwitch,
 )
@@ -151,3 +152,24 @@ class ScenarioGraphAdmin(admin.ModelAdmin):
         if obj is not None and obj.is_template:
             return False
         return super().has_delete_permission(request, obj)
+
+
+@admin.register(SimOutboxEntry)
+class SimOutboxEntryAdmin(admin.ModelAdmin):
+    """SİM gönderim kuyruğu — salt izleme (asıl yönetim dashboard'dan).
+
+    Kayıtlar task'lar tarafından üretilir; admin'den elle eklenmez.
+    """
+    list_display = ("readtime", "cabinet", "status", "priority", "source",
+                    "attempts", "next_attempt_at", "last_error_kind",
+                    "last_http_status")
+    list_filter = ("status", "priority", "source", "last_error_kind", "cabinet")
+    search_fields = ("cabinet__device_id", "cabinet__name", "last_error",
+                     "ministry_message")
+    date_hierarchy = "readtime"
+    ordering = ("-readtime",)
+    readonly_fields = ("payload", "created_at", "updated_at", "sent_at",
+                       "claimed_at", "first_error_at", "last_attempt_at")
+
+    def has_add_permission(self, request):
+        return False

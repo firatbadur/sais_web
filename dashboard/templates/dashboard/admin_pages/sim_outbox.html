@@ -1,0 +1,309 @@
+{% extends "dashboard/base.html" %}
+{% load i18n dashboard_extras %}
+
+{% block title %}{% trans "Bakanlık Veri Gönderim Kuyruğu" %}{% endblock %}
+{% block page_title %}{% trans "Bakanlık Veri Gönderim Kuyruğu" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    #kt_app_content_container { opacity: 0; }
+    body.page-ready #kt_app_content_container { opacity: 1; transition: opacity 0.18s ease-in-out; }
+    #report-results-card .dt-buttons .btn { margin-right: 0.35rem; padding: 0.45rem 0.85rem; }
+    .flatpickr-calendar { z-index: 10000; }
+    #report-table td.msg-cell { max-width: 320px; }
+    .queue-card.blocked { border-left: 4px solid var(--bs-danger); }
+    .queue-card.waiting { border-left: 4px solid var(--bs-warning); }
+    .queue-card.flowing { border-left: 4px solid var(--bs-success); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if not sim_enabled %}
+<div class="alert alert-warning d-flex align-items-center mb-5">
+    <i class="ki-outline ki-information-5 fs-2x me-3"></i>
+    <div>
+        <div class="fw-bold">{% trans "SIM veri iletimi KAPALI" %}</div>
+        <div class="fs-7">
+            {% blocktrans %}Ölçümler kuyruğa yazılmaya devam ediyor ama Bakanlık'a gönderilmiyor. Sistem Kontrol sayfasından açtığınızda kuyruk en eskiden başlayarak boşalır. Kabul penceresini ({{ accept_window_hours }} saat) aşan veriler kalıcı olarak kaybolur.{% endblocktrans %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ============ KABİN ÖZET KARTLARI ============ -->
+<div class="row g-5 mb-5" id="queue-summary">
+    {% for s in summary %}
+    <div class="col-md-6 col-xl-4">
+        <div class="card h-100 queue-card {% if s.blocked %}blocked{% elif s.pending %}waiting{% else %}flowing{% endif %}">
+            <div class="card-body py-5">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <div class="fw-bold fs-5 text-gray-800">{{ s.station|default:s.cabinet }}</div>
+                        <div class="text-muted fs-7">{{ s.cabinet }}</div>
+                    </div>
+                    {% if s.blocked %}
+                        <span class="badge badge-light-danger">{% trans "Tıkalı" %}</span>
+                    {% elif s.pending %}
+                        <span class="badge badge-light-warning">{% trans "Bekliyor" %}</span>
+                    {% else %}
+                        <span class="badge badge-light-success">{% trans "Akıyor" %}</span>
+                    {% endif %}
+                </div>
+                <div class="d-flex flex-wrap gap-4 mb-3">
+                    <div>
+                        <div class="fs-2 fw-bold text-gray-800">{{ s.pending }}</div>
+                        <div class="text-muted fs-8">{% trans "Bekleyen dakika" %}</div>
+                    </div>
+                    <div>
+                        <div class="fs-2 fw-bold text-success">{{ s.sent_24h }}</div>
+                        <div class="text-muted fs-8">{% trans "24s iletilen" %}</div>
+                    </div>
+                    <div>
+                        <div class="fs-2 fw-bold {% if s.failed_24h %}text-danger{% else %}text-gray-500{% endif %}">{{ s.failed_24h }}</div>
+                        <div class="text-muted fs-8">{% trans "24s reddedilen" %}</div>
+                    </div>
+                    <div>
+                        <div class="fs-2 fw-bold {% if s.expired_24h %}text-danger{% else %}text-gray-500{% endif %}">{{ s.expired_24h }}</div>
+                        <div class="text-muted fs-8">{% trans "24s süresi dolan" %}</div>
+                    </div>
+                </div>
+                {% if s.head_readtime %}
+                <div class="separator separator-dashed my-3"></div>
+                <div class="fs-7">
+                    <span class="text-muted">{% trans "Baştaki veri:" %}</span>
+                    <span class="fw-bold">{{ s.head_readtime|date:"d.m.Y H:i" }}</span>
+                    {% if s.head_blocked_seconds %}
+                        <span class="badge badge-light-danger ms-2">{{ s.head_blocked_seconds|minutes_from_seconds }} {% trans "dk tıkalı" %}</span>
+                    {% endif %}
+                </div>
+                {% if s.head_message %}
+                <div class="fs-8 text-danger mt-1 text-truncate" title="{{ s.head_message }}">{{ s.head_message }}</div>
+                {% endif %}
+                {% endif %}
+                <div class="mt-4">
+                    <button type="button" class="btn btn-sm btn-light-primary queue-action"
+                            data-action="retry_cabinet" data-cabinet="{{ s.cabinet_id }}">
+                        <i class="ki-outline ki-send fs-4"></i>{% trans "Şimdi Gönder" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-info mb-0">{% trans "Kuyrukta hiç kayıt yok — tüm veriler Bakanlık'a iletilmiş görünüyor." %}</div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- ============ FİLTRE FORMU ============ -->
+<div class="card mb-5 mb-xl-8">
+    <div class="card-header border-0 pt-6">
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Kuyruk Kayıtları" %}</h3>
+    </div>
+    <div class="card-body pt-2">
+        <form method="get" id="report-filter-form" class="row g-5">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Kabin" %}</label>
+                <select name="cabinet" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
+                    <option value="">{% trans "Hepsi" %}</option>
+                    {% for c in cabinets %}<option value="{{ c.id }}" {% if filters.cabinet_id == c.id %}selected{% endif %}>{{ c.station.name|default:c.name }} — {{ c.device_id }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Durum" %}</label>
+                <select name="status" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
+                    <option value="">{% trans "Hepsi" %}</option>
+                    {% for val, label in status_choices %}<option value="{{ val }}" {% if filters.status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Öncelik" %}</label>
+                <select name="priority" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
+                    <option value="">{% trans "Hepsi" %}</option>
+                    {% for val, label in priority_choices %}<option value="{{ val }}" {% if filters.priority == val|stringformat:"s" %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Hata Tipi" %}</label>
+                <select name="kind" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
+                    <option value="">{% trans "Hepsi" %}</option>
+                    {% for val, label in kind_choices %}<option value="{{ val }}" {% if filters.kind == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Arama" %}</label>
+                <input type="text" name="q" class="form-control" value="{{ filters.search }}" placeholder="{% trans 'Bakanlık mesajı / hata / kabin' %}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Başlangıç (veri zamanı)" %}</label>
+                <input type="text" name="start" id="filter-start" class="form-control" value="{{ filters.start|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Bitiş (veri zamanı)" %}</label>
+                <input type="text" name="end" id="filter-end" class="form-control" value="{{ filters.end|date:'d.m.Y H:i:s' }}" placeholder="gg.aa.yyyy SS:DD:SS">
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary"><i class="ki-outline ki-magnifier fs-3"></i>{% trans "Filtrele" %}</button>
+                {% if filters.submitted %}<a href="{% url 'dashboard:admin_sim_outbox' %}" class="btn btn-light-warning ms-2"><i class="ki-outline ki-arrows-circle fs-3"></i>{% trans "Sıfırla" %}</a>{% endif %}
+                {% if is_admin %}
+                <button type="button" class="btn btn-light-danger ms-2 queue-action" data-action="purge_dead" data-confirm="1">
+                    <i class="ki-outline ki-trash fs-3"></i>{% trans "İletilemeyenleri Temizle" %}
+                </button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ============ KUYRUK TABLOSU ============ -->
+<div class="card" id="report-results-card">
+    <div class="card-header border-0 pt-6">
+        <h3 class="card-title fw-bold text-gray-800 text-uppercase">{% trans "Gönderim Kuyruğu" %}</h3>
+        <div class="card-toolbar">
+            {% if not filters.submitted %}<span class="badge badge-light-primary me-3">{% blocktrans %}Son {{ default_limit }} kayıt{% endblocktrans %}</span>{% endif %}
+            <span class="badge badge-light-info">{% blocktrans %}Kabul penceresi: {{ accept_window_hours }} saat{% endblocktrans %}</span>
+        </div>
+    </div>
+    <div class="card-body pt-2">
+        <div id="queue-alert" class="alert d-none mb-4"></div>
+        <div class="table-responsive">
+            <table id="report-table" class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3 w-100">
+                <thead class="fs-7 fw-bold text-uppercase text-gray-700"><tr>
+                    <th>{% trans "Veri Zamanı" %}</th>
+                    <th>{% trans "Kabin" %}</th>
+                    <th>{% trans "Öncelik" %}</th>
+                    <th>{% trans "Kaynak" %}</th>
+                    <th>{% trans "Durum" %}</th>
+                    <th class="text-end">{% trans "Deneme" %}</th>
+                    <th>{% trans "Sonraki Deneme" %}</th>
+                    <th>{% trans "Hata Tipi" %}</th>
+                    <th class="text-end">HTTP</th>
+                    <th>{% trans "Bakanlık Mesajı" %}</th>
+                    <th class="text-end">{% trans "İşlem" %}</th>
+                </tr></thead>
+                <tbody>
+                    {% for e in rows %}
+                    <tr>
+                        <td data-order="{{ e.readtime|date:'U' }}" style="white-space:nowrap;">{{ e.readtime|date:"d.m.Y H:i" }}</td>
+                        <td class="text-muted">{{ e.cabinet.station.name|default:e.cabinet.name }}</td>
+                        <td>
+                            {% if e.priority == 0 %}<span class="badge badge-light-primary">{% trans "Canlı" %}</span>
+                            {% else %}<span class="badge badge-light">{% trans "Geçmiş" %}</span>{% endif %}
+                        </td>
+                        <td class="text-muted fs-7">{{ e.get_source_display }}</td>
+                        <td>
+                            {% if e.status == 'sent' %}<span class="badge badge-light-success">{{ e.get_status_display }}</span>
+                            {% elif e.status == 'pending' %}<span class="badge badge-light-warning">{{ e.get_status_display }}</span>
+                            {% elif e.status == 'sending' %}<span class="badge badge-light-info">{{ e.get_status_display }}</span>
+                            {% else %}<span class="badge badge-light-danger">{{ e.get_status_display }}</span>{% endif %}
+                        </td>
+                        <td class="text-end" data-order="{{ e.attempts }}">{{ e.attempts }}</td>
+                        <td class="text-muted fs-7" data-order="{{ e.next_attempt_at|date:'U' }}">{% if e.status == 'pending' %}{{ e.next_attempt_at|date:"d.m.Y H:i:s" }}{% else %}—{% endif %}</td>
+                        <td class="fs-7">{% if e.last_error_kind %}{{ e.last_error_kind|sim_error_label }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                        <td class="text-end" data-order="{{ e.last_http_status|default:0 }}">{{ e.last_http_status|default:"—" }}</td>
+                        <td class="msg-cell text-truncate fs-7" title="{{ e.ministry_message|default:e.last_error }}">{{ e.ministry_message|default:e.last_error|default:"—" }}</td>
+                        <td class="text-end" style="white-space:nowrap;">
+                            {% if e.status == 'pending' %}
+                            <button type="button" class="btn btn-sm btn-icon btn-light-primary queue-action"
+                                    data-action="retry" data-id="{{ e.id }}" title="{% trans 'Şimdi dene' %}">
+                                <i class="ki-outline ki-send fs-4"></i>
+                            </button>
+                            {% if is_admin %}
+                            <button type="button" class="btn btn-sm btn-icon btn-light-danger queue-action ms-1"
+                                    data-action="skip" data-id="{{ e.id }}" data-confirm="1" title="{% trans 'Atla (bu dakika Bakanlığa gitmez)' %}">
+                                <i class="ki-outline ki-cross-circle fs-4"></i>
+                            </button>
+                            {% endif %}
+                            {% elif is_admin and e.status != 'sent' and e.status != 'sending' %}
+                            <button type="button" class="btn btn-sm btn-icon btn-light-warning queue-action"
+                                    data-action="requeue" data-id="{{ e.id }}" title="{% trans 'Yeniden kuyruğa al' %}">
+                                <i class="ki-outline ki-arrows-circle fs-4"></i>
+                            </button>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% include "dashboard/partials/report_table_js.html" with order_col=0 %}
+<script>
+(function () {
+    const ACTION_URL = "{% url 'dashboard:api_sim_outbox_action' %}";
+    const STATUS_URL = "{% url 'dashboard:api_sim_outbox_status' %}";
+    const CSRF = "{{ csrf_token }}";
+    const I18N = {
+        confirmSkip: "{% trans 'Bu dakikanın verisi Bakanlığa HİÇ gönderilmeyecek ve kalıcı olarak kaybolacak. Kuyruğu elle açmak istediğinize emin misiniz?' %}",
+        confirmPurge: "{% trans 'İletilemeyen tüm kuyruk kayıtları silinecek. Devam edilsin mi?' %}",
+        done: "{% trans 'İşlem uygulandı' %}",
+        failed: "{% trans 'İşlem başarısız' %}",
+    };
+
+    const alertEl = document.getElementById('queue-alert');
+    function showAlert(msg, ok) {
+        alertEl.className = 'alert mb-4 ' + (ok ? 'alert-success' : 'alert-danger');
+        alertEl.textContent = msg;
+        alertEl.classList.remove('d-none');
+    }
+
+    function post(payload) {
+        return fetch(ACTION_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify(payload),
+        }).then(r => r.json());
+    }
+
+    document.addEventListener('click', function (ev) {
+        const btn = ev.target.closest('.queue-action');
+        if (!btn) return;
+        const action = btn.getAttribute('data-action');
+        if (btn.getAttribute('data-confirm')) {
+            const msg = action === 'purge_dead' ? I18N.confirmPurge : I18N.confirmSkip;
+            if (!window.confirm(msg)) return;
+        }
+        const payload = { action: action };
+        const id = btn.getAttribute('data-id');
+        const cab = btn.getAttribute('data-cabinet');
+        if (id) payload.ids = [parseInt(id, 10)];
+        if (cab) payload.cabinet_id = parseInt(cab, 10);
+        btn.disabled = true;
+        post(payload).then(function (d) {
+            btn.disabled = false;
+            if (d.ok) {
+                showAlert(I18N.done + ' (' + d.affected + ')', true);
+                setTimeout(() => window.location.reload(), 1200);
+            } else {
+                showAlert(d.error || I18N.failed, false);
+            }
+        }).catch(function () {
+            btn.disabled = false;
+            showAlert(I18N.failed, false);
+        });
+    });
+
+    // Özet kartları 10 sn'de bir tazele (tablo yeniden yüklenmez).
+    setInterval(function () {
+        fetch(STATUS_URL).then(r => r.json()).then(function (d) {
+            if (!d.ok) return;
+            document.querySelectorAll('.queue-card').forEach(function (card) {
+                const btn = card.querySelector('[data-cabinet]');
+                if (!btn) return;
+                const cid = parseInt(btn.getAttribute('data-cabinet'), 10);
+                const row = (d.cabinets || []).find(c => c.cabinet_id === cid);
+                if (!row) return;
+                card.classList.remove('blocked', 'waiting', 'flowing');
+                card.classList.add(row.blocked ? 'blocked' : (row.pending ? 'waiting' : 'flowing'));
+            });
+        }).catch(function () { /* sessiz */ });
+    }, 10000);
+})();
+</script>
+{% endblock %}

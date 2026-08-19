@@ -20,7 +20,9 @@ Bu komut beat scheduler'ın okuyacağı periyodik task'ları DB'ye yazar:
   - api.tasks.dispatch_report_schedules      (her 60 sn)  — vadesi gelen rapor zamanlamalarını üretime gönder
   - sais_domain.tasks.publish_minute_data    (cron: * * * * *)   — her dakika SIM + Envisoft gönderimi
   - sais_domain.tasks.run_scenarios          (cron: * * * * *)   — her dakika numune senaryosu değerlendirme
-  - sais_domain.tasks.resend_missing_data    (cron: 0 */6 * * *) — eksik veri yeniden gönderimi
+  - sais_domain.tasks.resend_missing_data    (cron: 0 */6 * * *) — eksik veri kuyruğa alma
+  - sais_domain.tasks.dispatch_sim_outbox    (her 30 sn) — SİM gönderim kuyruğu drenajı + bakımı
+  - sais_domain.tasks.prune_sim_outbox_task  (cron: 40 3 * * *) — SİM kuyruğu retention
 
 Tüm kayıtlar `enabled=True` ile yaratılır; istemediğiniz task'ı admin'den
 disable edebilirsiniz. Komut idempotenttir — aynı task adıyla mevcut kayıt
@@ -40,6 +42,10 @@ INTERVAL_TASKS = [
     ("api.tasks.heartbeat_task", 60),
     # Rapor Stüdyosu — vadesi gelen zamanlanmış raporları üretime gönder.
     ("api.tasks.dispatch_report_schedules", 60),
+    # Bakanlık SİM gönderim kuyruğu — takılı kayıtları kurtar, kabul penceresini
+    # aşanları düş, vadesi gelen kabinlere drenaj gönder (emniyet ağı; üretici
+    # zaten her dakika drenaj zincirliyor).
+    ("sais_domain.tasks.dispatch_sim_outbox", 30),
 ]
 
 CRONTAB_TASKS = [
@@ -70,6 +76,8 @@ CRONTAB_TASKS = [
     ("sais_domain.tasks.check_system_alarms",       "*/10", "*", "*", "*", "*"),
     # Sistem alarmları — SSL + lisans + kalibrasyon (günde 1, 08:10).
     ("sais_domain.tasks.check_system_alarms_daily", "10",   "8", "*", "*", "*"),
+    # SİM gönderim kuyruğu retention'ı — her gece 03:40.
+    ("sais_domain.tasks.prune_sim_outbox_task", "40", "3", "*", "*", "*"),
 ]
 
 # DB yedekleme — tek task (`backup_database_run`) farklı tier kwargs'ı ile.

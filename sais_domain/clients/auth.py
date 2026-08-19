@@ -70,3 +70,28 @@ def load_session(cabinet_id: int) -> Tuple[Optional[str], dict]:
 def clear_session(cabinet_id: int) -> None:
     """Login öncesi mevcut session bilgilerini temizle."""
     cache.delete_many([_ticket_key(cabinet_id), _cookies_key(cabinet_id)])
+
+
+# --- Login kilidi -----------------------------------------------------------
+# Aynı kabin için eşzamanlı login'ler birbirini geçersiz kılar: ``login()`` önce
+# ``clear_session()`` çağırdığı için, iki çağıran (kuyruk drenajı, senaryo
+# motoru, sistem alarmları, dashboard SIM konsolu) aynı anda giriş yaparsa biri
+# diğerinin taze ticket'ını siler ve her ikisi de 401 döngüsüne girer. Redis
+# ``SETNX`` ile giriş tek çağırana serileştirilir; bekleyenler kısa bir süre
+# sonra cache'te beliren ticket'ı kullanır.
+
+
+def _login_lock_key(cabinet_id: int) -> str:
+    return f"sais:sim:login:{cabinet_id}"
+
+
+def acquire_login_lock(cabinet_id: int, ttl: Optional[int] = None) -> bool:
+    """Login kilidini almayı dene (atomik). Alındıysa ``True``."""
+    if ttl is None:
+        ttl = int(getattr(settings, "SAIS_SIM_LOGIN_LOCK_SEC", 30))
+    return bool(cache.add(_login_lock_key(cabinet_id), "1", ttl))
+
+
+def release_login_lock(cabinet_id: int) -> None:
+    """Login kilidini bırak."""
+    cache.delete(_login_lock_key(cabinet_id))

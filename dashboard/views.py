@@ -1843,6 +1843,10 @@ class SystemControlView(OperatorRequiredMixin, TemplateView):
         ctx["alarm_settings"] = _alarm_settings_dict(SystemAlarmSettings.load())
         # Hata kodu seçimi için tüm Bakanlık kodları (geçerli olmayanlar öne çıkar).
         ctx["alarm_status_codes"] = SIM_DATA_STATUS_CODES
+        # Bakanlık veri kabul penceresi (gönderim kuyruğu süre aşımı) —
+        # SystemSwitch üzerinden operatörce ayarlanır.
+        from sais_domain import sim_outbox
+        ctx["accept_window_hours"] = sim_outbox.accept_window_hours()
         return ctx
 
     def post(self, request, *args, **kwargs):
@@ -1913,6 +1917,25 @@ class SystemControlView(OperatorRequiredMixin, TemplateView):
 
         elif action == "close_connections":
             self._close_scada_connections(request)
+
+        elif action == "save_accept_window":
+            # Bakanlık normalde son 48 saatlik veriyi kabul eder ama bakım vb.
+            # durumlarda pencereyi geçici olarak genişletebiliyor. Gönderim
+            # kuyruğu bu süreyi aşan kayıtları düşürdüğü için değer sabit
+            # kodlu olamaz — operatör buradan günceller.
+            hours = self._parse_minutes(
+                request.POST.get("sim_accept_window_hours"),
+                default=switch.sim_accept_window_hours or 48,
+                lo=1, hi=24 * 30,
+            )
+            switch.sim_accept_window_hours = hours
+            switch.updated_by = request.user
+            switch.save()
+            messages.success(
+                request,
+                _("Bakanlık veri kabul penceresi %(h)d saat olarak kaydedildi.")
+                % {"h": hours},
+            )
 
         else:  # save_switches — mevcut davranış
             switch.sim_enabled = request.POST.get("sim_enabled") == "on"
@@ -2489,6 +2512,103 @@ class NotificationCenterView(OperatorRequiredMixin, TemplateView):
 # ---------------------------------------------------------------------------
 # SIM Ayarları (SAIS kabin kayıtları + Bakanlık servisleri)
 # ---------------------------------------------------------------------------
+class SimOutboxView(OperatorRequiredMixin, ListView):
+    """Sürekli İzleme Merkezi → **Bakanlık Veri Kuyruğu**.
+
+    ``SimOutboxEntry`` (store-and-forward kuyruğu) kayıtlarının rapor
+    iskeletindeki görünümü — `ApiLogsView` ile aynı desen: filtre kartı +
+    DataTables client-side, filtre uygulanmadan son ``DEFAULT_LIMIT`` kayıt.
+
+    Sayfanın asıl işi "veri Bakanlığa gitmiyor" şikayetini yanıtlamak: hangi
+    dakikalar bekliyor, baştaki kayıt neden ilerlemiyor, hangi dakikalar
+    reddedildi/süresi doldu.
+    """
+    template_name = "dashboard/admin_pages/sim_outbox.html"
+    context_object_name = "rows"
+    paginate_by = None
+    MAX_ROWS = 5000
+    DEFAULT_LIMIT = 300
+
+    def _filters(self):
+        from sais_domain.models import SimOutboxEntry
+        gp = self.request.GET
+        status = gp.get("status") or ""
+        if status not in dict(SimOutboxEntry.STATUS_CHOICES):
+            status = ""
+        priority = gp.get("priority") or ""
+        if priority not in {str(v) for v, _ in SimOutboxEntry.PRIORITY_CHOICES}:
+            priority = ""
+        try:
+            cabinet_id = int(gp.get("cabinet") or 0) or None
+        except (TypeError, ValueError):
+            cabinet_id = None
+        return {
+            "submitted": bool(gp),
+            "cabinet_id": cabinet_id,
+            "status": status,
+            "priority": priority,
+            "kind": (gp.get("kind") or "").strip(),
+            "search": (gp.get("q") or "").strip(),
+            "start": parse_report_dt(gp.get("start")),
+            "end": parse_report_dt(gp.get("end")),
+        }
+
+    def get_queryset(self):
+        from sais_domain.models import SimOutboxEntry
+        f = self._filters()
+        qs = (
+            SimOutboxEntry.objects
+            .select_related("cabinet", "cabinet__station")
+            .order_by("priority", "readtime")
+            if f["status"] in ("", "pending", "sending")
+            else SimOutboxEntry.objects
+            .select_related("cabinet", "cabinet__station")
+            .order_by("-readtime")
+        )
+        if f["cabinet_id"]:
+            qs = qs.filter(cabinet_id=f["cabinet_id"])
+        if f["status"]:
+            qs = qs.filter(status=f["status"])
+        if f["priority"] != "":
+            qs = qs.filter(priority=int(f["priority"]))
+        if f["kind"]:
+            qs = qs.filter(last_error_kind=f["kind"])
+        if f["search"]:
+            qs = qs.filter(
+                Q(ministry_message__icontains=f["search"])
+                | Q(last_error__icontains=f["search"])
+                | Q(cabinet__device_id__icontains=f["search"])
+                | Q(cabinet__name__icontains=f["search"])
+            )
+        if f["start"]:
+            qs = qs.filter(readtime__gte=f["start"])
+        if f["end"]:
+            qs = qs.filter(readtime__lte=f["end"])
+        return qs[: (self.MAX_ROWS if f["submitted"] else self.DEFAULT_LIMIT)]
+
+    def get_context_data(self, **kwargs):
+        from sais_domain import sim_errors, sim_outbox
+        from sais_domain.models import SaisCabinet, SimOutboxEntry, SystemSwitch
+
+        ctx = super().get_context_data(**kwargs)
+        switch = SystemSwitch.load()
+        ctx["filters"] = self._filters()
+        ctx["cabinets"] = SaisCabinet.objects.select_related("station").order_by("id")
+        ctx["status_choices"] = SimOutboxEntry.STATUS_CHOICES
+        ctx["priority_choices"] = SimOutboxEntry.PRIORITY_CHOICES
+        ctx["kind_choices"] = [
+            (code, sim_errors.category_label(code))
+            for code in sim_errors.CATEGORY_INFO
+            if code != sim_errors.OK
+        ]
+        ctx["summary"] = SimOutboxEntry.summary()
+        ctx["sim_enabled"] = switch.sim_enabled
+        ctx["accept_window_hours"] = sim_outbox.accept_window_hours()
+        ctx["default_limit"] = self.DEFAULT_LIMIT
+        ctx["is_admin"] = getattr(self.request.user, "rol", None) == 1
+        return ctx
+
+
 class SimSettingsView(OperatorRequiredMixin, TemplateView):
     """Yönetici/Operatör → SIM Ayarları.
 

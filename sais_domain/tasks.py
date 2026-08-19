@@ -3,15 +3,29 @@ Bakanlık SIM ve Envisoft'a periyodik veri gönderim Celery task'ları.
 
 Akış::
 
-    publish_minute_data         (beat: cron */1 * * * *)
-        └─ aktif kabinler  →  publish_cabinet_data.delay(cabinet_id)
-                ├─ SaisSimClient.send_data(...)
-                └─ EnvisoftClient.send_data(...)
+    publish_minute_data          (beat: cron */1 * * * *)
+        │  dakika damgasını + yıkama override'ını SABİTLER
+        └─ publish_cabinet_data.apply_async(..., expires=45)
+                ├─ SIM      →  SimOutboxEntry (KUYRUĞA YAZAR, göndermez)
+                └─ Envisoft →  EnvisoftClient.send_data  (gönder-unut, değişmedi)
+
+    dispatch_sim_outbox          (beat: her 30 sn — emniyet ağı)
+        │  takılı kayıtları kurtar + kabul penceresini aşanları düş
+        └─ drain_sim_outbox.delay(cabinet_id)
+                └─ sim_outbox.drain_cabinet()  →  SaisSimClient.send_data
+
+    resend_missing_data          (beat: cron 0 */6 * * *)
+        └─ resend_cabinet_missing.delay(cabinet_id)
+                └─ GetMissingDates → historian → SimOutboxEntry (backfill şeridi)
+
+**SIM gönderimi artık tek serileşmiş yoldan geçer:** kuyruk drenajı. Bakanlık
+yanıt vermezse dakika kaybolmaz, kuyrukta bekler ve baştaki kayıt kabul
+edilene kadar sonraki dakikalar gönderilmez (bkz. ``sais_domain.sim_outbox``).
 
 Tek kabinin yavaş yanıtı diğerlerini geciktirmesin diye fan-out yapılır.
-İki dış sistem (SIM + Envisoft) bağımsızdır — biri fail ederse diğeri
-yine denenir. Tüm HTTP çağrıları ``BaseHttpClient`` üzerinden geçtiği
-için ``ApiLog(direction='out')`` satırları otomatik yazılır.
+İki dış sistem (SIM + Envisoft) bağımsızdır. Tüm HTTP çağrıları
+``BaseHttpClient`` üzerinden geçtiği için ``ApiLog(direction='out')``
+satırları otomatik yazılır.
 """
 from __future__ import annotations
 
@@ -20,10 +34,12 @@ from datetime import datetime, timedelta
 
 from celery import shared_task
 from django.conf import settings
+from django.db.models import F
 from django.utils import timezone
 
+from . import sim_errors, sim_outbox
 from .clients import EnvisoftClient, SaisClientError, SaisSimClient
-from .models import SaisCabinet, SimValidDay, SystemSwitch
+from .models import SaisCabinet, SimOutboxEntry, SimValidDay, SystemSwitch
 from .sim_report import detect_params, valid_counts
 from .services import (
     build_envisoft_rows,
@@ -71,30 +87,74 @@ def publish_minute_data() -> dict:
 
     Beat tarafından her dakika başında çağrılır. Tek tek kabinler için
     fan-out — bir kabinin yavaş yanıtı diğerlerini geciktirmez.
+
+    **Dakika damgası burada sabitlenir** ve alt task'a parametre geçirilir.
+    Eskiden ``readtime`` alt task'ın *çalıştığı* anda hesaplanıyordu; worker
+    kuyruğu birikince task ait olduğu dakikayı değil koştuğu dakikayı
+    damgalıyor, aynı dakika mükerrer yazılırken başka dakika hiç
+    gönderilmemiş oluyordu.
+
+    Damgayı sabitlemek ``expires`` OLMADAN güvenli değildir: geç çalışan bir
+    task eski dakika damgasıyla *taze* sensör snapshot'ı yazardı. Bu yüzden
+    mesajlara ömür verilir — bayat mesaj sessizce düşer.
+
+    Yıkama/bakım override'ı da burada bir kez çözülür (eskiden her kabin
+    task'ı ayrı ayrı okuyup aynı bayrağı eşzamanlı temizlemeye çalışıyordu).
     """
     # Lisans bitmişse veri yayını (SIM + Envisoft) durur.
     from api.licensing import license_active
     if not license_active():
         return {"dispatched": 0, "skipped": "license_inactive"}
 
+    readtime = timezone.localtime().replace(second=0, microsecond=0)
+
+    switch = SystemSwitch.load()
+    force_status = switch.active_wash_status_code()
+    # Yıkama süresi bittiyse state'i temizle — race-free conditional update,
+    # böylece eş zamanlı task'lar bayrağı çiftleyemez. Bayrak set ama
+    # active_wash_status_code() None döndüyse süre dolmuş demektir.
+    if force_status is None and switch.wash_active_kind:
+        SystemSwitch.objects.filter(pk=1, wash_active_kind=switch.wash_active_kind).update(
+            wash_active_kind=None,
+            wash_started_at=None,
+            wash_ends_at=None,
+            wash_started_by=None,
+        )
+
     cabinet_ids = list(
         SaisCabinet.objects
         .filter(station__active=True)
         .values_list("id", flat=True)
     )
+    expires = int(getattr(settings, "SAIS_PUBLISH_TASK_EXPIRES_SEC", 45))
     for cabinet_id in cabinet_ids:
-        publish_cabinet_data.delay(cabinet_id)
+        publish_cabinet_data.apply_async(
+            args=[cabinet_id],
+            kwargs={
+                "readtime_iso": readtime.isoformat(),
+                "force_status": force_status,
+            },
+            expires=expires,
+        )
     logger.info("publish_minute_data: %d cabinet enqueue edildi", len(cabinet_ids))
-    return {"dispatched": len(cabinet_ids)}
+    return {"dispatched": len(cabinet_ids), "readtime": readtime.isoformat()}
 
 
 @shared_task(name="sais_domain.tasks.publish_cabinet_data")
-def publish_cabinet_data(cabinet_id: int) -> dict:
-    """Tek bir kabinin SIM + Envisoft veri gönderimini yapar.
+def publish_cabinet_data(cabinet_id: int, readtime_iso: str | None = None,
+                         force_status: int | None = None) -> dict:
+    """Tek bir kabinin dakikalık verisini üretir.
 
-    İki gönderim birbirinden bağımsız çalışır; istisnalar log'lanır ama
-    fırlatılmaz — bir kabinin patlaması beat'i etkilemez. Her başarısız
-    çağrı zaten ``ApiLog`` üstünde error_message ile görünür durumda.
+    **SIM kolu artık göndermez, KUYRUĞA YAZAR** (``SimOutboxEntry``); asıl
+    gönderimi ``drain_sim_outbox`` yapar. Böylece Bakanlık yanıt vermediğinde
+    dakika kaybolmaz, kuyrukta bekler ve sıra korunur.
+
+    Envisoft kolu değişmedi (gönder-unut) — kapsam yalnız SIM.
+
+    ``readtime_iso``/``force_status`` normalde ``publish_minute_data``'dan
+    gelir. Verilmezse (elle çağrı veya sürüm geçişi sırasında broker'da kalmış
+    ESKİ mesaj) bugünkü davranışa düşülür: o an okunur. Bu geri-uyumluluk
+    dalı zorunludur — Watchtower güncellemesinde uçuşta mesaj kalır.
     """
     # Defansif: lisans bitmişse gönderim yapılmaz.
     from api.licensing import license_active
@@ -114,29 +174,28 @@ def publish_cabinet_data(cabinet_id: int) -> dict:
         return {"cabinet_id": cabinet_id, "skipped": "istasyon pasif"}
 
     switch = SystemSwitch.load()
-    force_status = switch.active_wash_status_code()
 
-    # Yıkama süresi bittiyse state'i temizle — race-free conditional update,
-    # böylece eş zamanlı task'lar bayrağı çiftleyemez. Bayrak set ama
-    # active_wash_status_code() None döndüyse süre dolmuş demektir.
-    if force_status is None and switch.wash_active_kind:
-        SystemSwitch.objects.filter(pk=1, wash_active_kind=switch.wash_active_kind).update(
-            wash_active_kind=None,
-            wash_started_at=None,
-            wash_ends_at=None,
-            wash_started_by=None,
-        )
+    if readtime_iso:
+        readtime = datetime.fromisoformat(readtime_iso)
+        if timezone.is_naive(readtime):
+            readtime = timezone.make_aware(readtime, timezone.get_current_timezone())
+    else:
+        # Eski mesaj / elle çağrı — bugünkü davranış.
+        readtime = timezone.localtime().replace(second=0, microsecond=0)
+        force_status = switch.active_wash_status_code()
+    readtime = readtime.replace(second=0, microsecond=0)
 
-    readtime = timezone.localtime()
-
-    sim_result = (
-        _publish_sim(cabinet, readtime, force_status=force_status) if switch.sim_enabled
-        else {"sent": False, "reason": "sim_disabled"}
-    )
+    sim_result = _enqueue_sim(cabinet, readtime, force_status=force_status, switch=switch)
     envisoft_result = (
-        _publish_envisoft(cabinet, readtime, force_status=force_status) if switch.envisoft_enabled
+        _publish_envisoft(cabinet, readtime, force_status=force_status)
+        if switch.envisoft_enabled
         else {"sent": False, "reason": "envisoft_disabled"}
     )
+
+    # Kuyruğa yeni kayıt girdiyse hemen boşaltmayı dene (düşük gecikme yolu).
+    # Kilit sayesinde beat dispatcher'ı ile yarışması zararsızdır.
+    if sim_result.get("queued") and switch.sim_enabled:
+        drain_sim_outbox.apply_async(args=[cabinet_id], expires=90)
 
     return {
         "cabinet_id": cabinet_id,
@@ -147,54 +206,156 @@ def publish_cabinet_data(cabinet_id: int) -> dict:
     }
 
 
+def _enqueue_sim(cabinet: SaisCabinet, readtime, *, force_status: int | None = None,
+                 switch=None) -> dict:
+    """Dakikalık SIM payload'ını üretip kuyruğa yazar (göndermez).
+
+    ``SystemSwitch.sim_enabled`` kapalıyken de kuyruğa yazılır (drenaj durur):
+    aksi halde "SIM'i 10 dakikalığına kapatayım" denen sürede geçen dakikalar
+    kalıcı olarak kaybolurdu. Kuyruk zaten kabul penceresi (48 saat) ile
+    sınırlı olduğu için sınırsız büyümez. ``SAIS_SIM_OUTBOX_ENQUEUE_WHEN_DISABLED``
+    ile eski davranışa dönülebilir.
+    """
+    switch = switch or SystemSwitch.load()
+    if not switch.sim_enabled and not getattr(
+        settings, "SAIS_SIM_OUTBOX_ENQUEUE_WHEN_DISABLED", True
+    ):
+        return {"queued": False, "reason": "sim_disabled"}
+
+    payload = build_sim_payload(cabinet, readtime=readtime, force_status=force_status)
+    if payload.is_empty:
+        return {"queued": False, "reason": "no analog values"}
+
+    entry, created = SimOutboxEntry.enqueue(
+        cabinet,
+        readtime=payload.readtime_dt or readtime,
+        payload=payload.values,
+        period=payload.period,
+        priority=SimOutboxEntry.PRIORITY_LIVE,
+        source=SimOutboxEntry.SOURCE_LIVE,
+    )
+    return {
+        "queued": created,
+        "values": len(payload.values),
+        "entry_id": entry.id if entry else None,
+        "sim_enabled": switch.sim_enabled,
+    }
+
+
+@shared_task(name="sais_domain.tasks.dispatch_sim_outbox")
+def dispatch_sim_outbox() -> dict:
+    """Kuyruk bakımını yapar + vadesi gelen kabinlere drenaj enqueue eder.
+
+    Beat tarafından 30 sn'de bir çağrılır — üretici zaten her dakika drenaj
+    zincirliyor; bu, kaybolan task / çökmüş worker / backoff sonrası uyanma
+    durumlarını toparlayan emniyet ağıdır.
+    """
+    from api.licensing import license_active
+    if not license_active():
+        return {"skipped": "license_inactive"}
+    if not getattr(settings, "SAIS_SIM_OUTBOX_ENABLED", True):
+        return {"skipped": "outbox_disabled"}
+
+    # Bakım adımları SIM kapalıyken de çalışmalı: aksi halde uzun süre kapalı
+    # kalan bir sahada kuyruk sınırsız büyür ve açılınca çoktan değersizleşmiş
+    # binlerce dakika gönderilmeye çalışılır.
+    reaped = sim_outbox.reap_stuck_entries()
+    expired = sim_outbox.expire_old_entries()
+
+    switch = SystemSwitch.load()
+    if not switch.sim_enabled:
+        return {"skipped": "sim_disabled", "reaped": reaped, "expired": expired}
+
+    cabinet_ids = sim_outbox.due_cabinet_ids()
+    for cabinet_id in cabinet_ids:
+        drain_sim_outbox.apply_async(args=[cabinet_id], expires=25)
+    return {
+        "reaped": reaped, "expired": expired, "dispatched": len(cabinet_ids),
+    }
+
+
+@shared_task(
+    name="sais_domain.tasks.drain_sim_outbox",
+    time_limit=900, soft_time_limit=840,
+)
+def drain_sim_outbox(cabinet_id: int) -> dict:
+    """Bir kabinin gönderim kuyruğunu sıkı FIFO ile boşaltır.
+
+    Kendi ``time_limit``'i vardır: en kötü tek gönderim (okuma timeout'u +
+    bağlantı tekrarları) global ``CELERY_TASK_TIME_LIMIT=300``'e sığmayabilir.
+    Bütçe kontrolü döngü içinde yapılır — süren istek kesilmez, yalnız yeni
+    gönderim başlatılmaz.
+    """
+    from api.licensing import license_active
+    if not license_active():
+        return {"cabinet_id": cabinet_id, "skipped": "license_inactive"}
+    if not getattr(settings, "SAIS_SIM_OUTBOX_ENABLED", True):
+        return {"cabinet_id": cabinet_id, "skipped": "outbox_disabled"}
+    if not SystemSwitch.load().sim_enabled:
+        return {"cabinet_id": cabinet_id, "skipped": "sim_disabled"}
+
+    cabinet = (
+        SaisCabinet.objects
+        .select_related("station")
+        .filter(pk=cabinet_id)
+        .first()
+    )
+    if cabinet is None:
+        return {"cabinet_id": cabinet_id, "skipped": "cabinet bulunamadı"}
+
+    return sim_outbox.drain_cabinet(cabinet)
+
+
 def _publish_sim(cabinet: SaisCabinet, readtime, *, force_status: int | None = None) -> dict:
+    """DOĞRUDAN gönderim (kuyruk devre dışıyken / debug için).
+
+    Normal akış artık kuyruk üzerindendir (``_enqueue_sim`` + ``drain_sim_outbox``).
+    Bu fonksiyon geriye dönük kaçış yolu olarak korunur; ``send_data`` artık ham
+    zarf döndürdüğü için kabul/ret ayrımı ``sim_errors`` ile yapılır.
+    """
     payload = build_sim_payload(cabinet, readtime=readtime, force_status=force_status)
     if payload.is_empty:
         return {"sent": False, "reason": "no analog values"}
     try:
         with SaisSimClient(cabinet) as client:
-            result = client.send_data(
+            envelope = client.send_data(
                 readtime=payload.readtime,
                 values=payload.values,
                 period=payload.period,
             )
-        # Bakanlık 200 + result:true ile kabul ettiyse son iletim damgasını yaz.
-        accepted = True
-        if isinstance(result, dict) and "result" in result:
-            accepted = bool(result["result"])
-        if accepted:
-            SystemSwitch.mark_sim_success(payload.readtime)
-        return {"sent": True, "values": len(payload.values), "result": result}
     except SaisClientError as exc:
-        logger.warning(
-            "SIM SendData başarısız (cabinet=%s): %s", cabinet.id, exc,
-        )
+        logger.warning("SIM SendData başarısız (cabinet=%s): %s", cabinet.id, exc)
         return {"sent": False, "error": str(exc)}
     except Exception as exc:  # noqa: BLE001
-        logger.exception(
-            "SIM SendData beklenmedik hata (cabinet=%s)", cabinet.id,
-        )
+        logger.exception("SIM SendData beklenmedik hata (cabinet=%s)", cabinet.id)
         return {"sent": False, "error": f"{type(exc).__name__}: {exc}"}
+
+    outcome, category, message = sim_errors.classify_send_result(envelope=envelope)
+    if outcome == sim_errors.ACCEPTED:
+        SystemSwitch.mark_sim_success(payload.readtime)
+        return {"sent": True, "values": len(payload.values)}
+    return {"sent": False, "error": f"{category}: {message}"}
 
 
 @shared_task(name="sais_domain.tasks.resend_missing_data")
 def resend_missing_data() -> dict:
-    """Bakanlık'ın eksik bildirdiği (son 48 saat) verileri yeniden gönderir.
+    """Bakanlık'ın eksik bildirdiği verileri **kuyruğa alır** (fan-out).
 
-    Beat tarafından **6 saatte bir** çağrılır. Her aktif kabin için Bakanlık
-    ``GetMissingDates`` servisini sorgular; dönen eksik dakikaları ``Reading``
-    historian'ından doldurup ``SendData`` ile yeniden iletir.
+    Beat tarafından **6 saatte bir** çağrılır. Her aktif kabin için ayrı bir
+    ``resend_cabinet_missing`` task'ı enqueue edilir.
+
+    **Artık doğrudan GÖNDERMEZ.** Eski hâli tek task içinde 720'ye kadar seri
+    ``SendData`` çağırıyordu; her biri timeout'a kadar bloklayabildiği için
+    ``CELERY_TASK_TIME_LIMIT=300`` gerçek bir birikimde döngüyü ortasından
+    kesiyordu. Artık eksik dakikalar ``SimOutboxEntry``'ye **backfill**
+    önceliğiyle yazılır; gönderimi tek serileşmiş yol olan drenaj yapar. Bu
+    sayede eksik veri yığını canlı dakikaların önüne geçemez ve gönderim yine
+    sıkı FIFO + tıkanma kurallarına uyar.
 
     Gate'ler (ikisi de ``publish_minute_data`` ile aynı mantık):
 
     - Lisans aktif değilse → no-op.
-    - ``SystemSwitch.sim_enabled`` kapalıysa → no-op. (Kullanıcı isteği: "SIM'e
-      veri gönder" pasifken eksik veri gönderimi de pasif olur.)
-
-    Tek run'da gönderilen dakika sayısı ``SAIS_MISSING_RESEND_MAX_MINUTES`` ile
-    sınırlı; kalan dakikalar bir sonraki run'da toparlanır (eksik kümesi
-    küçüldükçe yakınsar). Sonuç ``SystemSwitch``'e damgalanır (Sistem Kontrol
-    sayfasında görüntülenir).
+    - ``SystemSwitch.sim_enabled`` kapalıysa → no-op.
     """
     from api.licensing import license_active
     if not license_active():
@@ -204,105 +365,115 @@ def resend_missing_data() -> dict:
     if not switch.sim_enabled:
         return {"skipped": "sim_disabled"}
 
-    cabinets = list(
+    cabinet_ids = list(
+        SaisCabinet.objects
+        .filter(station__active=True)
+        .values_list("id", flat=True)
+    )
+    # Sayaçları sıfırla + kontrol damgasını at; alt task'lar F() ile artırır.
+    SystemSwitch.mark_missing_run(found=0, resent=0, error="")
+    for cabinet_id in cabinet_ids:
+        resend_cabinet_missing.apply_async(args=[cabinet_id], expires=1800)
+    logger.info("resend_missing_data: %d kabin enqueue edildi", len(cabinet_ids))
+    return {"dispatched": len(cabinet_ids)}
+
+
+@shared_task(
+    name="sais_domain.tasks.resend_cabinet_missing",
+    time_limit=600, soft_time_limit=540,
+)
+def resend_cabinet_missing(cabinet_id: int) -> dict:
+    """Tek kabin için ``GetMissingDates`` → historian backfill → **kuyruğa yaz**.
+
+    Bakanlık'ın eksik dakika listesini çeker, kabul penceresiyle sınırlar, en
+    eski dakikalardan başlayarak ``SAIS_MISSING_RESEND_MAX_MINUTES`` kadarını
+    ``Reading`` historian'ından doldurup kuyruğa ekler.
+
+    ``found`` = işlenmeye aday eksik dakika, ``enqueued`` = kuyruğa yeni
+    eklenen dakika (zaten kuyrukta bekleyen dakikalar tekrar eklenmez —
+    ``SimOutboxEntry.enqueue`` kısmi unique kısıtla bunu garanti eder).
+    """
+    from api.licensing import license_active
+    if not license_active():
+        return {"cabinet_id": cabinet_id, "skipped": "license_inactive"}
+
+    switch = SystemSwitch.load()
+    if not switch.sim_enabled:
+        return {"cabinet_id": cabinet_id, "skipped": "sim_disabled"}
+
+    cabinet = (
         SaisCabinet.objects
         .select_related("station")
-        .filter(station__active=True)
+        .filter(pk=cabinet_id)
+        .first()
     )
+    if cabinet is None:
+        return {"cabinet_id": cabinet_id, "skipped": "cabinet bulunamadı"}
 
-    total_found = 0
-    total_resent = 0
-    errors: list[str] = []
-    for cabinet in cabinets:
-        try:
-            result = _resend_cabinet_missing(cabinet)
-            total_found += result["found"]
-            total_resent += result["resent"]
-        except Exception as exc:  # noqa: BLE001 — bir kabin diğerlerini durdurmasın
-            logger.exception(
-                "resend_missing_data: cabinet=%s başarısız", cabinet.id,
-            )
-            errors.append(f"{cabinet.device_id}: {type(exc).__name__}: {exc}")
-
-    SystemSwitch.mark_missing_run(
-        found=total_found,
-        resent=total_resent,
-        error="; ".join(errors),
-    )
-    logger.info(
-        "resend_missing_data: %d kabin, %d eksik dakika bulundu, %d yeniden gönderildi",
-        len(cabinets), total_found, total_resent,
-    )
-    return {
-        "cabinets": len(cabinets),
-        "found": total_found,
-        "resent": total_resent,
-        "errors": errors,
-    }
-
-
-def _resend_cabinet_missing(cabinet: SaisCabinet) -> dict:
-    """Tek kabin için ``GetMissingDates`` → backfill → ``SendData`` akışı.
-
-    Bakanlık'ın eksik dakika listesini çeker, son 48 saatle sınırlar, en eski
-    dakikalardan başlayarak ``SAIS_MISSING_RESEND_MAX_MINUTES`` kadarını
-    ``Reading`` historian'ından doldurup gönderir. ``found`` = eksik dakika
-    sayısı (cap sonrası işlenmeye aday), ``resent`` = Bakanlık'ın 200 + result
-    ile kabul ettiği dakika sayısı.
-    """
     max_minutes = int(getattr(settings, "SAIS_MISSING_RESEND_MAX_MINUTES", 720))
     lookback = int(getattr(settings, "SAIS_MISSING_BACKFILL_LOOKBACK_MIN", 10))
 
-    with SaisSimClient(cabinet) as client:
-        objects = client.get_missing_dates()
-        raw_dates = []
-        if isinstance(objects, dict):
-            raw_dates = objects.get("MissingDates") or []
-
-        targets = _parse_missing_dates(raw_dates)
-        if not targets:
-            return {"found": 0, "resent": 0}
-
-        # En eskiden başla; cap aşılırsa kalan sonraki run'da toparlanır.
-        targets = targets[:max_minutes]
-
-        payloads = build_sim_payloads_for_times(
-            cabinet, targets, lookback_minutes=lookback,
+    try:
+        with SaisSimClient(cabinet) as client:
+            objects = client.get_missing_dates()
+    except Exception as exc:  # noqa: BLE001 — bir kabin diğerlerini durdurmasın
+        logger.exception("resend_cabinet_missing: cabinet=%s başarısız", cabinet_id)
+        SystemSwitch.objects.filter(pk=1).update(
+            last_missing_error=f"{cabinet.device_id}: {type(exc).__name__}: {exc}"[:300],
         )
+        return {"cabinet_id": cabinet_id, "error": str(exc)}
 
-        resent = 0
-        for payload in payloads:
-            if payload.is_empty:
-                continue
-            try:
-                result = client.send_data(
-                    readtime=payload.readtime,
-                    values=payload.values,
-                    period=payload.period,
-                )
-            except SaisClientError as exc:
-                logger.warning(
-                    "resend_missing_data SendData başarısız (cabinet=%s, readtime=%s): %s",
-                    cabinet.id, payload.readtime, exc,
-                )
-                continue
-            accepted = True
-            if isinstance(result, dict) and "result" in result:
-                accepted = bool(result["result"])
-            if accepted:
-                resent += 1
+    raw_dates = objects.get("MissingDates") or [] if isinstance(objects, dict) else []
+    targets = _parse_missing_dates(raw_dates)
+    if not targets:
+        return {"cabinet_id": cabinet_id, "found": 0, "enqueued": 0}
 
-        return {"found": len(targets), "resent": resent}
+    # En eskiden başla; cap aşılırsa kalan sonraki run'da toparlanır.
+    targets = targets[:max_minutes]
+
+    payloads = build_sim_payloads_for_times(
+        cabinet, targets, lookback_minutes=lookback,
+    )
+
+    enqueued = 0
+    for payload in payloads:
+        if payload.is_empty or not payload.readtime_dt:
+            continue
+        _, created = SimOutboxEntry.enqueue(
+            cabinet,
+            readtime=payload.readtime_dt,
+            payload=payload.values,
+            period=payload.period,
+            priority=SimOutboxEntry.PRIORITY_BACKFILL,
+            source=SimOutboxEntry.SOURCE_MISSING,
+        )
+        enqueued += int(created)
+
+    SystemSwitch.objects.filter(pk=1).update(
+        last_missing_found_count=F("last_missing_found_count") + len(targets),
+        last_missing_resent_count=F("last_missing_resent_count") + enqueued,
+    )
+    if enqueued:
+        drain_sim_outbox.apply_async(args=[cabinet_id], expires=120)
+    logger.info(
+        "resend_cabinet_missing: cabinet=%s, %d eksik dakika, %d kuyruğa alındı",
+        cabinet_id, len(targets), enqueued,
+    )
+    return {"cabinet_id": cabinet_id, "found": len(targets), "enqueued": enqueued}
 
 
-def _parse_missing_dates(raw_dates) -> list[datetime]:
+def _parse_missing_dates(raw_dates, window_hours=None) -> list[datetime]:
     """Bakanlık ISO tarih string'lerini TZ-aware datetime listesine çevirir.
 
-    Bakanlık naive yerel saat verir (``2020-11-24T00:55:00``). Yalnız son 48
-    saatteki dakikalar tutulur (servis sözleşmesi de 48 saatle sınırlı; defansif
-    filtre). Sıralı + tekilleştirilmiş döner (en eski → en yeni).
+    Bakanlık naive yerel saat verir (``2020-11-24T00:55:00``). Yalnız kabul
+    penceresi içindeki dakikalar tutulur — bu pencere normalde 48 saattir ama
+    Bakanlık bakım vb. durumlarda genişletebildiği için ``SystemSwitch``
+    üzerinden operatör tarafından ayarlanabilir (Sistem Kontrol sayfası).
+    Sıralı + tekilleştirilmiş döner (en eski → en yeni).
     """
-    cutoff = timezone.now() - timedelta(hours=48)
+    if window_hours is None:
+        window_hours = sim_outbox.accept_window_hours()
+    cutoff = timezone.now() - timedelta(hours=int(window_hours))
     out: set[datetime] = set()
     for item in raw_dates:
         if not item:
@@ -477,3 +648,15 @@ def check_system_alarms_daily() -> dict:
     """Günde bir: SSL bitiş + lisans bitiş + kalibrasyon hatırlatma."""
     from .system_alarms import run_daily
     return run_daily()
+
+
+@shared_task(name="sais_domain.tasks.prune_sim_outbox_task")
+def prune_sim_outbox_task() -> dict:
+    """SİM gönderim kuyruğu retention'ı (gecelik).
+
+    Bekleyen kayıtlara dokunmaz; yalnız sonuçlanmış kayıtları temizler.
+    Lisans-gate'siz (housekeeping) — kuyruk lisans bitse de şişmemeli.
+    """
+    from django.core.management import call_command
+    call_command("prune_sim_outbox")
+    return {"ok": True}

@@ -401,6 +401,93 @@ SAIS_SIM_SOFTWARE_VERSION = os.getenv("SAIS_SIM_SOFTWARE_VERSION", "EnvisoftV.2"
 # olarak ticket yenilemeyi tetikler — TTL sadece üst sınır.
 SAIS_SIM_TICKET_TTL = int(os.getenv("SAIS_SIM_TICKET_TTL", str(60 * 60)))
 
+# --- SIM HTTP transport (timeout + retry) ---
+# Bakanlık servisi saha koşullarında sık sık yavaşlıyor/yanıtsız kalıyor. Eskiden
+# timeout sabit 50 sn'di ve HİÇ retry yoktu (yalnız 401 → re-login). Artık her
+# ikisi de env'den ayarlanır ve urllib3 Retry ile transport seviyesinde uygulanır.
+SAIS_SIM_CONNECT_TIMEOUT = int(os.getenv("SAIS_SIM_CONNECT_TIMEOUT", "10"))
+SAIS_SIM_TIMEOUT = int(os.getenv("SAIS_SIM_TIMEOUT", "120"))
+SAIS_SIM_HTTP_RETRIES = int(os.getenv("SAIS_SIM_HTTP_RETRIES", "3"))
+# DİKKAT — okuma (read) tekrarı transport'ta 0 OLMALI. urllib3 bir read
+# timeout'unu da tekrarlarsa tek `session.post` çağrısı
+#   SAIS_SIM_TIMEOUT * (1 + retries) + backoff = 120*4 + 14 ≈ 494 sn
+# sürer ve `CELERY_TASK_TIME_LIMIT=300`'ü aşar → worker SIGKILL yer, üstelik
+# `CELERY_TASK_ACKS_LATE=True` olduğu için mesaj yeniden teslim edilir
+# (mükerrer gönderim + askıda kalan kilit). Okuma timeout'unun tekrarı
+# KUYRUK seviyesinde yapılır (`SimOutboxEntry.next_attempt_at` backoff'u) —
+# orada bekleme worker'ı bloke etmez. Bağlantı (connect) ve 5xx tekrarı ise
+# ucuzdur, transport'ta kalır.
+SAIS_SIM_HTTP_READ_RETRIES = int(os.getenv("SAIS_SIM_HTTP_READ_RETRIES", "0"))
+SAIS_SIM_HTTP_BACKOFF = float(os.getenv("SAIS_SIM_HTTP_BACKOFF", "2.0"))
+SAIS_SIM_HTTP_BACKOFF_MAX = int(os.getenv("SAIS_SIM_HTTP_BACKOFF_MAX", "30"))
+SAIS_SIM_RETRY_STATUSES = [
+    int(x) for x in env_list("SAIS_SIM_RETRY_STATUSES", "429,500,502,503,504")
+]
+# Ağır sorgu uçları (GetMissingDates / GetDataByBetweenTwoDate) zaten 180 sn
+# timeout kullanıyor; onlarda 3 retry en kötü ~12 dk sürerdi (kullanıcı-tetikli
+# SIM konsolu bunu bekleyemez) → ayrı, düşük retry.
+SAIS_SIM_LONG_QUERY_RETRIES = int(os.getenv("SAIS_SIM_LONG_QUERY_RETRIES", "1"))
+
+# --- SIM gönderim kuyruğu (store-and-forward outbox) ---
+# Dakikalık SendData payload'ları önce `SimOutboxEntry`'ye yazılır, ayrı bir
+# drenaj task'ı kabin bazında SIKI FIFO ile boşaltır: baştaki kayıt Bakanlık
+# tarafından kabul edilene kadar sonraki dakikalar GÖNDERİLMEZ.
+SAIS_SIM_OUTBOX_ENABLED = env_bool("SAIS_SIM_OUTBOX_ENABLED", default=True)
+# Kalıcı ret (HTTP 4xx / result=false) bu kadar denemeden sonra `failed` olur ve
+# kuyruk ilerler — tek bozuk dakika sahayı sonsuza dek kilitlemesin.
+SAIS_SIM_OUTBOX_MAX_ATTEMPTS = int(os.getenv("SAIS_SIM_OUTBOX_MAX_ATTEMPTS", "10"))
+# Bundan eski bekleyen kayıtlar `expired` olur — Bakanlık zaten 48 saatten
+# eskisini kabul etmiyor (GetMissingDates penceresi de 48 saat).
+SAIS_SIM_OUTBOX_MAX_AGE_HOURS = int(os.getenv("SAIS_SIM_OUTBOX_MAX_AGE_HOURS", "48"))
+# Bir drenaj turunun duvar-saati bütçesi + kayıt tavanı (birikmiş kuyruk tek
+# turda değil, turlar hâlinde boşalır).
+# Bütçe aritmetiği: en kötü tek gönderim = read 120 + connect 3*10 + backoff 6
+# ≈ 156 sn. Bütçe yalnız YENİ gönderim başlatmayı durdurur (süren istek
+# kesilmez) → en kötü task süresi 60 + 156 = 216 sn < SOFT_TIME_LIMIT 240 sn.
+SAIS_SIM_OUTBOX_DRAIN_BUDGET_SEC = int(os.getenv("SAIS_SIM_OUTBOX_DRAIN_BUDGET_SEC", "60"))
+SAIS_SIM_OUTBOX_DRAIN_MAX = int(os.getenv("SAIS_SIM_OUTBOX_DRAIN_MAX", "60"))
+# Drenaj kilidi: worst-case task süresinden uzun (SIGKILL'de kendiliğinden
+# düşsün) ama TIME_LIMIT=300'den kısa olmalı.
+SAIS_SIM_OUTBOX_LOCK_TTL_SEC = int(os.getenv("SAIS_SIM_OUTBOX_LOCK_TTL_SEC", "280"))
+# `sending` durumunda takılı kalan kayıt bu süreden sonra `pending`'e döner
+# (worker çöktüyse kuyruk sonsuza dek kilitlenmesin).
+SAIS_SIM_OUTBOX_CLAIM_LEASE_SEC = int(os.getenv("SAIS_SIM_OUTBOX_CLAIM_LEASE_SEC", "300"))
+# Sistematik ret (ör. hatalı parametre adı) hâlinde her kayıt için 10 deneme x
+# backoff beklemek kuyruğu saatlerce tıkar. Peş peşe bu kadar kayıt aynı
+# nedenle reddedilirse "zehirli kuyruk" moduna geçilir: sonraki retler ilk
+# denemede `failed` olur ve kuyruk hızla ilerler (alarm zaten çalar).
+SAIS_SIM_OUTBOX_POISON_STREAK = int(os.getenv("SAIS_SIM_OUTBOX_POISON_STREAK", "3"))
+# Ret (kalıcı) hatasında backoff tavanı — geçici hatanınkinden kısa; ret zaten
+# sınırlı sayıda denenecek, arada 10 dk beklemenin anlamı yok.
+SAIS_SIM_OUTBOX_REJECT_BACKOFF_MAX_SEC = int(
+    os.getenv("SAIS_SIM_OUTBOX_REJECT_BACKOFF_MAX_SEC", "60")
+)
+# Bakanlık "bu dakika zaten var" derse bu KABUL sayılır (mükerrer gönderim
+# kuyruğu zehirlemesin). Saha yanıt metni gözlemlenince genişletilebilir.
+SAIS_SIM_DUPLICATE_KEYWORDS = env_list(
+    "SAIS_SIM_DUPLICATE_KEYWORDS",
+    "tekrar veri,zaten mevcut,zaten var,already exists,duplicate",
+)
+# SIM iletimi kapalıyken de kuyruğa yazılsın mı? Varsayılan evet — aksi halde
+# "10 dakikalığına kapatayım" denen sürede geçen dakikalar kalıcı kaybolur.
+SAIS_SIM_OUTBOX_ENQUEUE_WHEN_DISABLED = env_bool(
+    "SAIS_SIM_OUTBOX_ENQUEUE_WHEN_DISABLED", default=True
+)
+# publish_cabinet_data mesajının ömrü — readtime artık planlanan dakikaya
+# sabitlendiği için GEÇ çalışan bir task yanlış dakikaya taze snapshot yazar.
+# expires bu yüzden zorunlu: bayat mesaj sessizce düşer.
+SAIS_PUBLISH_TASK_EXPIRES_SEC = int(os.getenv("SAIS_PUBLISH_TASK_EXPIRES_SEC", "45"))
+# Aynı kabin için eşzamanlı login'leri serileştir (ticket cache yarışı).
+SAIS_SIM_LOGIN_LOCK_SEC = int(os.getenv("SAIS_SIM_LOGIN_LOCK_SEC", "30"))
+# Kuyruk seviyesi backoff: min(BASE * 2**(deneme-1), MAX) saniye.
+SAIS_SIM_OUTBOX_BACKOFF_BASE_SEC = int(os.getenv("SAIS_SIM_OUTBOX_BACKOFF_BASE_SEC", "30"))
+SAIS_SIM_OUTBOX_BACKOFF_MAX_SEC = int(os.getenv("SAIS_SIM_OUTBOX_BACKOFF_MAX_SEC", "600"))
+# Gönderilmiş/süresi geçmiş kuyruk kayıtlarının saklama süresi (gün).
+# `failed` kayıtlar SİLİNMEZ (operatör görsün).
+SIM_OUTBOX_RETENTION_DAYS = int(os.getenv("SIM_OUTBOX_RETENTION_DAYS", "7"))
+# Ölü kayıtlar (failed/expired/skipped) daha uzun saklanır — teşhis için.
+SIM_OUTBOX_DEAD_RETENTION_DAYS = int(os.getenv("SIM_OUTBOX_DEAD_RETENTION_DAYS", "30"))
+
 # Eksik veri yeniden gönderim job'ı (sais_domain.tasks.resend_missing_data):
 # Bakanlık GetMissingDates'ten dönen eksik dakikaların kaçı tek run'da yeniden
 # gönderilir (üst sınır — kalan dakikalar bir sonraki 6 saatlik run'da toparlanır).

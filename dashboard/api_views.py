@@ -732,7 +732,45 @@ def system_control_status(request):
         "missing_found_count": switch.last_missing_found_count,
         "missing_resent_count": switch.last_missing_resent_count,
         "missing_error": switch.last_missing_error or None,
+        # Bakanlık gönderim kuyruğu özeti (store-and-forward outbox).
+        **_outbox_status_fields(),
     })
+
+
+def _outbox_status_fields():
+    """Sistem Kontrol kartı için kuyruk özeti (tek aggregate).
+
+    Sayılar `SimOutboxEntry.summary()` üzerinden gelir — kuyruk sayfası ve
+    alarm motoru ile aynı kaynak.
+    """
+    from sais_domain import sim_errors, sim_outbox
+    from sais_domain.models import SimOutboxEntry
+
+    rows = SimOutboxEntry.summary()
+    blocked = [r for r in rows if r["blocked"]]
+    oldest = [r["oldest"] for r in rows if r["oldest"]]
+    head = max(blocked, key=lambda r: r["head_blocked_seconds"], default=None)
+    detail = ""
+    if head:
+        label = (sim_errors.category_label(head["head_error_kind"])
+                 if head["head_error_kind"] else "")
+        mins = head["head_blocked_seconds"] // 60
+        detail = (
+            f"{head['station'] or head['cabinet']} — "
+            f"{mins} dk ({label}) {head['head_message'][:120]}"
+        ).strip()
+    return {
+        "outbox_pending": sum(r["pending"] for r in rows),
+        "outbox_sent_24h": sum(r["sent_24h"] for r in rows),
+        "outbox_lost_24h": sum(r["failed_24h"] + r["expired_24h"] for r in rows),
+        "outbox_blocked_cabinets": len(blocked),
+        "outbox_oldest": (
+            timezone.localtime(min(oldest)).strftime("%d.%m.%Y %H:%M")
+            if oldest else None
+        ),
+        "outbox_blocked_detail": detail,
+        "outbox_accept_window_hours": sim_outbox.accept_window_hours(),
+    }
 
 
 @login_required
@@ -4389,6 +4427,10 @@ def _alarm_settings_dict(s):
         "license_warn_days": s.license_warn_days,
         "poweroff_enabled": s.poweroff_enabled,
         "poweroff_min_minutes": s.poweroff_min_minutes,
+        "sim_queue_enabled": s.sim_queue_enabled,
+        "sim_queue_blocked_minutes": s.sim_queue_blocked_minutes,
+        "sim_queue_backlog_threshold": s.sim_queue_backlog_threshold,
+        "sim_queue_cooldown_minutes": s.sim_queue_cooldown_minutes,
         "notify_sms": s.notify_sms,
         "notify_email": s.notify_email,
     }
@@ -4436,6 +4478,10 @@ def system_alarms_save(request):
     s.license_warn_days = as_int("license_warn_days", 7, 1, 90)
     s.poweroff_enabled = bool(data.get("poweroff_enabled"))
     s.poweroff_min_minutes = as_int("poweroff_min_minutes", 5, 1, 1440)
+    s.sim_queue_enabled = bool(data.get("sim_queue_enabled"))
+    s.sim_queue_blocked_minutes = as_int("sim_queue_blocked_minutes", 15, 1, 1440)
+    s.sim_queue_backlog_threshold = as_int("sim_queue_backlog_threshold", 30, 1, 10000)
+    s.sim_queue_cooldown_minutes = as_int("sim_queue_cooldown_minutes", 60, 5, 10080)
     s.notify_sms = bool(data.get("notify_sms"))
     s.notify_email = bool(data.get("notify_email"))
     s.updated_by = request.user if request.user.is_authenticated else None
@@ -5097,3 +5143,168 @@ def comm_diagnostics_data(request):
         "recent": recent,
     })
 
+
+# --------------------------------------------------------------------------- #
+# Bakanlık veri gönderim kuyruğu (SimOutboxEntry)
+# --------------------------------------------------------------------------- #
+
+@login_required
+def sim_outbox_status(request):
+    """Kuyruk sayfası + Sistem Kontrol kartı için canlı özet (10 sn poll).
+
+    Sayılar tek yerden (`SimOutboxEntry.summary()`) gelir ki panel rozeti,
+    kuyruk sayfası ve alarm eşiği aynı gerçeği görsün.
+    """
+    from sais_domain import sim_errors, sim_outbox
+    from sais_domain.models import SimOutboxEntry, SystemSwitch
+
+    switch = SystemSwitch.load()
+    rows = SimOutboxEntry.summary()
+
+    cabinets = []
+    for r in rows:
+        cabinets.append({
+            "cabinet_id": r["cabinet_id"],
+            "cabinet": r["cabinet"],
+            "station": r["station"],
+            "pending": r["pending"],
+            "blocked": r["blocked"],
+            "head_readtime": (
+                timezone.localtime(r["head_readtime"]).strftime("%d.%m.%Y %H:%M")
+                if r["head_readtime"] else None
+            ),
+            "head_blocked_seconds": r["head_blocked_seconds"],
+            "head_error_kind": r["head_error_kind"],
+            "head_error_label": (
+                sim_errors.category_label(r["head_error_kind"])
+                if r["head_error_kind"] else ""
+            ),
+            "head_message": r["head_message"][:200],
+            "sent_24h": r["sent_24h"],
+            "failed_24h": r["failed_24h"],
+            "expired_24h": r["expired_24h"],
+            "oldest": (
+                timezone.localtime(r["oldest"]).strftime("%d.%m.%Y %H:%M")
+                if r["oldest"] else None
+            ),
+        })
+
+    blocked = [c for c in cabinets if c["blocked"]]
+    return JsonResponse({
+        "ok": True,
+        "sim_enabled": switch.sim_enabled,
+        "accept_window_hours": sim_outbox.accept_window_hours(),
+        "cabinets": cabinets,
+        "totals": {
+            "pending": sum(c["pending"] for c in cabinets),
+            "failed_24h": sum(c["failed_24h"] for c in cabinets),
+            "expired_24h": sum(c["expired_24h"] for c in cabinets),
+            "sent_24h": sum(c["sent_24h"] for c in cabinets),
+            "blocked_cabinets": len(blocked),
+            "blocked_names": [c["station"] or c["cabinet"] for c in blocked],
+            "max_blocked_seconds": max(
+                [c["head_blocked_seconds"] for c in blocked] or [0]
+            ),
+        },
+    })
+
+
+@login_required
+def sim_outbox_action(request):
+    """Kuyruk üzerinde operatör aksiyonları.
+
+    - ``retry`` / ``retry_cabinet`` — bekleyen kayıtların backoff'unu sıfırlar
+      ve drenajı hemen tetikler (operatör+admin).
+    - ``requeue`` — ``failed``/``expired`` kaydı yeniden kuyruğa alır (admin).
+    - ``skip`` — baştaki kaydı atlar; **Bakanlık'a o dakika hiç gitmez**, bu
+      yüzden yalnız admin ve yalnız tıkanmayı elle açmak için (admin).
+    - ``purge_dead`` — sonuçlanmış (iletilemeyen) kayıtları siler (admin).
+    """
+    import json
+
+    from sais_domain.models import SimOutboxEntry
+    from sais_domain.tasks import drain_sim_outbox
+
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST bekleniyor."}, status=405)
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (TypeError, ValueError):
+        return JsonResponse({"ok": False, "error": "Geçersiz istek."}, status=400)
+
+    action = (data.get("action") or "").strip()
+    ids = [int(i) for i in (data.get("ids") or []) if str(i).isdigit()]
+    cabinet_id = data.get("cabinet_id")
+    try:
+        cabinet_id = int(cabinet_id) if cabinet_id else None
+    except (TypeError, ValueError):
+        cabinet_id = None
+
+    # Veri kaybına yol açabilen aksiyonlar yalnız admin.
+    if action in ("skip", "purge_dead", "requeue"):
+        denied = _require_admin(request)
+    else:
+        denied = _require_operator(request)
+    if denied:
+        return denied
+
+    now = timezone.now()
+    affected = 0
+
+    if action == "retry":
+        affected = SimOutboxEntry.objects.filter(
+            id__in=ids, status=SimOutboxEntry.STATUS_PENDING,
+        ).update(next_attempt_at=now, updated_at=now)
+    elif action == "retry_cabinet":
+        if not cabinet_id:
+            return JsonResponse({"ok": False, "error": "Kabin seçilmedi."}, status=400)
+        affected = SimOutboxEntry.objects.filter(
+            cabinet_id=cabinet_id, status=SimOutboxEntry.STATUS_PENDING,
+        ).update(next_attempt_at=now, updated_at=now)
+    elif action == "requeue":
+        # Ölü kaydı yeniden dene: sayaçlar sıfırlanır ki tekrar şans bulsun.
+        affected = SimOutboxEntry.objects.filter(
+            id__in=ids, status__in=SimOutboxEntry.DEAD_STATUSES,
+        ).update(
+            status=SimOutboxEntry.STATUS_PENDING, attempts=0,
+            next_attempt_at=now, first_error_at=None,
+            last_error_kind="", last_error="", updated_at=now,
+        )
+    elif action == "skip":
+        affected = SimOutboxEntry.objects.filter(
+            id__in=ids, status__in=SimOutboxEntry.ACTIVE_STATUSES,
+        ).update(
+            status=SimOutboxEntry.STATUS_SKIPPED, payload={},
+            last_error_kind="skipped",
+            last_error="Operatör tarafından atlandı (kuyruk elle açıldı).",
+            updated_at=now,
+        )
+    elif action == "purge_dead":
+        qs = SimOutboxEntry.objects.filter(status__in=SimOutboxEntry.DEAD_STATUSES)
+        if cabinet_id:
+            qs = qs.filter(cabinet_id=cabinet_id)
+        affected, _ = qs.delete()
+    else:
+        return JsonResponse({"ok": False, "error": "Bilinmeyen işlem."}, status=400)
+
+    log_event(
+        EventType.CONFIG,
+        f"SİM veri kuyruğu işlemi: {action} ({affected} kayıt)",
+        request=request,
+    )
+
+    # Aksiyon sonrası kuyruğu hemen sürmeyi dene.
+    if action in ("retry", "retry_cabinet", "requeue", "skip"):
+        targets = [cabinet_id] if cabinet_id else list(
+            SimOutboxEntry.objects.filter(id__in=ids)
+            .values_list("cabinet_id", flat=True).distinct()
+        )
+        for cid in targets:
+            if cid:
+                try:
+                    drain_sim_outbox.apply_async(args=[cid], expires=120)
+                except Exception:  # noqa: BLE001 — broker yoksa UI kırılmasın
+                    pass
+
+    return JsonResponse({"ok": True, "affected": affected})

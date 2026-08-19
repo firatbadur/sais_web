@@ -7,6 +7,7 @@ SAIS kabin kayıtları gibi SAIS platformuna özel bilgiler buraya
 izole edilir.
 """
 from django.db import models
+from django.utils import timezone
 
 from sais_domain.crypto import EncryptedCharField
 from users.models import CustomUser
@@ -95,6 +96,9 @@ class SystemAlarmSettings(models.Model):
     4. **Lisans** — bitişe `license_warn_days` kala (günlük).
     5. **Açılma/kapanma (PowerOff)** — `poweroff_min_minutes`'tan uzun
        enerji/PC kesintisi olunca bildir (her kayıt için bir kez).
+    6. **Bakanlık veri kuyruğu** — gönderim kuyruğu (`SimOutboxEntry`) baştaki
+       kayıtta tıkandıysa, dakika birikmesi eşiği aştıysa veya Bakanlık dakika
+       reddettiyse bildir. 10 dakikada bir çalışır.
     """
 
     # --- Bakanlık veri hatası ---
@@ -130,6 +134,24 @@ class SystemAlarmSettings(models.Model):
     # --- Lisans ---
     license_enabled = models.BooleanField(default=True, verbose_name="Lisans Bitiş Uyarısı")
     license_warn_days = models.IntegerField(default=7, verbose_name="Lisans Uyarı (gün kala)")
+
+    # --- SİM gönderim kuyruğu (tıkanma / birikme) ---
+    sim_queue_enabled = models.BooleanField(
+        default=True, verbose_name="Bakanlık Veri Kuyruğu Alarmı",
+        help_text="Kuyruk tıkandığında veya birikmeye başladığında bildir.",
+    )
+    sim_queue_blocked_minutes = models.IntegerField(
+        default=15, verbose_name="Tıkanma Süresi Eşiği (dk)",
+        help_text="Baştaki veri bu kadar dakikadır iletilemiyorsa bildir.",
+    )
+    sim_queue_backlog_threshold = models.IntegerField(
+        default=30, verbose_name="Birikim Eşiği (dakika sayısı)",
+        help_text="Kuyrukta bu kadar dakikalık veri birikirse bildir.",
+    )
+    sim_queue_cooldown_minutes = models.IntegerField(
+        default=60, verbose_name="Tekrar Bildirim Aralığı (dk)",
+        help_text="Aynı kabin için iki bildirim arası asgari süre.",
+    )
 
     # --- PowerOff (enerji/internet kesintisi) ---
     poweroff_enabled = models.BooleanField(default=True, verbose_name="Kesinti (Açılma/Kapanma) Uyarısı")
@@ -267,6 +289,331 @@ class SimValidDay(models.Model):
         return round(min(100.0, self.valid_cells() / total * 100), 1)
 
 
+
+class SimOutboxEntry(models.Model):
+    """Bakanlık SİM'e iletilecek dakikalık veri kuyruğu (store-and-forward).
+
+    **Neden var:** eskiden dakikalık ``SendData`` doğrudan ``publish_cabinet_data``
+    içinden atılıyordu; Bakanlık servisi yanıt vermezse o dakikanın payload'ı
+    hiçbir yere yazılmadan kaybolurdu (tek onarım yolu 6 saatte bir çalışan
+    ``resend_missing_data`` idi). Artık her dakika önce buraya yazılır,
+    gönderimi ayrı bir drenaj task'ı yapar.
+
+    **Sıkı FIFO / baş tıkanması (asıl gereksinim):** drenaj bir kabinin
+    şeridinde en eski bekleyen kayıttan başlar. Baştaki kayıt **geçici** bir
+    hata alırsa (timeout / bağlantı / 5xx) kuyruk **BLOKE** olur — sonraki
+    dakikalar Bakanlık o veriyi kabul edene kadar GÖNDERİLMEZ. Böylece
+    Bakanlık tarafında dakika sırası korunur.
+
+    Kilitlenmeye karşı üç kaçış valfi vardır:
+
+    1. **Kalıcı ret** (HTTP 4xx / zarf ``result:false``) sınırlı sayıda denenir
+       (``SAIS_SIM_OUTBOX_MAX_ATTEMPTS``), sonra ``failed`` damgalanır, kuyruk
+       ilerler ve operatöre alarm gider.
+    2. **Zehirli kuyruk** — peş peşe ``SAIS_SIM_OUTBOX_POISON_STREAK`` kayıt
+       aynı nedenle reddedilirse (sistematik hata, ör. bozuk parametre adı)
+       sonraki retler ilk denemede ``failed`` olur; kuyruk saatlerce tıkanmaz.
+    3. **Süre aşımı** — ``readtime``'ı ``SAIS_SIM_OUTBOX_MAX_AGE_HOURS``
+       (48 saat) geçen kayıt ``expired`` olur; Bakanlık zaten 48 saatten
+       eskisini kabul etmiyor (``GetMissingDates`` penceresi de 48 saat).
+
+    **Payload dondurulur.** ``payload`` alanı üretim anındaki
+    ``build_sim_payload`` çıktısıdır. Kritik: dondurulmasaydı, biriken bir
+    kuyruğu boşaltan drenaj *güncel* sensör değerlerini *eski* bir dakika
+    damgasıyla gönderirdi.
+
+    Şeritler (``priority``): canlı dakikalar (0) geçmiş/eksik veri
+    backfill'inden (10) önce gider — böylece 720 dakikalık bir backfill yığını
+    canlı akışı bekletmez. Kuyruk **kabin bazında izoledir**: bir kabinin
+    tıkanması diğerini durdurmaz (drenaj task'ı ve Redis kilidi kabin başınadır).
+
+    Retention: ``prune_sim_outbox`` (``SIM_OUTBOX_RETENTION_DAYS`` = 7 gün
+    gönderilmiş, ``SIM_OUTBOX_DEAD_RETENTION_DAYS`` = 30 gün ölü kayıt).
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_SENDING = "sending"
+    STATUS_SENT = "sent"
+    STATUS_FAILED = "failed"
+    STATUS_EXPIRED = "expired"
+    STATUS_SKIPPED = "skipped"
+
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Kuyrukta"),
+        (STATUS_SENDING, "Gönderiliyor"),
+        (STATUS_SENT, "İletildi"),
+        (STATUS_FAILED, "Bakanlık Reddetti"),
+        (STATUS_EXPIRED, "Süresi Doldu"),
+        (STATUS_SKIPPED, "Operatör Atladı"),
+    )
+    #: Henüz sonuçlanmamış (kuyrukta sayılan) durumlar.
+    ACTIVE_STATUSES = (STATUS_PENDING, STATUS_SENDING)
+    #: Sonuçlanmış ama iletilememiş durumlar.
+    DEAD_STATUSES = (STATUS_FAILED, STATUS_EXPIRED, STATUS_SKIPPED)
+
+    PRIORITY_LIVE = 0
+    PRIORITY_BACKFILL = 10
+    PRIORITY_CHOICES = (
+        (PRIORITY_LIVE, "Canlı"),
+        (PRIORITY_BACKFILL, "Geçmiş (eksik veri)"),
+    )
+    #: Drenajın ziyaret sırası — canlı şerit önce.
+    LANES = (PRIORITY_LIVE, PRIORITY_BACKFILL)
+
+    SOURCE_LIVE = "live"
+    SOURCE_MISSING = "missing"
+    SOURCE_MANUAL = "manual"
+    SOURCE_CHOICES = (
+        (SOURCE_LIVE, "Dakikalık Yayın"),
+        (SOURCE_MISSING, "Eksik Veri Servisi"),
+        (SOURCE_MANUAL, "Elle / Komut"),
+    )
+
+    cabinet = models.ForeignKey(
+        SaisCabinet, on_delete=models.CASCADE, related_name="outbox_entries",
+        verbose_name="Kabin",
+    )
+    readtime = models.DateTimeField(
+        verbose_name="Veri Zamanı",
+        help_text="Verinin ait olduğu dakika (saniye sıfırlanmış). Bakanlık'a "
+                  "gönderilen Readtime bu değerden üretilir.",
+    )
+    period = models.SmallIntegerField(
+        default=1, verbose_name="Periyot",
+        help_text="Kabinin veri periyodu (SendData Period alanı).",
+    )
+    priority = models.SmallIntegerField(
+        default=PRIORITY_LIVE, choices=PRIORITY_CHOICES, verbose_name="Öncelik",
+        help_text="Canlı dakikalar geçmiş veri backfill'inden önce gönderilir.",
+    )
+    source = models.CharField(
+        max_length=10, default=SOURCE_LIVE, choices=SOURCE_CHOICES,
+        verbose_name="Kaynak",
+    )
+    payload = models.JSONField(
+        default=dict, blank=True, verbose_name="Veri (payload)",
+        help_text="Üretim anında dondurulmuş {parametre: değer, parametre_Status: "
+                  "kod} sözlüğü. Kayıt sonuçlanınca yer kaplamasın diye boşaltılır.",
+    )
+
+    status = models.CharField(
+        max_length=16, default=STATUS_PENDING, choices=STATUS_CHOICES,
+        db_index=True, verbose_name="Durum",
+    )
+    attempts = models.PositiveIntegerField(
+        default=0, verbose_name="Deneme Sayısı",
+    )
+    next_attempt_at = models.DateTimeField(
+        default=timezone.now, verbose_name="Sonraki Deneme",
+        help_text="Backoff sonrası bu andan önce tekrar denenmez.",
+    )
+    last_attempt_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="Son Deneme",
+    )
+    claimed_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="Kilitlenme Anı",
+        help_text="`sending` durumuna geçiş anı; worker çökerse bu damgadan "
+                  "hareketle kayıt kuyruğa geri alınır.",
+    )
+    first_error_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="İlk Hata",
+        help_text="Bu kaydın ilk başarısız denemesi — 'kuyruk N dakikadır "
+                  "tıkalı' ölçümü buradan hesaplanır.",
+    )
+    sent_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="İletim Zamanı",
+    )
+
+    last_error_kind = models.CharField(
+        max_length=20, blank=True, default="", verbose_name="Hata Tipi",
+        help_text="sais_domain.sim_errors kategorisi (timeout/conn_error/...).",
+    )
+    last_error = models.CharField(
+        max_length=500, blank=True, default="", verbose_name="Son Hata",
+    )
+    last_http_status = models.IntegerField(
+        null=True, blank=True, verbose_name="Son HTTP Kodu",
+    )
+    ministry_message = models.CharField(
+        max_length=500, blank=True, default="", verbose_name="Bakanlık Mesajı",
+        help_text="Ret hâlinde Bakanlık zarfındaki `message` alanı.",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Oluşturma")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Güncelleme")
+
+    class Meta:
+        db_table = "sais_sim_outbox"
+        verbose_name = "SİM Veri Kuyruğu Kaydı"
+        verbose_name_plural = "SİM Veri Kuyruğu"
+        ordering = ["-readtime", "-id"]
+        constraints = [
+            # Aynı dakika için en fazla BİR açık kayıt: mükerrer beat
+            # tetiklemesi veya Celery ACKS_LATE yeniden teslimi kaydı
+            # çiftlemesin. Kısmi koşul sayesinde, Bakanlık daha önce iletilmiş
+            # bir dakikayı "eksik" bildirirse o dakika yeniden kuyruğa alınabilir.
+            models.UniqueConstraint(
+                fields=["cabinet", "readtime"],
+                condition=models.Q(status__in=["pending", "sending"]),
+                name="sais_outbox_active_uniq",
+            ),
+        ]
+        indexes = [
+            # Baş kayıt seçimi — KISMİ index: yalnız açık satırları kapsar, bu
+            # yüzden birikmiş `sent` satırları sıcak index'i şişirmez.
+            models.Index(
+                fields=["cabinet", "priority", "readtime"],
+                condition=models.Q(status__in=["pending", "sending"]),
+                name="sais_outbox_head_idx",
+            ),
+            models.Index(
+                fields=["next_attempt_at"],
+                condition=models.Q(status="pending"),
+                name="sais_outbox_due_idx",
+            ),
+            models.Index(fields=["status", "-readtime"], name="sais_outbox_st_rt_idx"),
+            models.Index(fields=["cabinet", "-readtime"], name="sais_outbox_cab_rt_idx"),
+        ]
+
+    def __str__(self):
+        return f"[{self.status}] kabin={self.cabinet_id} {self.readtime:%Y-%m-%d %H:%M}"
+
+    # ---- Yardımcılar ----
+
+    @property
+    def readtime_str(self):
+        """Bakanlık'ın beklediği ``YYYY-AA-GGTSS:DD:00`` yerel saat string'i.
+
+        String saklanmaz, gönderim anında üretilir — böylece damga ile sıralama
+        anahtarı asla birbirinden ayrışamaz.
+        """
+        return timezone.localtime(self.readtime).strftime("%Y-%m-%dT%H:%M:00")
+
+    @property
+    def is_open(self):
+        return self.status in self.ACTIVE_STATUSES
+
+    def age_seconds(self, now=None):
+        """Verinin ait olduğu dakikadan bu yana geçen saniye."""
+        now = now or timezone.now()
+        return int((now - self.readtime).total_seconds())
+
+    def is_expired(self, max_age_hours, now=None):
+        """``readtime`` 48 saatten eskiyse Bakanlık zaten kabul etmez."""
+        return self.age_seconds(now) > int(max_age_hours) * 3600
+
+    def blocked_seconds(self, now=None):
+        """Bu kaydın kaç saniyedir iletilemediği (ilk hatadan beri)."""
+        if not self.first_error_at:
+            return 0
+        now = now or timezone.now()
+        return int((now - self.first_error_at).total_seconds())
+
+    # ---- Kuyruk işlemleri ----
+
+    @classmethod
+    def enqueue(cls, cabinet, *, readtime, payload, period=1,
+                priority=PRIORITY_LIVE, source=SOURCE_LIVE):
+        """Bir dakikayı kuyruğa ekler; zaten açık kayıt varsa eklemez.
+
+        ``(cabinet, readtime)`` üzerindeki **kısmi** unique kısıt yüzünden
+        ``get_or_create`` güvenilir değildir (kısıt yalnız açık satırları
+        kapsar) → varlık kontrolü + ``IntegrityError`` yakalama ile yapılır.
+
+        Dönüş: ``(entry | None, created: bool)``.
+        """
+        from django.db import IntegrityError, transaction
+
+        readtime = readtime.replace(second=0, microsecond=0)
+        try:
+            with transaction.atomic():
+                existing = cls.objects.filter(
+                    cabinet=cabinet, readtime=readtime,
+                    status__in=cls.ACTIVE_STATUSES,
+                ).first()
+                if existing is not None:
+                    return existing, False
+                entry = cls.objects.create(
+                    cabinet=cabinet, readtime=readtime, payload=payload,
+                    period=period or 1, priority=priority, source=source,
+                )
+                return entry, True
+        except IntegrityError:
+            # Yarış: başka bir worker aynı dakikayı bizden önce ekledi.
+            return None, False
+
+    @classmethod
+    def head(cls, cabinet_id, priority):
+        """Bir kabin + şeritteki en eski bekleyen kayıt (FIFO başı)."""
+        return (
+            cls.objects
+            .filter(cabinet_id=cabinet_id, priority=priority,
+                    status=cls.STATUS_PENDING)
+            .order_by("readtime", "id")
+            .first()
+        )
+
+    @classmethod
+    def summary(cls, now=None):
+        """Kabin başına kuyruk özeti — dashboard kartı + alarm motoru için.
+
+        Tek yerde toplanır ki panel rozeti, kuyruk sayfası ve alarm eşiği aynı
+        sayıları görsün.
+        """
+        from datetime import timedelta
+
+        from django.db.models import Count, Min, Q
+
+        now = now or timezone.now()
+        day_ago = now - timedelta(hours=24)
+        hour_ago = now - timedelta(hours=1)
+
+        rows = (
+            cls.objects
+            .values("cabinet_id", "cabinet__name", "cabinet__device_id",
+                    "cabinet__station__name")
+            .annotate(
+                pending=Count("id", filter=Q(status__in=cls.ACTIVE_STATUSES)),
+                oldest=Min("readtime", filter=Q(status__in=cls.ACTIVE_STATUSES)),
+                failed_24h=Count("id", filter=Q(status=cls.STATUS_FAILED,
+                                                updated_at__gte=day_ago)),
+                failed_1h=Count("id", filter=Q(status=cls.STATUS_FAILED,
+                                               updated_at__gte=hour_ago)),
+                expired_24h=Count("id", filter=Q(status=cls.STATUS_EXPIRED,
+                                                 updated_at__gte=day_ago)),
+                sent_24h=Count("id", filter=Q(status=cls.STATUS_SENT,
+                                              sent_at__gte=day_ago)),
+            )
+            .order_by("cabinet_id")
+        )
+
+        out = []
+        for r in rows:
+            head = (
+                cls.head(r["cabinet_id"], cls.PRIORITY_LIVE)
+                or cls.head(r["cabinet_id"], cls.PRIORITY_BACKFILL)
+            )
+            out.append({
+                "cabinet_id": r["cabinet_id"],
+                "cabinet": r["cabinet__name"] or r["cabinet__device_id"],
+                "station": r["cabinet__station__name"] or "",
+                "pending": r["pending"],
+                "oldest": r["oldest"],
+                "failed_24h": r["failed_24h"],
+                "failed_1h": r["failed_1h"],
+                "expired_24h": r["expired_24h"],
+                "sent_24h": r["sent_24h"],
+                "head_readtime": head.readtime if head else None,
+                "head_blocked_seconds": head.blocked_seconds(now) if head else 0,
+                "head_error_kind": head.last_error_kind if head else "",
+                "head_message": (
+                    (head.ministry_message or head.last_error) if head else ""
+                ),
+                "blocked": bool(head and head.first_error_at),
+            })
+        return out
+
+
 class EnvisoftChannel(models.Model):
     """`api.Parameter` ↔ Envisoft kanal ID eşlemesi."""
 
@@ -382,6 +729,24 @@ class SystemSwitch(models.Model):
         verbose_name="Yıkamayı Başlatan",
     )
 
+    # --- Bakanlık veri kabul penceresi (kuyruk süre aşımı) ---
+    # Bakanlık SIM varsayılan olarak son 48 saatlik veriyi kabul eder, daha
+    # eskisini reddeder (GetMissingDates penceresi de 48 saattir). ANCAK bakım /
+    # özel durumlarda Bakanlık bu pencereyi geçici olarak genişletebiliyor.
+    # Kuyruk (SimOutboxEntry) bu değerden eski bekleyen kayıtları `expired`
+    # yapıp ilerlediği için, pencere sabit kodlu OLMAMALI: saha operatörü
+    # Sistem Kontrol sayfasından güncelleyebilir. `.env`'deki
+    # SAIS_SIM_OUTBOX_MAX_AGE_HOURS yalnız ilk varsayılanı belirler.
+    sim_accept_window_hours = models.IntegerField(
+        default=48,
+        verbose_name="Bakanlık Veri Kabul Penceresi (saat)",
+        help_text="Bakanlık bu kadar saat öncesine kadarki veriyi kabul eder "
+                  "(varsayılan 48). Kuyrukta bu süreyi aşan kayıtlar 'süresi "
+                  "doldu' işaretlenip atlanır. Bakanlık bakım vb. nedenle "
+                  "pencereyi geçici genişletirse burayı artırın; eksik veri "
+                  "servisi de aynı pencereyi kullanır.",
+    )
+
     # --- Bakanlık SIM'e başarıyla iletilen son veri (HTTP 200) ---
     last_sim_success_at = models.DateTimeField(
         null=True, blank=True,
@@ -468,6 +833,18 @@ class SystemSwitch(models.Model):
             return None
         remaining = (self.wash_ends_at - timezone.now()).total_seconds()
         return max(0, int(remaining))
+
+    def accept_window_hours(self):
+        """Bakanlık veri kabul penceresi (saat) — güvenli sınırlar içinde.
+
+        Kuyruk süre aşımı ve eksik veri servisi bu tek kaynağı kullanır.
+        Anlamsız değerlere karşı 1 saat ile 30 gün arasına sıkıştırılır.
+        """
+        from django.conf import settings
+        raw = self.sim_accept_window_hours
+        if not raw or raw <= 0:
+            raw = int(getattr(settings, "SAIS_SIM_OUTBOX_MAX_AGE_HOURS", 48))
+        return max(1, min(int(raw), 24 * 30))
 
     @classmethod
     def mark_sim_success(cls, readtime):

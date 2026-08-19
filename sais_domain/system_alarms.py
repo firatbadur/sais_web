@@ -296,12 +296,79 @@ def check_calibration(settings: SystemAlarmSettings) -> int:
     return fired
 
 
+# ------------------------------------------------------ 6) SİM gönderim kuyruğu
+def check_sim_queue(settings: SystemAlarmSettings) -> int:
+    """Bakanlık gönderim kuyruğu tıkandı mı / birikiyor mu?
+
+    Kuyruk (``SimOutboxEntry``) tasarım gereği baştaki kayıt kabul edilene
+    kadar sonraki dakikaları bekletir. Bu doğru davranıştır ama **sessiz
+    kalmamalıdır**: uzun süren bir tıkanma, kabul penceresi (48 saat) dolunca
+    kalıcı veri kaybına döner. Üç tetik:
+
+    1. baştaki kayıt eşikten uzun süredir iletilemiyor,
+    2. kuyrukta biriken dakika sayısı eşiği aştı,
+    3. son 1 saatte Bakanlık dakika reddetti (``failed``).
+
+    ``sim_enabled`` kapalıyken alarm üretilmez — operatör zaten bilerek
+    kapatmıştır (birikme panelde ayrıca gösterilir).
+    """
+    if not settings.sim_queue_enabled:
+        return 0
+    from api.licensing import license_active
+    if not license_active():
+        return 0
+
+    from .models import SimOutboxEntry, SystemSwitch
+    from . import sim_errors
+
+    if not SystemSwitch.load().sim_enabled:
+        return 0
+
+    blocked_sec = max(1, settings.sim_queue_blocked_minutes) * 60
+    threshold = max(1, settings.sim_queue_backlog_threshold)
+    cooldown = settings.sim_queue_cooldown_minutes
+    fired = 0
+
+    for row in SimOutboxEntry.summary():
+        reasons = []
+        if row["blocked"] and row["head_blocked_seconds"] >= blocked_sec:
+            kind = sim_errors.category_label(row["head_error_kind"]) \
+                if row["head_error_kind"] else "bilinmeyen hata"
+            mins = row["head_blocked_seconds"] // 60
+            head = timezone.localtime(row["head_readtime"]).strftime("%d.%m.%Y %H:%M") \
+                if row["head_readtime"] else "-"
+            detail = f" ({row['head_message'][:120]})" if row["head_message"] else ""
+            reasons.append(
+                f"{head} tarihli veri {mins} dakikadır iletilemiyor — {kind}{detail}"
+            )
+        if row["pending"] >= threshold:
+            reasons.append(f"kuyrukta {row['pending']} dakikalık veri bekliyor")
+        if row["failed_1h"]:
+            reasons.append(
+                f"son 1 saatte {row['failed_1h']} dakika Bakanlık tarafından reddedildi"
+            )
+        if not reasons:
+            continue
+
+        title = f"{row['station'] or row['cabinet']}: Bakanlık Veri Kuyruğu"
+        msg = (
+            f"{row['station'] or ''} ({row['cabinet']}) — " + "; ".join(reasons) +
+            ". Veriler kuyrukta bekletiliyor; Bakanlık kabul penceresi içinde "
+            "iletilemezse kalıcı olarak kaybolur."
+        )
+        if _notify(settings, "sim_queue", f"cabinet:{row['cabinet_id']}",
+                   title, msg, cooldown_minutes=cooldown):
+            fired += 1
+    return fired
+
+
 # --------------------------------------------------------------- Koşucular
 def run_realtime() -> dict:
-    """10 dakikada bir: veri hatası + kesinti."""
+    """10 dakikada bir: veri hatası + kesinti + SİM gönderim kuyruğu."""
     settings = SystemAlarmSettings.load()
     out = {}
-    for name, fn in (("data_error", check_data_errors), ("poweroff", check_poweroff)):
+    for name, fn in (("data_error", check_data_errors), ("poweroff", check_poweroff),
+                     ("sim_queue", check_sim_queue)):
         try:
             out[name] = fn(settings)
         except Exception as exc:  # noqa: BLE001

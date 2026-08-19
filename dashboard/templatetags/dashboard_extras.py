@@ -88,3 +88,25 @@ def quality_badge(quality: str) -> str:
         "substituted": "badge-light-info",
         "manual": "badge-light-primary",
     }.get((quality or "").lower(), "badge-light-secondary")
+
+
+@register.filter
+def sim_error_label(kind: str) -> str:
+    """SİM kuyruğu hata kategorisi kodu → Türkçe etiket.
+
+    Etiket tablosu `sais_domain.sim_errors`'tadır (tek doğruluk kaynağı);
+    kuyruk sayfası, alarm metni ve teşhis komutu aynı adları kullanır.
+    """
+    if not kind:
+        return ""
+    from sais_domain import sim_errors
+    return sim_errors.category_label(kind)
+
+
+@register.filter
+def minutes_from_seconds(seconds) -> int:
+    """Saniye → tam dakika (kuyruk tıkanma süresi rozeti)."""
+    try:
+        return int(seconds or 0) // 60
+    except (TypeError, ValueError):
+        return 0
