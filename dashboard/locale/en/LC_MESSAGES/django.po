@@ -3457,8 +3457,20 @@ msgstr "No certificate/domain"
 msgid "Hiç"
 msgstr "Never"
 
-msgid "Bu uyarılar, bildirim tercihi açık aktif kullanıcılara SMS/e-posta gönderir. Aynı durum için tekrar bildirim, ayarlanan aralıkla sınırlanır (kullanıcı boğulmaz)."
-msgstr "These alerts send SMS/email to active users who opted in. Re-notification for the same condition is rate-limited by the configured interval (so users aren't flooded)."
+msgid "Her uyarı, kendi kartında seçilen rollerdeki (varsayılan: Operatör) bildirim tercihi açık aktif kullanıcılara SMS/e-posta gönderir. Bakanlık kullanıcıları bildirim almaz. Aynı durum için tekrar bildirim, ayarlanan aralıkla sınırlanır (kullanıcı boğulmaz)."
+msgstr "Each alert sends SMS/email to active, opted-in users in the roles selected on its own card (default: Operator). Ministry users never receive notifications. Re-notification for the same condition is rate-limited by the configured interval (so users aren't flooded)."
+
+msgid "Bildirim Gönderilecek Roller"
+msgstr "Notification Recipient Roles"
+
+msgid "Rol seçin"
+msgstr "Select roles"
+
+msgid "bildirim alabilecek kullanıcı"
+msgstr "user(s) reachable"
+
+msgid "Seçili rollerde bildirim alabilecek kullanıcı yok (telefon/e-posta veya bildirim tercihi eksik)."
+msgstr "No reachable user in the selected roles (missing phone/email or notification preference)."
 
 msgid "Son 10 dakikalık Bakanlık verisi (GetDataByBetweenTwoDate) çekilir; seçili hata durumları tekrar eşiğini aşarsa bildirilir. 10 dakikada bir çalışır."
 msgstr "The last 10 minutes of Ministry data (GetDataByBetweenTwoDate) is fetched; if selected error statuses exceed the repeat threshold, a notification is sent. Runs every 10 minutes."

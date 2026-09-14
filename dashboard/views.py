@@ -1841,6 +1841,9 @@ class SystemControlView(OperatorRequiredMixin, TemplateView):
 
         from .api_views import _alarm_settings_dict
         ctx["alarm_settings"] = _alarm_settings_dict(SystemAlarmSettings.load())
+        # Kategori bazlı bildirim rolü seçimi (Bakanlık rol=4 hariç).
+        from sais_domain.models import ALARM_ROLE_CHOICES
+        ctx["alarm_role_choices"] = [{"code": c, "label": l} for c, l in ALARM_ROLE_CHOICES]
         # Hata kodu seçimi için tüm Bakanlık kodları (geçerli olmayanlar öne çıkar).
         ctx["alarm_status_codes"] = SIM_DATA_STATUS_CODES
         # Bakanlık veri kabul penceresi (gönderim kuyruğu süre aşımı) —

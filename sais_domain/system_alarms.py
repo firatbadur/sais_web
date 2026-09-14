@@ -12,8 +12,10 @@ Beş kategori (her biri Sistem Kontrol → Sistem Alarmları'ndan toggle'lı):
 5. **PowerOff** — `poweroff_min_minutes`'tan uzun kesinti (her kayıt için bir kez).
 
 Bildirim ``api.notifications.send_bulk(... kind="alarm")`` ile gider; tekrar
-bildirim ``SystemAlarmState`` throttle'ı (cooldown) ile sınırlanır. Alıcılar
-aktif kullanıcılar (Bakanlık rol=4 hariç), kanal tercihine göre.
+bildirim ``SystemAlarmState`` throttle'ı (cooldown) ile sınırlanır. **Alıcılar
+kategori bazında rol seçimiyle** belirlenir (``SystemAlarmSettings.<tip>_roles``;
+varsayılan yalnız **Operatör**): aktif + seçili roldeki + kanal tercihi açık
+kullanıcılar. Bakanlık (rol=4) her koşulda hariçtir.
 """
 from __future__ import annotations
 
@@ -34,14 +36,24 @@ logger = logging.getLogger("sais_domain.system_alarms")
 
 ROLE_MINISTRY = 4  # Bakanlık (yalnız-API) kullanıcısı — bildirim almaz.
 
+# Alarm kategorileri — her biri kendi ``<tip>_roles`` rol seçimini taşır.
+ALARM_TYPES = ("data_error", "poweroff", "sim_queue", "ssl", "license", "calibration")
+
 
 # --------------------------------------------------------------------- Alıcılar
-def _recipients(settings: SystemAlarmSettings) -> list[dict]:
-    """Aktif kullanıcılar; kanal tercihine + telefon/e-posta varlığına göre."""
+def _recipients(settings: SystemAlarmSettings, alarm_type: str) -> list[dict]:
+    """``alarm_type`` için alıcılar.
+
+    Kategori bazlı **rol filtresi** (``SystemAlarmSettings.roles_for``;
+    varsayılan yalnız Operatör) + aktiflik + kanal tercihi +
+    telefon/e-posta varlığı. Bakanlık (rol=4) her koşulda hariç.
+    """
     from users.models import CustomUser
 
+    roles = settings.roles_for(alarm_type)
     out: list[dict] = []
-    for u in CustomUser.objects.filter(is_active=True).exclude(rol=ROLE_MINISTRY):
+    qs = CustomUser.objects.filter(is_active=True, rol__in=roles).exclude(rol=ROLE_MINISTRY)
+    for u in qs:
         phone = (u.phone_number or "").strip() if (settings.notify_sms and u.sms_enabled) else ""
         email = (u.email or "").strip() if (settings.notify_email and u.email_enabled) else ""
         if phone or email:
@@ -68,10 +80,10 @@ def _notify(settings, alarm_type, ref_key, title, message, cooldown_minutes):
         if (now - state.last_notified_at).total_seconds() < cooldown_minutes * 60:
             return False  # cooldown dolmadı
 
-    recipients = _recipients(settings)
+    recipients = _recipients(settings, alarm_type)
     channels = settings.channels()
     if not recipients or not channels:
-        logger.info("system alarm: alıcı/kanal yok — '%s' bildirilemedi", title)
+        logger.info("system alarm: alıcı/kanal yok (%s) — '%s' bildirilemedi", alarm_type, title)
         return False
 
     try:
@@ -456,4 +468,10 @@ def current_status(settings: SystemAlarmSettings | None = None) -> dict:
         for e in SystemAlarmState.objects.all()[:20]
     ]
 
-    return {"ssl": ssl_info, "license": lic_info, "calibration": cal_rows, "events": events}
+    # Kategori bazlı alıcı sayısı (seçili roller + kanal tercihi + iletişim bilgisi)
+    recipients = {t: len(_recipients(settings, t)) for t in ALARM_TYPES}
+
+    return {
+        "ssl": ssl_info, "license": lic_info, "calibration": cal_rows,
+        "events": events, "recipients": recipients,
+    }

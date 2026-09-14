@@ -914,7 +914,7 @@
     <div class="alert alert-primary d-flex align-items-center mb-5">
         <i class="ki-outline ki-information-5 fs-2 text-primary me-3"></i>
         <div class="fs-7">
-            {% trans "Bu uyarılar, bildirim tercihi açık aktif kullanıcılara SMS/e-posta gönderir. Aynı durum için tekrar bildirim, ayarlanan aralıkla sınırlanır (kullanıcı boğulmaz)." %}
+            {% trans "Her uyarı, kendi kartında seçilen rollerdeki (varsayılan: Operatör) bildirim tercihi açık aktif kullanıcılara SMS/e-posta gönderir. Bakanlık kullanıcıları bildirim almaz. Aynı durum için tekrar bildirim, ayarlanan aralıkla sınırlanır (kullanıcı boğulmaz)." %}
         </div>
     </div>
 
@@ -971,6 +971,7 @@
                             <input type="number" class="form-control form-control-sm" id="al-data_error_cooldown_minutes" min="5" max="10080">
                         </div>
                     </div>
+                    {% include "dashboard/partials/alarm_roles.html" with key="data_error" %}
                 </div>
             </div>
         </div>
@@ -994,6 +995,7 @@
                     </div>
                     <label class="form-label fs-8 text-muted mb-1">{% trans "Asgari Kesinti Süresi (dk)" %}</label>
                     <input type="number" class="form-control form-control-sm" id="al-poweroff_min_minutes" min="1" max="1440">
+                    {% include "dashboard/partials/alarm_roles.html" with key="poweroff" %}
                 </div>
             </div>
         </div>
@@ -1029,6 +1031,7 @@
                             <input type="number" class="form-control form-control-sm" id="al-sim_queue_cooldown_minutes" min="5" max="10080">
                         </div>
                     </div>
+                    {% include "dashboard/partials/alarm_roles.html" with key="sim_queue" %}
                 </div>
             </div>
         </div>
@@ -1060,6 +1063,7 @@
                             <div class="fw-bold" id="al-ssl-status">—</div>
                         </div>
                     </div>
+                    {% include "dashboard/partials/alarm_roles.html" with key="ssl" %}
                 </div>
             </div>
         </div>
@@ -1091,6 +1095,7 @@
                             <div class="fw-bold" id="al-license-status">—</div>
                         </div>
                     </div>
+                    {% include "dashboard/partials/alarm_roles.html" with key="license" %}
                 </div>
             </div>
         </div>
@@ -1124,6 +1129,11 @@
                         <div class="col-md-6">
                             <div class="fs-8 text-muted mb-1">{% trans "İstasyon son kalibrasyonları" %}</div>
                             <div id="al-calibration-status" class="fs-8 text-gray-700">—</div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            {% include "dashboard/partials/alarm_roles.html" with key="calibration" %}
                         </div>
                     </div>
                 </div>
@@ -1614,7 +1624,11 @@
         saved: "{% trans 'Kaydedildi' %}", err: "{% trans 'İşlem başarısız' %}",
         none: "{% trans 'Bildirim yok.' %}", days: "{% trans 'gün' %}",
         noCert: "{% trans 'Sertifika/domain yok' %}", never: "{% trans 'Hiç' %}",
+        recip: "{% trans 'bildirim alabilecek kullanıcı' %}",
+        noRecip: "{% trans 'Seçili rollerde bildirim alabilecek kullanıcı yok (telefon/e-posta veya bildirim tercihi eksik).' %}",
     };
+    // Alarm kategorileri — her birinin kendi rol seçimi (`al-<tip>_roles`) var.
+    const ALARM_TYPES = ['data_error', 'poweroff', 'sim_queue', 'ssl', 'license', 'calibration'];
 
     function csrf() { const el = document.querySelector('[name=csrfmiddlewaretoken]'); return el ? el.value : ''; }
     function postJSON(url, body) {
@@ -1638,6 +1652,16 @@
         Array.prototype.forEach.call(sel.options, function (o) { o.selected = chosen.indexOf(o.value) !== -1; });
         if (window.jQuery && jQuery(sel).hasClass('select2-hidden-accessible')) jQuery(sel).trigger('change');
     })();
+    // Rol seçimleri — boş/eksik gelirse varsayılan yalnız Operatör (rol=2).
+    ALARM_TYPES.forEach(function (t) {
+        const sel = $id(t + '_roles');
+        if (!sel) return;
+        let chosen = SETTINGS[t + '_roles'];
+        if (!Array.isArray(chosen) || !chosen.length) chosen = [2];
+        chosen = chosen.map(String);
+        Array.prototype.forEach.call(sel.options, function (o) { o.selected = chosen.indexOf(o.value) !== -1; });
+        if (window.jQuery && jQuery(sel).hasClass('select2-hidden-accessible')) jQuery(sel).trigger('change');
+    });
 
     // --- Kaydet ---
     const btn = document.getElementById('al-save');
@@ -1647,12 +1671,19 @@
         NUMS.forEach(function (k) { const el = $id(k); payload[k] = el ? el.value : null; });
         const sel = $id('data_error_codes');
         payload.data_error_codes = sel ? Array.prototype.map.call(sel.selectedOptions, function (o) { return parseInt(o.value, 10); }) : [];
+        ALARM_TYPES.forEach(function (t) {
+            const rs = $id(t + '_roles');
+            if (rs) payload[t + '_roles'] = Array.prototype.map.call(rs.selectedOptions, function (o) { return parseInt(o.value, 10); });
+        });
 
         btn.setAttribute('data-kt-indicator', 'on'); btn.disabled = true;
         const info = document.getElementById('al-save-info');
         postJSON(SAVE_URL, payload).then(function (d) {
             btn.removeAttribute('data-kt-indicator'); btn.disabled = false;
-            if (d.ok) { info.innerHTML = '<span class="text-success">' + esc(I18N.saved) + '</span>'; }
+            if (d.ok) {
+                info.innerHTML = '<span class="text-success">' + esc(I18N.saved) + '</span>';
+                statusLoaded = false; loadStatus();   // alıcı sayıları değişmiş olabilir
+            }
             else { info.innerHTML = '<span class="text-danger">' + esc(d.error || I18N.err) + '</span>'; }
         }).catch(function () {
             btn.removeAttribute('data-kt-indicator'); btn.disabled = false;
@@ -1688,6 +1719,18 @@
                     return '<div><b>' + esc(c.station) + ':</b> ' + v + '</div>';
                 }).join('');
             } else { calEl.textContent = '—'; }
+            // Kategori bazlı alıcı sayısı (rol seçiminin canlı karşılığı)
+            const rc = st.recipients || {};
+            ALARM_TYPES.forEach(function (t) {
+                const el = $id(t + '_recipients');
+                if (!el) return;
+                const n = rc[t];
+                if (n == null) { el.textContent = '—'; return; }
+                el.innerHTML = n > 0
+                    ? '<i class="ki-outline ki-check-circle fs-8 text-success me-1"></i>' + n + ' ' + esc(I18N.recip)
+                    : '<span class="text-warning"><i class="ki-outline ki-information-5 fs-8 me-1"></i>' + esc(I18N.noRecip) + '</span>';
+            });
+
             // Son bildirimler
             const evEl = document.getElementById('al-events');
             if (st.events && st.events.length) {

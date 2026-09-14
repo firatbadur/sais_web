@@ -81,6 +81,23 @@ def _default_data_error_codes():
     return [200, 201, 202, 203, 204, 205, 206]
 
 
+# Sistem alarmı bildirimi alabilecek roller (Bakanlık rol=4 her zaman hariç —
+# o kullanıcılar yalnız API erişimi içindir, bildirim almazlar).
+ALARM_ROLE_CHOICES = tuple(
+    (code, label) for code, label in CustomUser.rol_choices if code != 4
+)
+ALARM_ROLE_CODES = {code for code, _ in ALARM_ROLE_CHOICES}
+
+
+def _default_alarm_roles():
+    """Varsayılan bildirim hedefi: yalnız **Operatör** (rol=2).
+
+    Her alarm kategorisi kendi rol listesini tutar; operatör Sistem Kontrol →
+    Sistem Alarmları sekmesinden kategori bazında değiştirir (ör. lisans/SSL
+    uyarısı yalnız Sistem Yöneticisi'ne gitsin)."""
+    return [2]
+
+
 class SystemAlarmSettings(models.Model):
     """Sistem uyarı mekanizmaları ayarı — singleton (pk=1).
 
@@ -116,10 +133,20 @@ class SystemAlarmSettings(models.Model):
         default=60, verbose_name="Tekrar Bildirim Aralığı (dk)",
         help_text="Aynı hata için iki bildirim arası asgari süre.",
     )
+    data_error_roles = models.JSONField(
+        default=_default_alarm_roles, blank=True,
+        verbose_name="Bakanlık Veri Hatası — Bildirim Rolleri",
+        help_text="Bu alarmın bildirileceği kullanıcı rolleri (varsayılan: Operatör).",
+    )
 
     # --- SSL ---
     ssl_enabled = models.BooleanField(default=True, verbose_name="SSL Bitiş Uyarısı")
     ssl_warn_days = models.IntegerField(default=3, verbose_name="SSL Uyarı (gün kala)")
+    ssl_roles = models.JSONField(
+        default=_default_alarm_roles, blank=True,
+        verbose_name="SSL — Bildirim Rolleri",
+        help_text="Bu alarmın bildirileceği kullanıcı rolleri (varsayılan: Operatör).",
+    )
 
     # --- Kalibrasyon ---
     calibration_enabled = models.BooleanField(default=True, verbose_name="Kalibrasyon Hatırlatma")
@@ -130,10 +157,20 @@ class SystemAlarmSettings(models.Model):
     calibration_warn_days = models.IntegerField(
         default=1, verbose_name="Kalibrasyon Uyarı (gün kala)",
     )
+    calibration_roles = models.JSONField(
+        default=_default_alarm_roles, blank=True,
+        verbose_name="Kalibrasyon — Bildirim Rolleri",
+        help_text="Bu alarmın bildirileceği kullanıcı rolleri (varsayılan: Operatör).",
+    )
 
     # --- Lisans ---
     license_enabled = models.BooleanField(default=True, verbose_name="Lisans Bitiş Uyarısı")
     license_warn_days = models.IntegerField(default=7, verbose_name="Lisans Uyarı (gün kala)")
+    license_roles = models.JSONField(
+        default=_default_alarm_roles, blank=True,
+        verbose_name="Lisans — Bildirim Rolleri",
+        help_text="Bu alarmın bildirileceği kullanıcı rolleri (varsayılan: Operatör).",
+    )
 
     # --- SİM gönderim kuyruğu (tıkanma / birikme) ---
     sim_queue_enabled = models.BooleanField(
@@ -152,12 +189,22 @@ class SystemAlarmSettings(models.Model):
         default=60, verbose_name="Tekrar Bildirim Aralığı (dk)",
         help_text="Aynı kabin için iki bildirim arası asgari süre.",
     )
+    sim_queue_roles = models.JSONField(
+        default=_default_alarm_roles, blank=True,
+        verbose_name="Bakanlık Veri Kuyruğu — Bildirim Rolleri",
+        help_text="Bu alarmın bildirileceği kullanıcı rolleri (varsayılan: Operatör).",
+    )
 
     # --- PowerOff (enerji/internet kesintisi) ---
     poweroff_enabled = models.BooleanField(default=True, verbose_name="Kesinti (Açılma/Kapanma) Uyarısı")
     poweroff_min_minutes = models.IntegerField(
         default=5, verbose_name="Asgari Kesinti Süresi (dk)",
         help_text="Bu süreden kısa kesintiler bildirilmez.",
+    )
+    poweroff_roles = models.JSONField(
+        default=_default_alarm_roles, blank=True,
+        verbose_name="Kesinti — Bildirim Rolleri",
+        help_text="Bu alarmın bildirileceği kullanıcı rolleri (varsayılan: Operatör).",
     )
 
     # --- Kanallar ---
@@ -198,6 +245,26 @@ class SystemAlarmSettings(models.Model):
         if self.notify_email:
             ch.append("email")
         return ch
+
+    def roles_for(self, alarm_type: str) -> list[int]:
+        """``alarm_type`` için bildirim yapılacak rol kodları.
+
+        Tanımsız/boş/bozuk değerde varsayılana (yalnız Operatör) düşer —
+        alan boş bırakılıp alarmın sessizce kimseye gitmemesi istenmez;
+        bildirimi tamamen kapatmak için kategori toggle'ı kullanılır.
+        """
+        raw = getattr(self, f"{alarm_type}_roles", None)
+        if not isinstance(raw, (list, tuple)):
+            return _default_alarm_roles()
+        roles = []
+        for r in raw:
+            try:
+                code = int(r)
+            except (TypeError, ValueError):
+                continue
+            if code in ALARM_ROLE_CODES and code not in roles:
+                roles.append(code)
+        return roles or _default_alarm_roles()
 
 
 class SystemAlarmState(models.Model):

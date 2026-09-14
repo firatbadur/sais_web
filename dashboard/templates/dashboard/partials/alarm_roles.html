@@ -1,0 +1,16 @@
+{% load i18n %}
+{# Sistem alarmı kategorisi için bildirim rolü seçimi.                      #}
+{# Kullanım: {% include "dashboard/partials/alarm_roles.html" with key="ssl" %} #}
+{# `key` = alarm tipi (data_error/ssl/calibration/license/poweroff/sim_queue) #}
+<div class="separator separator-dashed my-3"></div>
+<label class="form-label fs-8 text-muted mb-1">
+    <i class="ki-outline ki-profile-user fs-7 me-1"></i>{% trans "Bildirim Gönderilecek Roller" %}
+</label>
+<select class="form-select form-select-sm alarm-role-select" id="al-{{ key }}_roles" multiple
+        data-control="select2" data-close-on-select="false" data-allow-clear="false"
+        data-placeholder="{% trans 'Rol seçin' %}">
+    {% for r in alarm_role_choices %}
+    <option value="{{ r.code }}">{{ r.label }}</option>
+    {% endfor %}
+</select>
+<div class="fs-8 text-muted mt-2" id="al-{{ key }}_recipients">—</div>

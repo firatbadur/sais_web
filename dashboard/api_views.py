@@ -4413,7 +4413,9 @@ def sim_valid_recompute(request):
 # --------------------------------------------------------------------------- #
 def _alarm_settings_dict(s):
     """SystemAlarmSettings → JSON-safe sözlük."""
-    return {
+    from sais_domain.system_alarms import ALARM_TYPES
+
+    out = {
         "data_error_enabled": s.data_error_enabled,
         "data_error_codes": list(s.data_error_codes or []),
         "data_error_persist_minutes": s.data_error_persist_minutes,
@@ -4434,6 +4436,10 @@ def _alarm_settings_dict(s):
         "notify_sms": s.notify_sms,
         "notify_email": s.notify_email,
     }
+    # Kategori bazlı bildirim rolleri (varsayılan: yalnız Operatör).
+    for t in ALARM_TYPES:
+        out[f"{t}_roles"] = s.roles_for(t)
+    return out
 
 
 @login_required
@@ -4484,6 +4490,30 @@ def system_alarms_save(request):
     s.sim_queue_cooldown_minutes = as_int("sim_queue_cooldown_minutes", 60, 5, 10080)
     s.notify_sms = bool(data.get("notify_sms"))
     s.notify_email = bool(data.get("notify_email"))
+
+    # --- Kategori bazlı bildirim rolleri ---
+    # Geçersiz/bilinmeyen rol kodları atılır; liste boş kalırsa varsayılan
+    # (yalnız Operatör) korunur — alarm sessizce kimseye gitmesin.
+    from sais_domain.models import ALARM_ROLE_CODES, _default_alarm_roles
+    from sais_domain.system_alarms import ALARM_TYPES
+
+    for t in ALARM_TYPES:
+        key = f"{t}_roles"
+        if key not in data:
+            continue
+        raw = data.get(key) or []
+        if not isinstance(raw, (list, tuple)):
+            return JsonResponse({"ok": False, "error": f"Geçersiz rol listesi: {key}"}, status=400)
+        roles = []
+        for r in raw:
+            try:
+                code = int(r)
+            except (ValueError, TypeError):
+                return JsonResponse({"ok": False, "error": f"Geçersiz rol kodu: {key}"}, status=400)
+            if code in ALARM_ROLE_CODES and code not in roles:
+                roles.append(code)
+        setattr(s, key, sorted(roles) or _default_alarm_roles())
+
     s.updated_by = request.user if request.user.is_authenticated else None
     s.save()
     return JsonResponse({"ok": True, "settings": _alarm_settings_dict(s)})
