@@ -126,6 +126,14 @@ def restore_database_run(backup_id, run_migrate=True, user_id=None):
     )
 
 
+@shared_task(name="api.tasks.config_import_run")
+def config_import_run(transfer_id, skip_safety_backup=False):
+    """İstasyon taşıma: güvenlik yedeği al → konfigürasyonu dosyadakiyle değiştir."""
+    from api.config_transfer import run_import
+
+    return run_import(transfer_id, skip_safety_backup=skip_safety_backup)
+
+
 @shared_task(name="api.tasks.dispatch_report_schedules")
 def dispatch_report_schedules():
     """Rapor zamanlamalarını kontrol eder; vadesi gelenleri kuyruğa atar (beat: 60 sn).

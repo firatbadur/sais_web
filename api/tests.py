@@ -275,3 +275,136 @@ class AggregateQualityFilterTests(TestCase):
         self.assertIsNone(agg.max_value)
         self.assertEqual(agg.count, 2)
         self.assertEqual(agg.bad_count, 0)
+
+
+# ---------------------------------------------------------------------------
+# İstasyon taşıma — konfigürasyon aktarımı (api/config_transfer.py)
+# ---------------------------------------------------------------------------
+from django.contrib.auth import get_user_model
+from django.core.serializers.json import DjangoJSONEncoder
+from django.urls import reverse
+
+from api import config_transfer
+from api.models import LogType, Parameter, SystemLog
+from dashboard.models import MimicScreen
+from sais_domain.models import SaisCabinet
+
+
+def _roundtrip(payload):
+    """Dosyaya yazılıp okunmuş gibi (datetime → ISO string) zarf."""
+    return json.loads(json.dumps(payload, cls=DjangoJSONEncoder))
+
+
+class ConfigTransferTests(TestCase):
+    def setUp(self):
+        from api.events import clear_logtype_cache
+
+        clear_logtype_cache()  # test rollback'i önbellekteki LogType id'lerini bayatlatır
+        User = get_user_model()
+        self.admin = User.objects.create_user(
+            username="yonetici", password="x", rol=1, email="a@a.com",
+        )
+        self.station = Station.objects.create(name="Kaynak Tesis")
+        conn = Connection.objects.create(
+            station=self.station, name="plc", protocol="modbus_tcp",
+            transport="tcp", host="10.0.0.5", is_enabled=True,
+        )
+        self.param = Parameter.objects.create(station=self.station, parameter_name="Sicaklik")
+        self.sensor = Sensor.objects.create(connection=conn, parameter=self.param)
+        self.cabinet = SaisCabinet.objects.create(
+            station=self.station, device_id="SIM-1", code="1", name="Kabin",
+            auth_username="bakanlik1", auth_secret="gizli-sifre",
+        )
+        MimicScreen.objects.create(name="Ekran", created_by=self.admin)
+
+    def test_roundtrip_replaces_config_and_resets_sequences(self):
+        payload = _roundtrip(config_transfer.build_export(list(config_transfer.SECTIONS)))
+        self.assertNotIn("api.License", payload["counts"])
+        # Hedefte farklı/ekstra konfigürasyon
+        Station.objects.create(name="Hedefteki Fazla Tesis")
+        self.station.name = "Değişti"
+        self.station.save()
+
+        result = config_transfer.apply_import(payload)
+        self.assertEqual(result["skipped"], 0)
+        self.assertEqual(list(Station.objects.values_list("name", flat=True)), ["Kaynak Tesis"])
+        sensor = Sensor.objects.get(pk=self.sensor.pk)
+        self.assertEqual(sensor.parameter_id, self.param.pk)
+        self.assertEqual(SaisCabinet.objects.get().auth_secret, "gizli-sifre")
+        # Sequence reset: yeni kayıt mevcut PK ile çakışmamalı.
+        Station.objects.create(name="Yeni")
+
+    def test_secret_reencrypted_with_target_key(self):
+        payload = _roundtrip(config_transfer.build_export([]))
+        cab = next(o for o in payload["objects"] if o["model"] == "sais_domain.saiscabinet")
+        self.assertEqual(cab["fields"]["auth_secret"], "gizli-sifre")  # dosyada düz metin
+        other_key = "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMTI="
+        with override_settings(CABINET_FERNET_KEY=other_key):
+            config_transfer.apply_import(payload)
+            self.assertEqual(SaisCabinet.objects.get().auth_secret, "gizli-sifre")
+
+    def test_lookup_rows_upserted_not_deleted(self):
+        lt = LogType.objects.create(name="Olay")
+        SystemLog.objects.create(type=lt, description="korunmalı")
+        payload = _roundtrip(config_transfer.build_export([]))
+        config_transfer.apply_import(payload)
+        self.assertTrue(SystemLog.objects.filter(type=lt, description="korunmalı").exists())
+
+    def test_users_not_selected_nulls_missing_refs(self):
+        payload = _roundtrip(config_transfer.build_export([]))  # kullanıcılar hariç
+        self.admin.delete()
+        result = config_transfer.apply_import(payload)
+        self.assertIsNone(MimicScreen.objects.get().created_by_id)
+        self.assertGreaterEqual(result["nulled"], 1)
+
+    def test_newer_schema_blocked(self):
+        payload = _roundtrip(config_transfer.build_export([]))
+        payload["migration_state"]["api"] = "9999_gelecek"
+        with self.assertRaises(config_transfer.ConfigTransferError):
+            config_transfer.inspect_payload(payload)
+
+    def test_users_without_admin_rejected(self):
+        payload = _roundtrip(config_transfer.build_export(["users"]))
+        for obj in payload["objects"]:
+            if obj["model"] == "users.customuser":
+                obj["fields"]["rol"] = 2
+                obj["fields"]["is_superuser"] = False
+        with self.assertRaises(config_transfer.ConfigTransferError):
+            config_transfer.inspect_payload(payload)
+
+    def test_operator_cannot_export_or_import(self):
+        User = get_user_model()
+        User.objects.create_user(username="op", password="x", rol=2, email="o@o.com")
+        self.client.login(username="op", password="x")
+        resp = self.client.post(reverse("dashboard:admin_config_export"))
+        self.assertEqual(resp.status_code, 403)
+        from api.models import ConfigTransfer
+        self.client.post(reverse("dashboard:admin_backups"), {"action": "config_discard"})
+        resp = self.client.get(reverse("dashboard:admin_backups"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.context["config_can_transfer"])
+        self.assertFalse(ConfigTransfer.objects.exists())
+
+    def test_staged_import_flow(self):
+        payload = config_transfer.build_export([])
+        raw = json.dumps(payload, cls=DjangoJSONEncoder).encode("utf-8")
+        with override_settings(BACKUP_DIR=tempfile.mkdtemp()):
+            rec = config_transfer.stage_import(raw, "cfg.json", None, user=self.admin)
+            self.assertEqual(rec.status, "pending")
+            result = config_transfer.run_import(rec.pk, skip_safety_backup=True)
+        rec.refresh_from_db()
+        self.assertEqual(rec.status, "success", rec.error)
+        self.assertEqual(result["sections"], ["core"])
+
+    def test_admin_page_renders_pending_summary(self):
+        payload = config_transfer.build_export([])
+        raw = json.dumps(payload, cls=DjangoJSONEncoder).encode("utf-8")
+        self.client.login(username="yonetici", password="x")
+        with override_settings(BACKUP_DIR=tempfile.mkdtemp()):
+            config_transfer.stage_import(raw, "cfg.json", None, user=self.admin)
+            resp = self.client.get(reverse("dashboard:admin_backups"))
+            self.assertEqual(resp.status_code, 200)
+            self.assertContains(resp, "config-import-modal")
+            resp = self.client.post(reverse("dashboard:admin_config_export"), {"sections": ["web"]})
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn("web", json.loads(resp.content)["sections"])

@@ -970,15 +970,17 @@ def backup_status(request):
     if denied:
         return denied
 
-    from api.models import DatabaseBackup, DatabaseRestore
+    from api.models import ConfigTransfer, DatabaseBackup, DatabaseRestore
 
     backup_running = DatabaseBackup.objects.filter(status="running").exists()
     restore_running = DatabaseRestore.objects.filter(status="running").exists()
+    config_running = ConfigTransfer.objects.filter(status="running").exists()
     last = DatabaseBackup.objects.order_by("-started_at").first()
     return JsonResponse({
-        "running": backup_running or restore_running,
+        "running": backup_running or restore_running or config_running,
         "backup_running": backup_running,
         "restore_running": restore_running,
+        "config_running": config_running,
         "backup_count": DatabaseBackup.objects.filter(status="success", pruned=False).count(),
         "last_backup": {
             "filename": last.filename,

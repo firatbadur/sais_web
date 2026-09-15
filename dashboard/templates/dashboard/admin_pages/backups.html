@@ -123,6 +123,229 @@
 </div>
 
 {# ------------------------------------------------------------------ #}
+{# İstasyon taşıma (konfigürasyon dışa / içe aktarma)                 #}
+{# ------------------------------------------------------------------ #}
+<div class="row g-5 mt-2" id="config-transfer">
+    <div class="col-12">
+        <div class="card card-flush">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="ki-outline ki-delivery-2 fs-2 me-2 text-info"></i>
+                    {% trans "İstasyon Taşıma (Konfigürasyon)" %}
+                </h3>
+                {% if not config_can_transfer %}
+                <div class="card-toolbar">
+                    <span class="badge badge-light-warning">
+                        <i class="ki-outline ki-lock fs-7 me-1"></i>{% trans "Yalnız Sistem Yöneticisi" %}
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <p class="text-muted fs-7 mb-3">
+                    {% trans "Sensör okumaları hariç tüm konfigürasyonu (istasyonlar, bağlantılar, sensörler, parametreler, kabinler, senaryolar, alarm/rapor/mimik ayarları ve seçime göre kullanıcılar) tek bir JSON dosyasına alır ve başka bir kuruluma yükler. Lisans taşınmaz." %}
+                </p>
+                <div class="alert alert-light-warning d-flex align-items-center py-3 mb-6">
+                    <i class="ki-outline ki-shield-cross fs-2 text-warning me-3"></i>
+                    <span class="fs-7">{% trans "Dosya Bakanlık SİM ve SMTP/SMS şifrelerini düz metin olarak içerir; güvenli saklayın ve paylaşmayın." %}</span>
+                </div>
+
+                <div class="row g-8">
+                    {# ---- Dışa aktar ---- #}
+                    <div class="col-lg-6">
+                        <h4 class="fs-6 fw-bold mb-4">{% trans "Dışa Aktar" %}</h4>
+                        <form method="post" action="{% url 'dashboard:admin_config_export' %}">
+                            {% csrf_token %}
+                            {% for s in config_sections %}
+                            <div class="form-check form-check-custom form-check-solid mb-3">
+                                <input class="form-check-input" type="checkbox" name="sections"
+                                       value="{{ s.key }}" id="exp-{{ s.key }}" checked
+                                       {% if s.required or not config_can_transfer %}disabled{% endif %}>
+                                <label class="form-check-label fs-7" for="exp-{{ s.key }}">
+                                    {% trans s.label %}{% if s.required %} <span class="text-muted">({% trans "her zaman" %})</span>{% endif %}
+                                </label>
+                            </div>
+                            {% endfor %}
+                            <button type="submit" class="btn btn-primary mt-3"
+                                    {% if not config_can_transfer %}disabled{% endif %}>
+                                <i class="ki-outline ki-file-down fs-4 me-1"></i>{% trans "Dosyayı İndir" %}
+                            </button>
+                        </form>
+                    </div>
+
+                    {# ---- İçe aktar ---- #}
+                    <div class="col-lg-6">
+                        <h4 class="fs-6 fw-bold mb-4">{% trans "İçe Aktar (Geri Yükle)" %}</h4>
+                        {% if config_pending %}
+                        <div class="border border-dashed border-warning rounded p-5">
+                            <div class="fw-bold text-gray-900 mb-3">{{ config_pending.filename }}</div>
+                            <div class="d-flex justify-content-between fs-7 mb-1">
+                                <span class="text-muted">{% trans "Kaynak makine" %}</span>
+                                <span class="fw-semibold">{{ config_pending.source_hostname|default:"—" }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between fs-7 mb-1">
+                                <span class="text-muted">{% trans "Kaynak sürüm" %}</span>
+                                <span class="badge badge-light">{{ config_pending.source_app_version|default:"—" }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between fs-7 mb-1">
+                                <span class="text-muted">{% trans "Dışa aktarım zamanı" %}</span>
+                                <span class="fw-semibold">{{ config_pending.exported_at|slice:":19"|default:"—" }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between fs-7 mb-1">
+                                <span class="text-muted">{% trans "Uyumluluk" %}</span>
+                                {% if config_pending.compatibility == 'exact' %}
+                                    <span class="badge badge-light-success">{% trans "Birebir" %}</span>
+                                {% else %}
+                                    <span class="badge badge-light-warning">{% trans "Eski sürüm (uyumlu)" %}</span>
+                                {% endif %}
+                            </div>
+                            <div class="d-flex justify-content-between fs-7 mb-3">
+                                <span class="text-muted">{% trans "Uygulanacak bölümler" %}</span>
+                                <span class="fw-semibold text-end">{{ config_pending.sections|join:", " }}</span>
+                            </div>
+                            <details class="fs-7 mb-4">
+                                <summary class="cursor-pointer text-primary">
+                                    {% blocktrans with n=config_pending.total_count %}{{ n }} kayıt — ayrıntı{% endblocktrans %}
+                                </summary>
+                                <table class="table table-sm fs-8 mt-2 mb-0">
+                                    {% for label, n in config_pending.counts.items %}
+                                    <tr><td class="text-gray-700">{{ label }}</td><td class="text-end">{{ n }}</td></tr>
+                                    {% endfor %}
+                                </table>
+                            </details>
+                            <div class="alert alert-danger fs-7 py-3 mb-4">
+                                {% trans "Bu kurulumdaki seçili bölümlerin konfigürasyonu SİLİNİP dosyadakiyle değiştirilecek. Silinen istasyon/sensörlere bağlı okuma geçmişi de gider. İşlemden önce otomatik tam veritabanı yedeği alınır." %}
+                            </div>
+                            <div class="d-flex gap-3">
+                                <button type="button" class="btn btn-danger" data-bs-toggle="modal"
+                                        data-bs-target="#config-import-modal">
+                                    <i class="ki-outline ki-arrow-circle-left fs-4 me-1"></i>{% trans "İçe Aktar" %}
+                                </button>
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="config_discard">
+                                    <button type="submit" class="btn btn-light">{% trans "Vazgeç" %}</button>
+                                </form>
+                            </div>
+                        </div>
+                        {% else %}
+                        <form method="post" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="config_upload">
+                            <input type="file" name="config_file" accept=".json,application/json"
+                                   class="form-control form-control-solid mb-4" required
+                                   {% if not config_can_transfer %}disabled{% endif %}>
+                            {% for s in config_sections %}{% if not s.required %}
+                            <div class="form-check form-check-custom form-check-solid mb-3">
+                                <input class="form-check-input" type="checkbox" name="sections"
+                                       value="{{ s.key }}" id="imp-{{ s.key }}" checked
+                                       {% if not config_can_transfer %}disabled{% endif %}>
+                                <label class="form-check-label fs-7" for="imp-{{ s.key }}">
+                                    {% trans s.label %}
+                                </label>
+                            </div>
+                            {% endif %}{% endfor %}
+                            <div class="form-text fs-8 mb-3">
+                                {% trans "İstasyon konfigürasyonu her zaman uygulanır; işaretli bölümler dosyada varsa uygulanır. Dosya önce doğrulanır, onayınızdan sonra yüklenir." %}
+                            </div>
+                            <button type="submit" class="btn btn-light-primary"
+                                    {% if not config_can_transfer %}disabled{% endif %}>
+                                <i class="ki-outline ki-file-up fs-4 me-1"></i>{% trans "Dosyayı Doğrula" %}
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if config_transfers %}
+                <div class="separator my-6"></div>
+                <div class="table-responsive">
+                    <table class="table table-row-bordered align-middle gy-2 fs-7">
+                        <thead>
+                            <tr class="fw-bold text-muted fs-8 text-uppercase">
+                                <th>{% trans "Tarih" %}</th>
+                                <th>{% trans "Yön" %}</th>
+                                <th>{% trans "Dosya" %}</th>
+                                <th>{% trans "Kaynak" %}</th>
+                                <th>{% trans "Kayıt" %}</th>
+                                <th>{% trans "Güvenlik Yedeği" %}</th>
+                                <th>{% trans "Durum" %}</th>
+                                <th>{% trans "Kullanıcı" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in config_transfers %}
+                            <tr>
+                                <td class="text-gray-800">{{ t.created_at|date:"d.m.Y H:i:s" }}</td>
+                                <td>
+                                    {% if t.direction == 'export' %}
+                                    <span class="badge badge-light-primary">{% trans "Dışa" %}</span>
+                                    {% else %}
+                                    <span class="badge badge-light-danger">{% trans "İçe" %}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-gray-700">{{ t.filename }}</td>
+                                <td class="text-gray-700">{{ t.source_hostname|default:"—" }} <span class="badge badge-light">{{ t.source_app_version }}</span></td>
+                                <td>{{ t.total_count }}</td>
+                                <td class="text-gray-700">{{ t.safety_backup.filename|default:"—" }}</td>
+                                <td>
+                                    {% if t.status == 'success' %}
+                                        <span class="badge badge-light-success">{% trans "Başarılı" %}</span>
+                                    {% elif t.status == 'running' %}
+                                        <span class="badge badge-light-info">{% trans "Uygulanıyor" %}</span>
+                                    {% else %}
+                                        <span class="badge badge-light-danger" title="{{ t.error }}">{% trans "Başarısız" %}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-gray-700">{{ t.user.username|default:"—" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if config_pending and config_can_transfer %}
+<div class="modal fade" tabindex="-1" id="config-import-modal">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="config_import_confirm">
+                <input type="hidden" name="transfer_id" value="{{ config_pending.id }}">
+                <div class="modal-header">
+                    <h3 class="modal-title text-danger">
+                        <i class="ki-outline ki-shield-cross fs-2 me-2"></i>{% trans "Konfigürasyon İçe Aktarım Onayı" %}
+                    </h3>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning fs-7">
+                        {% trans "Mevcut konfigürasyon dosyadakiyle DEĞİŞTİRİLECEK. Kullanıcılar bölümü uygulanırsa oturumunuz kapanabilir; dosyadaki yönetici hesabıyla giriş yapın." %}
+                    </div>
+                    <label class="form-label fs-7 fw-semibold">
+                        {% blocktrans %}Onaylamak için veritabanı adını yazın: <code>{{ db_name }}</code>{% endblocktrans %}
+                    </label>
+                    <input type="text" class="form-control form-control-solid" id="config-confirm"
+                           placeholder="{{ db_name }}" autocomplete="off">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">{% trans "Vazgeç" %}</button>
+                    <button type="submit" class="btn btn-danger" id="config-confirm-submit" disabled>
+                        {% trans "İçe Aktar" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ------------------------------------------------------------------ #}
 {# Yedekler tablosu                                                   #}
 {# ------------------------------------------------------------------ #}
 <div class="row g-5 mt-2">
@@ -326,6 +549,8 @@
     async function poll() {
         try {
             const res = await fetch(STATUS_URL, { credentials: "same-origin" });
+            // Konfigürasyon aktarımı kullanıcıları değiştirdiyse oturum düşer → login'e yönlen.
+            if (res.redirected) { location.reload(); return; }
             if (!res.ok) return;
             const data = await res.json();
             const badge = document.getElementById("running-badge");
@@ -384,6 +609,15 @@
     confirmInput.addEventListener("input", function () {
         submitBtn.disabled = (confirmInput.value.trim() !== DB_NAME);
     });
+
+    // ---- Konfigürasyon içe aktarım onayı ----
+    const cfgInput = document.getElementById("config-confirm");
+    if (cfgInput) {
+        const cfgSubmit = document.getElementById("config-confirm-submit");
+        cfgInput.addEventListener("input", function () {
+            cfgSubmit.disabled = (cfgInput.value.trim() !== DB_NAME);
+        });
+    }
 })();
 </script>
 {% endblock %}

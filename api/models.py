@@ -1630,6 +1630,84 @@ class DatabaseRestore(models.Model):
         return f"{self.source_filename} → [{self.status}]"
 
 
+class ConfigTransfer(models.Model):
+    """İstasyon taşıma — konfigürasyon dışa/içe aktarım kaydı (audit + onay akışı).
+
+    İçe aktarımda dosya önce yüklenip incelenir (`pending`), yönetici onaylayınca
+    Celery task güvenlik yedeği alıp konfigürasyonu değiştirir. Motor:
+    api/config_transfer.py.
+    """
+
+    DIRECTION_CHOICES = (
+        ("export", "Dışa Aktarım"),
+        ("import", "İçe Aktarım"),
+    )
+    STATUS_CHOICES = (
+        ("pending", "Onay Bekliyor"),
+        ("running", "Uygulanıyor"),
+        ("success", "Başarılı"),
+        ("failed", "Başarısız"),
+    )
+
+    direction = models.CharField(max_length=10, choices=DIRECTION_CHOICES, verbose_name="Yön")
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, default="pending", verbose_name="Durum",
+    )
+    filename = models.CharField(max_length=255, blank=True, default="", verbose_name="Dosya Adı")
+    path = models.CharField(
+        max_length=500, blank=True, default="", verbose_name="Tam Yol",
+        help_text="İçe aktarımda yüklenen dosyanın BACKUP_DIR altındaki yolu.",
+    )
+    sections = models.JSONField(default=list, blank=True, verbose_name="Bölümler")
+    source_app_version = models.CharField(
+        max_length=50, blank=True, default="", verbose_name="Kaynak Sürüm",
+    )
+    source_hostname = models.CharField(
+        max_length=255, blank=True, default="", verbose_name="Kaynak Makine",
+    )
+    exported_at = models.CharField(
+        max_length=64, blank=True, default="", verbose_name="Dışa Aktarım Zamanı",
+    )
+    compatibility = models.CharField(
+        max_length=10, blank=True, default="", verbose_name="Uyumluluk",
+    )
+    counts = models.JSONField(default=dict, blank=True, verbose_name="Kayıt Sayıları")
+    result = models.JSONField(default=dict, blank=True, verbose_name="Sonuç")
+    safety_backup = models.ForeignKey(
+        DatabaseBackup, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="config_transfers", verbose_name="Güvenlik Yedeği",
+    )
+    error = models.TextField(blank=True, default="", verbose_name="Hata")
+    user = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="config_transfers", verbose_name="Kullanıcı",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Oluşturma")
+    finished_at = models.DateTimeField(blank=True, null=True, verbose_name="Bitiş")
+
+    class Meta:
+        db_table = "config_transfer"
+        verbose_name = "Konfigürasyon Aktarımı"
+        verbose_name_plural = "Konfigürasyon Aktarımları"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.get_direction_display()} {self.filename} [{self.status}]"
+
+    @property
+    def total_count(self) -> int:
+        return sum(int(v) for v in (self.counts or {}).values())
+
+    def delete_file(self) -> None:
+        import os
+
+        if self.path and os.path.exists(self.path):
+            try:
+                os.remove(self.path)
+            except OSError:
+                pass
+
+
 # ---------------------------------------------------------------------------
 # Lisanslama (kurulum/saha bazlı, imzalı)
 # ---------------------------------------------------------------------------

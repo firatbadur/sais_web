@@ -74,6 +74,7 @@ sais_web/
 │   ├── middleware.py      # ApiLoggingMiddleware — gelen istek auto-log
 │   ├── api_logging.py     # Outbound helper (log_outbound_call decorator + record_outbound_call)
 │   ├── web_proxy.py       # WebSettings → Caddyfile render + PFX→PEM + atomik yazım
+│   ├── config_transfer.py # İstasyon taşıma: konfigürasyon dışa/içe aktarım motoru (SECTIONS)
 │   ├── helpers.py         # DataFrame → JSON safe dönüşüm
 │   ├── permissions.py
 │   ├── management/commands/
@@ -283,6 +284,44 @@ gerekmez); `db` container'a mount bile şart değil. TCP üzerinden bağlanır.
 - Beat task'ları [seed_periodic_tasks.py](scada_io/management/commands/seed_periodic_tasks.py)
   `BACKUP_TASKS`'ta — yeni sahada `seed_periodic_tasks` ile gelir. `.env`: `BACKUP_DIR`.
 
+## İstasyon taşıma (konfigürasyon dışa/içe aktarımı — Yedekleme sayfası)
+
+Bir kurulumun **okuma geçmişi hariç** tüm konfigürasyonunu tek JSON dosyasına alıp başka bir kuruluma
+(yeni PC / yeniden kurulum) yükler. Yönetici → **Yedekleme** sayfasındaki "İstasyon Taşıma" kartı.
+Sayfayı operatör görür; **dışa/içe aktarma yalnız rol=1** (sunucu tarafında `user_has_role(ROLE_ADMIN)`
++ `ConfigExportView(AdminRequiredMixin)`; operatörde butonlar disabled). Jenerik → `api/`.
+
+- **Tek doğruluk kaynağı** [api/config_transfer.py](api/config_transfer.py) `SECTIONS`: `core` (zorunlu —
+  istasyon/bağlantı/scan group/sensör/parametre/kabin/senaryo/alarm/rapor/mimik/SystemSwitch/
+  SystemAlarmSettings...) + opsiyonel `users` / `web` (WebSettings) / `notifications` / `periodic_tasks`.
+  **Lisans asla taşınmaz**, Document (dosya) ve tüm runtime/historian tabloları hariç. Yeni konfigürasyon
+  modeli eklenince buraya eklenmeli.
+- **Format**: zarf `{"format":"envisoft_webx.config_transfer","version":1, app_version, migration_state,
+  hostname, sections, counts, objects}`; `objects` Django `python` serializer + `use_natural_foreign_keys`
+  (kullanıcı FK'leri username ile). `EncryptedCharField` (kabin SIM şifresi) dosyada **düz metin**,
+  hedefte hedefin anahtarıyla yeniden şifrelenir (farklı SECRET_KEY'li makinede çalışır). UI dosyanın
+  sır içerdiğini uyarır.
+- **Geri yükleme = tamamen değiştir** (`apply_import`, tek transaction): seçili bölüm modelleri ters
+  sırada silinir → dosyadakiler PK korunarak yüklenir → `config_migration.reset_sequences` (import_config
+  ile ortak) → fixup (ReportSchedule `next_run_at` yeniden hesap, kabin↔Bakanlık kullanıcı senkronu,
+  `PeriodicTasks.update_changed`) → commit sonrası `serial_bridge.apply` + (web) `web_proxy.apply`.
+  **Lookup tabloları (StationType/StatusCode/RequestType/LogType) silinmez, PK ile upsert** — silmek
+  SystemLog/Command'ı cascade ile götürürdü. Silinen istasyon/sensörlere bağlı hedef okuma geçmişi
+  gider (bilinçli). Seçilmeyen bölüme işaret eden ve hedefte olmayan referans → null'lanır (null
+  olamıyorsa kayıt atlanır). Dosyayı üreten sürümde olmayan model (`counts`'ta yok) hedefte silinmez.
+- **Güvenlik kontrolleri** (`inspect_payload`): format/sürüm, `compare_schema` `block` (dosya koddan
+  yeni) → ret; `users` uygulanacaksa dosyada aktif rol=1/superuser yoksa ret (kilitlenme).
+- **Akış**: yükle → doğrula → `ConfigTransfer(pending)` + dosya `BACKUP_DIR/config_transfers/` → sayfada
+  özet + DB adı yazılarak onay → Celery `api.tasks.config_import_run` → **önce `backup_database
+  --tier=manual` güvenlik yedeği** (alınamazsa hiçbir şey değişmez) → `apply_import`. Model
+  `api.models.ConfigTransfer` (geçmiş + güvenlik yedeği bağı). `backup_status` poll'u `config_running`
+  içerir; kullanıcılar değişip oturum düşerse sayfa login'e yenilenir.
+- **CLI**: `export_station_config [--sections users,web] [--output f.json]`,
+  `import_station_config --file f.json --yes [--sections ...] [--skip-safety-backup]`.
+- **`auto_create_alarm` sinyali `raw` kayıtta çalışmaz** (loaddata/aktarım dosyadaki AlarmRule'ları getirir;
+  aksi halde mükerrer alarm kuralı oluşurdu).
+- Testler: [api/tests.py](api/tests.py) `ConfigTransferTests`.
+
 ## MSSQL → PostgreSQL config göçü (tek seferlik)
 
 Sistem MSSQL'den **PostgreSQL 16**'ya taşındı. Mevcut bir MSSQL sahasını taşırken **yalnız
@@ -315,8 +354,9 @@ python manage.py seed_initial_data && python manage.py seed_sais_data && python 
 ```
 **v0.3.8 (veya öncesi) sahadan göç — iki ek koşul:**
 1. **`export_config` o imajlarda YOK** (göç araçları v0.4.0 ile geldi). Fallback: eski sürüm
-   ayaktayken düz `dumpdata` ile `CONFIG_MODELS` listesini dök — listedeki tüm modeller v0.3.8'de
-   zaten mevcut. `api.License`'ı **hariç tut**: eski/boş lisans kaydı yeni kuruluma taşınırsa
+   ayaktayken düz `dumpdata` ile `CONFIG_MODELS` listesini dök — listedeki modeller v0.3.8'de
+   zaten mevcut (sonradan eklenen ReportTemplate/ReportSchedule/MimicScreen/SystemAlarmSettings
+   o sürümde yoksa listeden çıkar). `api.License`'ı **hariç tut**: eski/boş lisans kaydı yeni kuruluma taşınırsa
    `created_at` eski olacağından bootstrap grace dolmuş sayılıp saha anında kilitlenebilir; yeni
    sistemde `refresh_license` taze token çeksin.
 2. **Kaldırılmış alanlar `loaddata`'yı durdurur.** Eski export'ta o sürümde var olup bugün

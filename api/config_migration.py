@@ -36,10 +36,14 @@ CONFIG_MODELS: list[str] = [
     "api.MessageTemplate",
     "api.AlarmRule",
     "api.Reminder",
+    "api.ReportTemplate",
+    "api.ReportSchedule",
+    "dashboard.MimicScreen",
     # --- SAIS-özel (sais_domain) ---
     "sais_domain.SaisCabinet",
     "sais_domain.EnvisoftChannel",
     "sais_domain.SystemSwitch",
+    "sais_domain.SystemAlarmSettings",
     "sais_domain.SimStatusPolicy",
     "sais_domain.Scenario",
     "sais_domain.ScenarioParameter",
@@ -53,3 +57,22 @@ CONFIG_MODELS: list[str] = [
 
 # import_config boşluk kontrolü bu modeller üzerinden yapılır (varsa DB boş değil).
 EMPTINESS_GUARD_MODELS: list[str] = ["api.Station", "api.Parameter"]
+
+
+def reset_sequences(labels) -> int:
+    """PK korunarak yüklenen modellerin sequence'lerini max(id)'ye taşır (PG).
+
+    Atlanırsa yükleme başarılı görünür ama ilk YENİ kayıtta duplicate-PK ile
+    patlar. Dönen değer çalıştırılan SQL sayısıdır.
+    """
+    from django.apps import apps
+    from django.core.management.color import no_style
+    from django.db import connection
+
+    models = [apps.get_model(label) for label in labels]
+    statements = connection.ops.sequence_reset_sql(no_style(), models)
+    if statements:
+        with connection.cursor() as cursor:
+            for sql in statements:
+                cursor.execute(sql)
+    return len(statements)

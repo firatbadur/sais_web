@@ -26,10 +26,8 @@ import os
 from django.apps import apps
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
-from django.core.management.color import no_style
-from django.db import connection
 
-from api.config_migration import CONFIG_MODELS, EMPTINESS_GUARD_MODELS
+from api.config_migration import CONFIG_MODELS, EMPTINESS_GUARD_MODELS, reset_sequences
 
 
 class Command(BaseCommand):
@@ -79,11 +77,6 @@ class Command(BaseCommand):
 
     def _reset_sequences(self):
         """Yüklenen modellerin PK sequence'lerini max(id)'ye taşı (PG)."""
-        models = [apps.get_model(label) for label in CONFIG_MODELS]
-        statements = connection.ops.sequence_reset_sql(no_style(), models)
-        if not statements:
-            return
-        with connection.cursor() as cursor:
-            for sql in statements:
-                cursor.execute(sql)
-        self.stdout.write(f"  {len(statements)} sequence resetlendi.")
+        count = reset_sequences(CONFIG_MODELS)
+        if count:
+            self.stdout.write(f"  {count} sequence resetlendi.")

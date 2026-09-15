@@ -95,7 +95,8 @@ def _create_for_sensor(sensor) -> None:
 
 
 def auto_create_alarm(sender, instance, created, **kwargs):
-    if not created:
+    # loaddata / konfigürasyon aktarımı (raw): dosyadaki AlarmRule'lar zaten gelir.
+    if not created or kwargs.get("raw"):
         return
     try:
         _create_for_sensor(instance)

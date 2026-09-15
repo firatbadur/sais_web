@@ -3663,3 +3663,112 @@ msgstr "Are you sure you want to delete <b>%(name)s</b>?"
 
 msgid "Bu parametreye bağlı %(counter)s sensör var; silme işlemi engellendi. Önce sensörleri silin veya başka bir parametreye taşıyın."
 msgstr "%(counter)s sensor(s) are bound to this parameter; deletion is blocked. Delete the sensors first or move them to another parameter."
+
+msgid "İstasyon Taşıma (Konfigürasyon)"
+msgstr "Station Transfer (Configuration)"
+
+msgid "Yalnız Sistem Yöneticisi"
+msgstr "System Administrator only"
+
+msgid "Sensör okumaları hariç tüm konfigürasyonu (istasyonlar, bağlantılar, sensörler, parametreler, kabinler, senaryolar, alarm/rapor/mimik ayarları ve seçime göre kullanıcılar) tek bir JSON dosyasına alır ve başka bir kuruluma yükler. Lisans taşınmaz."
+msgstr "Exports all configuration except sensor readings (stations, connections, sensors, parameters, cabinets, scenarios, alarm/report/mimic settings and optionally users) to a single JSON file and loads it into another installation. The license is not transferred."
+
+msgid "Dosya Bakanlık SİM ve SMTP/SMS şifrelerini düz metin olarak içerir; güvenli saklayın ve paylaşmayın."
+msgstr "The file contains Ministry SIM and SMTP/SMS passwords in plain text; store it securely and do not share it."
+
+msgid "Dışa Aktar"
+msgstr "Export"
+
+msgid "her zaman"
+msgstr "always"
+
+msgid "Dosyayı İndir"
+msgstr "Download File"
+
+msgid "İçe Aktar (Geri Yükle)"
+msgstr "Import (Restore)"
+
+msgid "Kaynak makine"
+msgstr "Source machine"
+
+msgid "Kaynak sürüm"
+msgstr "Source version"
+
+msgid "Dışa aktarım zamanı"
+msgstr "Exported at"
+
+msgid "Eski sürüm (uyumlu)"
+msgstr "Older version (compatible)"
+
+msgid "Uygulanacak bölümler"
+msgstr "Sections to apply"
+
+#, python-format
+msgid "%(n)s kayıt — ayrıntı"
+msgstr "%(n)s records — details"
+
+msgid "Bu kurulumdaki seçili bölümlerin konfigürasyonu SİLİNİP dosyadakiyle değiştirilecek. Silinen istasyon/sensörlere bağlı okuma geçmişi de gider. İşlemden önce otomatik tam veritabanı yedeği alınır."
+msgstr "The configuration of the selected sections on this installation will be DELETED and replaced with the file contents. Reading history attached to deleted stations/sensors is lost as well. A full database backup is taken automatically first."
+
+msgid "İstasyon konfigürasyonu her zaman uygulanır; işaretli bölümler dosyada varsa uygulanır. Dosya önce doğrulanır, onayınızdan sonra yüklenir."
+msgstr "Station configuration is always applied; checked sections are applied if present in the file. The file is validated first and loaded after your confirmation."
+
+msgid "Dosyayı Doğrula"
+msgstr "Validate File"
+
+msgid "Kayıt"
+msgstr "Records"
+
+msgid "Güvenlik Yedeği"
+msgstr "Safety Backup"
+
+msgid "Uygulanıyor"
+msgstr "Applying"
+
+msgid "Dışa"
+msgstr "Export"
+
+msgid "İçe"
+msgstr "Import"
+
+msgid "Konfigürasyon İçe Aktarım Onayı"
+msgstr "Configuration Import Confirmation"
+
+msgid "Mevcut konfigürasyon dosyadakiyle DEĞİŞTİRİLECEK. Kullanıcılar bölümü uygulanırsa oturumunuz kapanabilir; dosyadaki yönetici hesabıyla giriş yapın."
+msgstr "The current configuration will be REPLACED with the file contents. If the users section is applied your session may end; sign in with the administrator account from the file."
+
+msgid "Kullanıcılar ve gruplar"
+msgstr "Users and groups"
+
+msgid "İstasyon konfigürasyonu"
+msgstr "Station configuration"
+
+msgid "Web erişim / SSL ayarları"
+msgstr "Web access / SSL settings"
+
+msgid "Bildirim (SMTP / SMS) ayarları"
+msgstr "Notification (SMTP / SMS) settings"
+
+msgid "Periyodik görev tanımları"
+msgstr "Periodic task definitions"
+
+msgid "Konfigürasyon aktarımı yalnız Sistem Yöneticisi tarafından yapılabilir."
+msgstr "Configuration transfer can only be performed by a System Administrator."
+
+msgid "Lütfen bir konfigürasyon dosyası seçin."
+msgstr "Please select a configuration file."
+
+msgid "Dosya doğrulandı. Aşağıdaki özeti kontrol edip onaylayın."
+msgstr "File validated. Review the summary below and confirm."
+
+msgid "Onay bekleyen içe aktarım bulunamadı."
+msgstr "No import awaiting confirmation was found."
+
+msgid "Devam eden bir aktarım var; bitmesini bekleyin."
+msgstr "A transfer is already running; please wait for it to finish."
+
+msgid "İçe aktarım başlatıldı: önce güvenlik yedeği alınıyor, ardından konfigürasyon değiştirilecek. Kullanıcılar da taşınıyorsa oturumunuz kapanabilir."
+msgstr "Import started: a safety backup is taken first, then the configuration will be replaced. If users are transferred too, your session may end."
+
+msgid "Bekleyen içe aktarım iptal edildi."
+msgstr "Pending import cancelled."

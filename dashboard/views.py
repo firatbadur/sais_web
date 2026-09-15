@@ -2147,6 +2147,23 @@ class BackupRestoreView(OperatorRequiredMixin, TemplateView):
         ctx["backup_dir"] = settings.BACKUP_DIR
         ctx["backup_dir_ok"] = os.path.isdir(settings.BACKUP_DIR)
         ctx["db_name"] = database_name()
+
+        # İstasyon taşıma (konfigürasyon aktarımı)
+        from api.config_transfer import SECTIONS
+        from api.models import ConfigTransfer
+
+        ctx["config_sections"] = [
+            {"key": k, "label": v["label"], "required": v["required"]}
+            for k, v in SECTIONS.items()
+        ]
+        ctx["config_can_transfer"] = user_has_role(self.request.user, ROLE_ADMIN)
+        ctx["config_pending"] = (
+            ConfigTransfer.objects.filter(direction="import", status="pending").first()
+        )
+        ctx["config_transfers"] = list(ConfigTransfer.objects.select_related(
+            "user", "safety_backup",
+        ).exclude(status="pending")[:20])
+        ctx["running"] = ctx["running"] or ConfigTransfer.objects.filter(status="running").exists()
         return ctx
 
     def post(self, request, *args, **kwargs):
@@ -2155,6 +2172,10 @@ class BackupRestoreView(OperatorRequiredMixin, TemplateView):
         from api.tasks import backup_database_run, restore_database_run
 
         action = request.POST.get("action", "")
+
+        if action.startswith("config_"):
+            self._handle_config_action(request, action)
+            return redirect("dashboard:admin_backups")
 
         if action == "save_policies":
             BackupPolicy.ensure_defaults()
@@ -2209,6 +2230,88 @@ class BackupRestoreView(OperatorRequiredMixin, TemplateView):
             messages.error(request, _("Geçersiz işlem."))
 
         return redirect("dashboard:admin_backups")
+
+    def _handle_config_action(self, request, action):
+        """İstasyon taşıma içe aktarım aksiyonları — yalnız Sistem Yöneticisi."""
+        from api.config_transfer import ConfigTransferError, discard_pending, stage_import
+        from api.models import ConfigTransfer
+        from api.tasks import config_import_run
+
+        if not user_has_role(request.user, ROLE_ADMIN):
+            messages.error(request, _("Konfigürasyon aktarımı yalnız Sistem Yöneticisi tarafından yapılabilir."))
+            return
+
+        if action == "config_upload":
+            upload = request.FILES.get("config_file")
+            if not upload:
+                messages.error(request, _("Lütfen bir konfigürasyon dosyası seçin."))
+                return
+            sections = request.POST.getlist("sections")
+            try:
+                rec = stage_import(upload.read(), upload.name, sections, user=request.user)
+            except (ConfigTransferError, OSError) as exc:
+                messages.error(request, str(exc))
+                return
+            log_event(
+                EventType.BACKUP,
+                f"Konfigürasyon dosyası yüklendi, onay bekliyor ({rec.filename})",
+                severity="warning", request=request,
+            )
+            messages.info(request, _("Dosya doğrulandı. Aşağıdaki özeti kontrol edip onaylayın."))
+
+        elif action == "config_import_confirm":
+            rec = ConfigTransfer.objects.filter(
+                pk=request.POST.get("transfer_id"), direction="import", status="pending",
+            ).first()
+            if not rec:
+                messages.error(request, _("Onay bekleyen içe aktarım bulunamadı."))
+                return
+            if ConfigTransfer.objects.filter(status="running").exists():
+                messages.error(request, _("Devam eden bir aktarım var; bitmesini bekleyin."))
+                return
+            ConfigTransfer.objects.filter(pk=rec.pk).update(status="running", user=request.user)
+            config_import_run.delay(transfer_id=rec.pk)
+            log_event(
+                EventType.BACKUP,
+                f"Konfigürasyon içe aktarımı başlatıldı ({rec.filename}, kaynak={rec.source_hostname})",
+                severity="critical", request=request,
+            )
+            messages.warning(request, _(
+                "İçe aktarım başlatıldı: önce güvenlik yedeği alınıyor, ardından konfigürasyon "
+                "değiştirilecek. Kullanıcılar da taşınıyorsa oturumunuz kapanabilir."
+            ))
+
+        elif action == "config_discard":
+            discard_pending()
+            messages.info(request, _("Bekleyen içe aktarım iptal edildi."))
+
+        else:
+            messages.error(request, _("Geçersiz işlem."))
+
+
+class ConfigExportView(AdminRequiredMixin, View):
+    """İstasyon taşıma — konfigürasyonu JSON dosyası olarak indirir (yalnız rol=1)."""
+
+    def post(self, request, *args, **kwargs):
+        import json
+
+        from django.core.serializers.json import DjangoJSONEncoder
+        from django.http import HttpResponse
+
+        from api.config_transfer import build_export, export_filename, record_export
+
+        payload = build_export(request.POST.getlist("sections"))
+        filename = export_filename()
+        record_export(payload, filename, user=request.user)
+        log_event(
+            EventType.BACKUP,
+            f"Konfigürasyon dışa aktarıldı ({filename}, bölümler={','.join(payload['sections'])})",
+            severity="warning", request=request,
+        )
+        body = json.dumps(payload, ensure_ascii=False, indent=2, cls=DjangoJSONEncoder)
+        response = HttpResponse(body, content_type="application/json; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 # --------------------------------------------------------------------------- #

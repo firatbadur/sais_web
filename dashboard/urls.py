@@ -96,6 +96,8 @@ urlpatterns = [
     path("admin-pages/system-control/", views.SystemControlView.as_view(),
          name="admin_system_control"),
     path("admin-pages/backups/", views.BackupRestoreView.as_view(), name="admin_backups"),
+    path("admin-pages/backups/config-export/", views.ConfigExportView.as_view(),
+         name="admin_config_export"),
     path("admin-pages/license/", views.LicenseStatusView.as_view(), name="admin_license"),
     path("admin-pages/web-settings/", views.WebSettingsView.as_view(),
          name="admin_web_settings"),
