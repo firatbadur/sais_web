@@ -120,10 +120,12 @@ def build_sim_payload(
     Aynı parametreye birden fazla sensör eşleşirse — pratik olmasa da —
     iteration sırasında son okunan kazanır.
     """
-    from .models import SimStatusPolicy
+    from .models import SimChannel, SimStatusPolicy
     policy = SimStatusPolicy.load()
     blocked = policy.blocked_code_set()
     fallback = policy.fallback_status_code
+    # Kabin için kolon seçimi (None = hiç yapılandırılmamış → eski davranış).
+    izinli = SimChannel.enabled_parameter_names(cabinet)
 
     values: dict[str, Any] = {}
     qs = _cabinet_sensor_snapshots(cabinet).filter(
@@ -133,6 +135,10 @@ def build_sim_payload(
         param = snap.sensor.parameter
         param_name = (param.parameter_name or param.parameter_txt or "").strip()
         if not param_name:
+            continue
+        # Bakanlık tanımsız kolonda TÜM payload'u reddettiği için seçim dışı
+        # parametreler hiç yazılmaz (bkz. SimChannel).
+        if izinli is not None and param_name not in izinli:
             continue
         value = snap.value if snap.value is not None else -9999
         if force_status is not None:
@@ -189,7 +195,7 @@ def build_sim_payloads_for_times(
     from api.models import Reading
     from api.models import Sensor
 
-    from .models import SimStatusPolicy
+    from .models import SimChannel, SimStatusPolicy
 
     targets = sorted({t for t in target_times if t is not None})
     if not targets:
@@ -205,6 +211,15 @@ def build_sim_payloads_for_times(
         )
         .select_related("parameter")
     )
+    # Kolon seçimi canlı payload ile AYNI uygulanır; aksi halde backfill,
+    # canlı gönderimde elenen tanımsız kolonu geri koyup Bakanlık'ın o dakikayı
+    # tümden reddetmesine yol açardı (bkz. SimChannel).
+    izinli = SimChannel.enabled_parameter_names(cabinet)
+    if izinli is not None:
+        sensors = [
+            s for s in sensors
+            if ((s.parameter.parameter_name or s.parameter.parameter_txt or "").strip() in izinli)
+        ]
     if not sensors:
         return []
 

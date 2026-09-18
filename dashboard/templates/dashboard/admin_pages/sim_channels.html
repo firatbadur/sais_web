@@ -1,0 +1,197 @@
+{% extends "dashboard/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Gönderilecek Veriler" %}{% endblock %}
+{% block page_title %}{% trans "Gönderilecek Veriler" %}{% endblock %}
+
+{% block content %}
+<div class="card mb-5">
+    <div class="card-header border-0 pt-6">
+        <div class="card-title flex-column">
+            <h3 class="fw-bold m-0">{% trans "Bakanlığa İletilecek Kolonlar" %}</h3>
+            <span class="text-muted fs-7 mt-1">
+                {% trans "İşaretli parametreler SendData payload'una yazılır; işaretsizler hiç gönderilmez." %}
+            </span>
+        </div>
+        <div class="card-toolbar">
+            {% if cabinets|length > 1 %}
+            <form method="get" class="me-3">
+                <select name="cabinet" class="form-select form-select-sm" onchange="this.form.submit()">
+                    {% for c in cabinets %}
+                    <option value="{{ c.id }}" {% if cabinet and c.id == cabinet.id %}selected{% endif %}>{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+            {% endif %}
+            <button type="button" id="btn-sync" class="btn btn-sm btn-light-primary me-2">
+                <i class="ki-duotone ki-cloud-download fs-4"><span class="path1"></span><span class="path2"></span></i>
+                {% trans "Bakanlıktan Senkronize Et" %}
+            </button>
+            <button type="button" id="btn-save" class="btn btn-sm btn-primary">
+                <i class="ki-duotone ki-check fs-4"></i>{% trans "Kaydet" %}
+            </button>
+        </div>
+    </div>
+
+    <div class="card-body pt-0">
+        {% csrf_token %}
+
+        <div class="alert alert-warning d-flex align-items-center p-4 mb-5">
+            <i class="ki-duotone ki-information-5 fs-2hx text-warning me-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+            <div class="d-flex flex-column">
+                <h5 class="mb-1">{% trans "Neden bu sayfa var?" %}</h5>
+                <span class="fs-7">
+                    {% blocktrans %}Bakanlık, payload'da kendi tanımında olmayan tek bir kolon görürse o dakikanın tamamını reddeder ("Tanımsız Kolonlara veri girilemez"). Bu kalıcı bir rettir; kuyruktaki dakikalar iletilemez duruma düşer. Bu yüzden yalnız karşı tarafta tanımlı kolonlar işaretli olmalıdır.{% endblocktrans %}
+                </span>
+            </div>
+        </div>
+
+        {% if tanimsiz_acik %}
+        <div class="alert alert-danger d-flex align-items-center p-4 mb-5">
+            <i class="ki-duotone ki-shield-cross fs-2hx text-danger me-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+            <div class="d-flex flex-column">
+                <h5 class="mb-1">{% trans "Dikkat: tanımsız kolon işaretli" %}</h5>
+                <span class="fs-7">
+                    {% for r in tanimsiz_acik %}<code>{{ r.code }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}
+                    — {% trans "bu kolonlar gönderildiği sürece iletim reddedilir. İşareti kaldırıp kaydedin." %}
+                </span>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if hic_senkron %}
+        <div class="alert alert-light-primary d-flex align-items-center p-4 mb-5">
+            <i class="ki-duotone ki-information fs-2hx text-primary me-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+            <div class="d-flex flex-column">
+                <span class="fs-7">{% trans "Bakanlık kanal tanımı henüz çekilmedi. Senkronize et düğmesi hangi kolonların karşı tarafta tanımlı olduğunu getirir." %}</span>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if not cabinet %}
+        <div class="text-center text-muted py-10">{% trans "Tanımlı kabin yok." %}</div>
+        {% else %}
+        <div class="table-responsive">
+            <table class="table table-row-bordered table-row-gray-300 align-middle gs-3 gy-3">
+                <thead>
+                    <tr class="fw-bold fs-7 text-gray-600 text-uppercase">
+                        <th style="width:70px;">{% trans "Gönder" %}</th>
+                        <th>{% trans "Kolon adı" %}</th>
+                        <th>{% trans "Açıklama" %}</th>
+                        <th>{% trans "Sensörler" %}</th>
+                        <th>{% trans "Bakanlıkta tanımlı" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                    <tr>
+                        <td>
+                            <div class="form-check form-switch form-check-custom form-check-solid form-check-sm">
+                                <input class="form-check-input ch-toggle" type="checkbox"
+                                       value="{{ r.parameter_id }}"
+                                       data-code="{{ r.code }}"
+                                       data-defined="{{ r.ministry_defined|yesno:'1,0,x' }}"
+                                       {% if r.is_enabled %}checked{% endif %}>
+                            </div>
+                        </td>
+                        <td><code class="fs-6">{{ r.code }}</code></td>
+                        <td class="text-gray-700">{{ r.text }}{% if r.ministry_unit %} <span class="text-muted fs-8">({{ r.ministry_unit }})</span>{% endif %}</td>
+                        <td class="text-muted fs-7">{{ r.sensors|join:", " }}</td>
+                        <td>
+                            {% if r.ministry_defined == None %}
+                                <span class="badge badge-light">{% trans "bilinmiyor" %}</span>
+                            {% elif r.ministry_defined %}
+                                <span class="badge badge-light-success">{% trans "tanımlı" %}</span>
+                                {% if r.ministry_text %}<span class="text-muted fs-8 ms-1">{{ r.ministry_text }}</span>{% endif %}
+                            {% else %}
+                                <span class="badge badge-light-danger">{% trans "tanımsız" %}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted py-8">{% trans "Bu kabinin istasyonunda analog sensör bulunamadı." %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+(function () {
+    var CAB = {{ cabinet.id|default:0 }};
+    var URL_SYNC = "{% url 'dashboard:api_sim_channels_sync' %}";
+    var URL_SAVE = "{% url 'dashboard:api_sim_channels_save' %}";
+    var T_SYNCING = "{% trans 'Senkronize ediliyor...' %}";
+    var T_SYNC = "{% trans 'Senkronize Et' %}";
+    var T_SAVING = "{% trans 'Kaydediliyor...' %}";
+    var T_SAVE = "{% trans 'Kaydet' %}";
+    var T_WARN = "{% trans 'Tanımsız kolonlar işaretli — iletim reddedilecek:' %}";
+
+    function csrf() {
+        var el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
+    }
+    function post(url, body) {
+        return fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+            body: JSON.stringify(body)
+        }).then(function (r) {
+            return r.json().then(function (j) { return {ok: r.ok, data: j}; });
+        });
+    }
+
+    var btnSync = document.getElementById('btn-sync');
+    var btnSave = document.getElementById('btn-save');
+
+    if (btnSync) btnSync.addEventListener('click', function () {
+        btnSync.disabled = true;
+        btnSync.textContent = T_SYNCING;
+        post(URL_SYNC, {cabinet_id: CAB}).then(function (res) {
+            if (res.ok && res.data.ok) {
+                location.reload();
+            } else {
+                alert(res.data.error || 'Hata');
+                btnSync.disabled = false;
+                btnSync.textContent = T_SYNC;
+            }
+        }).catch(function (e) {
+            alert(String(e));
+            btnSync.disabled = false;
+            btnSync.textContent = T_SYNC;
+        });
+    });
+
+    if (btnSave) btnSave.addEventListener('click', function () {
+        var secili = [];
+        var riskli = [];
+        document.querySelectorAll('.ch-toggle').forEach(function (el) {
+            if (el.checked) {
+                secili.push(parseInt(el.value, 10));
+                if (el.getAttribute('data-defined') === '0') {
+                    riskli.push(el.getAttribute('data-code'));
+                }
+            }
+        });
+        if (riskli.length && !confirm(T_WARN + ' ' + riskli.join(', '))) { return; }
+        btnSave.disabled = true;
+        btnSave.textContent = T_SAVING;
+        post(URL_SAVE, {cabinet_id: CAB, enabled: secili}).then(function (res) {
+            if (res.ok && res.data.ok) {
+                location.reload();
+            } else {
+                alert(res.data.error || 'Hata');
+                btnSave.disabled = false;
+                btnSave.textContent = T_SAVE;
+            }
+        }).catch(function (e) {
+            alert(String(e));
+            btnSave.disabled = false;
+            btnSave.textContent = T_SAVE;
+        });
+    });
+})();
+</script>
+{% endblock %}

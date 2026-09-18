@@ -5340,3 +5340,186 @@ def sim_outbox_action(request):
                     pass
 
     return JsonResponse({"ok": True, "affected": affected})
+
+
+@login_required
+def sim_channels_sync(request):
+    """Bakanlık'ın kanal tanımını çekip ``SimChannel`` kayıtlarıyla eşler.
+
+    ``GetChannelInformation`` o istasyon için **gerçekten tanımlı** kolonları
+    döndürür; kullanıcı hangi parametrenin karşı tarafta karşılığı olduğunu
+    tahmin etmek zorunda kalmasın diye tablo bununla işaretlenir.
+
+    İlk kez oluşturulan kayıtlarda ``is_enabled`` Bakanlık tanımına göre
+    atanır (tanımlı → açık, tanımsız → kapalı): "Tanımsız Kolonlara veri
+    girilemez" reddini doğuran kolon böylece kendiliğinden dışarıda kalır.
+    Var olan kayıtların kullanıcı seçimi **korunur** — yalnız tanım bilgisi
+    tazelenir.
+    """
+    import json
+
+    from django.utils import timezone
+
+    from api.models import Parameter, Sensor
+    from sais_domain.clients.sim import SaisSimClient
+    from sais_domain.models import SaisCabinet, SimChannel
+
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST bekleniyor."}, status=405)
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (TypeError, ValueError):
+        data = {}
+    try:
+        cabinet_id = int(data.get("cabinet_id") or 0)
+    except (TypeError, ValueError):
+        cabinet_id = 0
+
+    cabinet = SaisCabinet.objects.filter(id=cabinet_id).first() or SaisCabinet.objects.order_by("id").first()
+    if not cabinet:
+        return JsonResponse({"ok": False, "error": "Kabin tanımlı değil."}, status=400)
+
+    try:
+        kanallar = SaisSimClient(cabinet).get_channel_information(triggered_by=request.user) or []
+    except Exception as exc:  # noqa: BLE001
+        return JsonResponse(
+            {"ok": False, "error": f"Bakanlık kanal bilgisi alınamadı: {exc}"}, status=502,
+        )
+    if not isinstance(kanallar, list):
+        return JsonResponse(
+            {"ok": False, "error": "Bakanlık beklenmeyen yanıt döndürdü."}, status=502,
+        )
+
+    tanim = {}
+    for k in kanallar:
+        if not isinstance(k, dict):
+            continue
+        ad = (k.get("Parameter") or "").strip()
+        if not ad:
+            continue
+        # Aynı kolon birden fazla cihaz/seri no ile dönebilir; aktif olan kazanır.
+        if ad not in tanim or k.get("IsActive"):
+            tanim[ad] = {
+                "text": (k.get("ParameterText") or "").strip(),
+                "unit": (k.get("UnitText") or "").strip(),
+                "active": bool(k.get("IsActive")),
+            }
+
+    now = timezone.now()
+    olusan = guncellenen = 0
+    param_ids = (
+        Sensor.objects
+        .filter(
+            connection__station_id=cabinet.station_id,
+            is_active=True,
+            parameter__isnull=False,
+            sensor_type__in=(0, 1),
+        )
+        .values_list("parameter_id", flat=True)
+        .distinct()
+    )
+    for p in Parameter.objects.filter(id__in=list(param_ids)):
+        ad = (p.parameter_name or p.parameter_txt or "").strip()
+        if not ad:
+            continue
+        bilgi = tanim.get(ad)
+        ch = SimChannel.objects.filter(cabinet=cabinet, parameter=p).first()
+        if ch is None:
+            SimChannel.objects.create(
+                cabinet=cabinet, parameter=p,
+                is_enabled=bool(bilgi and bilgi["active"]),
+                ministry_defined=bool(bilgi),
+                ministry_text=(bilgi or {}).get("text", ""),
+                ministry_unit=(bilgi or {}).get("unit", ""),
+                last_synced_at=now,
+            )
+            olusan += 1
+        else:
+            ch.ministry_defined = bool(bilgi)
+            ch.ministry_text = (bilgi or {}).get("text", "")
+            ch.ministry_unit = (bilgi or {}).get("unit", "")
+            ch.last_synced_at = now
+            ch.save(update_fields=[
+                "ministry_defined", "ministry_text", "ministry_unit",
+                "last_synced_at", "updated_at",
+            ])
+            guncellenen += 1
+
+    log_event(
+        EventType.CONFIG,
+        f"Bakanlık kanal tanımı senkronize edildi (kabin={cabinet.pk}): "
+        f"{len(tanim)} tanımlı kolon, {olusan} yeni, {guncellenen} güncellenen.",
+        user=request.user,
+    )
+    return JsonResponse({
+        "ok": True,
+        "ministry_columns": sorted(tanim.keys()),
+        "created": olusan,
+        "updated": guncellenen,
+    })
+
+
+@login_required
+def sim_channels_save(request):
+    """Kullanıcının kolon seçimini kaydeder (işaretliler Bakanlık'a gider)."""
+    import json
+
+    from api.models import Parameter, Sensor
+    from sais_domain.models import SaisCabinet, SimChannel
+
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST bekleniyor."}, status=405)
+    denied = _require_operator(request)
+    if denied:
+        return denied
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (TypeError, ValueError):
+        return JsonResponse({"ok": False, "error": "Geçersiz istek."}, status=400)
+
+    try:
+        cabinet_id = int(data.get("cabinet_id") or 0)
+    except (TypeError, ValueError):
+        cabinet_id = 0
+    cabinet = SaisCabinet.objects.filter(id=cabinet_id).first()
+    if not cabinet:
+        return JsonResponse({"ok": False, "error": "Kabin bulunamadı."}, status=400)
+
+    secili = {int(i) for i in (data.get("enabled") or []) if str(i).isdigit()}
+
+    # Kapsam: payload'a girebilecek parametreler (aktif analog sensörü olanlar).
+    param_ids = set(
+        Sensor.objects
+        .filter(
+            connection__station_id=cabinet.station_id,
+            is_active=True,
+            parameter__isnull=False,
+            sensor_type__in=(0, 1),
+        )
+        .values_list("parameter_id", flat=True)
+        .distinct()
+    )
+    acik = kapali = 0
+    for p in Parameter.objects.filter(id__in=list(param_ids)):
+        istenen = p.id in secili
+        ch, _created = SimChannel.objects.get_or_create(
+            cabinet=cabinet, parameter=p, defaults={"is_enabled": istenen},
+        )
+        if ch.is_enabled != istenen:
+            ch.is_enabled = istenen
+            ch.save(update_fields=["is_enabled", "updated_at"])
+        acik += 1 if istenen else 0
+        kapali += 0 if istenen else 1
+
+    log_event(
+        EventType.CONFIG,
+        f"Bakanlık gönderim kolonları güncellendi (kabin={cabinet.pk}): "
+        f"{acik} açık, {kapali} kapalı.",
+        user=request.user,
+    )
+    return JsonResponse({"ok": True, "enabled": acik, "disabled": kapali})

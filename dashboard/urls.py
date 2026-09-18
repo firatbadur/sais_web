@@ -118,6 +118,8 @@ urlpatterns = [
          name="admin_sim_outbox"),
     path("admin-pages/sim-data-report/", views.SimDataReportView.as_view(),
          name="admin_sim_data_report"),
+    path("admin-pages/sim-channels/", views.SimChannelsView.as_view(),
+         name="admin_sim_channels"),
 
     # --- Rapor Stüdyosu (operatör görüntüler/üretir; şablon+zamanlama düzenleme rol=1) ---
     path("report-studio/", views.ReportStudioView.as_view(), name="report_studio"),
@@ -270,6 +272,8 @@ urlpatterns = [
     path("api/sim/data-report/", api_views.sim_data_report, name="api_sim_data_report"),
     path("api/sim/valid-ratio/", api_views.sim_valid_ratio, name="api_sim_valid_ratio"),
     path("api/sim/valid-recompute/", api_views.sim_valid_recompute, name="api_sim_valid_recompute"),
+    path("api/sim/channels-sync/", api_views.sim_channels_sync, name="api_sim_channels_sync"),
+    path("api/sim/channels-save/", api_views.sim_channels_save, name="api_sim_channels_save"),
 
     # --- AJAX API (Numune Senaryosu) ---
     path("api/scenario/list/", api_views.scenario_list, name="api_scenario_list"),

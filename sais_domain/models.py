@@ -1364,3 +1364,94 @@ class ScenarioGraph(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class SimChannel(models.Model):
+    """Bakanlık'a **hangi parametrelerin** iletileceğini belirleyen kabin-parametre seçimi.
+
+    Saha gerçeği (Marbin/Tekirdağ, 2026-09-18): Bakanlık ``SendData``'yı **tüm
+    payload** düzeyinde reddeder — payload'da istasyon için tanımlı olmayan tek
+    bir kolon bulunması o dakikanın tamamını düşürür::
+
+        {"result": false, "message": "Tanımsız Kolonlara veri girilemez (Sicaklik)"}
+
+    Bizde ölçülen ama Bakanlık tanımında olmayan bir sensör (ör. sıcaklık) bu
+    yüzden **bütün** iletimi kilitler; üstelik bu kalıcı bir rettir, kuyruk
+    poison-streak ile dakikaları ``failed`` yapar. Bu model o seçimi kullanıcıya
+    verir: Sürekli İzleme Merkezi → **Gönderilecek Veriler** sayfasından kolonlar
+    işaretlenir, ``build_sim_payload`` yalnız işaretlileri yazar.
+
+    ``ministry_defined`` alanı Bakanlık'ın ``GetChannelInformation`` yanıtından
+    (sayfadaki "Bakanlık'tan Senkronize Et") doldurulur — kullanıcı tahmin
+    etmesin diye hangi kolonun karşı tarafta gerçekten tanımlı olduğu gösterilir.
+
+    **Geriye uyumluluk:** bir kabin için hiç kayıt yoksa davranış değişmez
+    (tüm analog parametreler gider) — ``SimStatusPolicy`` ile aynı yaklaşım.
+    Bkz. :func:`enabled_parameter_names`.
+    """
+
+    cabinet = models.ForeignKey(
+        SaisCabinet,
+        on_delete=models.CASCADE,
+        related_name="sim_channels",
+        verbose_name="Kabin",
+    )
+    parameter = models.ForeignKey(
+        "api.Parameter",
+        on_delete=models.CASCADE,
+        related_name="sim_channels",
+        verbose_name="Parametre",
+    )
+    is_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Bakanlık'a Gönder",
+        help_text="Kapalıysa bu parametre SendData payload'una hiç yazılmaz.",
+    )
+    ministry_defined = models.BooleanField(
+        default=False,
+        verbose_name="Bakanlık'ta Tanımlı",
+        help_text="Son senkronizasyonda Bakanlık kanal listesinde bulundu mu.",
+    )
+    ministry_text = models.CharField(
+        max_length=200, blank=True, default="",
+        verbose_name="Bakanlık Kanal Adı",
+    )
+    ministry_unit = models.CharField(
+        max_length=100, blank=True, default="",
+        verbose_name="Bakanlık Birimi",
+    )
+    last_synced_at = models.DateTimeField(
+        blank=True, null=True, verbose_name="Son Senkronizasyon",
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Güncelleme")
+
+    class Meta:
+        db_table = "sais_sim_channel"
+        verbose_name = "Bakanlık Veri Kolonu"
+        verbose_name_plural = "Bakanlık Veri Kolonları"
+        unique_together = (("cabinet", "parameter"),)
+        ordering = ["parameter__parameter_name"]
+
+    def __str__(self):
+        durum = "açık" if self.is_enabled else "kapalı"
+        return f"{self.parameter} → {durum}"
+
+    @classmethod
+    def enabled_parameter_names(cls, cabinet) -> set[str] | None:
+        """Kabin için iletilecek ``parameter_name`` kümesi; yapılandırılmamışsa ``None``.
+
+        ``None`` = "seçim yapılmamış" → çağıran eski davranışı sürdürür (hepsini
+        gönderir). Boş küme ile karıştırılmamalı: boş küme "hiçbiri" demektir.
+        """
+        qs = cls.objects.filter(cabinet=cabinet).select_related("parameter")
+        adlar: set[str] = set()
+        var = False
+        for ch in qs:
+            var = True
+            if not ch.is_enabled:
+                continue
+            p = ch.parameter
+            ad = (p.parameter_name or p.parameter_txt or "").strip()
+            if ad:
+                adlar.add(ad)
+        return adlar if var else None

@@ -2907,3 +2907,89 @@ class DocumentDeleteView(OperatorRequiredMixin, View):
         else:
             messages.error(request, _("Doküman bulunamadı."))
         return redirect("dashboard:documents")
+
+
+class SimChannelsView(OperatorRequiredMixin, TemplateView):
+    """Sürekli İzleme Merkezi → **Gönderilecek Veriler**.
+
+    Bakanlık'a hangi parametrelerin iletileceğini seçtirir. Varlık sebebi:
+    ``SendData`` payload'unda istasyon için tanımlı olmayan **tek** bir kolon,
+    o dakikanın tamamının reddedilmesine yol açar ("Tanımsız Kolonlara veri
+    girilemez (Sicaklik)") ve bu kalıcı ret olduğundan kuyruk dakikaları
+    ``failed`` yapar. Seçim :class:`sais_domain.models.SimChannel` kayıtlarında
+    tutulur; sayfa Bakanlık'ın kendi kanal tanımını da (GetChannelInformation)
+    yanına koyar ki kullanıcı tahmin etmesin.
+    """
+    template_name = "dashboard/admin_pages/sim_channels.html"
+
+    def get_context_data(self, **kwargs):
+        from api.models import Sensor
+        from sais_domain.models import SaisCabinet, SimChannel
+
+        ctx = super().get_context_data(**kwargs)
+        cabinets = list(SaisCabinet.objects.select_related("station").order_by("id"))
+
+        try:
+            cabinet_id = int(self.request.GET.get("cabinet") or 0)
+        except (TypeError, ValueError):
+            cabinet_id = 0
+        cabinet = next((c for c in cabinets if c.id == cabinet_id), None) or (
+            cabinets[0] if cabinets else None
+        )
+
+        rows = []
+        if cabinet:
+            # Kabinin istasyonundaki aktif ANALOG sensörler — payload kapsamıyla
+            # birebir aynı (bkz. services.build_sim_payload).
+            sensors = (
+                Sensor.objects
+                .filter(
+                    connection__station_id=cabinet.station_id,
+                    is_active=True,
+                    parameter__isnull=False,
+                    sensor_type__in=(0, 1),
+                )
+                .select_related("parameter")
+                .order_by("parameter__parameter_name")
+            )
+            mevcut = {
+                ch.parameter_id: ch
+                for ch in SimChannel.objects.filter(cabinet=cabinet)
+            }
+            gorulen = {}
+            for sn in sensors:
+                p = sn.parameter
+                ad = (p.parameter_name or p.parameter_txt or "").strip()
+                if not ad:
+                    continue
+                if p.id not in gorulen:
+                    ch = mevcut.get(p.id)
+                    gorulen[p.id] = {
+                        "parameter_id": p.id,
+                        "code": ad,
+                        "text": p.parameter_txt or p.parameter_name or "",
+                        "unit": getattr(p, "unit", "") or "",
+                        "sensors": [],
+                        # Hiç kayıt yoksa mevcut davranış "gönder" olduğundan
+                        # varsayılan işaretli gelir (yanıltıcı olmasın).
+                        "is_enabled": (ch.is_enabled if ch else True),
+                        "configured": ch is not None,
+                        "ministry_defined": (ch.ministry_defined if ch else None),
+                        "ministry_text": (ch.ministry_text if ch else ""),
+                        "ministry_unit": (ch.ministry_unit if ch else ""),
+                        "last_synced_at": (ch.last_synced_at if ch else None),
+                    }
+                gorulen[p.id]["sensors"].append(sn.tag or f"#{sn.id}")
+            rows = list(gorulen.values())
+
+        ctx.update({
+            "cabinets": cabinets,
+            "cabinet": cabinet,
+            "rows": rows,
+            "hic_senkron": all(r.get("ministry_defined") is None for r in rows) if rows else True,
+            "tanimsiz_acik": [
+                r for r in rows
+                if r["is_enabled"] and r.get("ministry_defined") is False
+            ],
+        })
+        return ctx

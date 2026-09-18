@@ -544,3 +544,108 @@ class SimOutboxPageTests(TestCase):
         })
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(SystemSwitch.load().sim_accept_window_hours, 72)
+
+
+class SimChannelSelectionTests(TestCase):
+    """Bakanlık'a iletilecek kolon seçimi (``SimChannel``).
+
+    Regresyon bağlamı (saha, 2026-09-18): payload'da Bakanlık tanımında
+    olmayan tek bir kolon ("Sicaklik") bulunması SendData'nın **tamamının**
+    reddedilmesine yol açıyordu. Seçim dışı bırakılan parametre payload'a
+    ne değer ne de ``_Status`` anahtarı olarak girmelidir.
+    """
+
+    def setUp(self):
+        from api.models import (
+            Connection, Parameter, Sensor, SensorLatest, Station,
+        )
+        from sais_domain.models import SaisCabinet
+
+        self.station = Station.objects.create(name="Test Tesis", active=True)
+        self.cabinet = SaisCabinet.objects.create(
+            station=self.station, device_id="SIM1", code="30060001",
+            name="Kabin", auth_username="u", auth_secret="s",
+        )
+        self.conn = Connection.objects.create(
+            station=self.station, name="PLC", protocol="modbus_tcp",
+            host="127.0.0.1", port=502, is_enabled=True,
+        )
+        self.sensors = {}
+        for ad in ("Debi", "Sicaklik"):
+            param = Parameter.objects.create(
+                parameter_name=ad, parameter_txt=ad, station=self.station,
+            )
+            sensor = Sensor.objects.create(
+                connection=self.conn, parameter=param, sensor_type=0,
+                is_active=True, address=1,
+            )
+            SensorLatest.objects.update_or_create(
+                sensor=sensor,
+                defaults={"value": 1.5, "readtime": timezone.now()},
+            )
+            self.sensors[ad] = sensor
+
+    def _payload(self):
+        from sais_domain.services import build_sim_payload
+        return build_sim_payload(self.cabinet, readtime=timezone.now()).values
+
+    def test_no_selection_sends_everything(self):
+        """Hiç kayıt yoksa davranış değişmez — geriye uyumluluk."""
+        values = self._payload()
+        self.assertIn("Debi", values)
+        self.assertIn("Sicaklik", values)
+
+    def test_disabled_parameter_is_omitted(self):
+        """Kapatılan kolon ne değer ne status olarak yazılır."""
+        from sais_domain.models import SimChannel
+
+        SimChannel.objects.create(
+            cabinet=self.cabinet,
+            parameter=self.sensors["Debi"].parameter, is_enabled=True,
+        )
+        SimChannel.objects.create(
+            cabinet=self.cabinet,
+            parameter=self.sensors["Sicaklik"].parameter, is_enabled=False,
+        )
+        values = self._payload()
+        self.assertIn("Debi", values)
+        self.assertIn("Debi_Status", values)
+        self.assertNotIn("Sicaklik", values)
+        self.assertNotIn("Sicaklik_Status", values)
+
+    def test_enabled_names_none_when_unconfigured(self):
+        """``None`` (yapılandırılmamış) ile boş küme (hiçbiri) ayrı anlamlar."""
+        from sais_domain.models import SimChannel
+
+        self.assertIsNone(SimChannel.enabled_parameter_names(self.cabinet))
+        SimChannel.objects.create(
+            cabinet=self.cabinet,
+            parameter=self.sensors["Debi"].parameter, is_enabled=False,
+        )
+        self.assertEqual(SimChannel.enabled_parameter_names(self.cabinet), set())
+
+    def test_backfill_uses_same_selection(self):
+        """Eksik veri yeniden gönderimi canlı payload ile aynı kolonları yazar."""
+        from api.models import Reading
+        from sais_domain.models import SimChannel
+        from sais_domain.services import build_sim_payloads_for_times
+
+        SimChannel.objects.create(
+            cabinet=self.cabinet,
+            parameter=self.sensors["Sicaklik"].parameter, is_enabled=False,
+        )
+        SimChannel.objects.create(
+            cabinet=self.cabinet,
+            parameter=self.sensors["Debi"].parameter, is_enabled=True,
+        )
+        hedef = (timezone.now() - timedelta(minutes=5)).replace(second=0, microsecond=0)
+        for ad in ("Debi", "Sicaklik"):
+            Reading.objects.create(
+                sensor=self.sensors[ad], value=2.0,
+                time_iso=hedef + timedelta(seconds=10),
+            )
+        payloads = build_sim_payloads_for_times(self.cabinet, [hedef])
+        self.assertTrue(payloads)
+        values = payloads[0].values
+        self.assertIn("Debi", values)
+        self.assertNotIn("Sicaklik", values)
