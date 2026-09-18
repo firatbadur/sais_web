@@ -40,9 +40,19 @@ COMPOSE_FILE="docker-compose.prod.yml"
 EMBED_GHCR_USER='__GHCR_USER__'
 EMBED_GHCR_TOKEN='__GHCR_TOKEN__'
 EMBED_GHCR_IMAGE='__GHCR_IMAGE__'
-case "$EMBED_GHCR_USER"  in *__GHCR_USER__*)  EMBED_GHCR_USER="";;  esac
-case "$EMBED_GHCR_TOKEN" in *__GHCR_TOKEN__*) EMBED_GHCR_TOKEN="";; esac
-case "$EMBED_GHCR_IMAGE" in *__GHCR_IMAGE__*) EMBED_GHCR_IMAGE="";; esac
+# TUZAK (saha: v1.4.1-v1.4.3 "GHCR token bulunamadi"): asagidaki placeholder'lar
+# BILEREK parcali yazildi ('__GHCR' + '_USER__'). release.yml sed'i dosyada tam
+# `__GHCR_USER__` dizisini arar; parcali yazim o diziyi olusturmadigi icin bu
+# satirlara DOKUNAMAZ. Eskiden guard da sed'lenip `*firatbadur*` haline geliyor,
+# az once gomulen GERCEK degeri yakalayip bosaltiyordu -> musteri surumu token'i
+# gomulu oldugu halde "token bulunamadi" ile duserdi. Glob yerine TAM esitlik
+# kullanilir (gercek deger placeholder'a esit olamaz). `if` sart: `[ ]` && form
+# `set -e` altinda test false donunce script'i oldururdu.
+_PH='__GHCR'
+if [ "$EMBED_GHCR_USER"  = "${_PH}_USER__"  ]; then EMBED_GHCR_USER="";  fi
+if [ "$EMBED_GHCR_TOKEN" = "${_PH}_TOKEN__" ]; then EMBED_GHCR_TOKEN=""; fi
+if [ "$EMBED_GHCR_IMAGE" = "${_PH}_IMAGE__" ]; then EMBED_GHCR_IMAGE=""; fi
+unset _PH
 
 GHCR_IMAGE="${GHCR_IMAGE:-${EMBED_GHCR_IMAGE:-ghcr.io/firatbadur/sais_web}}"
 GHCR_USER="${GHCR_USER:-${EMBED_GHCR_USER:-firatbadur}}"

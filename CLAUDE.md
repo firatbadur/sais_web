@@ -665,6 +665,19 @@ yok (Linux'ta Docker native çalışır), servis NSSM/scheduled-task yerine **sy
   `__GHCR_USER__`/`__GHCR_TOKEN__`/`__GHCR_IMAGE__` placeholder'larını `INSTALLER_GHCR_TOKEN` secret'ıyla
   `sed`'ler ve script'i release asset'i olarak ekler. Script placeholder'ları değişmemişse (repo/dev)
   boş sayar → token yalnız geliştiriciye sorulur; müşteri sürümünde gömülü olduğundan hiç sorulmaz.
+- **TUZAK — gömülü token'ı script'in kendi guard'ı siliyordu (saha: v1.4.1–v1.4.3, Marbin/TR kurulumu):**
+  `sed`'in global `s#__GHCR_TOKEN__#<token>#g` bayrağı yalnız tanım satırını değil, hemen altındaki
+  **guard satırını** (`case "$EMBED_GHCR_TOKEN" in *__GHCR_TOKEN__*) ... ="";;`) da değiştiriyordu →
+  guard `*<gerçek token>*` haline gelip **az önce gömülen değeri yakalayıp boşaltıyordu**. Sonuç: token
+  asset'te DURUYOR ama script `GHCR_TOKEN bulunamadı` ile ölüyor (unattended modda anında; interaktif
+  modda token sorar) — müşteri sürümü hiç çalışmıyordu. Teşhis yanıltıcı: `grep __GHCR_TOKEN__` "gömülmüş"
+  der, çünkü placeholder gerçekten yok. **Çözüm iki katman:** (1) release.yml sed'i `/^EMBED_GHCR_TOKEN=/`
+  **satır adresli** (global `g` yok) → guard'a dokunulmaz; doğrulama yalnız tanım satırına bakar + gömülü
+  token uzunluğunu kontrol eder. (2) Script'teki guard'lar `case`/glob yerine **tam eşitlik** + placeholder'ı
+  **parçalı** yazar (`_PH='__GHCR'` + `"${_PH}_TOKEN__"`) → dosyada tam `__GHCR_TOKEN__` dizisi oluşmadığı
+  için sed ileride yanlışlıkla global yapılsa bile guard korunur. `if` şart zorunlu: `[ ] && x` formu
+  `set -e` altında test false dönünce script'i öldürür. **Elde eski asset kalırsa geçici kurtarma:**
+  `TOK=$(awk -F"'" '/^EMBED_GHCR_TOKEN=/{print $2}' install-linux.sh)` + `GHCR_TOKEN="$TOK"` env'i ile çalıştır.
 - **Akış (6 adım)**: Docker CE kur (`get.docker.com`) → `.env` üret (`DJANGO_SECRET_KEY` +
   `POSTGRES_PASSWORD` + `WATCHTOWER_API_TOKEN` rastgele; domain'den wildcard ALLOWED_HOSTS/CSRF türet) →
   GHCR login (`--password-stdin`) → `pull` + `up -d` → migration bekle + `seed_initial_data`/

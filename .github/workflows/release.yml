@@ -143,16 +143,22 @@ jobs:
         env:
           GHCR_TOKEN: ${{ secrets.INSTALLER_GHCR_TOKEN }}
         run: |
-          # Placeholder'ları gerçek değerlerle değiştir. Token alfanümerik (ghp_/
+          # Placeholder'ları gerçek değerlerle değiştir — YALNIZ tanım satırlarında
+          # (/^EMBED_.../ adresi). Global s###g script'in kendi guard satırlarını da
+          # değiştirip az önce gömülen GERÇEK değeri boşaltıyordu → müşteri sürümü
+          # "GHCR token bulunamadı" ile düşüyordu (v1.4.1-v1.4.3 sahada). Token alfanümerik (ghp_/
           # github_pat_) → sed '#' ayıracı ve '&' ile çakışmaz.
           sed -i \
-            -e "s#__GHCR_USER__#${{ github.repository_owner }}#g" \
-            -e "s#__GHCR_IMAGE__#ghcr.io/${{ github.repository }}#g" \
-            -e "s#__GHCR_TOKEN__#${GHCR_TOKEN}#g" \
+            -e "/^EMBED_GHCR_USER=/s#__GHCR_USER__#${{ github.repository_owner }}#" \
+            -e "/^EMBED_GHCR_IMAGE=/s#__GHCR_IMAGE__#ghcr.io/${{ github.repository }}#" \
+            -e "/^EMBED_GHCR_TOKEN=/s#__GHCR_TOKEN__#${GHCR_TOKEN}#" \
             installer/install-linux.sh
           # Gömüldüğünü doğrula (placeholder kalmamalı; token'ı log'a basma).
-          if grep -q "__GHCR_TOKEN__" installer/install-linux.sh; then
+          if grep -q "^EMBED_GHCR_TOKEN='__GHCR_TOKEN__'" installer/install-linux.sh; then
             echo "HATA: token gömülemedi (placeholder duruyor)."; exit 1
+          fi
+          if ! grep -qE "^EMBED_GHCR_TOKEN='.{20,}'" installer/install-linux.sh; then
+            echo "HATA: gömülü token beklenenden kısa/boş."; exit 1
           fi
 
       - name: Attach Linux installer to release
