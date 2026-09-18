@@ -13,7 +13,7 @@
                 {% trans "İşaretli parametreler SendData payload'una yazılır; işaretsizler hiç gönderilmez." %}
             </span>
         </div>
-        <div class="card-toolbar">
+        <div class="card-toolbar flex-wrap gap-2">
             {% if cabinets|length > 1 %}
             <form method="get" class="me-3">
                 <select name="cabinet" class="form-select form-select-sm" onchange="this.form.submit()">
@@ -24,11 +24,10 @@
             </form>
             {% endif %}
             <button type="button" id="btn-sync" class="btn btn-sm btn-light-primary me-2">
-                <i class="ki-duotone ki-cloud-download fs-4"><span class="path1"></span><span class="path2"></span></i>
-                {% trans "Bakanlıktan Senkronize Et" %}
+                <i class="ki-outline ki-cloud-download fs-4"></i>{% trans "Bakanlıktan Senkronize Et" %}
             </button>
             <button type="button" id="btn-save" class="btn btn-sm btn-primary">
-                <i class="ki-duotone ki-check fs-4"></i>{% trans "Kaydet" %}
+                <i class="ki-outline ki-check fs-4"></i>{% trans "Kaydet" %}
             </button>
         </div>
     </div>
@@ -86,7 +85,7 @@
                     {% for r in rows %}
                     <tr>
                         <td>
-                            <div class="form-check form-switch form-check-custom form-check-solid form-check-sm">
+                            <div class="form-check form-switch form-check-custom form-check-solid">
                                 <input class="form-check-input ch-toggle" type="checkbox"
                                        value="{{ r.parameter_id }}"
                                        data-code="{{ r.code }}"
@@ -124,9 +123,7 @@
     var URL_SYNC = "{% url 'dashboard:api_sim_channels_sync' %}";
     var URL_SAVE = "{% url 'dashboard:api_sim_channels_save' %}";
     var T_SYNCING = "{% trans 'Senkronize ediliyor...' %}";
-    var T_SYNC = "{% trans 'Senkronize Et' %}";
     var T_SAVING = "{% trans 'Kaydediliyor...' %}";
-    var T_SAVE = "{% trans 'Kaydet' %}";
     var T_WARN = "{% trans 'Tanımsız kolonlar işaretli — iletim reddedilecek:' %}";
 
     function csrf() {
@@ -146,21 +143,30 @@
     var btnSync = document.getElementById('btn-sync');
     var btnSave = document.getElementById('btn-save');
 
+    // Butonun ikonunu kaybetmemek icin metin yerine innerHTML saklanir
+    // (textContent atamak <i> elementini de silerdi).
+    function mesgul(btn, metin) {
+        if (!btn.dataset.html) { btn.dataset.html = btn.innerHTML; }
+        btn.disabled = true;
+        btn.textContent = metin;
+    }
+    function serbest(btn) {
+        btn.disabled = false;
+        if (btn.dataset.html) { btn.innerHTML = btn.dataset.html; }
+    }
+
     if (btnSync) btnSync.addEventListener('click', function () {
-        btnSync.disabled = true;
-        btnSync.textContent = T_SYNCING;
+        mesgul(btnSync, T_SYNCING);
         post(URL_SYNC, {cabinet_id: CAB}).then(function (res) {
             if (res.ok && res.data.ok) {
                 location.reload();
             } else {
                 alert(res.data.error || 'Hata');
-                btnSync.disabled = false;
-                btnSync.textContent = T_SYNC;
+                serbest(btnSync);
             }
         }).catch(function (e) {
             alert(String(e));
-            btnSync.disabled = false;
-            btnSync.textContent = T_SYNC;
+            serbest(btnSync);
         });
     });
 
@@ -176,20 +182,17 @@
             }
         });
         if (riskli.length && !confirm(T_WARN + ' ' + riskli.join(', '))) { return; }
-        btnSave.disabled = true;
-        btnSave.textContent = T_SAVING;
+        mesgul(btnSave, T_SAVING);
         post(URL_SAVE, {cabinet_id: CAB, enabled: secili}).then(function (res) {
             if (res.ok && res.data.ok) {
                 location.reload();
             } else {
                 alert(res.data.error || 'Hata');
-                btnSave.disabled = false;
-                btnSave.textContent = T_SAVE;
+                serbest(btnSave);
             }
         }).catch(function (e) {
             alert(String(e));
-            btnSave.disabled = false;
-            btnSave.textContent = T_SAVE;
+            serbest(btnSave);
         });
     });
 })();
