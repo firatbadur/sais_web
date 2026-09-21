@@ -55,6 +55,9 @@ class Command(BaseCommand):
                             default="both", help="Hangi soak testi çalışsın.")
         parser.add_argument("--skip-soak", action="store_true",
                             help="Yalnız ayar + açık soket özetini yaz.")
+        parser.add_argument("--probe-rounds", type=int, default=5,
+                            help="Her scan group'un tek tek denenme sayısı "
+                                 "(0 = grup izolasyon testini atla).")
 
     def handle(self, *args, **opts):
         try:
@@ -74,6 +77,7 @@ class Command(BaseCommand):
             return
 
         self._warn_if_polling_on()
+        self._probe_groups(conn, opts["probe_rounds"])
 
         seconds = max(10, opts["seconds"])
         interval = opts["interval"] or (conn.poll_interval_sec or 10)
@@ -113,6 +117,17 @@ class Command(BaseCommand):
         ]
         for label, value in rows:
             self.stdout.write(f"   {label:<26}: {value}")
+
+        for sg in groups:
+            self.stdout.write(
+                f"      grup '{sg.name}': slave={sg.slave_id} fn={sg.function} "
+                f"adres={sg.start_address} adet={sg.quantity}"
+            )
+            limit = 2000 if sg.function in (1, 2) else 125
+            if (sg.quantity or 0) > limit:
+                self.stdout.write(self.style.ERROR(
+                    f"      ! adet {sg.quantity} > fn{sg.function} sınırı {limit}"
+                ))
 
         if requests and conn.poll_interval_sec:
             worst = requests * blocking
@@ -190,6 +205,82 @@ class Command(BaseCommand):
                 ))
         except Exception:  # noqa: BLE001
             pass
+
+    # -- 2b) grup izolasyonu --------------------------------------------- #
+    def _probe_groups(self, conn, rounds):
+        """Her scan group'u TEK BAŞINA, taze soketle dener.
+
+        Bazı PLC'ler beğenmedikleri isteğe (fonksiyon desteklenmiyor, adet/adres
+        aralığı dışı, yanlış slave) Modbus exception yanıtı dönmek yerine
+        **TCP oturumunu kapatır**. O zaman hata `Connection reset by peer` /
+        `Connection unexpectedly closed` olarak görünür ve ağ sorunu sanılır —
+        oysa tek bir grubun ayarı tüm turu öldürüyordur. Gruplar tek tek
+        denenince suçlu hemen ayrışır.
+        """
+        from scada_io.readers import build_reader
+
+        groups = list(conn.scan_groups.filter(is_active=True))
+        if not rounds or not groups:
+            return
+
+        self._h(f"2b) Scan group izolasyon testi ({rounds} tur, her grup ayrı soket)")
+        verdicts = {}
+        for sg in groups:
+            ok = fail = 0
+            first_error = ""
+            for _ in range(rounds):
+                reader = build_reader(conn)
+                if not reader.open():
+                    fail += 1
+                    first_error = first_error or f"open: {reader.last_error}"
+                    continue
+                try:
+                    _regs, err = reader.read_raw(
+                        slave_id=sg.slave_id, function=sg.function,
+                        address=sg.start_address, count=sg.quantity,
+                    )
+                finally:
+                    try:
+                        reader.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+                if err:
+                    fail += 1
+                    first_error = first_error or err
+                else:
+                    ok += 1
+
+            verdicts[sg.name] = fail
+            line = (f"   {sg.name:<20} slave={sg.slave_id} fn={sg.function} "
+                    f"adres={sg.start_address} adet={sg.quantity} → "
+                    f"{ok} OK / {fail} HATA")
+            if fail == 0:
+                self.stdout.write(self.style.SUCCESS(line))
+            else:
+                self.stdout.write(self.style.ERROR(line + f"  ({first_error[:80]})"))
+
+        bad = [n for n, f in verdicts.items() if f]
+        good = [n for n, f in verdicts.items() if not f]
+        if bad and good:
+            self.stdout.write(self.style.ERROR(
+                f"
+   ! SUÇLU BULUNDU: {', '.join(bad)} grubu/grupları taze soketle "
+                f"bile hata veriyor, {', '.join(good)} temiz.
+"
+                f"   → Sorun ağ/oturum DEĞİL, o grubun ayarı: fonksiyon kodu "
+                f"(coil/discrete için 1/2, register için 3/4), başlangıç adresi "
+                f"(0-tabanlı mı 1-tabanlı mı), adet (cihazın desteklediği aralığı "
+                f"aşıyor olabilir) veya slave_id. Cihaz beğenmediği isteğe exception "
+                f"dönmek yerine soketi kapatıyor.
+"
+                f"   → Aynı aralığı Modbus Poll'da dene: orada da kopuyorsa kesinleşir."
+            ))
+        elif bad:
+            self.stdout.write(self.style.WARNING(
+                "
+   Tüm gruplar hata veriyor → tek bir grubun ayarı değil; "
+                "oturum/ağ tarafına bak (aşağıdaki soak testleri)."
+            ))
 
     # -- 3) soak --------------------------------------------------------- #
     def _soak(self, conn, seconds, interval, *, persistent):
