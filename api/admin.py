@@ -107,7 +107,7 @@ class ConnectionAdmin(admin.ModelAdmin):
             "fields": (
                 "poll_interval_sec", "save_interval_sec",
                 "timeout_ms", "retry_count",
-                "auto_reconnect", "reconnect_delay_sec",
+                "single_session", "auto_reconnect", "reconnect_delay_sec",
             ),
         }),
         ("Runtime Durumu", {

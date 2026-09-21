@@ -229,6 +229,15 @@ class Connection(models.Model):
                   "→ cevapsız okuma en fazla ~8 sn bloklar). 0 = tek deneme (en hızlı). "
                   "Cevap vermeyen/yavaş noktalarda düşürmek poll cycle'ı hızlandırır.",
     )
+    single_session = models.BooleanField(
+        default=False, verbose_name="Tek Oturumlu Cihaz",
+        help_text="Cihaz aynı anda yalnız BİR TCP oturumu kabul ediyorsa açın "
+                  "(Mikrodev vb. küçük PLC'ler). Açıkken okuma turu biter bitmez "
+                  "soket kapatılır; böylece tüm worker process'leri boyunca aynı "
+                  "anda tek bağlantı açık kalır ve cihaz eski oturumu düşürdüğü "
+                  "için oluşan 'Connection reset by peer' / 'Broken pipe' hataları "
+                  "biter. Kapalıyken soket kalıcı tutulur (varsayılan, daha hızlı).",
+    )
     auto_reconnect = models.BooleanField(
         default=True, verbose_name="Otomatik Yeniden Bağlan",
     )

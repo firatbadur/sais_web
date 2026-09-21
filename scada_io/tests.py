@@ -466,3 +466,83 @@ class AsciiSocketUrlTests(SimpleTestCase):
             self.assertTrue(reader.open())
             ser.assert_called_once()
             sfu.assert_not_called()
+
+
+# --------------------------------------------------------------------------- #
+# _read_cycle — ölü sokette erken çıkış
+# --------------------------------------------------------------------------- #
+class _FakeScanGroups:
+    def filter(self, **_kwargs):
+        return []
+
+
+class _FakeConn:
+    pk = 1
+    scan_groups = _FakeScanGroups()
+
+
+class _FakeSensor:
+    def __init__(self, sid):
+        self.id = sid
+        self.scan_group_id = None
+
+
+class _FakeReader:
+    """İlk okumada soketi öldüren sahte reader (pymodbus broken pipe deseni)."""
+
+    def __init__(self, error_at=0):
+        self.error_at = error_at
+        self.calls = 0
+
+    def read(self, sensor):
+        from .readers import ReadResult
+        idx = self.calls
+        self.calls += 1
+        if idx >= self.error_at:
+            return ReadResult(
+                quality="bad",
+                error="ConnectionResetError: [Errno 104] Connection reset by peer",
+            )
+        return ReadResult(value=1.0, quality="good")
+
+
+class ReadCycleDeadSocketTests(SimpleTestCase):
+    """Soket ölünce kalan sensörler aynı ölü sokete SORULMAMALI.
+
+    pymodbus kırık soketi kendi kapatmaz (`client.socket` set kalır, `connect()`
+    True döner) → devam etmek her sensör için aynı hatayı ve boşuna bekleme
+    üretir. Caller zaten taze soketle cycle'ı bir kez tekrarlıyor.
+    """
+
+    def test_dead_socket_stops_further_reads(self):
+        from .tasks import _read_cycle
+
+        sensors = [_FakeSensor(i) for i in range(5)]
+        reader = _FakeReader(error_at=1)   # 2. okumada soket ölür
+
+        results, last_error, conn_level, socket_dead = _read_cycle(
+            reader, _FakeConn(), sensors
+        )
+
+        self.assertTrue(socket_dead)
+        self.assertTrue(conn_level)
+        # 1 başarılı + 1 hatalı okuma yapıldı, kalan 3 sensöre dokunulmadı
+        self.assertEqual(reader.calls, 2)
+        # ama her sensör için yine de bir sonuç üretildi (hepsi persist edilsin)
+        self.assertEqual(len(results), len(sensors))
+        self.assertTrue(results[0][1].ok)
+        self.assertFalse(any(r.ok for _s, r in results[1:]))
+
+    def test_healthy_cycle_reads_all(self):
+        from .tasks import _read_cycle
+
+        sensors = [_FakeSensor(i) for i in range(4)]
+        reader = _FakeReader(error_at=99)
+
+        results, _err, conn_level, socket_dead = _read_cycle(
+            reader, _FakeConn(), sensors
+        )
+        self.assertFalse(socket_dead)
+        self.assertFalse(conn_level)
+        self.assertEqual(reader.calls, 4)
+        self.assertTrue(all(r.ok for _s, r in results))

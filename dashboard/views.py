@@ -1941,12 +1941,19 @@ class SystemControlView(OperatorRequiredMixin, TemplateView):
             )
 
         else:  # save_switches — mevcut davranış
+            was_polling = switch.polling_enabled
             switch.sim_enabled = request.POST.get("sim_enabled") == "on"
             switch.envisoft_enabled = request.POST.get("envisoft_enabled") == "on"
             switch.polling_enabled = request.POST.get("polling_enabled") == "on"
             switch.updated_by = request.user
             switch.save()
             messages.success(request, _("Sistem kontrol ayarları kaydedildi."))
+            # "Sensör Okuması" kapatıldıysa worker'ların açık tuttuğu socket'leri
+            # de kapat: anahtar tek başına yalnız yeni görev kuyruğa almayı
+            # durdurur, pool'daki TCP oturumu cihaza bağlı kalırdı (operatör
+            # "kapattım ama cihaz hâlâ bize bağlı" diyor — haklı).
+            if was_polling and not switch.polling_enabled:
+                self._close_scada_connections(request)
 
         return redirect("dashboard:admin_system_control")
 

@@ -202,6 +202,13 @@
                         <input id="c-autoreconnect" class="form-check-input" type="checkbox" checked>
                     </div>
                 </div>
+                <div class="col-md-12 mb-5">
+                    <label class="form-check form-switch form-check-custom form-check-solid">
+                        <input id="c-singlesession" class="form-check-input" type="checkbox">
+                        <span class="form-check-label fw-semibold">{% trans "Tek Oturumlu Cihaz" %}</span>
+                    </label>
+                    <div class="form-text">{% trans "Cihaz aynı anda yalnız bir TCP oturumu kabul ediyorsa açın (Mikrodev vb. küçük PLC'ler). Okuma turu biter bitmez soket kapatılır; 'Connection reset by peer' / 'Broken pipe' hatalarını önler." %}</div>
+                </div>
             </div>
                 </div>
                 </div>
@@ -584,8 +591,9 @@
         serial_port:'c-serialport', baudrate:'c-baudrate', parity:'c-parity', stop_bits:'c-stopbits',
         byte_size:'c-bytesize', xonxoff:'c-xonxoff', rtscts:'c-rtscts', dsrdtr:'c-dsrdtr',
         poll_interval_sec:'c-poll', save_interval_sec:'c-save', timeout_ms:'c-timeout', retry_count:'c-retry',
-        auto_reconnect:'c-autoreconnect', reconnect_delay_sec:'c-reconnectdelay' };
-    const C_CHECK = ['is_enabled','xonxoff','rtscts','dsrdtr','auto_reconnect'];
+        auto_reconnect:'c-autoreconnect', reconnect_delay_sec:'c-reconnectdelay',
+        single_session:'c-singlesession' };
+    const C_CHECK = ['is_enabled','xonxoff','rtscts','dsrdtr','auto_reconnect','single_session'];
     const C_S2 = ['station'];
 
     function clearCErrors(){ document.querySelectorAll('[data-cerr]').forEach(e=>e.textContent=''); }

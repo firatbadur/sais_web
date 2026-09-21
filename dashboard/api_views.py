@@ -2806,7 +2806,7 @@ _CONNECTION_FIELDS = (
     "serial_port", "baudrate", "parity", "stop_bits", "byte_size",
     "xonxoff", "rtscts", "dsrdtr",
     "poll_interval_sec", "save_interval_sec", "timeout_ms", "retry_count",
-    "auto_reconnect", "reconnect_delay_sec",
+    "single_session", "auto_reconnect", "reconnect_delay_sec",
 )
 
 

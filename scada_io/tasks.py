@@ -19,6 +19,7 @@ from datetime import timedelta
 
 from celery import shared_task
 from celery.worker.control import control_command
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
@@ -101,6 +102,58 @@ def close_scada_pool(state, reason: str = "manual"):
 # Polling
 # --------------------------------------------------------------------------- #
 
+# Bağlantı başına dağıtık polling kilidi (Redis `SETNX` — `cache.add` atomiktir).
+#
+# NEDEN: `connection_pool` worker PROCESS'ine özeldir; prefork'ta
+# (`--concurrency=4`) aynı Connection farklı child'larda eşzamanlı poll'lanırsa
+# aynı cihaza aynı anda 2-4 TCP oturumu açılır. Küçük PLC'ler (Mikrodev vb.)
+# yalnız 1-2 eşzamanlı Modbus TCP oturumu kabul eder; fazlası gelince eskisini
+# RST ile düşürürler → `ConnectionResetError [Errno 104]` / `BrokenPipeError
+# [Errno 32]` ve o cycle'ın TÜM sensörleri bad olur.
+#
+# Çakışma bir yarış değil, NORMAL bir sonuçtur: `last_polled_at` cycle'ın
+# BAŞINDA damgalandığı için bir cycle `poll_interval_sec`'ten uzun sürerse
+# (timeout × retry bloklaması) `dispatch_polls` aynı bağlantıyı bitmeden yeniden
+# kuyruğa atar. Kilit bunu keser → cihaza aynı anda tek oturum.
+_POLL_LOCK_PREFIX = "scada:poll:"
+
+# Kilit TTL'i: task hard limit'i (120 sn) + marj. Worker SIGKILL yerse kilit en
+# fazla bu kadar asılı kalır (normal akışta `finally` ile bırakılır).
+POLL_LOCK_TTL_SEC = 150
+
+
+def _poll_lock_key(conn_id: int) -> str:
+    return f"{_POLL_LOCK_PREFIX}{conn_id}"
+
+
+def _acquire_poll_lock(conn_id: int) -> bool:
+    """Bağlantı için polling kilidini al (atomik). Alındıysa ``True``.
+
+    Cache backend yoksa/erişilemezse kilit uygulanmaz (eski davranış) — teşhis
+    altyapısı asıl polling'i durdurmamalı.
+    """
+    try:
+        return bool(cache.add(_poll_lock_key(conn_id), "1", POLL_LOCK_TTL_SEC))
+    except Exception:  # noqa: BLE001
+        logger.debug("poll lock alınamadı (cache erişimi) conn=%s", conn_id, exc_info=True)
+        return True
+
+
+def _release_poll_lock(conn_id: int) -> None:
+    try:
+        cache.delete(_poll_lock_key(conn_id))
+    except Exception:  # noqa: BLE001
+        logger.debug("poll lock bırakılamadı conn=%s", conn_id, exc_info=True)
+
+
+def _poll_lock_busy(conn_id: int) -> bool:
+    """Kilit şu an tutuluyor mu? (dispatch tarafında boş yere enqueue etmemek için)"""
+    try:
+        return cache.get(_poll_lock_key(conn_id)) is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
 @shared_task(name="scada_io.tasks.dispatch_polls")
 def dispatch_polls():
     """Beat tarafından her 5 sn'de tetiklenir. Due olan bağlantıları enqueue eder.
@@ -128,7 +181,20 @@ def dispatch_polls():
     for conn in Connection.objects.filter(is_enabled=True):
         interval = conn.poll_interval_sec or 10
         if conn.last_polled_at is None or (now - conn.last_polled_at) >= timedelta(seconds=interval):
-            poll_connection.delay(conn.pk)
+            # Önceki cycle hâlâ sürüyorsa (kilit tutuluyor) kuyruğa atma:
+            # hem cihaza ikinci oturum açılmasını hem de her 5 sn'de bir boşa
+            # dönen task birikmesini önler.
+            if _poll_lock_busy(conn.pk):
+                logger.debug("dispatch_polls: conn=%s hâlâ pollanıyor, atlandı", conn.pk)
+                continue
+            # `expires`: kuyrukta bekleyip bayatlayan poll çalışmadan düşsün.
+            # Aksi halde worker meşgulken biriken task'lar sonradan sırayla
+            # koşar; operatör Sistem Kontrol'den polling'i KAPATSA bile birikmiş
+            # kuyruk dakikalarca cihaza bağlanmaya devam eder (saha gözlemi:
+            # "kapattım ama son poll 5 sn önce").
+            poll_connection.apply_async(
+                args=(conn.pk,), expires=max(30, interval * 2),
+            )
             enqueued += 1
     if enqueued:
         logger.info("dispatch_polls: %d connection enqueued", enqueued)
@@ -154,6 +220,27 @@ def poll_connection(self, conn_id: int):
     if not license_active():
         return
 
+    # Defansif: dispatch ile çalıştırma arasında operatör Sistem Kontrol'den
+    # polling'i kapatmış olabilir. Anahtar YALNIZ dispatch'te kontrol edilseydi
+    # kuyrukta bekleyen task'lar kapatıldıktan sonra da cihaza bağlanmaya devam
+    # ederdi (saha gözlemi: SCADA kapalıyken "Son poll 5 sn önce").
+    from sais_domain.models import SystemSwitch
+    if not SystemSwitch.load().polling_enabled:
+        logger.info("poll_connection: polling kapalı, conn=%s atlandı", conn_id)
+        return
+
+    # Aynı bağlantıya ikinci bir cycle girmesin — cihazda tek oturum kalsın.
+    if not _acquire_poll_lock(conn_id):
+        logger.info("poll_connection: conn=%s hâlâ pollanıyor, bu tur atlandı", conn_id)
+        return
+    try:
+        _poll_connection_body(conn_id)
+    finally:
+        _release_poll_lock(conn_id)
+
+
+def _poll_connection_body(conn_id: int):
+    """`poll_connection`'ın gövdesi — polling kilidi alınmış halde çalışır."""
     try:
         conn = Connection.objects.get(pk=conn_id)
     except Connection.DoesNotExist:
@@ -286,6 +373,15 @@ def poll_connection(self, conn_id: int):
             last_error_message=last_sensor_error[:500],
         )
 
+    # --- Tek oturumlu cihaz: turu bitirir bitirmez soketi kapat ---
+    # Pool worker process'ine özel olduğundan prefork'ta N process = N açık
+    # soket demektir; cihaz tek oturum kabul ediyorsa bu soketler birbirini
+    # düşürür. Polling kilidi aynı anda tek CYCLE garantisi verir, bu bayrak
+    # da cycle dışında hiç açık soket KALMAMASINI garanti eder → cihazda her
+    # an en fazla bir oturum (Modbus Poll'un davranışı).
+    if getattr(conn, "single_session", False):
+        connection_pool.invalidate(conn_id, reason="single_session")
+
 
 # Bir hata metnini "bağlantı seviyesi" sayan anahtar kelimeler. Timeout ayrı
 # tutulur: scan-group fazında timeout bağlantıyı ölü saymaz (cihaz cevap
@@ -332,9 +428,20 @@ def _read_cycle(reader, conn, real_sensors):
                 conn_level = True
             if classify_comm_error(err) == CONN_RESET:
                 socket_dead = True
+                break  # ölü sokete kalan grupları sormanın anlamı yok
 
     results = []
     for sensor in real_sensors:
+        if socket_dead:
+            # Soket öldü (reset/broken pipe). pymodbus kırık soketi KENDİ
+            # kapatmaz (`client.socket` set kalır, `connect()` True döner) →
+            # kalan sensörleri sormak her biri için aynı hatayı ve boşuna
+            # bekleme üretir. Hepsini hatayla işaretleyip çıkıyoruz; caller
+            # taze soketle cycle'ı bir kez tekrarlayacak (sonuçlar oradan gelir).
+            results.append((sensor, ReadResult(
+                quality="bad", error=last_error or "socket dead")))
+            continue
+
         result = _read_sensor_with_groups(reader, sensor, group_data)
         results.append((sensor, result))
         if not result.ok:
