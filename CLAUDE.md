@@ -250,6 +250,25 @@ geri inmek tek başına yetmez (eski kod yeni şemayla `UndefinedColumn` verir) 
 
 İlgili `.env` değişkenleri: `GHCR_IMAGE`, `IMAGE_TAG`, `WATCHTOWER_API_TOKEN` (dashboard "Şimdi Güncelle" HTTP API token'ı), `WEB_PORT`.
 
+> **TUZAK — GHCR token'ı ölünce "Şimdi Güncelle" SESSİZCE hiçbir şey yapmaz (saha deneyimi,
+> İskenderun, 2026-09-21, v1.4.0'da takılı kalmıştı):** Watchtower imajı private GHCR'dan çeker;
+> PAT süresi dolduğunda/iptal edildiğinde pull `403 Forbidden` → `error from registry: denied` alır
+> ama oturumu **`Session done  Failed=0 Scanned=3 Updated=0`** diye kapatır (pull hatasını "failed"
+> saymaz). Dashboard watchtower'ın sonucunu hiç okumadığı için ekran dakikalarca "Güncelleme
+> başlatıldı" der; `.env`'deki `GHCR_TOKEN` de aynı token olduğundan sürüm kontrolü de sessizce
+> "kontrol yapılamadı"ya düşer → **hiçbir yerde hata görünmez**. Teşhis tek yerde:
+> `docker compose ... logs watchtower`. Log'daki `auth: "not present"` **"kimlik yollanmadı" DEĞİL** —
+> GHCR'ın 403 yanıtında `www-authenticate` başlığı olmadığı anlamına gelir (kimlik yollandı,
+> reddedildi). **Kurtarma:** yeni PAT (`read:packages`, **süresiz**) → `docker login ghcr.io` →
+> `compose pull && up -d` (elle güncelleme; pull ilerlemesi canlı akar, watchtower'ı baypas eder) →
+> `.env`'deki `GHCR_TOKEN`'ı da güncelle → `up -d --force-recreate watchtower web`. **force-recreate
+> şart:** `docker login` config.json'ı temp+rename ile yazar (**yeni inode**), çalışan watchtower'ın
+> bind-mount'u eski dosyayı görmeye devam eder. **Filo etkisi:** aynı token installer'a build-time
+> gömülü olduğundan süresi dolunca yeni kurulumlar da `20-up` pull adımında ölür →
+> `INSTALLER_GHCR_TOKEN` secret'ı yenilenip installer yeniden yayımlanmalı. Güncellemeden sonraki
+> ~40 sn'lik Caddy 502'leri normaldir (web recreate penceresi); log'da gunicorn "Listening at" satırı
+> ile 502'lerin zaman damgalarını karşılaştırarak ayırt edilir.
+
 ## Veritabanı yedekleme / geri yükleme (sürüm-bilinçli)
 
 `pg_dump -Fc` (custom format) ile tam yedek (.dump), `pg_restore` ile geri yükleme. Generic SCADA
