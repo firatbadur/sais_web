@@ -546,3 +546,21 @@ class ReadCycleDeadSocketTests(SimpleTestCase):
         self.assertFalse(conn_level)
         self.assertEqual(reader.calls, 4)
         self.assertTrue(all(r.ok for _s, r in results))
+
+
+class NetDiagTests(SimpleTestCase):
+    """/proc/net/tcp adres çözümü (teşhis komutu bunun üzerine kurulu)."""
+
+    def test_hex_to_ipv4_is_little_endian(self):
+        from .netdiag import _hex_to_ipv4
+        # 192.168.1.165 → little-endian hex "A501A8C0"
+        self.assertEqual(_hex_to_ipv4("A501A8C0"), "192.168.1.165")
+
+    def test_count_sockets_returns_none_without_proc(self):
+        # Windows dev'de /proc yok → çağıran "ölçülemedi" demeli, patlamamalı
+        from pathlib import Path
+
+        from .netdiag import count_sockets
+        if Path("/proc/net/tcp").exists():
+            self.skipTest("/proc var (Linux) — bu test Windows dev içindir")
+        self.assertIsNone(count_sockets("192.168.1.165", 502))

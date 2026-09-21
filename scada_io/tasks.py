@@ -98,6 +98,28 @@ def close_scada_pool(state, reason: str = "manual"):
     return {"ok": True, "closed": closed}
 
 
+@control_command(args=[("host", str), ("port", int)])
+def scada_pool_stats(state, host: str = "", port: int = 0):
+    """Worker'ın pool durumunu + cihaza açık TCP soket sayısını döner (teşhis).
+
+    `close_scada_pool` gibi: pool worker PROCESS'inin belleğinde yaşar, dışarıdan
+    okunamaz. `/proc/net/tcp` de container'ın kendi network namespace'ini
+    gösterdiğinden cihaza gerçekten kaç oturum açık olduğunu ancak worker'ın
+    içinden sayabiliriz. `diagnose_plc_socket` komutu bunu broadcast eder.
+
+    NOT: prefork'ta bu komut yalnız MainProcess'te çalışır; child'ların açık
+    soketleri pool özetinde görünmez ama `/proc/net/tcp` **tüm container'ı**
+    (child'lar dahil) kapsadığı için soket sayımı yine de doğrudur.
+    """
+    from . import netdiag
+
+    payload = {"ok": True, "pool": connection_pool.stats()}
+    if host:
+        payload["sockets"] = netdiag.count_sockets(host, port or 502)
+        payload["target"] = f"{host}:{port or 502}"
+    return payload
+
+
 # --------------------------------------------------------------------------- #
 # Polling
 # --------------------------------------------------------------------------- #
