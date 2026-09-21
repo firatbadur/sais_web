@@ -37,7 +37,7 @@ CONNECTION_FIELDS = (
     "baudrate", "parity", "stop_bits", "byte_size",
     "xonxoff", "rtscts", "dsrdtr",
     "poll_interval_sec", "save_interval_sec", "timeout_ms",
-    "retry_count", "auto_reconnect", "reconnect_delay_sec",
+    "retry_count", "single_session", "auto_reconnect", "reconnect_delay_sec",
     "is_enabled",
 )
 
