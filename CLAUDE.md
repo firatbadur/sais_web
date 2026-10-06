@@ -633,6 +633,15 @@ başlatır, ilk veriyi tohumlar, açılışta otomatik kalkan **NSSM Windows ser
   `Install-WslFromMsi` — microsoft/WSL GitHub release'inden x64 MSI indirilip `msiexec /qn` ile
   sessiz kurulur (Store bağımlılığı yok). Ayrıca `$env:WSL_UTF8=1` (UTF-16 NUL çöpünü keser) ve
   PS 5.1 tuzağı: `Start-Process -PassThru` sonrası `$p.Handle`'a dokunulmadan `ExitCode` null okunur.
+- **TUZAK — saha ağı GitHub indirmesini kesiyor (saha deneyimi, Reyhanlı, Win11 26200):**
+  `api.github.com` yanıt veriyor ama `release-assets.githubusercontent.com` TLS el sıkışmasında
+  RST alıyor (`curl: (35) Recv failure: Connection was reset`, 0 bayt); `wsl --update` da 0 sn'de
+  exit 1. Düz `--retry` curl 35'i geçici saymaz → hiç tekrar denenmez. `Invoke-DownloadSpin`
+  ([_common.ps1](installer/scripts/_common.ps1)) artık `--retry-all-errors` (curl ≥7.71'de, probe
+  ediliyor) + `--connect-timeout`/`--speed-limit` kullanıyor, curl başarısız olursa **sistem
+  proxy'sini kullanan** `Invoke-WebRequest`'e düşüyor (curl.exe Windows proxy'sini görmez).
+  **Çevrimdışı yol:** `Install-WslFromMsi` önce `<InstallDir>\payload\wsl*.msi` dosyasına bakar →
+  operatör MSI'ı başka makinede indirip oraya koyar, sonra `Start-ScheduledTask EnvisoftWebX-Install`.
 - **Canlı kurulum ilerlemesi (tek güncellenen satır, `install-progress.txt` yan kanalı)**: adım
   çıktısı child-stdout → pipe → `Out-Host` → `Start-Transcript` zincirinden akar ve **transcript
   yazıcısı tamponlar** (ölçüldü: birkaç KB birikince / adım bitince flush) → log'a dayalı canlı

@@ -461,6 +461,21 @@ error_block(
     "shutdown /r /t 0               # yeniden baslatin; kurulum kaldigi yerden otomatik surer",
 )
 error_block(
+    "\"Downloading WSL package ... 0 B\" → \"curl: (35) Recv failure: Connection was reset\" (Windows)",
+    "wsl --update hemen exit 1 veriyor; ardından WSL MSI indirmesi dakikalarca 0 B'de kalıp "
+    "\"Connection was reset\" ile düşüyor.",
+    "Sahadaki ağ (firewall / içerik filtresi / antivirüs SSL denetimi / zorunlu proxy) GitHub'ın dosya "
+    "sunucusuna (release-assets.githubusercontent.com) bağlantıyı kesiyor. Güncel installer tekrar "
+    "dener ve Windows sistem proxy'si üzerinden de indirmeyi dener; ağ yine engelliyorsa MSI elle verilir.",
+    ["Başka bir bilgisayarda github.com/microsoft/WSL/releases sayfasından wsl.X.Y.Z.x64.msi "
+     "dosyasını indirin.",
+     "Dosyayı kurulum makinesinde C:\\EnvisoftWebX\\payload\\ klasörüne kopyalayın (installer önce "
+     "orada wsl*.msi arar, indirme yapmaz).",
+     "Kurulumu kaldığı yerden sürdürün. Not: sonraki adımlar da internet ister (Ubuntu, "
+     "download.docker.com, ghcr.io) — kalıcı çözüm için BT'den bu adreslere izin istenmelidir."],
+    "Start-ScheduledTask -TaskName EnvisoftWebX-Install   # kurulumu kaldigi yerden surdur",
+)
+error_block(
     "Kurulum scripti 2. adımda sessizce duruyor (eski sürüm)",
     "Linux scripti \"Yapılandırma üretiliyor\" satırından sonra hiçbir şey demeden çıkıyor.",
     "Eski script sürümünde bir kabuk (SIGPIPE) hatası vardı.",

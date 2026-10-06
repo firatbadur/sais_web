@@ -324,17 +324,37 @@ function Invoke-DownloadSpin {
         } catch {}
     }
 
+    # curl first (resumable). Field incident (Reyhanli): the site network reset
+    # the TLS handshake (curl 35) - plain --retry does NOT retry that, so
+    # --retry-all-errors (curl 7.71+, probed) is added, and --speed-limit/-time
+    # aborts a stalled 0-byte transfer instead of hanging. If curl still fails,
+    # fall back to Invoke-WebRequest: it honours the Windows system proxy
+    # (curl.exe ignores it), which is what corporate/municipal networks need.
     $job = Start-Job -ScriptBlock {
         param($u, $o)
         $curl = Get-Command curl.exe -ErrorAction SilentlyContinue   # ships with Win10 1803+
         if ($curl) {
-            & $curl.Source -fL -sS --retry 3 --retry-delay 5 -C - -o $o $u 2>&1 | Out-String
-            $LASTEXITCODE
-        } else {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-            $ProgressPreference = "SilentlyContinue"
-            try { Invoke-WebRequest -Uri $u -OutFile $o -UseBasicParsing; 0 } catch { "$_"; 1 }
+            $cargs = @("-fL", "-sS", "--retry", "5", "--retry-delay", "5", "--connect-timeout", "30",
+                       "--speed-limit", "1024", "--speed-time", "120", "-C", "-", "-o", $o)
+            $help = (& $curl.Source --help all 2>$null) | Out-String
+            if ($help -match "retry-all-errors") { $cargs += "--retry-all-errors" }
+            $cout = & $curl.Source @cargs $u 2>&1 | Out-String
+            if ($LASTEXITCODE -eq 0) { $cout; 0; return }
+            "curl exit ${LASTEXITCODE}: $($cout.Trim())"
+            Remove-Item $o -Force -ErrorAction SilentlyContinue
         }
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        $ProgressPreference = "SilentlyContinue"
+        try {
+            $iwr = @{ Uri = $u; OutFile = $o; UseBasicParsing = $true }
+            $sysProxy = [Net.WebRequest]::GetSystemWebProxy()
+            if (-not $sysProxy.IsBypassed([Uri]$u)) {
+                $iwr.Proxy = $sysProxy.GetProxy([Uri]$u).AbsoluteUri
+                $iwr.ProxyUseDefaultCredentials = $true
+            }
+            Invoke-WebRequest @iwr
+            0
+        } catch { "Invoke-WebRequest: $_"; 1 }
     } -ArgumentList $Url, $OutFile
 
     $t0 = Get-Date

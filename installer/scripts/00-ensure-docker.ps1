@@ -69,16 +69,46 @@ function Write-WslDiag {
 # blocked, servicing stuck): download the official WSL MSI straight from the
 # microsoft/WSL GitHub release and install it silently. Fully non-interactive,
 # no Microsoft Store dependency, with live download progress.
+#
+# OFFLINE / BLOCKED NETWORK (field incident, Reyhanli, Win11 26200): the site
+# network reset every TLS connection to release-assets.githubusercontent.com
+# (curl 35, 0 bytes) while api.github.com worked. Operator workaround: download
+# wsl.<ver>.x64.msi on another machine and drop it into <InstallDir>\payload\
+# -> it is used directly, no download at all.
+function Find-LocalWslMsi {
+    $dirs = @((Join-Path (Split-Path $PSScriptRoot -Parent) "payload"), (Split-Path $PSScriptRoot -Parent))
+    foreach ($dir in $dirs) {
+        if (-not (Test-Path $dir)) { continue }
+        $f = Get-ChildItem -Path $dir -Filter "wsl*.msi" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Length -gt 50MB } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($f) { return $f.FullName }
+    }
+    return $null
+}
+
 function Install-WslFromMsi {
-    Write-Step "Falling back to direct WSL MSI install (github.com/microsoft/WSL) ..."
-    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/microsoft/WSL/releases/latest" `
-        -UseBasicParsing -Headers @{ "User-Agent" = "EnvisoftWebX-Installer" }
-    $asset = $rel.assets | Where-Object { $_.name -match '\.x64\.msi$' } | Select-Object -First 1
-    if (-not $asset) { throw "No x64 MSI asset found in the latest microsoft/WSL release." }
-    $msi = Join-Path $env:TEMP $asset.name
-    Invoke-DownloadSpin -Label "Downloading WSL package ($($asset.name))" `
-        -Url $asset.browser_download_url -OutFile $msi -ExpectedBytes ([long]$asset.size)
+    $msi = Find-LocalWslMsi
+    if ($msi) {
+        Write-Step "Using local WSL package: $msi"
+    } else {
+        Write-Step "Falling back to direct WSL MSI install (github.com/microsoft/WSL) ..."
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/microsoft/WSL/releases/latest" `
+            -UseBasicParsing -Headers @{ "User-Agent" = "EnvisoftWebX-Installer" }
+        $asset = $rel.assets | Where-Object { $_.name -match '\.x64\.msi$' } | Select-Object -First 1
+        if (-not $asset) { throw "No x64 MSI asset found in the latest microsoft/WSL release." }
+        $msi = Join-Path $env:TEMP $asset.name
+        try {
+            Invoke-DownloadSpin -Label "Downloading WSL package ($($asset.name))" `
+                -Url $asset.browser_download_url -OutFile $msi -ExpectedBytes ([long]$asset.size)
+        } catch {
+            $payloadDir = Join-Path (Split-Path $PSScriptRoot -Parent) "payload"
+            Write-WarnLine "WSL package download failed - this network seems to block GitHub downloads (firewall / antivirus / proxy)."
+            Write-WarnLine "Workaround: on another PC download $($asset.browser_download_url)"
+            Write-WarnLine "copy it into $payloadDir and run: Start-ScheduledTask EnvisoftWebX-Install"
+            throw
+        }
+    }
     $r = Invoke-NativeSpin "Installing WSL package (msiexec /qn)" "msiexec.exe" "/i `"$msi`" /qn /norestart" -TimeoutSec 900
     # 3010 = success, reboot required (handled by the normal exit-10 path).
     if ($r.TimedOut -or ($r.ExitCode -ne 0 -and $r.ExitCode -ne 3010)) {
