@@ -269,6 +269,20 @@ geri inmek tek başına yetmez (eski kod yeni şemayla `UndefinedColumn` verir) 
 > ~40 sn'lik Caddy 502'leri normaldir (web recreate penceresi); log'da gunicorn "Listening at" satırı
 > ile 502'lerin zaman damgalarını karşılaştırarak ayırt edilir.
 
+> **TUZAK — Redis AOF bozulması worker/beat'i SESSİZCE durdurur (saha deneyimi, Reyhanlı,
+> 2026-10-07):** Eski compose'larda redis `--appendonly yes` + `redis_data` volume'üyle çalışıyordu.
+> Elektrik kesintisi / sert kapanmada AOF yarım kalır → Redis her açılışta `Bad file format reading
+> the append only file` ile çöker (restart loop) → `celery_worker`/`celery_beat` `Error -2 connecting
+> to redis:6379. Name or service not known` ile bekler → **polling + SİM gönderimi durur ama dashboard
+> açık görünür** (web DB'den okur). **Kalıcı çözüm:** Redis'te kalıcı veri yok (Celery kuyruğu +
+> cache + dağıtık kilit; result backend `django-db`, oturumlar DB'de) → dev + prod compose +
+> `install-linux.sh` heredoc'unda Redis **kalıcılıksız** (`--appendonly no --save ""`, volume mount'u
+> yok) — diskte bozulabilecek dosya kalmaz. Restart'ta kaybolan kuyruk mesajları zararsız (beat yeniden
+> üretir; `queued` kalan komutu `expire_commands` kapatır). **Mevcut sahalar** (Watchtower compose'u
+> yenilemez): [scripts/fix-redis-persistence.ps1](scripts/fix-redis-persistence.ps1) bir kez çalıştırılır
+> (host compose'u yedekleyip yamalar, `config -q` doğrular, redis'i yeniden kurar, worker/beat restart).
+> `diagnose-site.ps1` bu imzayı ve compose'un düzeltilip düzeltilmediğini (bölüm 4) yakalar.
+
 ## Veritabanı yedekleme / geri yükleme (sürüm-bilinçli)
 
 `pg_dump -Fc` (custom format) ile tam yedek (.dump), `pg_restore` ile geri yükleme. Generic SCADA

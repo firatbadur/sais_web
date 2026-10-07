@@ -29,9 +29,12 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis_data:/data
+    # Kalıcılık KAPALI (AOF/RDB yok, volume yok): Redis yalnız Celery kuyruğu +
+    # cache + dağıtık kilit tutar, kalıcı veri PostgreSQL'de. Eskiden
+    # --appendonly yes + redis_data volume'ü vardı; elektrik kesintisinde AOF
+    # yarım kalıyor, Redis her açılışta "Bad file format reading the append only
+    # file" ile çöküyor ve worker/beat sessizce duruyordu (saha: Reyhanlı, 2026-10-07).
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
     ports:
       - "6379:6379"
     healthcheck:
@@ -152,7 +155,6 @@ volumes:
   pg_data:
   pg_backups:
   report_files:
-  redis_data:
   media_data:
   static_data:
   caddy_config:

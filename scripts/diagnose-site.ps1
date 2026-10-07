@@ -132,6 +132,7 @@ if (Test-Path $composeFile) {
         "/bridge (seri kopru)"                  = "SERIAL_BRIDGE_HOST_DIR"
         "ensure_database (acilis zinciri)"      = "ensure_database"
         "watchtower 1.7.x (pinned)"             = "watchtower:1.7"
+        "redis kaliciligi kapali (AOF bozulmasi)" = '"--appendonly", "no"'
     }
     foreach ($n in $needles.Keys) {
         if ($body -match [regex]::Escape($needles[$n])) { Emit ("  [VAR ] " + $n) "Green" }
@@ -222,6 +223,8 @@ $rules = @(
     @{ p = 'bind: address already in use|port is already allocated';           m = "[KRITIK] 80/443 baska process'te (cogunlukla IIS). W3SVC+WAS durdur/Disabled yap." },
     @{ p = 'Lisans|license_expired|LicenseLock';                               m = "[UYARI] Lisans kilidi olabilir: site 'acilmiyor' degil, kilit ekranina yonleniyor olabilir. /admin/ superuser ile acik kalir; exec web python manage.py refresh_license" },
     @{ p = 'InvalidToken|Fernet|cryptography.fernet';                          m = "[KRITIK] Kabin sirri cozulemiyor: SECRET_KEY degistiyse CABINET_FERNET_KEY turetimi bozulur. Eski SECRET_KEY'i geri koy ya da kabin sifresini yeniden gir." },
+    @{ p = 'Bad file format reading the append only file|redis-check-aof';     m = "[KRITIK] Redis AOF dosyasi bozuk (elektrik kesintisi/sert kapanma) -> Redis her acilista cokuyor, worker/beat duruyor. Cozum: scriptsix-redis-persistence.ps1 (kaliciligi kapatir + redis'i yeniden kurar)." },
+    @{ p = 'connecting to redis:6379|Cannot connect to redis://';              m = "[KRITIK] Worker/beat Redis'e ulasamiyor -> polling + SIM gonderimi DURDU (dashboard acik gorunur). Bolum 1'de redis durumuna ve bolum 5'te redis loguna bak." },
     @{ p = 'Killed|OOMKilled|MemoryError';                                     m = "[KRITIK] Bellek yetmedi (OOM). WSL .wslconfig memory limitini yukselt." },
     @{ p = 'permission denied.*docker.sock';                                   m = "[KRITIK] WSL varsayilan kullanicisi root degil -> stack yonetilemiyor (portproxy de kurulamaz)." },
     @{ p = 'exec /usr/local/bin|exec format error|no such file or directory';  m = "[KRITIK] Imaj/komut uyusmazligi: host'taki compose dosyasi imajin bekledigi komut/mount ile uyumsuz (bolum 4'e bak)." }

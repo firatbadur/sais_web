@@ -531,6 +531,19 @@ error_block(
     "Domain, Django ALLOWED_HOSTS listesinde yok (dashboard'dan domain eklemek bunu güncellemez).",
     ["Bölüm 5.4'teki .env düzenlemesini yapıp web'i yeniden başlatın."],
 )
+error_block(
+    "Dashboard açılıyor ama veri akmıyor (worker/beat Redis'e bağlanamıyor)",
+    "Dashboard açılıyor ama \"Son Poll\" ilerlemiyor, Bakanlık'a veri gitmiyor. celery_worker / "
+    "celery_beat loglarında \"Error -2 connecting to redis:6379. Name or service not known\"; redis "
+    "logunda \"Bad file format reading the append only file\".",
+    "Eski kurulumlarda Redis diske AOF dosyası yazıyordu; elektrik kesintisi veya sert kapanmada "
+    "bu dosya yarım kalır ve Redis her açılışta çöker. Redis'te kalıcı veri yoktur (yalnız kuyruk "
+    "ve önbellek); ölçümler ve ayarlar PostgreSQL'de güvendedir. Güncel kurulumlarda Redis "
+    "kalıcılığı kapalıdır, bu arıza oluşmaz.",
+    ["Windows: yönetici PowerShell'de düzeltme scriptini bir kez çalıştırın (compose dosyasını "
+     "düzeltir, Redis'i yeniden kurar, worker/beat'i yeniden başlatır):"],
+    "powershell -ExecutionPolicy Bypass -File .\\fix-redis-persistence.ps1",
+)
 
 h2("7.4 Domain ve SSL")
 error_block(
@@ -583,6 +596,7 @@ table(
         ["IIS 404 sayfası (Windows)", "IIS 80 portunu tutuyor", "W3SVC+WAS durdur ve devre dışı bırak, reboot"],
         ["502 Bad Gateway", "Web başlıyor / çökmüş", "ps + logs web; 30-60 sn bekle"],
         ["400 DisallowedHost", "Domain ALLOWED_HOSTS'ta yok", ".env'e ekle + up -d (Bölüm 5.4)"],
+        ["Veri akmıyor, worker Redis'e bağlanamıyor", "Redis AOF dosyası bozuk (elektrik kesintisi)", "fix-redis-persistence.ps1 (Bölüm 7.3)"],
         ["Sonsuz yönlendirme", "Cloudflare Flexible", "DNS only veya Full (strict)"],
         ["İmaj indirme koptu", "Geçici ağ / IPv6", "Güncel setup bekler+tekrarlar; eskide Start-ScheduledTask EnvisoftWebX-Install"],
         ["Sertifika alınamadı", "DNS/port/rate-limit", "DNS + 80/443 + caddy log"],
