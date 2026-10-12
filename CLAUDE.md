@@ -828,7 +828,9 @@ ve karşılaşılabilecek hatalar tek bir kullanıcı kılavuzunda toplanır (ku
   ile bucket sınırlarına genişletilerek yeniden hesaplanır (komutta `--start/--end`) → en az bir değer
   eklenen ve **kabul penceresindeki** dakikalar `build_sim_payloads_for_times` ile SİM kuyruğuna
   (`PRIORITY_BACKFILL`, `SOURCE_MANUAL`) yazılır; pencere dışı dakikalar yalnız historian'a girer.
-  Denetim: `EventType.MANUAL_DATA`. Limit 5 MB / 20.000 satır. Testler: `sais_domain/tests.py`
+  Denetim: `EventType.MANUAL_DATA`. Limit 5 MB / 20.000 satır. Worker yoksa iş `running`'de kalır
+  → sayfa 2 dk sonra uyarır; kurtarma `python manage.py apply_manual_import_once [--id N]`
+  (sonradan çalışan Celery mesajı `running` olmayan kaydı atlar → mükerrer yazım yok). Testler: `sais_domain/tests.py`
   `ManualImportTests`.
 - **TUZAK — Bakanlık reddi eskiden BAŞARI sayılıyordu (bulundu + düzeltildi):** `SaisSimClient.send_data` yanıtı `_unwrap(..., allow_non_dict=True)` ile açıyordu; `_unwrap` zarfta `objects` anahtarı varsa **`payload["objects"]`** döndürür. Bakanlık'ın tipik ret zarfı `{"result": false, "message": "...", "objects": null}` olduğu için `send_data` **`None`** dönüyor, çağırandaki `isinstance(result, dict) and "result" in result` kontrolü `False` kalıyor ve `accepted = True` sayılıyordu → `SystemSwitch.mark_sim_success()` yazılıyor, panelde **"SİM'e Son İletim" yeşil görünürken Bakanlık veriyi almamış** oluyordu (aynı hata `resend_missing_data`'nın `resent` sayacını da şişiriyordu). `send_data` artık `_envelope()` kullanır (ham zarf; `send_calibration`/`send_host_changed` ile aynı sözleşme) ve kabul/ret ayrımını `sim_errors.classify_send_result` yapar; `mark_sim_success` YALNIZ gerçek kabulde atılır. **Aynı yutma `send_diagnostic*` ve `sample_request_*` uçlarında hâlâ var** (kapsam dışı — bkz. bilinen sınırlamalar).
 
@@ -898,6 +900,7 @@ python manage.py diagnose_plc_socket --connection N    # TCP oturum/soket teşhi
 python manage.py sim_outbox_status [--head 10]         # SİM gönderim kuyruğu durumu (salt okuma)
 python manage.py drain_sim_outbox_once [--cabinet N]   # kuyruğu senkron boşalt (worker'sız)
 python manage.py prune_sim_outbox --dry-run            # kuyruk retention sayımı
+python manage.py apply_manual_import_once [--id N]     # takılı manuel veri içe aktarımını uygula
 ```
 
 ## Kod düzenleme kuralları

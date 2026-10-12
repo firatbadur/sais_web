@@ -86,6 +86,13 @@
             <span class="spinner-border spinner-border-sm me-3"></span>
             <span>{% blocktrans with f=running.filename %}"{{ f }}" içe aktarılıyor… Sayfa otomatik yenilenecek.{% endblocktrans %}</span>
         </div>
+        {% if running_stuck %}
+        <div class="alert alert-danger p-4 mt-4 mb-0 fs-7">
+            <strong>{% trans "İşlem 2 dakikadan uzun sürüyor." %}</strong>
+            {% trans "Arka plan servisi (Celery worker) çalışmıyor olabilir; bu durumda polling ve Bakanlık gönderimi de durmuştur. Worker'ı başlatın veya sunucuda şu komutu çalıştırın:" %}
+            <code class="d-block mt-2">python manage.py apply_manual_import_once --id {{ running.id }}</code>
+        </div>
+        {% endif %}
         {% else %}
         <form method="post" enctype="multipart/form-data" class="d-flex flex-wrap align-items-center gap-3">
             {% csrf_token %}

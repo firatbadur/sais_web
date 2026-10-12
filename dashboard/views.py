@@ -2955,6 +2955,14 @@ class SimManualEntryView(OperatorRequiredMixin, TemplateView):
             qs = ManualDataImport.objects.filter(cabinet=cabinet).select_related("user")
             staged = qs.filter(status=ManualDataImport.STATUS_STAGED).defer("rows").first()
             running = qs.filter(status=ManualDataImport.STATUS_RUNNING).defer("rows").first()
+            if running:
+                # Worker yoksa iş sonsuza dek "işleniyor" kalır — 2 dk sonra açıkça söyle.
+                started = (running.summary or {}).get("started_at")
+                try:
+                    started_dt = datetime.fromisoformat(started) if started else running.created_at
+                except ValueError:
+                    started_dt = running.created_at
+                ctx["running_stuck"] = (timezone.now() - started_dt).total_seconds() > 120
             history = list(
                 qs.exclude(status=ManualDataImport.STATUS_STAGED).defer("rows")[:50]
             )
@@ -3020,8 +3028,10 @@ class SimManualEntryView(OperatorRequiredMixin, TemplateView):
             ).exists():
                 messages.error(request, _("Bu kabin için devam eden bir içe aktarım var; bitmesini bekleyin."))
                 return redirect(target)
+            summary = dict(rec.summary or {})
+            summary["started_at"] = timezone.now().isoformat()  # takılı iş tespiti için
             ManualDataImport.objects.filter(pk=rec.pk).update(
-                status=ManualDataImport.STATUS_RUNNING, user=request.user,
+                status=ManualDataImport.STATUS_RUNNING, user=request.user, summary=summary,
             )
             apply_manual_import.delay(rec.pk)
             log_event(
