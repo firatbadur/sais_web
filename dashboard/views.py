@@ -2651,6 +2651,9 @@ class SimOutboxView(OperatorRequiredMixin, ListView):
         priority = gp.get("priority") or ""
         if priority not in {str(v) for v, _ in SimOutboxEntry.PRIORITY_CHOICES}:
             priority = ""
+        source = gp.get("source") or ""
+        if source not in dict(SimOutboxEntry.SOURCE_CHOICES):
+            source = ""
         try:
             cabinet_id = int(gp.get("cabinet") or 0) or None
         except (TypeError, ValueError):
@@ -2660,6 +2663,7 @@ class SimOutboxView(OperatorRequiredMixin, ListView):
             "cabinet_id": cabinet_id,
             "status": status,
             "priority": priority,
+            "source": source,
             "kind": (gp.get("kind") or "").strip(),
             "search": (gp.get("q") or "").strip(),
             "start": parse_report_dt(gp.get("start")),
@@ -2684,6 +2688,8 @@ class SimOutboxView(OperatorRequiredMixin, ListView):
             qs = qs.filter(status=f["status"])
         if f["priority"] != "":
             qs = qs.filter(priority=int(f["priority"]))
+        if f["source"]:
+            qs = qs.filter(source=f["source"])
         if f["kind"]:
             qs = qs.filter(last_error_kind=f["kind"])
         if f["search"]:
@@ -2709,6 +2715,7 @@ class SimOutboxView(OperatorRequiredMixin, ListView):
         ctx["cabinets"] = SaisCabinet.objects.select_related("station").order_by("id")
         ctx["status_choices"] = SimOutboxEntry.STATUS_CHOICES
         ctx["priority_choices"] = SimOutboxEntry.PRIORITY_CHOICES
+        ctx["source_choices"] = SimOutboxEntry.SOURCE_CHOICES
         ctx["kind_choices"] = [
             (code, sim_errors.category_label(code))
             for code in sim_errors.CATEGORY_INFO

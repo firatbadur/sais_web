@@ -433,7 +433,7 @@ class SimOutboxEntry(models.Model):
     SOURCE_CHOICES = (
         (SOURCE_LIVE, "Dakikalık Yayın"),
         (SOURCE_MISSING, "Eksik Veri Servisi"),
-        (SOURCE_MANUAL, "Elle / Komut"),
+        (SOURCE_MANUAL, "Manuel Veri Girişi"),
     )
 
     cabinet = models.ForeignKey(
@@ -575,6 +575,20 @@ class SimOutboxEntry(models.Model):
             return 0
         now = now or timezone.now()
         return int((now - self.first_error_at).total_seconds())
+
+    @property
+    def payload_rows(self) -> list[tuple]:
+        """Kuyruk sayfasındaki detay için ``(kolon, değer, durum)`` satırları.
+
+        Payload düz sözlüktür (``KOi`` + ``KOi_Status``); burada çiftlenir.
+        """
+        data = self.payload or {}
+        rows = []
+        for key in sorted(data):
+            if key.endswith("_Status"):
+                continue
+            rows.append((key, data.get(key), data.get(f"{key}_Status")))
+        return rows
 
     # ---- Kuyruk işlemleri ----
 

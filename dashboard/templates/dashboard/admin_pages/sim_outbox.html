@@ -133,6 +133,13 @@
                 </select>
             </div>
             <div class="col-md-3">
+                <label class="form-label fw-semibold">{% trans "Kaynak" %}</label>
+                <select name="source" class="form-select" data-control="select2" data-placeholder='{% trans "Hepsi" %}' data-allow-clear="true">
+                    <option value="">{% trans "Hepsi" %}</option>
+                    {% for val, label in source_choices %}<option value="{{ val }}" {% if filters.source == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
                 <label class="form-label fw-semibold">{% trans "Arama" %}</label>
                 <input type="text" name="q" class="form-control" value="{{ filters.search }}" placeholder="{% trans 'Bakanlık mesajı / hata / kabin' %}">
             </div>
@@ -205,6 +212,26 @@
                         <td class="text-end" data-order="{{ e.last_http_status|default:0 }}">{{ e.last_http_status|default:"—" }}</td>
                         <td class="msg-cell text-truncate fs-7" title="{{ e.ministry_message|default:e.last_error }}">{{ e.ministry_message|default:e.last_error|default:"—" }}</td>
                         <td class="text-end" style="white-space:nowrap;">
+                            <button type="button" class="btn btn-sm btn-icon btn-light-info payload-view me-1"
+                                    data-id="{{ e.id }}" data-time="{{ e.readtime|date:'d.m.Y H:i' }}"
+                                    title="{% trans 'Gönderilecek veriyi göster' %}">
+                                <i class="ki-outline ki-eye fs-4"></i>
+                            </button>
+                            <template id="payload-{{ e.id }}">
+                                <table class="table table-sm table-row-bordered align-middle gs-3 mb-0">
+                                    <thead><tr class="fw-bold text-gray-600 fs-7">
+                                        <th>{% trans "Kolon" %}</th><th class="text-end">{% trans "Değer" %}</th><th class="text-end">{% trans "Durum" %}</th>
+                                    </tr></thead>
+                                    <tbody>
+                                    {% for key, val, st in e.payload_rows %}
+                                        <tr><td><code>{{ key }}</code></td><td class="text-end">{{ val|default_if_none:"—" }}</td>
+                                            <td class="text-end"><span class="badge {% if st == 1 %}badge-light-success{% else %}badge-light-warning{% endif %}">{{ st|default_if_none:"—" }}</span></td></tr>
+                                    {% empty %}
+                                        <tr><td colspan="3" class="text-muted text-center">{% trans "Boş veri" %}</td></tr>
+                                    {% endfor %}
+                                    </tbody>
+                                </table>
+                            </template>
                             {% if e.status == 'pending' %}
                             <button type="button" class="btn btn-sm btn-icon btn-light-primary queue-action"
                                     data-action="retry" data-id="{{ e.id }}" title="{% trans 'Şimdi dene' %}">
@@ -227,6 +254,18 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="payload-modal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">{% trans "Gönderilecek Veri" %} — <span id="payload-modal-time"></span></h3>
+                <button type="button" class="btn btn-sm btn-icon btn-active-light-primary" data-bs-dismiss="modal"><i class="ki-outline ki-cross fs-2"></i></button>
+            </div>
+            <div class="modal-body" id="payload-modal-body"></div>
         </div>
     </div>
 </div>
@@ -260,6 +299,18 @@
             body: JSON.stringify(payload),
         }).then(r => r.json());
     }
+
+    // Satırın dondurulmuş payload'ı (<template> içinde; arama/dışa aktarmaya karışmaz).
+    document.addEventListener('click', function (ev) {
+        const btn = ev.target.closest('.payload-view');
+        if (!btn) return;
+        const tpl = btn.parentElement.querySelector('template');
+        const body = document.getElementById('payload-modal-body');
+        body.innerHTML = '';
+        if (tpl) body.appendChild(tpl.content.cloneNode(true));
+        document.getElementById('payload-modal-time').textContent = btn.getAttribute('data-time');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('payload-modal')).show();
+    });
 
     document.addEventListener('click', function (ev) {
         const btn = ev.target.closest('.queue-action');
