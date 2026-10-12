@@ -160,6 +160,10 @@ urlpatterns = [
          name="admin_sim_data_report"),
     path("admin-pages/sim-channels/", views.SimChannelsView.as_view(),
          name="admin_sim_channels"),
+    path("admin-pages/sim-manual-entry/", views.SimManualEntryView.as_view(),
+         name="admin_sim_manual_entry"),
+    path("admin-pages/sim-manual-entry/template/<int:cabinet_id>/",
+         views.SimManualTemplateView.as_view(), name="admin_sim_manual_template"),
 
     # --- Rapor Stüdyosu (operatör görüntüler/üretir; şablon+zamanlama düzenleme rol=1) ---
     path("report-studio/", views.ReportStudioView.as_view(), name="report_studio"),

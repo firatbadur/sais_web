@@ -2916,6 +2916,158 @@ class DocumentDeleteView(OperatorRequiredMixin, View):
         return redirect("dashboard:documents")
 
 
+class SimManualEntryView(OperatorRequiredMixin, TemplateView):
+    """Sürekli İzleme Merkezi → **Manuel Veri Girişi**.
+
+    Elektrik kesintisinde kaybolan dakikalar analizörün SD kartından alınıp
+    kabine özel Excel şablonuyla yüklenir: yükle → doğrula/önizle → onay →
+    Celery ``apply_manual_import`` (historian + aggregate + SİM kuyruğu).
+    Motor: :mod:`sais_domain.manual_import`. POST aksiyonları PRG ile döner.
+    """
+    template_name = "dashboard/admin_pages/sim_manual_entry.html"
+
+    def _cabinet(self, raw):
+        from sais_domain.models import SaisCabinet
+
+        cabinets = list(SaisCabinet.objects.select_related("station").order_by("id"))
+        try:
+            cabinet_id = int(raw or 0)
+        except (TypeError, ValueError):
+            cabinet_id = 0
+        cabinet = next((c for c in cabinets if c.id == cabinet_id), None) or (
+            cabinets[0] if cabinets else None
+        )
+        return cabinets, cabinet
+
+    def get_context_data(self, **kwargs):
+        from sais_domain import manual_import
+        from sais_domain.models import ManualDataImport
+        from sais_domain.sim_outbox import accept_window_hours
+        from sais_domain.sim_report import SIM_DATA_STATUS_CODES
+
+        ctx = super().get_context_data(**kwargs)
+        cabinets, cabinet = self._cabinet(self.request.GET.get("cabinet"))
+        staged = running = None
+        history = []
+        columns = []
+        if cabinet:
+            columns = manual_import.template_columns(cabinet)
+            qs = ManualDataImport.objects.filter(cabinet=cabinet).select_related("user")
+            staged = qs.filter(status=ManualDataImport.STATUS_STAGED).defer("rows").first()
+            running = qs.filter(status=ManualDataImport.STATUS_RUNNING).defer("rows").first()
+            history = list(
+                qs.exclude(status=ManualDataImport.STATUS_STAGED).defer("rows")[:50]
+            )
+        ctx.update({
+            "cabinets": cabinets,
+            "cabinet": cabinet,
+            "columns": columns,
+            "staged": staged,
+            "running": running,
+            "history": history,
+            "status_codes": SIM_DATA_STATUS_CODES,
+            "accept_window_hours": accept_window_hours(),
+            "max_rows": manual_import.MAX_ROWS,
+            "max_mb": manual_import.MAX_UPLOAD_BYTES // (1024 * 1024),
+        })
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        from django.urls import reverse
+
+        from sais_domain import manual_import
+        from sais_domain.models import ManualDataImport
+        from sais_domain.tasks import apply_manual_import
+
+        _cabs, cabinet = self._cabinet(request.POST.get("cabinet"))
+        action = request.POST.get("action")
+        target = reverse("dashboard:admin_sim_manual_entry")
+        if cabinet is None:
+            messages.error(request, _("Tanımlı kabin yok."))
+            return redirect(target)
+        target = f"{target}?cabinet={cabinet.id}"
+
+        if action == "upload":
+            upload = request.FILES.get("data_file")
+            if not upload:
+                messages.error(request, _("Lütfen doldurulmuş Excel dosyasını seçin."))
+                return redirect(target)
+            if upload.size > manual_import.MAX_UPLOAD_BYTES:
+                messages.error(request, _("Dosya çok büyük."))
+                return redirect(target)
+            try:
+                rec = manual_import.stage_upload(
+                    cabinet, upload.read(), upload.name, user=request.user,
+                )
+            except manual_import.ManualImportError as exc:
+                messages.error(request, str(exc))
+                return redirect(target)
+            if rec.has_errors:
+                messages.error(request, _("Dosyada hatalar var; düzeltip yeniden yükleyin."))
+            else:
+                messages.info(request, _("Dosya doğrulandı. Önizlemeyi kontrol edip içe aktarın."))
+
+        elif action == "confirm":
+            rec = ManualDataImport.objects.filter(
+                pk=request.POST.get("import_id"), cabinet=cabinet,
+                status=ManualDataImport.STATUS_STAGED,
+            ).first()
+            if rec is None or rec.has_errors:
+                messages.error(request, _("Onay bekleyen geçerli bir yükleme bulunamadı."))
+                return redirect(target)
+            if ManualDataImport.objects.filter(
+                cabinet=cabinet, status=ManualDataImport.STATUS_RUNNING,
+            ).exists():
+                messages.error(request, _("Bu kabin için devam eden bir içe aktarım var; bitmesini bekleyin."))
+                return redirect(target)
+            ManualDataImport.objects.filter(pk=rec.pk).update(
+                status=ManualDataImport.STATUS_RUNNING, user=request.user,
+            )
+            apply_manual_import.delay(rec.pk)
+            log_event(
+                EventType.MANUAL_DATA,
+                f"Manuel veri içe aktarımı başlatıldı ({rec.filename}, "
+                f"{rec.summary.get('row_count', 0)} dakika)",
+                severity="warning", request=request, station=cabinet.station,
+            )
+            messages.warning(request, _("İçe aktarım başlatıldı; sonuç birkaç saniye içinde aşağıda görünecek."))
+
+        elif action == "discard":
+            ManualDataImport.objects.filter(
+                cabinet=cabinet, status=ManualDataImport.STATUS_STAGED,
+            ).update(status=ManualDataImport.STATUS_DISCARDED, rows=[])
+            messages.info(request, _("Yükleme iptal edildi."))
+
+        else:
+            messages.error(request, _("Geçersiz işlem."))
+        return redirect(target)
+
+
+class SimManualTemplateView(OperatorRequiredMixin, View):
+    """Manuel veri girişi — kabine özel boş Excel şablonunu indirir."""
+
+    def get(self, request, *args, **kwargs):
+        from django.http import Http404, HttpResponse
+
+        from sais_domain import manual_import
+        from sais_domain.models import SaisCabinet
+
+        cabinet = SaisCabinet.objects.select_related("station").filter(
+            pk=kwargs.get("cabinet_id"),
+        ).first()
+        if cabinet is None:
+            raise Http404
+        body = manual_import.build_template(cabinet)
+        safe = re.sub(r"[^A-Za-z0-9_-]+", "_", str(cabinet.station))[:40].strip("_") or "kabin"
+        fname = f"manuel_veri_{safe}_{timezone.localtime():%Y%m%d}.xlsx"
+        resp = HttpResponse(
+            body,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        resp["Content-Disposition"] = f'attachment; filename="{fname}"'
+        return resp
+
+
 class SimChannelsView(OperatorRequiredMixin, TemplateView):
     """Sürekli İzleme Merkezi → **Gönderilecek Veriler**.
 

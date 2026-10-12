@@ -1455,3 +1455,69 @@ class SimChannel(models.Model):
             if ad:
                 adlar.add(ad)
         return adlar if var else None
+
+
+class ManualDataImport(models.Model):
+    """Manuel veri girişi — analizör SD kartından alınan verinin Excel ile içe aktarımı.
+
+    Elektrik kesintisinde polling durur; kayıp dakikaların değerleri analizörün
+    SD kartından alınıp istasyona özel Excel şablonuyla yüklenir. Akış:
+    yükle → doğrula (``staged``; önizleme + hatalar/uyarılar) → onay →
+    Celery ``apply_manual_import`` (``running``) → ``applied`` / ``failed``.
+
+    ``rows`` doğrulanmış ve normalize edilmiş satırları tutar (dosya diske
+    yazılmaz): ``[{"t": ISO dakika, "s": durum kodu, "v": {kod: değer}}]``.
+    Motor: :mod:`sais_domain.manual_import`.
+    """
+
+    STATUS_STAGED = "staged"
+    STATUS_RUNNING = "running"
+    STATUS_APPLIED = "applied"
+    STATUS_FAILED = "failed"
+    STATUS_DISCARDED = "discarded"
+    STATUS_CHOICES = (
+        (STATUS_STAGED, "Onay Bekliyor"),
+        (STATUS_RUNNING, "İşleniyor"),
+        (STATUS_APPLIED, "Uygulandı"),
+        (STATUS_FAILED, "Başarısız"),
+        (STATUS_DISCARDED, "İptal Edildi"),
+    )
+
+    cabinet = models.ForeignKey(
+        SaisCabinet, on_delete=models.CASCADE, related_name="manual_imports",
+        verbose_name="Kabin",
+    )
+    user = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, blank=True, null=True,
+        verbose_name="Kullanıcı",
+    )
+    filename = models.CharField(max_length=255, blank=True, default="", verbose_name="Dosya")
+    status = models.CharField(
+        max_length=12, choices=STATUS_CHOICES, default=STATUS_STAGED,
+        db_index=True, verbose_name="Durum",
+    )
+    rows = models.JSONField(default=list, blank=True, verbose_name="Satırlar")
+    summary = models.JSONField(default=dict, blank=True, verbose_name="Özet")
+    errors = models.JSONField(default=list, blank=True, verbose_name="Hatalar")
+    warnings = models.JSONField(default=list, blank=True, verbose_name="Uyarılar")
+    range_start = models.DateTimeField(blank=True, null=True, verbose_name="İlk Dakika")
+    range_end = models.DateTimeField(blank=True, null=True, verbose_name="Son Dakika")
+    inserted_count = models.IntegerField(default=0, verbose_name="Eklenen Okuma")
+    skipped_count = models.IntegerField(default=0, verbose_name="Atlanan Okuma")
+    enqueued_count = models.IntegerField(default=0, verbose_name="Kuyruğa Alınan Dakika")
+    error = models.TextField(blank=True, default="", verbose_name="Hata")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Yüklenme")
+    applied_at = models.DateTimeField(blank=True, null=True, verbose_name="Uygulanma")
+
+    class Meta:
+        db_table = "sais_manual_data_import"
+        verbose_name = "Manuel Veri İçe Aktarımı"
+        verbose_name_plural = "Manuel Veri İçe Aktarımları"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.cabinet} / {self.filename} ({self.get_status_display()})"
+
+    @property
+    def has_errors(self) -> bool:
+        return bool(self.errors)

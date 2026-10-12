@@ -97,6 +97,8 @@ MENU = [
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Veri Gönderim Kuyruğu"), "url_name": "dashboard:admin_sim_outbox",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
+            {"label": _("Manuel Veri Girişi"), "url_name": "dashboard:admin_sim_manual_entry",
+             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Dinamik Veri Raporu"), "url_name": "dashboard:admin_sim_data_report",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
         ],

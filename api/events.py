@@ -38,6 +38,7 @@ class EventType:
     SCENARIO = "Numune Senaryosu"
     CALIBRATION = "Kalibrasyon"
     SYSTEM = "Sistem"
+    MANUAL_DATA = "Manuel Veri Girişi"
 
 
 # Önem dereceleri — SystemLog.SEVERITY_* ile aynı.

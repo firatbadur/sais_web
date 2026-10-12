@@ -660,3 +660,66 @@ def prune_sim_outbox_task() -> dict:
     from django.core.management import call_command
     call_command("prune_sim_outbox")
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Manuel veri girişi (SD kart → Excel) — motor sais_domain.manual_import
+# ---------------------------------------------------------------------------
+@shared_task(
+    name="sais_domain.tasks.apply_manual_import",
+    time_limit=900, soft_time_limit=840,
+)
+def apply_manual_import(import_id: int) -> dict:
+    """Onaylanmış ``ManualDataImport``'u uygular (historian + aggregate + SİM kuyruğu).
+
+    Lisans-gate'siz: veri kurtarma işlemidir; SİM drenajı zaten kendi
+    gate'ine sahiptir. Sayfa ``running`` durumunu poll'layıp sonucu gösterir.
+    """
+    from api.events import EventType, log_event
+
+    from . import manual_import
+    from .models import ManualDataImport
+
+    rec = (
+        ManualDataImport.objects.select_related("cabinet", "cabinet__station", "user")
+        .filter(pk=import_id).first()
+    )
+    if rec is None or rec.status != ManualDataImport.STATUS_RUNNING:
+        return {"import_id": import_id, "skipped": "durum running değil"}
+
+    try:
+        result = manual_import.apply_import(rec)
+    except Exception as exc:  # noqa: BLE001 — sonuç kayda yazılsın
+        logger.exception("apply_manual_import: import=%s başarısız", import_id)
+        ManualDataImport.objects.filter(pk=rec.pk).update(
+            status=ManualDataImport.STATUS_FAILED,
+            error=f"{type(exc).__name__}: {exc}"[:2000],
+            applied_at=timezone.now(),
+        )
+        log_event(
+            EventType.MANUAL_DATA,
+            f"Manuel veri içe aktarımı başarısız ({rec.filename}): {exc}",
+            severity="critical", user=rec.user, station=rec.cabinet.station,
+        )
+        return {"import_id": import_id, "error": str(exc)}
+
+    note = ""
+    if result["dropped_columns"]:
+        note = ("Onay anında kabinde bulunmayan kolonlar atlandı: "
+                + ", ".join(result["dropped_columns"]))
+    ManualDataImport.objects.filter(pk=rec.pk).update(
+        status=ManualDataImport.STATUS_APPLIED,
+        inserted_count=result["inserted"],
+        skipped_count=result["skipped"],
+        enqueued_count=result["enqueued"],
+        error=note,
+        applied_at=timezone.now(),
+        rows=[],  # uygulanan veri artık Reading'de; JSON'u şişirme
+    )
+    log_event(
+        EventType.MANUAL_DATA,
+        f"Manuel veri içe aktarıldı ({rec.filename}): {result['inserted']} okuma eklendi, "
+        f"{result['skipped']} atlandı, {result['enqueued']} dakika Bakanlık kuyruğuna alındı.",
+        severity="warning", user=rec.user, station=rec.cabinet.station,
+    )
+    return {"import_id": import_id, **result}

@@ -89,6 +89,7 @@ sais_web/
 │   ├── models.py          # SaisCabinet, EnvisoftChannel, SystemSwitch, SimOutboxEntry
 │   ├── sim_outbox.py      # Bakanlık gönderim kuyruğu motoru (sıkı FIFO drenaj + backoff + kilit)
 │   ├── sim_errors.py      # SendData sonucu → kabul / geçici hata / kalıcı ret (saf fonksiyon)
+│   ├── manual_import.py   # Manuel veri girişi: Excel şablon + doğrulama + Reading/aggregate/SİM kuyruğu
 │   ├── admin.py
 │   ├── apps.py
 │   ├── management/commands/seed_sais_data.py  # Atıksu StationType + ministry_sample + Envisoft eşlemeleri
@@ -806,6 +807,27 @@ ve karşılaşılabilecek hatalar tek bir kullanıcı kılavuzunda toplanır (ku
   kendiliğinden dışarıda kalır); sonraki senkronizasyonlar kullanıcı seçimini **ezmez**, yalnız
   tanım bilgisini tazeler. Testler: [sais_domain/tests.py](sais_domain/tests.py)
   `SimChannelSelectionTests` (4).
+- **Manuel veri girişi (SD kart → Excel) — SAIS-özel → `sais_domain/`:** Elektrik kesintisinde
+  kaybolan dakikalar analizörün SD kartından alınıp Sürekli İzleme Merkezi → **Manuel Veri Girişi**
+  (`/dashboard/admin-pages/sim-manual-entry/`, operatör+admin) sayfasından yüklenir. Tek doğruluk
+  kaynağı [sais_domain/manual_import.py](sais_domain/manual_import.py). **Format yalnız .xlsx**,
+  kabine özel şablon sayfadan indirilir (`build_template`): `Veri` sayfası `Tarih Saat | Durum |
+  <parameter_name>...` (kolonlar = SİM payload kapsamı: aktif analog sensörler + `SimChannel` seçimi),
+  `Açıklama` (kurallar + örnek satırlar — içe aktarılmaz), `Durum Kodları` (`sim_report.SIM_DATA_STATUS_CODES`).
+  **`Durum` satır başına zorunlu** ve tüm parametrelere uygulanır (yıkama/bakım dakikaları geçerli diye
+  gitmesin); kod Bakanlık kataloğunda olmalı. Akış: yükle → `parse_workbook` doğrular (bilinmeyen kolon,
+  tarih/gelecek/mükerrer dakika, boş/geçersiz Durum, sayı olmayan değer = **hata, onay verilemez**;
+  aralık dışı değer, mevcut okuma, kabul penceresi dışı dakika = uyarı) → `ManualDataImport(staged)`
+  (satırlar JSON'da, dosya diske yazılmaz; kabin başına tek bekleyen) → onay → Celery
+  `sais_domain.tasks.apply_manual_import`: `Reading.bulk_create(origin="manual")` — **o dakikada
+  sensörün okuması varsa değer ATLANIR** (mevcut veri korunur); quality `status_quality` (1 good,
+  yıkama/bakım/operasyonel uncertain, diğer bad); `persist_reading` **kullanılmaz** (canlı overlay +
+  throttle + `SensorLatest`'i eski veriyle ezerdi) → aggregate'ler `aggregate_readings.recompute_range`
+  ile bucket sınırlarına genişletilerek yeniden hesaplanır (komutta `--start/--end`) → en az bir değer
+  eklenen ve **kabul penceresindeki** dakikalar `build_sim_payloads_for_times` ile SİM kuyruğuna
+  (`PRIORITY_BACKFILL`, `SOURCE_MANUAL`) yazılır; pencere dışı dakikalar yalnız historian'a girer.
+  Denetim: `EventType.MANUAL_DATA`. Limit 5 MB / 20.000 satır. Testler: `sais_domain/tests.py`
+  `ManualImportTests`.
 - **TUZAK — Bakanlık reddi eskiden BAŞARI sayılıyordu (bulundu + düzeltildi):** `SaisSimClient.send_data` yanıtı `_unwrap(..., allow_non_dict=True)` ile açıyordu; `_unwrap` zarfta `objects` anahtarı varsa **`payload["objects"]`** döndürür. Bakanlık'ın tipik ret zarfı `{"result": false, "message": "...", "objects": null}` olduğu için `send_data` **`None`** dönüyor, çağırandaki `isinstance(result, dict) and "result" in result` kontrolü `False` kalıyor ve `accepted = True` sayılıyordu → `SystemSwitch.mark_sim_success()` yazılıyor, panelde **"SİM'e Son İletim" yeşil görünürken Bakanlık veriyi almamış** oluyordu (aynı hata `resend_missing_data`'nın `resent` sayacını da şişiriyordu). `send_data` artık `_envelope()` kullanır (ham zarf; `send_calibration`/`send_host_changed` ile aynı sözleşme) ve kabul/ret ayrımını `sim_errors.classify_send_result` yapar; `mark_sim_success` YALNIZ gerçek kabulde atılır. **Aynı yutma `send_diagnostic*` ve `sample_request_*` uçlarında hâlâ var** (kapsam dışı — bkz. bilinen sınırlamalar).
 
 - **Bakanlık veri kabul penceresi ayarlanabilir (sabit 48 saat DEĞİL):** Bakanlık varsayılan olarak son **48 saatlik** veriyi kabul eder, ama bakım/özel durumlarda bu pencereyi geçici olarak genişletebiliyor. Bu yüzden pencere kod sabiti değil `SystemSwitch.sim_accept_window_hours` alanıdır ve **Sistem Kontrol sayfasından operatör değiştirir** (`save_accept_window` action; 1 saat–30 gün arasına sıkıştırılır). Tek okuma noktası `sim_outbox.accept_window_hours()`; hem kuyruk süre aşımı (`expired`) hem `_parse_missing_dates` filtresi bunu kullanır. `.env`'deki `SAIS_SIM_OUTBOX_MAX_AGE_HOURS` yalnız ilk varsayılanı verir.

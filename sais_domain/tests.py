@@ -649,3 +649,168 @@ class SimChannelSelectionTests(TestCase):
         values = payloads[0].values
         self.assertIn("Debi", values)
         self.assertNotIn("Sicaklik", values)
+
+
+class ManualImportTests(TestCase):
+    """Manuel veri girişi (SD kart → Excel) — ``sais_domain.manual_import``."""
+
+    def setUp(self):
+        from api.models import Connection, Parameter, Sensor, SensorLatest, Station
+        from sais_domain.models import SaisCabinet
+
+        self.station = Station.objects.create(name="Test Tesis", active=True)
+        self.cabinet = SaisCabinet.objects.create(
+            station=self.station, device_id="SIM1", code="30060001",
+            name="Kabin", auth_username="u", auth_secret="s",
+        )
+        conn = Connection.objects.create(
+            station=self.station, name="PLC", protocol="modbus_tcp",
+            host="127.0.0.1", port=502, is_enabled=True,
+        )
+        self.sensors = {}
+        for ad, lo, hi in (("KOI", 0, 1000), ("pH", 0, 14)):
+            param = Parameter.objects.create(
+                parameter_name=ad, parameter_txt=ad, station=self.station,
+                min_range=lo, max_range=hi,
+            )
+            self.sensors[ad] = Sensor.objects.create(
+                connection=conn, parameter=param, sensor_type=0,
+                is_active=True, address=1,
+            )
+        SensorLatest.objects.create(
+            sensor=self.sensors["KOI"], value=42.0, readtime=timezone.now(),
+        )
+        # Dakika hizalı, pencere içinde bir başlangıç (yerel saat, naive — Excel gibi).
+        # minute=10 → test dakikaları aynı saatlik bucket'ta kalır (saat sınırı flake'i yok).
+        self.base = (timezone.localtime() - timedelta(hours=3)).replace(
+            minute=10, second=0, microsecond=0, tzinfo=None,
+        )
+
+    def _xlsx(self, rows, headers=("Tarih Saat", "Durum", "KOI", "pH")):
+        """Şablonu indirip veri sayfasına satır yazar (kullanıcı davranışı)."""
+        import io
+
+        from openpyxl import load_workbook
+
+        from sais_domain.manual_import import build_template
+
+        wb = load_workbook(io.BytesIO(build_template(self.cabinet)))
+        ws = wb["Veri"]
+        for i, h in enumerate(headers, start=1):
+            ws.cell(row=1, column=i, value=h)
+        for r, row in enumerate(rows, start=3):
+            for c, v in enumerate(row, start=1):
+                ws.cell(row=r, column=c, value=v)
+        buf = io.BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+
+    def _stage(self, rows, **kw):
+        from sais_domain.manual_import import stage_upload
+        return stage_upload(self.cabinet, self._xlsx(rows, **kw), "veri.xlsx")
+
+    def _apply(self, rec):
+        from sais_domain.manual_import import apply_import
+        rec.refresh_from_db()
+        return apply_import(rec)
+
+    def test_template_roundtrip_is_valid(self):
+        b = self.base
+        rec = self._stage([
+            (b, 1, 120.5, 7.1),
+            (b + timedelta(minutes=1), 23, "130,25", None),
+            (f"{(b + timedelta(minutes=2)):%d.%m.%Y %H:%M}", "1", 140, 7.3),
+        ])
+        self.assertEqual(rec.errors, [])
+        self.assertEqual(rec.summary["row_count"], 3)
+        self.assertEqual(rec.summary["value_count"], 5)
+        self.assertEqual(rec.rows[1]["v"], {"KOI": 130.25})
+
+    def test_validation_errors(self):
+        b = self.base
+        cases = {
+            "bilinmeyen sütun": ([(b, 1, 1, 1, 1)], ("Tarih Saat", "Durum", "KOI", "pH", "Sicaklik")),
+            "boş durum": ([(b, None, 1, 1)], None),
+            "geçersiz kod": ([(b, 77, 1, 1)], None),
+            "mükerrer dakika": ([(b, 1, 1, 1), (b, 1, 2, 2)], None),
+            "gelecek tarih": ([(b + timedelta(days=2), 1, 1, 1)], None),
+            "sayı değil": ([(b, 1, "abc", 1)], None),
+            "değersiz satır": ([(b, 1, None, None)], None),
+            "tarih okunamadı": ([("dün", 1, 1, 1)], None),
+        }
+        for name, (rows, headers) in cases.items():
+            with self.subTest(name):
+                kw = {"headers": headers} if headers else {}
+                rec = self._stage(rows, **kw)
+                self.assertTrue(rec.errors, name)
+                self.assertEqual(rec.rows, [])
+
+    def test_apply_inserts_manual_readings_with_status(self):
+        from api.models import Reading, ReadingHourly, SensorLatest
+
+        b = self.base
+        rec = self._stage([(b, 1, 100, 7.0), (b + timedelta(minutes=1), 23, 110, 7.2)])
+        result = self._apply(rec)
+        self.assertEqual(result["inserted"], 4)
+        koi = Reading.objects.filter(sensor=self.sensors["KOI"]).order_by("time_iso")
+        self.assertEqual([r.origin for r in koi], ["manual", "manual"])
+        self.assertEqual([r.status.code for r in koi], [1, 23])
+        self.assertEqual([r.quality for r in koi], ["good", "uncertain"])
+        # HMI snapshot'ı eski veriyle ezilmez
+        self.assertEqual(SensorLatest.objects.get(sensor=self.sensors["KOI"]).value, 42.0)
+        # Aggregate yeniden hesaplandı; yıkama dakikası ortalamaya girmez
+        hourly = ReadingHourly.objects.get(sensor=self.sensors["KOI"])
+        self.assertEqual(hourly.avg_value, 100)
+        self.assertEqual(hourly.count, 2)
+
+    def test_existing_readings_are_skipped(self):
+        from api.models import Reading
+
+        b = self.base
+        aware = timezone.make_aware(b)
+        Reading.objects.create(
+            sensor=self.sensors["KOI"], value=5, time_iso=aware + timedelta(seconds=20),
+        )
+        rec = self._stage([(b, 1, 100, 7.0)])
+        self.assertEqual(rec.summary["existing_count"], 1)
+        result = self._apply(rec)
+        self.assertEqual(result["inserted"], 1)
+        self.assertEqual(result["skipped"], 1)
+        self.assertEqual(
+            list(Reading.objects.filter(sensor=self.sensors["KOI"]).values_list("value", flat=True)),
+            [5],
+        )
+
+    def test_sim_queue_only_within_accept_window(self):
+        from sais_domain.models import SimOutboxEntry
+
+        b = self.base
+        old = b - timedelta(days=5)   # 48 saat penceresinin dışında
+        rec = self._stage([(b, 1, 100, 7.0), (old, 1, 90, 7.0)])
+        self.assertEqual(rec.summary["outside_window_count"], 1)
+        result = self._apply(rec)
+        self.assertEqual(result["inserted"], 4)
+        entries = list(SimOutboxEntry.objects.filter(cabinet=self.cabinet))
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].source, SimOutboxEntry.SOURCE_MANUAL)
+        self.assertEqual(entries[0].priority, SimOutboxEntry.PRIORITY_BACKFILL)
+        self.assertEqual(entries[0].readtime, timezone.make_aware(b))
+
+    def test_page_upload_and_template_download(self):
+        from users.models import CustomUser
+
+        user = CustomUser.objects.create_user(username="op", password="x", rol=2)
+        self.client.force_login(user)
+        resp = self.client.get(reverse("dashboard:admin_sim_manual_template", args=[self.cabinet.id]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp["Content-Disposition"].endswith('.xlsx"'))
+
+        import io
+        f = io.BytesIO(self._xlsx([(self.base, 1, 100, 7.0)]))
+        f.name = "veri.xlsx"
+        resp = self.client.post(reverse("dashboard:admin_sim_manual_entry"), {
+            "action": "upload", "cabinet": self.cabinet.id, "data_file": f,
+        })
+        self.assertEqual(resp.status_code, 302)
+        resp = self.client.get(resp["Location"])
+        self.assertContains(resp, "İçe Aktar")

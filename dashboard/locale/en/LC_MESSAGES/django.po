@@ -3772,3 +3772,30 @@ msgstr "Import started: a safety backup is taken first, then the configuration w
 
 msgid "Bekleyen içe aktarım iptal edildi."
 msgstr "Pending import cancelled."
+
+msgid "Manuel Veri Girişi"
+msgstr "Manual Data Entry"
+
+msgid "Excel Şablonunu İndir"
+msgstr "Download Excel Template"
+
+msgid "Yükle ve Doğrula"
+msgstr "Upload and Validate"
+
+msgid "Geçmiş içe aktarımlar"
+msgstr "Past imports"
+
+msgid "1. Şablonu indirin ve doldurun"
+msgstr "1. Download and fill in the template"
+
+msgid "2. Doldurulmuş dosyayı yükleyin"
+msgstr "2. Upload the completed file"
+
+msgid "3. Önizleme ve onay"
+msgstr "3. Preview and confirm"
+
+msgid "İçe aktarımı onaylayın"
+msgstr "Confirm the import"
+
+msgid "Henüz içe aktarım yapılmadı."
+msgstr "No imports yet."
