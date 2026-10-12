@@ -20,7 +20,7 @@
 {% csrf_token %}
 <div class="card mb-6">
     <div class="card-body py-5">
-        <form method="get" class="row g-4 align-items-end">
+        <form method="get" action="{% url 'dashboard:tour' %}" class="row g-4 align-items-end">
             <input type="hidden" name="tab" value="{{ tab }}">
             <div class="col-md-5">
                 <label class="form-label fw-semibold">{% trans "Tesis" %}</label>
@@ -67,9 +67,9 @@
 {% if station %}
 <ul class="nav nav-tabs nav-line-tabs nav-line-tabs-2x border-transparent fs-5 fw-bold mb-6">
     <li class="nav-item"><a class="nav-link text-active-primary {% if tab != 'photos' %}active{% endif %}"
-        href="?station={{ station.pk }}"><i class="ki-outline ki-scan-barcode fs-3 me-2"></i>{% trans "360° Sahneler" %}</a></li>
+        href="{% url 'dashboard:tour' %}?station={{ station.pk }}"><i class="ki-outline ki-scan-barcode fs-3 me-2"></i>{% trans "360° Sahneler" %}</a></li>
     <li class="nav-item"><a class="nav-link text-active-primary {% if tab == 'photos' %}active{% endif %}"
-        href="?station={{ station.pk }}&tab=photos"><i class="ki-outline ki-picture fs-3 me-2"></i>{% trans "Ekipman Fotoğrafları" %}</a></li>
+        href="{% url 'dashboard:tour' %}?station={{ station.pk }}&tab=photos"><i class="ki-outline ki-picture fs-3 me-2"></i>{% trans "Ekipman Fotoğrafları" %}</a></li>
 </ul>
 {% endif %}
 

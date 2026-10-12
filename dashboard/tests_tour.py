@@ -256,3 +256,10 @@ class TourApiTests(TestCase):
                               ("dashboard:tour_photo_capture", [st], "")):
             r = self.client.get(reverse(name, args=args) + q)
             self.assertEqual(r.status_code, 200, name)
+
+    def test_tab_links_are_absolute(self):
+        """base.html `<base href="/">` içerir: göreli `?tab=...` linki anasayfaya gider."""
+        self.client.force_login(self.operator)
+        html = self.client.get(reverse("dashboard:tour") + "?station=%s" % self.station.pk).content.decode()
+        self.assertNotIn('href="?', html)
+        self.assertIn('href="%s?station=%s&tab=photos"' % (reverse("dashboard:tour"), self.station.pk), html)
