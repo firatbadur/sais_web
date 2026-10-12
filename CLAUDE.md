@@ -102,6 +102,11 @@ sais_web/
 │   ├── urls.py            # /dashboard/... URL pattern'leri (namespace="dashboard")
 │   ├── views.py           # DashboardLoginView, HomeView, rapor/operatör/admin view'ları
 │   ├── api_views.py       # AJAX endpoint'leri — home_kpis/snapshot/trend/events
+│   ├── tour_views.py      # Tesis Sanal Turu: sayfalar + /dashboard/api/tour/... uçları
+│   ├── tour_stitch.py     # 360° panorama birleştirme (jiroskop projeksiyonu + OpenCV fallback)
+│   ├── tour_checklist.py  # Ekipman fotoğrafı çekim listesi (tek doğruluk kaynağı)
+│   ├── tour_ai.py         # Claude vision: hotspot önerisi + etiket plakası okuma
+│   ├── tasks.py           # Celery: stitch_tour_scene / ai_suggest_hotspots / ai_read_nameplate
 │   ├── forms.py           # DashboardLoginForm, AdminUserCreate/Update, Profile, ChangePassword
 │   ├── permissions.py     # RoleRequiredMixin + AdminRequiredMixin + OperatorRequiredMixin
 │   ├── context_processors.py   # MENU dict (rol-filtreli); available_languages
@@ -1189,6 +1194,69 @@ sistem raporu Celery ile otomatik üretip (PDF/Excel) alıcılara gönderir. Jen
   için volume ancak compose dosyası yenilenip `up -d` yapılınca gelir (Watchtower yalnız imajı günceller).
 - **Ertelenenler**: EN `.po` çevirileri.
 
+## Tesis Sanal Turu (360° panorama + ekipman fotoğrafları + AI)
+
+Sahaya gitmeden "kabinde hangi sensör/malzeme nerede, etiketinde ne yazıyor?" sorusunu
+cevaplar. Menü **Tesis Turu** (`/dashboard/tour/`, tüm roller görür; yazma operatör+admin).
+Dashboard'a özgü → `dashboard/`. İki sekme:
+
+- **360° Sahneler** — istasyon başına sıralı sahneler (Kabin dışı, Kapı önü, Kabin içi...).
+  Görüntüleyici `/dashboard/tour/station/<id>/` standalone tam ekran, vendored **Photo Sphere
+  Viewer 5.15 + markers + three.js** (`plugins/custom/photo-sphere-viewer/`, importmap ile;
+  `sourceMappingURL` satırları manifest storage için silindi). Hotspot türleri: `sensor` (canlı
+  değer `mimic_tags` 4 sn poll + panelde son okuma/kalibrasyon/rapor linki), `equipment`
+  (marka/model/seri no + bağlı `Document`), `link` (sahneler arası geçiş), `note`. Düzenleme
+  modunda panoramaya tıkla → işaret ekle; "Konumu Taşı", "Açılış Görünümü".
+- **Ekipman Fotoğrafları** — yönlendirmeli yakın çekim listesi. Maddeler + çekim adımları
+  (genel görünüm → etiket plakası → ekran → bağlantılar...) **kodda sabit**:
+  [dashboard/tour_checklist.py](dashboard/tour_checklist.py) `STANDARD_ITEMS` (numune alıcı, PLC +
+  I/O, sürücü, pompa, debimetre, pano, UPS, modem, kabin dışı...) + istasyonun **analog
+  sensörleri** (`sensor:<id>` → fotoğraf sensöre bağlanır). Mobil sihirbaz
+  `/dashboard/tour/station/<id>/photos/capture/` "sıradaki eksik çekim"i gösterir;
+  `<input capture=environment>` kullandığı için **HTTPS gerektirmez**. "Bu tesiste yok" işareti
+  yalnız tarayıcıda (localStorage) tutulur. Hotspot `equipment_key` (veya sensörü) ile o maddenin
+  fotoğrafları görüntüleyici panelinde çıkar.
+
+**Görüntüler DB'de (`BinaryField`), MEDIA'da DEĞİL — bilinçli:** prod compose'da `media_data`
+yalnız `web`'e mount'lu; birleştirmeyi yapan `celery_worker` göremezdi ve mevcut sahalarda compose
+dosyası Watchtower ile yenilenmez. DB'de tutmak ayrıca turları `pg_dump` yedeğine sokar. Liste
+sorgularında `TourScene.LIGHT_DEFER` / `EquipmentPhoto.LIGHT_DEFER` ile binary kolonları defer et.
+Modeller: `TourScene`, `TourFrame`, `TourHotspot`, `EquipmentPhoto` (migration `dashboard/0005`).
+
+**360° çekim (yalnız telefon):** `/dashboard/tour/scene/<pk>/capture/` — kamera + `deviceorientation`;
+30 hedef (0° × 12, ±45° × 8, zenit/nadir), hedefe ±4° hizalanıp ~0.45 sn sabit kalınca otomatik
+kare, kuyrukla (ağ kopmasına dayanıklı, aynı `seq` üzerine yazar) yüklenir. Birleştirme
+[dashboard/tour_stitch.py](dashboard/tour_stitch.py): kareler **yönelimliyse jiroskop
+projeksiyonu** (`stitch_by_orientation` — görüntü eşleştirmesi yok, kabin içindeki özelliksiz beyaz
+duvarlarda da çalışır), değilse OpenCV `Stitcher` (`stitch_by_features`, kısmi panorama gri dolgulu
+2:1'e gömülür). Telefonun kendi Panorama/Photo Sphere çıktısı da "Panorama Yükle" ile eklenebilir.
+Açı sözleşmesi (JS + Python + PSV ortak): yaw kuzeyden saat yönünde, pitch yukarı +, roll
+`u = cosφ·up0 − sinφ·right0`; yaw çekimin ilk yönüne göre sıfırlanır.
+- **TUZAK — 360° canlı çekim HTTPS ister:** `getUserMedia` + `deviceorientation` yalnız secure
+  context'te (HTTPS veya localhost) çalışır; yerel IP (`http://192.168…`) ile açılan sahada sayfa
+  bunu söyler ve panorama yüklemeye yönlendirir. iOS'ta jiroskop izni kullanıcı dokunuşuyla istenir.
+- Kamera FOV'u web API'lerinden okunamaz → uzun kenar varsayılan **68°** (26 mm eşdeğeri ana kamera),
+  çekim sayfasındaki kaydırıcıyla ayarlanır; yanlış FOV dikişlerde kayma yapar.
+
+**AI (Claude vision)** [dashboard/tour_ai.py](dashboard/tour_ai.py) — `ANTHROPIC_API_KEY` boşsa
+butonlar gizli/devre dışı; lisans gate'li; her çağrı `ApiLog(component="tour_ai")`. Model
+`TOUR_AI_MODEL` (varsayılan `claude-opus-5-5`), `output_config.format` JSON şeması +
+`fallbacks="default"` (beta `server-side-fallback-2026-07-01`). (1) **Hotspot önerisi**: panoramayı
+değil yönelimli **kareleri** (6'lık gruplar, 1280 px) gönderir, kutu merkezini kare yönelimiyle
+yaw/pitch'e çevirir, yakın tekrarları birleştirir → `ai_suggested=True, confirmed=False` işaretler
+(rol 3 görmez; operatör onaylar/reddeder; yeniden çalıştırma yalnız onaysızları değiştirir). Yüklenmiş
+panoramalarda kare olmadığından çalışmaz. (2) **Etiket plakası okuma**: `nameplate` adımında çekilen
+fotoğrafta mobil sihirbaz otomatik tetikler; yalnız boş marka/model/seri no alanlarını doldurur.
+Celery: `dashboard.tasks.stitch_tour_scene` / `ai_suggest_hotspots` / `ai_read_nameplate`
+(time_limit 900/900/300 — polling ile aynı worker kuyruğunu paylaşır).
+- `.env`: `TOUR_MAX_FRAME_PX` (1600), `TOUR_PANO_WIDTH` (4096), `TOUR_MAX_UPLOAD_MB` (40),
+  `TOUR_MAX_FRAMES` (60), `ANTHROPIC_API_KEY`, `TOUR_AI_MODEL`. Bağımlılık: `opencv-python-headless`,
+  `anthropic`.
+- **İstasyon Taşıma turları taşımaz** ve `core` içe aktarımı istasyonları silip yeniden yüklediği için
+  hedefteki turlar/fotoğraflar CASCADE ile silinir (öncesindeki güvenlik yedeği içerir).
+- Testler: [dashboard/tests_tour.py](dashboard/tests_tour.py) (geometri round-trip, yetki, idempotent
+  kare, checklist ilerlemesi, AI ayrıştırma/etiket — mock).
+
 ## Testler
 
 `api/tests.py`, `users/tests.py`, `modbus/tests.py` şu an boş. Yeni özellik eklerken ilgili uygulamaya test yazılması beklenir.
@@ -1248,4 +1316,6 @@ Beklenen yük: cycle 1.5-2.5 sn, 17 Reading insert/sn, ~1.4M satır/gün, 90 gü
 - **SİM polling'le aynı Celery kuyruğunu paylaşıyor** — `task_routes` yok, `--concurrency=4`. Bakanlık
   yavaşladığında drenaj bir slotu ~156 sn tutabilir. Kalıcı çözüm `sais_domain.tasks.*`'ı ayrı bir
   `sim` kuyruğuna + kendi worker'ına almak (compose değişikliği gerektirir).
+- **Tesis Sanal Turu**: EN çevirileri yok; "Bu tesiste yok" işareti tarayıcıya özgü (sunucuda değil);
+  turlar İstasyon Taşıma ile taşınmaz; gerçek cihazda (iOS/Android) çekim akışı saha testini bekliyor.
 - **TLS Modbus** — pymodbus 3.x henüz native desteklemiyor; out of scope.

@@ -71,6 +71,16 @@ REPORTS_DIR = os.getenv("REPORTS_DIR", str(BASE_DIR / "media" / "reports"))
 # Üretilen rapor kayıtları + dosyaları bu kadar gün saklanır (prune_generated_reports).
 REPORT_RETENTION_DAYS = int(os.getenv("REPORT_RETENTION_DAYS", "90"))
 
+# ---- Tesis Sanal Turu (360° panorama + AI hotspot önerisi) ----
+# Görüntüler DB'de (BinaryField) tutulur; bu sınırlar DB şişmesini kontrol eder.
+TOUR_MAX_FRAME_PX = int(os.getenv("TOUR_MAX_FRAME_PX", "1600"))   # çekim karesi uzun kenar
+TOUR_PANO_WIDTH = int(os.getenv("TOUR_PANO_WIDTH", "4096"))       # üretilen panorama genişliği
+TOUR_MAX_UPLOAD_MB = int(os.getenv("TOUR_MAX_UPLOAD_MB", "40"))    # tek dosya yükleme sınırı
+TOUR_MAX_FRAMES = int(os.getenv("TOUR_MAX_FRAMES", "60"))          # sahne başına kare
+# AI (Claude vision) — anahtar boşsa AI önerisi devre dışı kalır.
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+TOUR_AI_MODEL = os.getenv("TOUR_AI_MODEL", "claude-opus-5-5")
+
 # ---- Web erişim / Caddy reverse proxy ----
 # WebSettings → api.web_proxy bu yolları kullanarak Caddyfile + manuel cert
 # dosyalarını üretir. caddy_config volume'ü web + caddy container'larına ortak

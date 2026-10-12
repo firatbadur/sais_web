@@ -1,0 +1,487 @@
+{% extends "dashboard/base.html" %}
+{% load i18n static dashboard_extras %}
+
+{% block title %}{% trans "Tesis Sanal Turu" %}{% endblock %}
+{% block page_title %}{% trans "Tesis Sanal Turu" %}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .tour-card .thumb { height: 170px; background: var(--bs-gray-200); border-radius: .65rem .65rem 0 0;
+        background-size: cover; background-position: center; position: relative; display: flex;
+        align-items: center; justify-content: center; color: var(--bs-gray-500); }
+    .tour-card .thumb .badge { position: absolute; top: 10px; left: 10px; }
+    .tour-card .thumb .order { position: absolute; top: 10px; right: 10px; }
+    #qr-box { display: flex; justify-content: center; }
+    #qr-box img, #qr-box svg { width: 220px; height: 220px; image-rendering: pixelated; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<div class="card mb-6">
+    <div class="card-body py-5">
+        <form method="get" class="row g-4 align-items-end">
+            <input type="hidden" name="tab" value="{{ tab }}">
+            <div class="col-md-5">
+                <label class="form-label fw-semibold">{% trans "Tesis" %}</label>
+                <select name="station" class="form-select" data-control="select2" onchange="this.form.submit()">
+                    {% for s in stations %}
+                    <option value="{{ s.pk }}" {% if station and s.pk == station.pk %}selected{% endif %}>{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-7 text-md-end">
+                {% if tab == 'photos' %}
+                {% if can_manage and station %}
+                <button type="button" class="btn btn-primary" id="btn-photo-capture"
+                        data-url="{% url 'dashboard:tour_photo_capture' station.pk %}" data-name="{% trans 'Ekipman Fotoğrafları' %}">
+                    <i class="ki-outline ki-phone fs-3"></i>{% trans "Telefonla Çek" %}</button>
+                {% endif %}
+                {% else %}
+                {% if station and scenes %}
+                <a href="{% url 'dashboard:tour_viewer' station.pk %}" target="_blank" class="btn btn-primary">
+                    <i class="ki-outline ki-eye fs-3"></i>{% trans "Turu Aç" %}
+                </a>
+                {% endif %}
+                {% if can_manage and station %}
+                <button type="button" class="btn btn-light-primary" id="btn-new-scene">
+                    <i class="ki-outline ki-plus fs-3"></i>{% trans "Yeni Sahne" %}
+                </button>
+                {% endif %}
+                {% endif %}
+            </div>
+        </form>
+        {% if can_manage and tab != 'photos' %}
+        <div class="alert alert-warning d-none align-items-start mt-5 mb-0 py-3" id="https-warn">
+            <i class="ki-outline ki-information-5 fs-2 me-3 mt-1"></i>
+            <div class="fs-7">
+                {% blocktrans %}Bu sayfa HTTPS ile açılmadı. Telefon tarayıcıları kamera ve jiroskop erişimini yalnız
+                HTTPS bağlantıda verir; yönlendirmeli çekim için tesisin alan adıyla (https://…) bağlanın.
+                HTTPS yoksa telefonun kendi <b>Panorama</b> modunda çektiğiniz fotoğrafı "Panorama Yükle" ile ekleyebilirsiniz.{% endblocktrans %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if station %}
+<ul class="nav nav-tabs nav-line-tabs nav-line-tabs-2x border-transparent fs-5 fw-bold mb-6">
+    <li class="nav-item"><a class="nav-link text-active-primary {% if tab != 'photos' %}active{% endif %}"
+        href="?station={{ station.pk }}"><i class="ki-outline ki-scan-barcode fs-3 me-2"></i>{% trans "360° Sahneler" %}</a></li>
+    <li class="nav-item"><a class="nav-link text-active-primary {% if tab == 'photos' %}active{% endif %}"
+        href="?station={{ station.pk }}&tab=photos"><i class="ki-outline ki-picture fs-3 me-2"></i>{% trans "Ekipman Fotoğrafları" %}</a></li>
+</ul>
+{% endif %}
+
+{% if station and tab == 'photos' %}
+<div class="card mb-6">
+    <div class="card-body py-5">
+        <div class="d-flex align-items-center gap-5 flex-wrap">
+            <div class="flex-grow-1" style="min-width:240px">
+                <div class="d-flex justify-content-between fs-7 fw-semibold mb-2">
+                    <span>{% trans "Çekim listesi ilerlemesi" %}</span><span id="ph-progress-txt">—</span>
+                </div>
+                <div class="progress h-8px"><div class="progress-bar bg-success" id="ph-progress" style="width:0%"></div></div>
+            </div>
+            <div class="text-muted fs-7" style="max-width:520px">{% blocktrans %}Her ekipman için genel görünüm, etiket plakası ve bağlantı
+                fotoğrafları istenir. Telefonla çekim sayfası eksik adımları sırayla gösterir; HTTPS gerektirmez.{% endblocktrans %}</div>
+        </div>
+    </div>
+</div>
+<div id="ph-root"><div class="text-center text-muted py-10"><span class="spinner-border spinner-border-sm me-2"></span>{% trans "Yükleniyor…" %}</div></div>
+{% elif not station %}
+<div class="card"><div class="card-body text-center text-muted py-15">{% trans "Önce bir tesis tanımlayın." %}</div></div>
+{% elif not scenes %}
+<div class="card">
+    <div class="card-body text-center py-15">
+        <i class="ki-outline ki-scan-barcode fs-3x text-gray-400 mb-4 d-block"></i>
+        <div class="fs-5 fw-semibold text-gray-700 mb-2">{% trans "Bu tesis için henüz sahne yok." %}</div>
+        <div class="text-muted fs-7">{% blocktrans %}Kabin dışı, kapı önü, kabin içi gibi her çekim noktası bir sahnedir. Sahne ekleyip
+            telefonla 360° çekin; ardından görüntüleyicide sensör ve malzemeleri işaretleyin.{% endblocktrans %}</div>
+    </div>
+</div>
+{% else %}
+<div class="row g-6" id="scene-grid">
+    {% for s in scenes %}
+    <div class="col-sm-6 col-lg-4 col-xxl-3">
+        <div class="card tour-card h-100" data-scene="{{ s.id }}" data-status="{{ s.status }}">
+            <div class="thumb" {% if s.thumb_url %}style="background-image:url('{{ s.thumb_url }}')"{% endif %}>
+                {% if not s.thumb_url %}<i class="ki-outline ki-picture fs-3x"></i>{% endif %}
+                <span class="badge {% if s.status == 'ready' %}badge-success{% elif s.status == 'failed' %}badge-danger{% elif s.status == 'processing' %}badge-warning{% else %}badge-secondary{% endif %}">
+                    {% if s.status == 'processing' %}<span class="spinner-border spinner-border-sm me-1" style="width:.7rem;height:.7rem"></span>{% endif %}{{ s.status_label }}
+                </span>
+                <span class="badge badge-light order">#{{ forloop.counter }}</span>
+            </div>
+            <div class="card-body p-5">
+                <div class="fw-bold fs-5 text-gray-800">{{ s.name }}</div>
+                {% if s.description %}<div class="text-muted fs-7 mt-1">{{ s.description }}</div>{% endif %}
+                <div class="d-flex gap-2 flex-wrap mt-3 fs-8">
+                    <span class="badge badge-light-primary">{% blocktrans with n=s.hotspot_count %}{{ n }} işaret{% endblocktrans %}</span>
+                    {% if s.frame_count %}<span class="badge badge-light">{% blocktrans with n=s.frame_count %}{{ n }} kare{% endblocktrans %}</span>{% endif %}
+                    {% if s.stitch_method %}<span class="badge badge-light">{{ s.stitch_method }}</span>{% endif %}
+                </div>
+                {% if s.status == 'failed' and s.error %}<div class="text-danger fs-8 mt-2">{{ s.error }}</div>{% endif %}
+            </div>
+            <div class="card-footer p-4 d-flex flex-wrap gap-2">
+                {% if s.status == 'ready' %}
+                <a class="btn btn-sm btn-primary" target="_blank" href="{% url 'dashboard:tour_viewer' station.pk %}?scene={{ s.id }}">
+                    <i class="ki-outline ki-eye fs-4"></i>{% trans "Görüntüle" %}</a>
+                {% endif %}
+                {% if can_manage %}
+                <button class="btn btn-sm btn-light-info js-capture" data-id="{{ s.id }}" data-name="{{ s.name }}"
+                        data-url="{% url 'dashboard:tour_capture' s.id %}">
+                    <i class="ki-outline ki-phone fs-4"></i>{% trans "Telefonla Çek" %}</button>
+                <button class="btn btn-sm btn-light js-upload" data-id="{{ s.id }}" data-name="{{ s.name }}">
+                    <i class="ki-outline ki-file-up fs-4"></i>{% trans "Panorama Yükle" %}</button>
+                <button class="btn btn-sm btn-icon btn-light js-edit" data-id="{{ s.id }}" data-name="{{ s.name }}"
+                        data-desc="{{ s.description }}" data-order="{{ s.order }}" title="{% trans 'Düzenle' %}">
+                    <i class="ki-outline ki-pencil fs-4"></i></button>
+                <button class="btn btn-sm btn-icon btn-light-danger js-delete" data-id="{{ s.id }}" data-name="{{ s.name }}"
+                        title="{% trans 'Sil' %}"><i class="ki-outline ki-trash fs-4"></i></button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Fotoğraf detay -->
+<div class="modal fade" id="modal-photo" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-xl"><div class="modal-content">
+        <div class="modal-header py-4"><h3 class="modal-title" id="pm-title">—</h3>
+            <button type="button" class="btn btn-icon btn-sm btn-active-light-primary" data-bs-dismiss="modal"><i class="ki-outline ki-cross fs-1"></i></button></div>
+        <div class="modal-body">
+            <div class="row g-6">
+                <div class="col-lg-8 text-center"><a id="pm-full" target="_blank"><img id="pm-img" class="mw-100 rounded" style="max-height:70vh"></a></div>
+                <div class="col-lg-4">
+                    <div class="text-muted fs-7 mb-4" id="pm-meta"></div>
+                    <label class="form-label fs-7">{% trans "Etiket / Ad" %}</label>
+                    <input class="form-control form-control-sm mb-3" id="pm-label" maxlength="150" {% if not can_manage %}disabled{% endif %}>
+                    <label class="form-label fs-7">{% trans "Marka" %}</label>
+                    <input class="form-control form-control-sm mb-3" id="pm-brand" maxlength="100" {% if not can_manage %}disabled{% endif %}>
+                    <label class="form-label fs-7">{% trans "Model" %}</label>
+                    <input class="form-control form-control-sm mb-3" id="pm-model" maxlength="100" {% if not can_manage %}disabled{% endif %}>
+                    <label class="form-label fs-7">{% trans "Seri No" %}</label>
+                    <input class="form-control form-control-sm mb-3" id="pm-serial" maxlength="100" {% if not can_manage %}disabled{% endif %}>
+                    <label class="form-label fs-7">{% trans "Not" %}</label>
+                    <textarea class="form-control form-control-sm mb-3" id="pm-caption" rows="3" {% if not can_manage %}disabled{% endif %}></textarea>
+                    <div class="alert alert-light-info fs-8 py-2 px-3 d-none" id="pm-ai" style="white-space:pre-wrap"></div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer py-3">
+            <a class="btn btn-sm btn-light" id="pm-download"><i class="ki-outline ki-file-down fs-4"></i>{% trans "İndir" %}</a>
+            {% if can_manage %}
+            {% if ai_enabled %}<button class="btn btn-sm btn-light-info" id="pm-ai-read"><i class="ki-outline ki-technology-2 fs-4"></i>{% trans "Etiketi AI ile Oku" %}</button>{% endif %}
+            <button class="btn btn-sm btn-light-danger" id="pm-delete"><i class="ki-outline ki-trash fs-4"></i>{% trans "Sil" %}</button>
+            <button class="btn btn-sm btn-primary" id="pm-save">{% trans "Kaydet" %}</button>
+            {% endif %}
+        </div>
+    </div></div>
+</div>
+
+{% if can_manage %}
+<!-- Sahne ekle/düzenle -->
+<div class="modal fade" id="modal-scene" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h3 class="modal-title" id="scene-modal-title">{% trans "Yeni Sahne" %}</h3>
+            <button type="button" class="btn btn-icon btn-sm btn-active-light-primary" data-bs-dismiss="modal"><i class="ki-outline ki-cross fs-1"></i></button></div>
+        <div class="modal-body">
+            <input type="hidden" id="scene-id">
+            <div class="mb-5"><label class="form-label required">{% trans "Sahne Adı" %}</label>
+                <input type="text" class="form-control" id="scene-name" maxlength="120"
+                       placeholder="{% trans 'ör. Kabin İçi, Kapı Önü, Numune Hattı' %}"></div>
+            <div class="mb-5"><label class="form-label">{% trans "Açıklama" %}</label>
+                <textarea class="form-control" id="scene-desc" rows="2"></textarea></div>
+            <div><label class="form-label">{% trans "Sıra" %}</label>
+                <input type="number" min="0" class="form-control w-125px" id="scene-order" value="0"></div>
+            <div class="alert alert-danger d-none mt-5 mb-0" id="scene-err"></div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-light" data-bs-dismiss="modal">{% trans "Vazgeç" %}</button>
+            <button class="btn btn-primary" id="scene-save">{% trans "Kaydet" %}</button></div>
+    </div></div>
+</div>
+
+<!-- Telefonla çek: QR -->
+<div class="modal fade" id="modal-capture" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h3 class="modal-title">{% trans "Telefonla Çek" %} — <span id="cap-name"></span></h3>
+            <button type="button" class="btn btn-icon btn-sm btn-active-light-primary" data-bs-dismiss="modal"><i class="ki-outline ki-cross fs-1"></i></button></div>
+        <div class="modal-body text-center">
+            <div class="text-gray-700 mb-5">{% blocktrans %}Telefonun kamerasıyla bu kodu okutun (aynı kullanıcıyla giriş yapmanız gerekir).
+                Sayfa sizi hedef noktalara yönlendirir, kareler otomatik çekilir.{% endblocktrans %}</div>
+            <div id="qr-box" class="mb-5"></div>
+            <div class="input-group input-group-sm">
+                <input type="text" class="form-control" id="cap-url" readonly>
+                <button class="btn btn-light-primary" id="cap-copy">{% trans "Kopyala" %}</button>
+                <a class="btn btn-primary" id="cap-open" target="_blank">{% trans "Bu cihazda aç" %}</a>
+            </div>
+            <ul class="text-start text-muted fs-7 mt-5 mb-0">
+                <li>{% trans "Telefonu dik tutun ve çekim noktasında yerinizde dönün (yürümeyin)." %}</li>
+                <li>{% trans "Telefonu gövdenizin değil, kendi ekseninde döndürmeye çalışın — dikişler daha temiz olur." %}</li>
+                <li>{% trans "Kabin içinde ışıkları açın; çekim boyunca kapıyı/ortamı değiştirmeyin." %}</li>
+            </ul>
+        </div>
+    </div></div>
+</div>
+
+<!-- Panorama yükle -->
+<div class="modal fade" id="modal-upload" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h3 class="modal-title">{% trans "Panorama Yükle" %} — <span id="up-name"></span></h3>
+            <button type="button" class="btn btn-icon btn-sm btn-active-light-primary" data-bs-dismiss="modal"><i class="ki-outline ki-cross fs-1"></i></button></div>
+        <div class="modal-body">
+            <div class="text-muted fs-7 mb-5">{% blocktrans %}Telefonun "Panorama" / "Photo Sphere" modunda çektiğiniz fotoğrafı yükleyin.
+                2:1 oranlı (küresel) fotoğraflar doğrudan 360° gösterilir; yatay şerit panoramalar için kapsadığı açıyı seçin.{% endblocktrans %}</div>
+            <input type="file" class="form-control mb-5" id="up-file" accept="image/jpeg,image/png">
+            <label class="form-label">{% trans "Yatay kapsama (yalnız şerit panorama)" %}</label>
+            <select class="form-select" id="up-hspan">
+                <option value="">{% trans "Otomatik (2:1 ise 360°)" %}</option>
+                <option value="360">360°</option><option value="270">270°</option>
+                <option value="180">180°</option><option value="120">120°</option>
+            </select>
+            <div class="alert alert-danger d-none mt-5 mb-0" id="up-err"></div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-light" data-bs-dismiss="modal">{% trans "Vazgeç" %}</button>
+            <button class="btn btn-primary" id="up-save"><span class="indicator-label">{% trans "Yükle" %}</span>
+                <span class="indicator-progress">{% trans "Yükleniyor..." %} <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span></button></div>
+    </div></div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'dashboard/plugins/custom/photo-sphere-viewer/qrcode.js' %}"></script>
+<script>
+(function () {
+    const STATION_ID = {{ station.pk|default:"null" }};
+    const URLS = {
+        save: "{% url 'dashboard:api_tour_scene_save' %}",
+        del: "{% url 'dashboard:api_tour_scene_delete' %}",
+        status: "{% url 'dashboard:api_tour_scene_status' 0 %}",
+        pano: "{% url 'dashboard:api_tour_pano_upload' 0 %}",
+    };
+    const I18N = {
+        newScene: "{% trans 'Yeni Sahne' %}",
+        editScene: "{% trans 'Sahneyi Düzenle' %}",
+        confirmDelete: "{% trans 'sahnesi, tüm işaretleri ve çekim kareleriyle birlikte silinecek. Emin misiniz?' %}",
+        copied: "{% trans 'Kopyalandı' %}",
+        err: "{% trans 'İşlem başarısız.' %}",
+    };
+    const $ = (s) => document.querySelector(s);
+    if (!window.isSecureContext && $('#https-warn')) {
+        $('#https-warn').classList.remove('d-none'); $('#https-warn').classList.add('d-flex');
+    }
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const url0 = (u, id) => u.replace(/\/0\//, '/' + id + '/');
+
+    async function postJSON(url, body) {
+        const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+            body: JSON.stringify(body)});
+        let d = {};
+        try { d = await r.json(); } catch (e) { d = {ok: false, error: I18N.err}; }
+        return d;
+    }
+    function showErr(el, msg) { el.textContent = msg || I18N.err; el.classList.remove('d-none'); }
+
+    // ---- Sahne ekle / düzenle ----
+    const mScene = $('#modal-scene') ? new bootstrap.Modal($('#modal-scene')) : null;
+    function openScene(id, name, desc, order) {
+        $('#scene-id').value = id || '';
+        $('#scene-name').value = name || '';
+        $('#scene-desc').value = desc || '';
+        $('#scene-order').value = order || 0;
+        $('#scene-err').classList.add('d-none');
+        $('#scene-modal-title').textContent = id ? I18N.editScene : I18N.newScene;
+        mScene.show();
+        setTimeout(() => $('#scene-name').focus(), 300);
+    }
+    $('#btn-new-scene') && $('#btn-new-scene').addEventListener('click', () => openScene(null, '', '', document.querySelectorAll('.tour-card').length));
+    document.querySelectorAll('.js-edit').forEach(b => b.addEventListener('click', () =>
+        openScene(b.dataset.id, b.dataset.name, b.dataset.desc, b.dataset.order)));
+    $('#scene-save') && $('#scene-save').addEventListener('click', async () => {
+        const d = await postJSON(URLS.save, {id: $('#scene-id').value || null, station_id: STATION_ID,
+            name: $('#scene-name').value, description: $('#scene-desc').value, order: $('#scene-order').value});
+        if (d.ok) location.reload(); else showErr($('#scene-err'), d.error);
+    });
+    document.querySelectorAll('.js-delete').forEach(b => b.addEventListener('click', async () => {
+        if (!confirm('"' + b.dataset.name + '" ' + I18N.confirmDelete)) return;
+        const d = await postJSON(URLS.del, {id: b.dataset.id});
+        if (d.ok) location.reload(); else alert(d.error || I18N.err);
+    }));
+
+    // ---- Telefonla çek (QR) ----
+    const mCap = $('#modal-capture') ? new bootstrap.Modal($('#modal-capture')) : null;
+    function openQr(url, name) {
+        const full = new URL(url, location.href).href;
+        $('#cap-name').textContent = name;
+        $('#cap-url').value = full;
+        $('#cap-open').href = full;
+        const qr = qrcode(0, 'M');
+        qr.addData(full);
+        qr.make();
+        $('#qr-box').innerHTML = qr.createSvgTag({cellSize: 6, margin: 2, scalable: true});
+        mCap.show();
+    }
+    document.querySelectorAll('.js-capture').forEach(b => b.addEventListener('click', () => openQr(b.dataset.url, b.dataset.name)));
+    $('#cap-copy') && $('#cap-copy').addEventListener('click', () => {
+        navigator.clipboard && navigator.clipboard.writeText($('#cap-url').value);
+        $('#cap-copy').textContent = I18N.copied;
+    });
+
+    // ---- Panorama yükle ----
+    const mUp = $('#modal-upload') ? new bootstrap.Modal($('#modal-upload')) : null;
+    let upId = null;
+    document.querySelectorAll('.js-upload').forEach(b => b.addEventListener('click', () => {
+        upId = b.dataset.id;
+        $('#up-name').textContent = b.dataset.name;
+        $('#up-file').value = '';
+        $('#up-err').classList.add('d-none');
+        mUp.show();
+    }));
+    $('#up-save') && $('#up-save').addEventListener('click', async () => {
+        const f = $('#up-file').files[0];
+        if (!f) return;
+        const btn = $('#up-save');
+        btn.setAttribute('data-kt-indicator', 'on'); btn.disabled = true;
+        const fd = new FormData();
+        fd.append('file', f); fd.append('hspan', $('#up-hspan').value);
+        try {
+            const r = await fetch(url0(URLS.pano, upId), {method: 'POST', headers: {'X-CSRFToken': csrf}, body: fd});
+            const d = await r.json().catch(() => ({ok: false}));
+            if (d.ok) location.reload(); else showErr($('#up-err'), d.error);
+        } finally { btn.removeAttribute('data-kt-indicator'); btn.disabled = false; }
+    });
+
+    // ---- Ekipman fotoğrafları sekmesi ----
+    const TAB = "{{ tab }}";
+    const CAN_MANAGE = {{ can_manage|yesno:"true,false" }};
+    const PH = {
+        state: "{% url 'dashboard:api_tour_photos' %}?station=" + STATION_ID,
+        upload: "{% url 'dashboard:api_tour_photo_upload' %}",
+        save: "{% url 'dashboard:api_tour_photo_save' %}",
+        del: "{% url 'dashboard:api_tour_photo_delete' %}",
+        get: "{% url 'dashboard:api_tour_photo_get' 0 %}",
+        aiRead: "{% url 'dashboard:api_tour_photo_ai_read' 0 %}",
+    };
+    const PI18N = {
+        photos: "{% trans 'fotoğraf' %}", missing: "{% trans 'eksik' %}", upload: "{% trans 'Yükle' %}",
+        other: "{% trans 'Serbest / Diğer Fotoğraflar' %}", confirmDel: "{% trans 'Fotoğraf silinsin mi?' %}",
+        aiRunning: "{% trans 'AI etiketi okuyor…' %}",
+    };
+    const escH = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    let phState = null, phCurrent = null;
+
+    async function loadPhotos() {
+        const d = await fetch(PH.state).then(r => r.json()).catch(() => null);
+        if (!d || !d.ok) return;
+        phState = d;
+        const p = d.progress;
+        $('#ph-progress').style.width = p.percent + '%';
+        $('#ph-progress-txt').textContent = p.percent + '% (' + p.done + '/' + p.total + ') · ' + p.photo_count + ' ' + PI18N.photos;
+        let html = '';
+        const thumb = (ph) => '<a href="#" class="js-ph d-inline-block me-2 mb-2" data-id="' + ph.id + '" title="' + escH(ph.label || ph.created_at) + '">' +
+            '<img src="' + ph.thumb_url + '" class="rounded border" style="width:92px;height:92px;object-fit:cover"></a>';
+        for (const cat of d.categories) {
+            const items = d.items.filter(i => i.category === cat.key);
+            if (!items.length) continue;
+            html += '<div class="card mb-6"><div class="card-header min-h-50px"><h3 class="card-title fs-5">' + escH(cat.label) + '</h3></div><div class="card-body py-4">';
+            for (const it of items) {
+                const photos = d.photos[it.key] || [];
+                html += '<div class="py-4 border-bottom border-gray-200"><div class="d-flex align-items-center mb-3 gap-3">' +
+                    '<span class="fw-bold text-gray-800">' + escH(it.title) + '</span>' +
+                    '<span class="badge ' + (it.complete ? 'badge-light-success' : 'badge-light-warning') + '">' + it.done_shots + '/' + it.shots.length + '</span></div>' +
+                    '<div class="d-flex flex-wrap gap-6">';
+                for (const sh of it.shots) {
+                    const shPhotos = photos.filter(x => x.shot_key === sh.key);
+                    html += '<div style="min-width:120px"><div class="fs-8 fw-semibold mb-2 ' + (sh.count ? 'text-success' : 'text-gray-500') + '" title="' + escH(sh.hint) + '">' +
+                        (sh.count ? '✓ ' : '○ ') + escH(sh.label) + '</div><div>' + shPhotos.map(thumb).join('') +
+                        (CAN_MANAGE ? '<label class="btn btn-sm btn-light btn-icon mb-2" title="' + PI18N.upload + '" style="width:92px;height:92px;vertical-align:top">' +
+                            '<i class="ki-outline ki-plus fs-1"></i><input type="file" accept="image/*" class="d-none js-ph-up" data-item="' + escH(it.key) + '" data-shot="' + escH(sh.key) + '"></label>' : '') +
+                        '</div></div>';
+                }
+                html += '</div></div>';
+            }
+            html += '</div></div>';
+        }
+        const others = d.photos['custom'] || [];
+        if (others.length) {
+            html += '<div class="card mb-6"><div class="card-header min-h-50px"><h3 class="card-title fs-5">' + PI18N.other + '</h3></div><div class="card-body py-4">' +
+                others.map(thumb).join('') + '</div></div>';
+        }
+        $('#ph-root').innerHTML = html;
+    }
+
+    const mPhoto = $('#modal-photo') ? new bootstrap.Modal($('#modal-photo')) : null;
+    function fillPhoto(ph) {
+        phCurrent = ph;
+        $('#pm-title').textContent = ph.label || ph.item_key;
+        $('#pm-img').src = ph.image_url; $('#pm-full').href = ph.image_url;
+        $('#pm-download').href = ph.image_url + '?download=1';
+        $('#pm-meta').textContent = ph.created_at + (ph.created_by ? ' · ' + ph.created_by : '') + ' · ' + ph.width + '×' + ph.height;
+        $('#pm-label').value = ph.label; $('#pm-brand').value = ph.brand; $('#pm-model').value = ph.model_name;
+        $('#pm-serial').value = ph.serial_no; $('#pm-caption').value = ph.caption;
+        const ai = $('#pm-ai');
+        if (ph.ai_status === 'running') { ai.textContent = PI18N.aiRunning; ai.classList.remove('d-none'); }
+        else if (ph.ai_text) { ai.textContent = ph.ai_text; ai.classList.remove('d-none'); }
+        else ai.classList.add('d-none');
+    }
+    async function openPhoto(id) {
+        const d = await fetch(url0(PH.get, id)).then(r => r.json()).catch(() => null);
+        if (!d || !d.ok) return;
+        fillPhoto(d.photo); mPhoto.show();
+    }
+    document.addEventListener('click', (e) => {
+        const a = e.target.closest('.js-ph');
+        if (a) { e.preventDefault(); openPhoto(a.dataset.id); }
+    });
+    document.addEventListener('change', async (e) => {
+        if (!e.target.matches('.js-ph-up')) return;
+        const f = e.target.files[0]; if (!f) return;
+        const fd = new FormData();
+        fd.append('file', f); fd.append('station_id', STATION_ID);
+        fd.append('item_key', e.target.dataset.item); fd.append('shot_key', e.target.dataset.shot);
+        const r = await fetch(PH.upload, {method: 'POST', headers: {'X-CSRFToken': csrf}, body: fd});
+        const d = await r.json().catch(() => ({ok: false}));
+        if (!d.ok) alert(d.error || I18N.err);
+        loadPhotos();
+    });
+    $('#pm-save') && $('#pm-save').addEventListener('click', async () => {
+        const d = await postJSON(PH.save, {id: phCurrent.id, label: $('#pm-label').value, brand: $('#pm-brand').value,
+            model_name: $('#pm-model').value, serial_no: $('#pm-serial').value, caption: $('#pm-caption').value});
+        if (d.ok) { mPhoto.hide(); loadPhotos(); } else alert(d.error || I18N.err);
+    });
+    $('#pm-delete') && $('#pm-delete').addEventListener('click', async () => {
+        if (!confirm(PI18N.confirmDel)) return;
+        const d = await postJSON(PH.del, {id: phCurrent.id});
+        if (d.ok) { mPhoto.hide(); loadPhotos(); } else alert(d.error || I18N.err);
+    });
+    $('#pm-ai-read') && $('#pm-ai-read').addEventListener('click', async () => {
+        const d = await postJSON(url0(PH.aiRead, phCurrent.id), {});
+        if (!d.ok) { alert(d.error || I18N.err); return; }
+        const id = phCurrent.id;
+        fillPhoto(Object.assign(phCurrent, {ai_status: 'running'}));
+        const timer = setInterval(async () => {
+            const r = await fetch(url0(PH.get, id)).then(r => r.json()).catch(() => null);
+            if (!r || !r.ok || r.photo.ai_status === 'running') return;
+            clearInterval(timer);
+            if (phCurrent && phCurrent.id === id) fillPhoto(r.photo);
+        }, 2500);
+    });
+    $('#btn-photo-capture') && $('#btn-photo-capture').addEventListener('click', (e) => openQr(e.currentTarget.dataset.url, e.currentTarget.dataset.name));
+    if (TAB === 'photos' && STATION_ID) loadPhotos();
+
+    // ---- Birleştirilen sahneleri izle ----
+    const pending = [...document.querySelectorAll('.tour-card[data-status="processing"]')].map(c => c.dataset.scene);
+    if (pending.length) {
+        const timer = setInterval(async () => {
+            for (const id of pending) {
+                const r = await fetch(url0(URLS.status, id)).then(r => r.json()).catch(() => null);
+                if (r && r.ok && r.scene.status !== 'processing') { clearInterval(timer); location.reload(); return; }
+            }
+        }, 5000);
+    }
+})();
+</script>
+{% endblock %}

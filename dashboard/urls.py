@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from django.urls import path
 
-from . import api_views, views
+from . import api_views, tour_views, views
 
 
 app_name = "dashboard"
@@ -83,6 +83,46 @@ urlpatterns = [
          name="document_download"),
     path("documents/<int:pk>/delete/", views.DocumentDeleteView.as_view(),
          name="document_delete"),
+
+    # --- Tesis Sanal Turu (360° panorama + hotspot) ---
+    path("tour/", tour_views.TourListView.as_view(), name="tour"),
+    path("tour/station/<int:station_id>/", tour_views.TourViewerView.as_view(), name="tour_viewer"),
+    path("tour/scene/<int:pk>/capture/", tour_views.TourCaptureView.as_view(), name="tour_capture"),
+    path("api/tour/scenes/", tour_views.tour_scenes, name="api_tour_scenes"),
+    path("api/tour/scene/save/", tour_views.tour_scene_save, name="api_tour_scene_save"),
+    path("api/tour/scene/delete/", tour_views.tour_scene_delete, name="api_tour_scene_delete"),
+    path("api/tour/scene/<int:pk>/image/", tour_views.tour_scene_image, name="api_tour_scene_image"),
+    path("api/tour/scene/<int:pk>/thumb/", tour_views.tour_scene_thumb, name="api_tour_scene_thumb"),
+    path("api/tour/scene/<int:pk>/status/", tour_views.tour_scene_status,
+         name="api_tour_scene_status"),
+    path("api/tour/scene/<int:pk>/frames/reset/", tour_views.tour_frames_reset,
+         name="api_tour_frames_reset"),
+    path("api/tour/scene/<int:pk>/frames/", tour_views.tour_frame_upload,
+         name="api_tour_frame_upload"),
+    path("api/tour/scene/<int:pk>/finish/", tour_views.tour_scene_finish,
+         name="api_tour_scene_finish"),
+    path("api/tour/scene/<int:pk>/panorama/", tour_views.tour_pano_upload,
+         name="api_tour_pano_upload"),
+    path("api/tour/hotspot/save/", tour_views.tour_hotspot_save, name="api_tour_hotspot_save"),
+    path("api/tour/hotspot/delete/", tour_views.tour_hotspot_delete,
+         name="api_tour_hotspot_delete"),
+    path("api/tour/hotspot/<int:pk>/info/", tour_views.tour_hotspot_info,
+         name="api_tour_hotspot_info"),
+    path("tour/station/<int:station_id>/photos/capture/", tour_views.PhotoCaptureView.as_view(),
+         name="tour_photo_capture"),
+    path("api/tour/photos/", tour_views.tour_photos, name="api_tour_photos"),
+    path("api/tour/photo/upload/", tour_views.tour_photo_upload, name="api_tour_photo_upload"),
+    path("api/tour/photo/save/", tour_views.tour_photo_save, name="api_tour_photo_save"),
+    path("api/tour/photo/delete/", tour_views.tour_photo_delete, name="api_tour_photo_delete"),
+    path("api/tour/photo/<int:pk>/image/", tour_views.tour_photo_image,
+         name="api_tour_photo_image"),
+    path("api/tour/photo/<int:pk>/thumb/", tour_views.tour_photo_thumb,
+         name="api_tour_photo_thumb"),
+    path("api/tour/scene/<int:pk>/ai-suggest/", tour_views.tour_ai_suggest,
+         name="api_tour_ai_suggest"),
+    path("api/tour/photo/<int:pk>/", tour_views.tour_photo_get, name="api_tour_photo_get"),
+    path("api/tour/photo/<int:pk>/ai-read/", tour_views.tour_photo_ai_read,
+         name="api_tour_photo_ai_read"),
 
     # --- Admin pages (rol=1) ---
     path("admin-pages/users/", views.UserListView.as_view(), name="admin_users"),

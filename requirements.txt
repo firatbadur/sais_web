@@ -39,6 +39,10 @@ weasyprint>=63,<67
 matplotlib>=3.9,<4.0
 openpyxl>=3.1,<4.0
 
+# Tesis Sanal Turu — panorama birleştirme (headless: libGL gerekmez) + AI öneri
+opencv-python-headless>=4.10,<5
+anthropic>=0.70,<1
+
 # Caching / Queue
 redis>=5.2,<6.0
 django-redis>=5.4,<6.0

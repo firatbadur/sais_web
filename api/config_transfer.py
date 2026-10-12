@@ -15,6 +15,10 @@ ayarlarını kullanır ama farkları:
   - seçilmeyen bölümlere işaret eden referanslar (ör. kullanıcılar taşınmadıysa
     `MimicScreen.created_by`) hedefte yoksa null'lanır / kayıt atlanır,
   - lisans ASLA taşınmaz (yeni kurulumda grace/kilitlenme riski).
+  - Tesis Sanal Turu (`dashboard.TourScene`/`TourFrame`/`TourHotspot`/`EquipmentPhoto`)
+    taşınmaz (DB'de büyük binary görüntüler). DİKKAT: `core` uygulanırken istasyonlar
+    silinip yeniden yüklendiğinden hedefteki turlar/fotoğraflar CASCADE ile gider;
+    içe aktarma öncesi alınan güvenlik yedeği (`backup_database`) onları içerir.
 
 Tek doğruluk kaynağı: `SECTIONS`.
 """

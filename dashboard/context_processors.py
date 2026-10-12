@@ -114,6 +114,12 @@ MENU = [
         "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
     },
     {
+        "label": _("Tesis Turu"),
+        "url_name": "dashboard:tour",
+        "icon": "ki-scan-barcode",
+        "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
+    },
+    {
         "label": _("Mimik Editörü"),
         "url_name": "dashboard:admin_mimic",
         "icon": "ki-picture",

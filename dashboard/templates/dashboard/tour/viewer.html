@@ -1,0 +1,498 @@
+{% load static i18n dashboard_extras %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'tr' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <title>{{ station.name }} · {% trans "Tesis Sanal Turu" %}</title>
+    <link rel="shortcut icon" href="{% static 'images/logo/icon.png' %}">
+    <link href="{% static 'dashboard/plugins/global/plugins.bundle.css' %}" rel="stylesheet">
+    <link href="{% static 'dashboard/css/style.bundle.css' %}" rel="stylesheet">
+    <link href="{% static 'dashboard/plugins/custom/photo-sphere-viewer/core.css' %}" rel="stylesheet">
+    <link href="{% static 'dashboard/plugins/custom/photo-sphere-viewer/markers.css' %}" rel="stylesheet">
+    <script>
+        (function () {
+            var t = localStorage.getItem("data-bs-theme") || "light";
+            if (t === "system") t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            document.documentElement.setAttribute("data-bs-theme", t);
+        })();
+    </script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "{% static 'dashboard/plugins/custom/photo-sphere-viewer/three.module.js' %}",
+            "@photo-sphere-viewer/core": "{% static 'dashboard/plugins/custom/photo-sphere-viewer/core.module.js' %}",
+            "@photo-sphere-viewer/markers-plugin": "{% static 'dashboard/plugins/custom/photo-sphere-viewer/markers.module.js' %}"
+        }
+    }
+    </script>
+    <style>
+        :root, [data-bs-theme="dark"] { --mx-bg:#1b1f27; --mx-panel:#232834; --mx-border:#353c4a;
+            --mx-text:#c5ccd6; --mx-head:#fff; --mx-muted:#7e8794; --mx-accent:#009ef7; }
+        [data-bs-theme="light"] { --mx-bg:#eceff3; --mx-panel:#fff; --mx-border:#dde2ea;
+            --mx-text:#4b5057; --mx-head:#181c32; --mx-muted:#9aa2af; --mx-accent:#009ef7; }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; overflow: hidden; font-family: Inter, sans-serif; background: #000; color: var(--mx-text); }
+        body { display: flex; flex-direction: column; }
+        .v-top { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--mx-panel);
+            border-bottom: 1px solid var(--mx-border); flex: 0 0 auto; flex-wrap: wrap; }
+        .v-top .name { font-weight: 700; color: var(--mx-head); white-space: nowrap; }
+        .v-btn { background: var(--mx-bg); border: 1px solid var(--mx-border); color: var(--mx-text); border-radius: 6px;
+            padding: 6px 11px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+        .v-btn:hover { background: var(--mx-border); color: var(--mx-head); }
+        .v-btn.active { background: var(--mx-accent); border-color: var(--mx-accent); color: #fff; }
+        .v-btn:disabled { opacity: .5; cursor: default; }
+        .v-sel { background: var(--mx-bg); border: 1px solid var(--mx-border); color: var(--mx-head); border-radius: 6px;
+            padding: 6px 10px; font-size: 13px; max-width: 240px; }
+        .v-ind { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--mx-muted);
+            padding: 4px 10px; border: 1px solid var(--mx-border); border-radius: 20px; background: var(--mx-bg); }
+        .v-ind .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mx-muted); }
+        .v-ind.ok { color: #2fb574; } .v-ind.ok .dot { background: #2fb574; }
+        .v-ind.err { color: #e4544c; } .v-ind.err .dot { background: #e4544c; }
+        .spacer { flex: 1; }
+        .v-body { flex: 1; position: relative; min-height: 0; }
+        #viewer { position: absolute; inset: 0; }
+        .v-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            color: #aaa; font-size: 15px; text-align: center; padding: 20px; }
+        .edit-banner { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 20;
+            background: rgba(0,158,247,.92); color: #fff; padding: 7px 14px; border-radius: 20px; font-size: 13px;
+            display: none; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+        .edit-banner.show { display: block; }
+
+        /* ---- Marker'lar ---- */
+        .hs { position: relative; cursor: pointer; display: inline-block; }
+        .hs .pin { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            color: #fff; font-size: 15px; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.55);
+            animation: hsPulse 2.4s infinite; }
+        .hs .lbl { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); background: rgba(15,20,32,.82); color: #fff; padding: 3px 8px; border-radius: 6px; font-size: 12px;
+            white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+        .hs .lbl b { color: #7fd3ff; font-variant-numeric: tabular-nums; }
+        .hs.k-sensor .pin { background: #009ef7; }
+        .hs.k-equipment .pin { background: #7239ea; }
+        .hs.k-note .pin { background: #f6b100; }
+        .hs.k-link .pin { background: #2fb574; width: 36px; height: 36px; font-size: 18px; }
+        .hs.bad .pin { background: #e4544c; }
+        .hs.ai .pin { border-style: dashed; opacity: .75; animation: none; }
+        .hs.ai .lbl { border: 1px dashed #7fd3ff; }
+        @keyframes hsPulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.55); } 70% { box-shadow: 0 0 0 9px rgba(255,255,255,0); } 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); } }
+
+        /* ---- Yan panel ---- */
+        .side { position: absolute; top: 0; right: 0; bottom: 0; width: 360px; max-width: 100%; z-index: 30;
+            background: var(--mx-panel); border-left: 1px solid var(--mx-border); box-shadow: -10px 0 30px rgba(0,0,0,.35);
+            transform: translateX(105%); transition: transform .22s ease; display: flex; flex-direction: column; }
+        .side.show { transform: none; }
+        .side-head { padding: 14px 16px; border-bottom: 1px solid var(--mx-border); display: flex; align-items: flex-start; gap: 10px; }
+        .side-head h4 { margin: 0; font-size: 15px; color: var(--mx-head); flex: 1; }
+        .side-head small { display: block; color: var(--mx-muted); font-weight: 500; margin-top: 3px; }
+        .side-body { padding: 16px; overflow-y: auto; flex: 1; }
+        .side-foot { padding: 12px 16px; border-top: 1px solid var(--mx-border); display: flex; gap: 8px; flex-wrap: wrap; }
+        .kv { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px dashed var(--mx-border); font-size: 13px; }
+        .kv span:first-child { color: var(--mx-muted); }
+        .kv span:last-child { color: var(--mx-head); font-weight: 600; text-align: right; }
+        .big-val { font-size: 34px; font-weight: 700; color: var(--mx-head); font-variant-numeric: tabular-nums; }
+        .big-val small { font-size: 15px; color: var(--mx-muted); margin-left: 4px; }
+        .side label { font-size: 12px; color: var(--mx-muted); margin: 10px 0 4px; display: block; }
+        .side .fc { width: 100%; padding: 8px 10px; border-radius: 7px; border: 1px solid var(--mx-border);
+            background: var(--mx-bg); color: var(--mx-head); font-size: 13px; }
+        .side textarea.fc { min-height: 70px; resize: vertical; }
+        .err { color: #e4544c; font-size: 12px; margin-top: 10px; display: none; }
+        .ph-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+        .ph-strip a { display: block; aspect-ratio: 1; border-radius: 7px; overflow: hidden; border: 1px solid var(--mx-border); }
+        .ph-strip img { width: 100%; height: 100%; object-fit: cover; }
+        .ph-title { font-size: 12px; color: var(--mx-muted); margin-top: 16px; font-weight: 600; }
+        .ai-note { background: rgba(0,158,247,.1); border: 1px dashed var(--mx-accent); border-radius: 8px; padding: 9px 11px;
+            font-size: 12px; margin-bottom: 8px; color: var(--mx-text); }
+        @media (max-width: 640px) {
+            .side { top: auto; width: 100%; height: 62%; border-left: 0; border-top: 1px solid var(--mx-border);
+                transform: translateY(105%); border-radius: 14px 14px 0 0; }
+            .v-top .hide-sm { display: none; }
+        }
+    </style>
+</head>
+<body>
+{% csrf_token %}
+<div class="v-top">
+    <a class="v-btn hide-sm" href="{% url 'dashboard:tour' %}?station={{ station.pk }}" title="{% trans 'Sahne listesi' %}">
+        <i class="ki-outline ki-arrow-left fs-4"></i></a>
+    <span class="name">{{ station.name }}</span>
+    <select class="v-sel" id="scene-sel"></select>
+    <span class="v-ind hide-sm" id="live-ind"><span class="dot"></span><span id="live-txt">{% trans "Canlı" %}</span></span>
+    <span class="spacer"></span>
+    {% if can_manage %}
+    {% if ai_enabled %}
+    <button class="v-btn" id="btn-ai" title="{% trans 'Çekim karelerinden cihazları tanıyıp işaret önerir' %}">
+        <i class="ki-outline ki-technology-2 fs-4"></i><span class="hide-sm">{% trans "AI ile Öner" %}</span></button>
+    {% endif %}
+    <button class="v-btn" id="btn-start-view" style="display:none" title="{% trans 'Şu anki bakış açısını sahnenin açılış görünümü yap' %}">
+        <i class="ki-outline ki-focus fs-4"></i><span class="hide-sm">{% trans "Açılış Görünümü" %}</span></button>
+    <button class="v-btn" id="btn-edit"><i class="ki-outline ki-pencil fs-4"></i><span>{% trans "Düzenle" %}</span></button>
+    {% endif %}
+</div>
+<div class="v-body">
+    <div id="viewer"></div>
+    <div class="v-empty" id="empty" style="display:none"></div>
+    <div class="edit-banner" id="edit-banner">{% trans "Düzenleme modu — işaret eklemek için panoramada bir noktaya tıklayın" %}</div>
+
+    <!-- Bilgi / düzenleme paneli -->
+    <div class="side" id="side">
+        <div class="side-head">
+            <h4 id="side-title">—<small id="side-sub"></small></h4>
+            <button class="v-btn" id="side-close"><i class="ki-outline ki-cross fs-4"></i></button>
+        </div>
+        <div class="side-body" id="side-body"></div>
+        <div class="side-foot" id="side-foot"></div>
+    </div>
+</div>
+
+{{ sensors_json|json_script:"sensors-data" }}
+{{ documents_json|json_script:"documents-data" }}
+{{ equipment_json|json_script:"equipment-data" }}
+<script type="module">
+import { Viewer } from '@photo-sphere-viewer/core';
+import { MarkersPlugin } from '@photo-sphere-viewer/markers-plugin';
+
+const STATION_ID = {{ station.pk }};
+const START_SCENE = {{ start_scene|default:0 }};
+const CAN_MANAGE = {{ can_manage|yesno:"true,false" }};
+const URLS = {
+    scenes: "{% url 'dashboard:api_tour_scenes' %}?station=" + STATION_ID,
+    tags: "{% url 'dashboard:api_mimic_tags' %}",
+    info: "{% url 'dashboard:api_tour_hotspot_info' 0 %}",
+    hsSave: "{% url 'dashboard:api_tour_hotspot_save' %}",
+    hsDel: "{% url 'dashboard:api_tour_hotspot_delete' %}",
+    sceneSave: "{% url 'dashboard:api_tour_scene_save' %}",
+    aiSuggest: "{% url 'dashboard:api_tour_ai_suggest' 0 %}",
+    aiStatus: "{% url 'dashboard:api_tour_scene_status' 0 %}",
+    report: "{% url 'dashboard:reports_data' %}",
+    doc: "{% url 'dashboard:document_download' 0 %}",
+};
+const KINDS = [{% for k, label in kinds %}["{{ k }}", "{{ label|escapejs }}"],{% endfor %}];
+const I18N = {
+    noScenes: "{% trans 'Bu tesis için hazır (panoraması olan) sahne yok. Sahne listesinden çekim yapın veya panorama yükleyin.' %}",
+    live: "{% trans 'Canlı' %}", offline: "{% trans 'Bağlantı yok' %}",
+    edit: "{% trans 'Düzenle' %}", done: "{% trans 'Bitti' %}",
+    newHs: "{% trans 'Yeni İşaret' %}", editHs: "{% trans 'İşareti Düzenle' %}",
+    kind: "{% trans 'Tür' %}", sensor: "{% trans 'Sensör' %}", target: "{% trans 'Hedef Sahne' %}",
+    title: "{% trans 'Başlık' %}", brand: "{% trans 'Marka' %}", model: "{% trans 'Model' %}",
+    serial: "{% trans 'Seri No' %}", equip: "{% trans 'Ekipman Fotoğrafları (çekim listesi maddesi)' %}",
+    photos: "{% trans 'Yakın Çekim Fotoğraflar' %}", desc: "{% trans 'Açıklama / Not' %}", doc: "{% trans 'Bağlı Doküman' %}",
+    none: "{% trans '— Yok —' %}", choose: "{% trans '— Seçin —' %}",
+    save: "{% trans 'Kaydet' %}", del: "{% trans 'Sil' %}", move: "{% trans 'Konumu Taşı' %}",
+    confirm: "{% trans 'Öneriyi Onayla' %}", reject: "{% trans 'Reddet' %}",
+    moveHint: "{% trans 'Yeni konum için panoramada bir noktaya tıklayın' %}",
+    confirmDel: "{% trans 'Bu işaret silinsin mi?' %}",
+    value: "{% trans 'Anlık Değer' %}", status: "{% trans 'Durum' %}", readtime: "{% trans 'Son Okuma' %}",
+    cal: "{% trans 'Son Kalibrasyon' %}", tag: "{% trans 'Etiket' %}",
+    report: "{% trans 'Veri Raporu' %}", download: "{% trans 'Dokümanı İndir' %}", go: "{% trans 'Bu Sahneye Git' %}",
+    noData: "{% trans 'Veri yok' %}", aiNote: "{% trans 'Bu işaret yapay zekâ önerisidir; doğrulayıp onaylayın.' %}",
+    aiConf: "{% trans 'güven' %}",
+    aiRunning: "{% trans 'AI kareleri inceliyor…' %}", aiDone: "{% trans 'AI önerileri eklendi:' %}",
+    aiFail: "{% trans 'AI önerisi başarısız:' %}", startSaved: "{% trans 'Açılış görünümü kaydedildi.' %}",
+    err: "{% trans 'İşlem başarısız.' %}",
+};
+const SENSORS = JSON.parse(document.getElementById('sensors-data').textContent);
+const DOCUMENTS = JSON.parse(document.getElementById('documents-data').textContent);
+const EQUIPMENT = JSON.parse(document.getElementById('equipment-data').textContent);
+const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const url0 = (u, id) => u.replace(/\/0\//, '/' + id + '/');
+const deg = (r) => r * 180 / Math.PI;
+
+let scenes = [], current = null, editMode = false, liveValues = {}, moveTarget = null;
+
+async function postJSON(url, body) {
+    const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+        body: JSON.stringify(body || {})});
+    return r.json().catch(() => ({ok: false, error: I18N.err}));
+}
+
+// ------------------------------------------------------------------ viewer
+const viewer = new Viewer({
+    container: '#viewer',
+    navbar: ['zoom', 'move', 'caption', 'fullscreen'],
+    defaultZoomLvl: 30,
+    touchmoveTwoFingers: false,
+    mousewheelCtrlKey: false,
+    loadingTxt: '…',
+    lang: {zoom: 'Yakınlaştır', zoomOut: 'Uzaklaştır', zoomIn: 'Yakınlaştır', moveUp: 'Yukarı',
+        moveDown: 'Aşağı', moveLeft: 'Sola', moveRight: 'Sağa', fullscreen: 'Tam ekran',
+        loadError: 'Panorama yüklenemedi'},
+    plugins: [[MarkersPlugin, {markers: []}]],
+});
+const markers = viewer.getPlugin(MarkersPlugin);
+
+function fmtVal(v, h) {
+    if (v === undefined || v === null) return '—';
+    if (h.digital) return Number(v) ? 'Aktif' : 'Pasif';
+    const n = Number(v);
+    return (Math.abs(n) >= 100 ? n.toFixed(1) : n.toFixed(2)) + (h.unit ? ' ' + h.unit : '');
+}
+const ICONS = {sensor: 'ki-chart-line-up', equipment: 'ki-setting-2', note: 'ki-notepad', link: 'ki-arrow-up'};
+
+function hsLabel(h) {
+    if (h.kind === 'sensor') {
+        const v = liveValues[h.sensor_tag];
+        return esc(h.title || h.sensor_label) + (v !== undefined ? ' <b>' + esc(fmtVal(v, h)) + '</b>' : '');
+    }
+    if (h.kind === 'link') {
+        const t = scenes.find(s => s.id === h.target_scene_id);
+        return esc(h.title || (t ? t.name : ''));
+    }
+    return esc(h.title || h.kind_label);
+}
+function hsHtml(h) {
+    const cls = ['hs', 'k-' + h.kind];
+    if (h.ai_suggested && !h.confirmed) cls.push('ai');
+    return '<div class="' + cls.join(' ') + '"><span class="pin"><i class="ki-outline ' + (ICONS[h.kind] || 'ki-information') +
+        '"></i></span><span class="lbl">' + hsLabel(h) + '</span></div>';
+}
+function markerConf(h) {
+    return {id: 'h' + h.id, position: {yaw: h.yaw + 'deg', pitch: h.pitch + 'deg'}, html: hsHtml(h),
+        anchor: 'center center', data: {hid: h.id}, zIndex: h.kind === 'link' ? 2 : 1};
+}
+function renderMarkers() {
+    markers.clearMarkers();
+    if (!current) return;
+    current.hotspots.forEach(h => markers.addMarker(markerConf(h)));
+}
+function refreshMarker(h) {
+    try { markers.updateMarker({id: 'h' + h.id, html: hsHtml(h)}); } catch (e) { /* marker yok */ }
+}
+
+async function loadScene(scene, keepView) {
+    current = scene;
+    $('#scene-sel').value = scene.id;
+    closeSide();
+    const pos = keepView ? viewer.getPosition() : {yaw: scene.initial_yaw * Math.PI / 180, pitch: scene.initial_pitch * Math.PI / 180};
+    markers.clearMarkers();
+    await viewer.setPanorama(scene.image_url, {position: pos, caption: scene.name, transition: !keepView,
+        showLoader: true});
+    renderMarkers();
+    const u = new URL(location.href); u.searchParams.set('scene', scene.id); history.replaceState(null, '', u);
+}
+
+async function loadAll(selectId, keepView) {
+    const d = await fetch(URLS.scenes).then(r => r.json()).catch(() => null);
+    scenes = (d && d.ok ? d.scenes : []).filter(s => s.image_url);
+    const sel = $('#scene-sel');
+    sel.innerHTML = scenes.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('');
+    if (!scenes.length) {
+        $('#empty').textContent = I18N.noScenes; $('#empty').style.display = 'flex'; sel.style.display = 'none';
+        return;
+    }
+    const target = scenes.find(s => s.id === selectId) || scenes[0];
+    await loadScene(target, keepView && current && current.id === target.id);
+}
+$('#scene-sel').addEventListener('change', (e) => {
+    const s = scenes.find(x => x.id === Number(e.target.value)); if (s) loadScene(s);
+});
+
+// ------------------------------------------------------------------ live values
+async function pollLive() {
+    try {
+        const d = await fetch(URLS.tags).then(r => r.json());
+        liveValues = d.values || {};
+        $('#live-ind').className = 'v-ind hide-sm ok'; $('#live-txt').textContent = I18N.live;
+        if (current) current.hotspots.filter(h => h.kind === 'sensor').forEach(refreshMarker);
+    } catch (e) {
+        $('#live-ind').className = 'v-ind hide-sm err'; $('#live-txt').textContent = I18N.offline;
+    }
+}
+setInterval(pollLive, 4000);
+
+// ------------------------------------------------------------------ side panel
+function openSide(title, sub, body, foot) {
+    $('#side-title').innerHTML = esc(title) + '<small>' + esc(sub || '') + '</small>';
+    $('#side-body').innerHTML = body; $('#side-foot').innerHTML = foot || '';
+    $('#side-foot').style.display = foot ? 'flex' : 'none';
+    $('#side').classList.add('show');
+}
+function closeSide() { $('#side').classList.remove('show'); }
+$('#side-close').addEventListener('click', closeSide);
+const kv = (k, v) => '<div class="kv"><span>' + esc(k) + '</span><span>' + v + '</span></div>';
+
+async function showInfo(h) {
+    if (h.kind === 'link') {
+        const t = scenes.find(s => s.id === h.target_scene_id);
+        if (t) loadScene(t);
+        return;
+    }
+    let body = '';
+    if (h.ai_suggested && !h.confirmed) body += '<div class="ai-note">' + I18N.aiNote + '</div>';
+    let foot = '';
+    openSide(h.title || h.sensor_label || h.kind_label, h.kind_label, '<div style="color:var(--mx-muted)">…</div>');
+    const info = await fetch(url0(URLS.info, h.id)).then(r => r.json()).catch(() => null);
+    const x = info && info.ok ? info.hotspot : h;
+    if (h.kind === 'sensor') {
+        body += '<div class="big-val">' + (x.value !== undefined && x.value !== null ? esc(fmtVal(x.value, {digital: x.digital})) +
+            (x.unit && !x.digital ? '' : '') : I18N.noData) + '</div>';
+        body += kv(I18N.tag, esc(x.sensor_tag));
+        if (x.status) body += kv(I18N.status, esc(x.status));
+        if (x.readtime) body += kv(I18N.readtime, esc(x.readtime) + ' <span style="color:var(--mx-muted);font-weight:400">(' + esc(x.readtime_ago || '') + ')</span>');
+        if (x.last_calibration) body += kv(I18N.cal, esc(x.last_calibration));
+        if (x.brand) body += kv(I18N.brand, esc(x.brand));
+        if (x.model_name) body += kv(I18N.model, esc(x.model_name));
+        if (x.serial_no) body += kv(I18N.serial, esc(x.serial_no));
+        if (x.description) body += '<p style="margin-top:12px;white-space:pre-wrap">' + esc(x.description) + '</p>';
+        if (x.station_id && x.parameter_id) {
+            const q = new URLSearchParams({station: x.station_id, parameter: x.parameter_id, interval: 'hourly'});
+            foot += '<a class="v-btn" target="_blank" href="' + URLS.report + '?' + q + '"><i class="ki-outline ki-chart-simple fs-4"></i>' + I18N.report + '</a>';
+        }
+    } else {
+        if (h.brand) body += kv(I18N.brand, esc(h.brand));
+        if (h.model_name) body += kv(I18N.model, esc(h.model_name));
+        if (h.serial_no) body += kv(I18N.serial, esc(h.serial_no));
+        if (h.description) body += '<p style="margin-top:12px;white-space:pre-wrap">' + esc(h.description) + '</p>';
+        if (!body) body = '<div style="color:var(--mx-muted)">—</div>';
+    }
+    if (x.photos && x.photos.length) {
+        body += '<div class="ph-title">' + I18N.photos + '</div><div class="ph-strip">' +
+            x.photos.map(ph => '<a href="' + ph.image_url + '" target="_blank" title="' + esc(ph.label || '') + '"><img src="' + ph.thumb_url + '" alt=""></a>').join('') + '</div>';
+        const plate = x.photos.find(ph => ph.brand || ph.model_name || ph.serial_no);
+        if (plate && !x.brand && !x.model_name) {
+            if (plate.brand) body += kv(I18N.brand, esc(plate.brand));
+            if (plate.model_name) body += kv(I18N.model, esc(plate.model_name));
+            if (plate.serial_no) body += kv(I18N.serial, esc(plate.serial_no));
+        }
+    }
+    if (h.document_id) foot += '<a class="v-btn" href="' + url0(URLS.doc, h.document_id) + '"><i class="ki-outline ki-file-down fs-4"></i>' + I18N.download + '</a>';
+    if (CAN_MANAGE) foot += '<button class="v-btn" id="side-edit"><i class="ki-outline ki-pencil fs-4"></i>' + I18N.edit + '</button>';
+    openSide(h.title || h.sensor_label || h.kind_label, h.kind_label, body, foot);
+    const eb = $('#side-edit'); if (eb) eb.addEventListener('click', () => openForm(h));
+}
+
+// ------------------------------------------------------------------ edit form
+function opts(list, selected, empty) {
+    return (empty ? '<option value="">' + esc(empty) + '</option>' : '') +
+        list.map(o => '<option value="' + o.id + '"' + (String(o.id) === String(selected ?? '') ? ' selected' : '') + '>' + esc(o.text) + '</option>').join('');
+}
+function openForm(h) {
+    const isNew = !h.id;
+    const otherScenes = scenes.filter(s => s.id !== current.id).map(s => ({id: s.id, text: s.name}));
+    let body = '';
+    if (h.ai_suggested && !h.confirmed) body += '<div class="ai-note">' + I18N.aiNote +
+        (h.ai_confidence ? ' (' + I18N.aiConf + ' %' + Math.round(h.ai_confidence * 100) + ')' : '') + '</div>';
+    body += '<label>' + I18N.kind + '</label><select class="fc" id="f-kind">' +
+        KINDS.map(([k, l]) => '<option value="' + k + '"' + (k === h.kind ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>';
+    body += '<div id="f-sensor-wrap"><label>' + I18N.sensor + '</label><select class="fc" id="f-sensor">' + opts(SENSORS, h.sensor_id, I18N.choose) + '</select></div>';
+    body += '<div id="f-target-wrap"><label>' + I18N.target + '</label><select class="fc" id="f-target">' + opts(otherScenes, h.target_scene_id, I18N.choose) + '</select></div>';
+    body += '<label>' + I18N.title + '</label><input class="fc" id="f-title" maxlength="150" value="' + esc(h.title) + '">';
+    body += '<div id="f-equip-wrap"><label>' + I18N.brand + '</label><input class="fc" id="f-brand" maxlength="100" value="' + esc(h.brand) + '">' +
+        '<label>' + I18N.model + '</label><input class="fc" id="f-model" maxlength="100" value="' + esc(h.model_name) + '">' +
+        '<label>' + I18N.serial + '</label><input class="fc" id="f-serial" maxlength="100" value="' + esc(h.serial_no) + '">' +
+        '<label>' + I18N.doc + '</label><select class="fc" id="f-doc">' + opts(DOCUMENTS, h.document_id, I18N.none) + '</select>' +
+        '<label>' + I18N.equip + '</label><select class="fc" id="f-equip">' + opts(EQUIPMENT, h.equipment_key, I18N.none) + '</select></div>';
+    body += '<label>' + I18N.desc + '</label><textarea class="fc" id="f-desc">' + esc(h.description) + '</textarea>';
+    body += '<div class="err" id="f-err"></div>';
+    let foot = '';
+    if (h.ai_suggested && !h.confirmed) foot += '<button class="v-btn active" id="f-confirm">' + I18N.confirm + '</button>';
+    foot += '<button class="v-btn' + (h.ai_suggested && !h.confirmed ? '' : ' active') + '" id="f-save">' + I18N.save + '</button>';
+    if (!isNew) foot += '<button class="v-btn" id="f-move">' + I18N.move + '</button>' +
+        '<button class="v-btn" id="f-del" style="color:#e4544c">' + (h.ai_suggested && !h.confirmed ? I18N.reject : I18N.del) + '</button>';
+    openSide(isNew ? I18N.newHs : I18N.editHs, current.name, body, foot);
+
+    const syncKind = () => {
+        const k = $('#f-kind').value;
+        $('#f-sensor-wrap').style.display = k === 'sensor' ? '' : 'none';
+        $('#f-target-wrap').style.display = k === 'link' ? '' : 'none';
+        $('#f-equip-wrap').style.display = (k === 'equipment' || k === 'sensor') ? '' : 'none';
+    };
+    $('#f-kind').addEventListener('change', syncKind); syncKind();
+
+    const submit = async (confirmIt) => {
+        const payload = {id: h.id || null, scene_id: current.id, yaw: h.yaw, pitch: h.pitch,
+            kind: $('#f-kind').value, sensor_id: $('#f-sensor').value || null, target_scene_id: $('#f-target').value || null,
+            title: $('#f-title').value, brand: $('#f-brand').value, model_name: $('#f-model').value,
+            serial_no: $('#f-serial').value, document_id: $('#f-doc').value || null, description: $('#f-desc').value,
+            equipment_key: $('#f-equip').value || '',
+            confirm: !!confirmIt};
+        const d = await postJSON(URLS.hsSave, payload);
+        if (!d.ok) { $('#f-err').textContent = d.error || I18N.err; $('#f-err').style.display = 'block'; return; }
+        const idx = current.hotspots.findIndex(x => x.id === d.hotspot.id);
+        if (idx >= 0) { current.hotspots[idx] = d.hotspot; markers.removeMarker('h' + d.hotspot.id); }
+        else current.hotspots.push(d.hotspot);
+        markers.addMarker(markerConf(d.hotspot));
+        closeSide();
+    };
+    $('#f-save').addEventListener('click', () => submit(false));
+    const fc = $('#f-confirm'); if (fc) fc.addEventListener('click', () => submit(true));
+    const fd = $('#f-del'); if (fd) fd.addEventListener('click', async () => {
+        if (!(h.ai_suggested && !h.confirmed) && !confirm(I18N.confirmDel)) return;
+        const d = await postJSON(URLS.hsDel, {id: h.id});
+        if (d.ok) { current.hotspots = current.hotspots.filter(x => x.id !== h.id); markers.removeMarker('h' + h.id); closeSide(); }
+    });
+    const fm = $('#f-move'); if (fm) fm.addEventListener('click', () => {
+        moveTarget = h; closeSide(); banner(I18N.moveHint);
+    });
+}
+
+function banner(text) {
+    const b = $('#edit-banner');
+    if (text) { b.textContent = text; b.classList.add('show'); } else b.classList.remove('show');
+}
+
+// ------------------------------------------------------------------ events
+markers.addEventListener('select-marker', ({marker}) => {
+    const h = current && current.hotspots.find(x => x.id === marker.data.hid);
+    if (!h) return;
+    if (h.kind === 'link' && !editMode) { showInfo(h); return; }
+    if (editMode) openForm(h); else showInfo(h);
+});
+
+viewer.addEventListener('click', async ({data}) => {
+    if (!CAN_MANAGE || !current || data.rightclick) return;
+    if (data.target && data.target.closest && data.target.closest('.psv-marker')) return;
+    const yaw = Math.round(deg(data.yaw) * 100) / 100, pitch = Math.round(deg(data.pitch) * 100) / 100;
+    if (moveTarget) {
+        const h = moveTarget; moveTarget = null; banner(editMode ? $('#edit-banner').dataset.def : null);
+        const d = await postJSON(URLS.hsSave, {id: h.id, yaw, pitch, kind: h.kind});
+        if (d.ok) { Object.assign(h, d.hotspot); markers.updateMarker({id: 'h' + h.id, position: {yaw: yaw + 'deg', pitch: pitch + 'deg'}}); }
+        return;
+    }
+    if (!editMode) return;
+    openForm({id: null, kind: 'equipment', yaw, pitch, title: '', brand: '', model_name: '', serial_no: '', description: ''});
+});
+
+if (CAN_MANAGE) {
+    $('#edit-banner').dataset.def = $('#edit-banner').textContent;
+    $('#btn-edit').addEventListener('click', () => {
+        editMode = !editMode;
+        $('#btn-edit').classList.toggle('active', editMode);
+        $('#btn-edit').querySelector('span').textContent = editMode ? I18N.done : I18N.edit;
+        $('#btn-start-view').style.display = editMode ? '' : 'none';
+        banner(editMode ? $('#edit-banner').dataset.def : null);
+        if (!editMode) { closeSide(); moveTarget = null; }
+    });
+    $('#btn-start-view').addEventListener('click', async () => {
+        const p = viewer.getPosition();
+        const d = await postJSON(URLS.sceneSave, {id: current.id, name: current.name, description: current.description,
+            initial_yaw: deg(p.yaw) > 180 ? deg(p.yaw) - 360 : deg(p.yaw), initial_pitch: deg(p.pitch)});
+        if (d.ok) { current.initial_yaw = d.scene.initial_yaw; current.initial_pitch = d.scene.initial_pitch; banner(I18N.startSaved);
+            setTimeout(() => banner(editMode ? $('#edit-banner').dataset.def : null), 1800); }
+    });
+    const aiBtn = $('#btn-ai');
+    if (aiBtn) aiBtn.addEventListener('click', async () => {
+        if (!current) return;
+        aiBtn.disabled = true; banner(I18N.aiRunning);
+        const d = await postJSON(url0(URLS.aiSuggest, current.id), {});
+        if (!d.ok) { banner(I18N.aiFail + ' ' + (d.error || '')); aiBtn.disabled = false; setTimeout(() => banner(null), 5000); return; }
+        // Task arka planda çalışıyor — bitene kadar durum poll'la.
+        const sceneId = current.id;
+        const timer = setInterval(async () => {
+            const s = await fetch(url0(URLS.aiStatus, sceneId)).then(r => r.json()).catch(() => null);
+            if (!s || !s.ok || s.scene.ai_status === 'running') return;
+            clearInterval(timer); aiBtn.disabled = false;
+            if (s.scene.ai_status === 'failed') { banner(I18N.aiFail + ' ' + (s.scene.ai_error || '')); }
+            else { banner(I18N.aiDone + ' ' + (s.scene.ai_added || 0)); }
+            setTimeout(() => banner(editMode ? $('#edit-banner').dataset.def : null), 4000);
+            await loadAll(sceneId, true);
+        }, 3000);
+    });
+}
+
+await loadAll(START_SCENE);
+pollLive();
+</script>
+</body>
+</html>

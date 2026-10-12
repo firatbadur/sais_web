@@ -1,0 +1,445 @@
+{% load static i18n %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'tr' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#000000">
+    <title>{{ scene.name }} · {% trans "360° Çekim" %}</title>
+    <link rel="shortcut icon" href="{% static 'images/logo/icon.png' %}">
+    <link href="{% static 'dashboard/plugins/global/plugins.bundle.css' %}" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { margin: 0; height: 100%; background: #000; color: #fff; font-family: Inter, -apple-system, sans-serif;
+            overflow: hidden; overscroll-behavior: none; touch-action: none; }
+        #video, #overlay { position: fixed; inset: 0; width: 100%; height: 100%; }
+        #video { object-fit: cover; }
+        .top { position: fixed; top: 0; left: 0; right: 0; padding: calc(env(safe-area-inset-top) + 10px) 14px 10px;
+            background: linear-gradient(rgba(0,0,0,.75), rgba(0,0,0,0)); display: flex; align-items: center; gap: 10px; z-index: 5; }
+        .top .t { flex: 1; min-width: 0; }
+        .top .t b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .top .t small { color: #bbb; font-size: 12px; }
+        .prog { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .hint { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 108px);
+            background: rgba(0,0,0,.7); padding: 9px 16px; border-radius: 22px; font-size: 15px; z-index: 5; white-space: nowrap;
+            max-width: 92vw; overflow: hidden; text-overflow: ellipsis; }
+        .bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 14px 16px calc(env(safe-area-inset-bottom) + 16px);
+            display: flex; align-items: center; justify-content: space-between; gap: 10px; z-index: 5;
+            background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.75)); }
+        .btn { border: 0; border-radius: 12px; padding: 12px 16px; font-size: 15px; font-weight: 600; color: #fff;
+            background: rgba(255,255,255,.18); display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+        .btn.primary { background: #009ef7; } .btn.success { background: #2fb574; }
+        .btn:disabled { opacity: .45; }
+        .shutter { width: 70px; height: 70px; border-radius: 50%; border: 5px solid #fff; background: rgba(255,255,255,.25); }
+        .shutter:active { background: #fff; }
+        .panel { position: fixed; inset: 0; z-index: 10; background: rgba(10,12,18,.96); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; padding: 28px; text-align: center; gap: 16px; overflow-y: auto; }
+        .panel h2 { margin: 0; font-size: 21px; }
+        .panel p { margin: 0; color: #c8cdd5; font-size: 15px; line-height: 1.5; max-width: 420px; }
+        .panel ul { text-align: left; color: #c8cdd5; font-size: 14px; line-height: 1.55; max-width: 420px; padding-left: 20px; margin: 0; }
+        .panel .warn { background: rgba(246,177,0,.15); border: 1px solid rgba(246,177,0,.5); color: #ffd36b; border-radius: 10px;
+            padding: 10px 14px; font-size: 14px; max-width: 420px; }
+        .panel .err { background: rgba(228,84,76,.15); border: 1px solid rgba(228,84,76,.5); color: #ff8f88; }
+        .hidden { display: none !important; }
+        .flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 4; transition: opacity .25s; }
+        .flash.on { opacity: .55; transition: none; }
+        .fov { font-size: 12px; color: #aaa; display: flex; align-items: center; gap: 8px; }
+        .queue { font-size: 12px; color: #ffd36b; }
+    </style>
+</head>
+<body>
+{% csrf_token %}
+<video id="video" playsinline muted autoplay></video>
+<canvas id="overlay"></canvas>
+<div class="flash" id="flash"></div>
+
+<div class="top">
+    <a class="btn" href="{% url 'dashboard:tour' %}?station={{ scene.station_id }}"><i class="ki-outline ki-arrow-left fs-3"></i></a>
+    <div class="t"><b>{{ scene.name }}</b><small>{{ scene.station.name }} <span class="queue" id="queue"></span></small></div>
+    <div class="prog" id="prog">0/0</div>
+</div>
+<div class="hint hidden" id="hint"></div>
+<div class="bottom hidden" id="bottom">
+    <button class="btn" id="btn-restart"><i class="ki-outline ki-arrows-circle fs-3"></i></button>
+    <button class="shutter hidden" id="btn-shutter" aria-label="{% trans 'Çek' %}"></button>
+    <button class="btn success" id="btn-finish" disabled><i class="ki-outline ki-check fs-3"></i>{% trans "Bitir" %}</button>
+</div>
+
+<!-- Başlangıç paneli -->
+<div class="panel" id="p-start">
+    <h2>{% trans "360° Çekim" %} — {{ scene.name }}</h2>
+    <p>{% blocktrans %}Çekim noktasında durun. Ekrandaki <b>beyaz halkayı</b> sırayla her <b>mavi noktaya</b> getirin;
+        hizalanıp sabit tutunca kare kendiliğinden çekilir.{% endblocktrans %}</p>
+    <ul>
+        <li>{% trans "Telefonu dik (portre) tutun." %}</li>
+        <li>{% trans "Yürümeyin, olduğunuz yerde dönün; telefonu mümkün olduğunca kendi ekseninde çevirin." %}</li>
+        <li>{% trans "Önce orta sıra, sonra yukarı ve aşağı sıralar çekilir (yaklaşık 30 kare, 2-3 dakika)." %}</li>
+        <li>{% trans "Ortamdaki ışıkları açın, kapıyı/kapakları çekim boyunca değiştirmeyin." %}</li>
+    </ul>
+    {% if frame_count %}<div class="warn">{% blocktrans with n=frame_count %}Bu sahnede önceki çekimden {{ n }} kare var. Başlatınca silinir.{% endblocktrans %}</div>{% endif %}
+    <div class="warn err hidden" id="start-err"></div>
+    <div class="fov"><span>{% trans "Kamera açısı" %}</span>
+        <input type="range" id="fov" min="55" max="85" step="1" value="68"><span id="fov-v">68°</span></div>
+    <button class="btn primary" id="btn-start" style="padding:15px 28px;font-size:17px">
+        <i class="ki-outline ki-camera fs-2"></i>{% trans "Kamerayı Başlat" %}</button>
+    <button class="btn" id="btn-manual">{% trans "Jiroskopsuz (elle) çek" %}</button>
+</div>
+
+<!-- Bitti paneli -->
+<div class="panel hidden" id="p-done">
+    <h2 id="done-title">{% trans "Kareler yükleniyor…" %}</h2>
+    <p id="done-text"></p>
+    <div class="warn err hidden" id="done-err"></div>
+    <a class="btn primary hidden" id="btn-view" href="#">{% trans "Turu Aç" %}</a>
+    <a class="btn" href="{% url 'dashboard:tour' %}?station={{ scene.station_id }}">{% trans "Sahne Listesi" %}</a>
+</div>
+
+<script>
+(function () {
+    const URLS = {
+        reset: "{% url 'dashboard:api_tour_frames_reset' scene.pk %}",
+        frame: "{% url 'dashboard:api_tour_frame_upload' scene.pk %}",
+        finish: "{% url 'dashboard:api_tour_scene_finish' scene.pk %}",
+        status: "{% url 'dashboard:api_tour_scene_status' scene.pk %}",
+        viewer: "{% url 'dashboard:tour_viewer' scene.station_id %}?scene={{ scene.pk }}",
+    };
+    const MAX_PX = {{ max_frame_px }};
+    const MAX_FRAMES = {{ max_frames }};
+    const I18N = {
+        insecure: "{% trans 'Bu sayfa HTTPS ile açılmadığı için tarayıcı kamera ve jiroskopa erişim vermiyor. Tesisin https:// adresiyle açın ya da sahne listesinden “Panorama Yükle”yi kullanın.' %}",
+        noCam: "{% trans 'Kamera açılamadı:' %}",
+        noGyro: "{% trans 'Jiroskop verisi gelmiyor. Elle çekim moduna geçildi: her karede öncekiyle yaklaşık üçte bir örtüşme bırakarak çekin.' %}",
+        perm: "{% trans 'Hareket sensörü izni verilmedi.' %}",
+        right: "{% trans 'Sağa dönün' %}", left: "{% trans 'Sola dönün' %}",
+        up: "{% trans 'Yukarı bakın' %}", down: "{% trans 'Aşağı bakın' %}",
+        hold: "{% trans 'Sabit tutun…' %}", level: "{% trans 'Telefonu düz (yatırmadan) tutun' %}",
+        allDone: "{% trans 'Tüm noktalar çekildi — Bitir’e basın' %}",
+        manualHint: "{% trans 'Kare çekip hafifçe dönün, tekrar çekin' %}",
+        pending: "{% trans 'yükleniyor' %}",
+        stitching: "{% trans 'Panorama birleştiriliyor…' %}",
+        stitchText: "{% trans 'Sunucu kareleri birleştiriyor; bu 1-3 dakika sürebilir. Sayfayı kapatabilirsiniz.' %}",
+        ready: "{% trans 'Panorama hazır!' %}", readyText: "{% trans 'Şimdi turu açıp sensör ve malzemeleri işaretleyebilirsiniz.' %}",
+        failed: "{% trans 'Birleştirme başarısız' %}",
+        restart: "{% trans 'Çekilen kareler silinip baştan başlanacak. Emin misiniz?' %}",
+        err: "{% trans 'İşlem başarısız.' %}",
+    };
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const $ = (s) => document.getElementById(s);
+    const video = $('video'), overlay = $('overlay'), ctx = overlay.getContext('2d');
+    const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+
+    // ---------------------------------------------------------------- hedef ızgarası
+    function buildTargets() {
+        const t = [];
+        const row = (pitch, n, off) => { for (let i = 0; i < n; i++) t.push({yaw: off + i * 360 / n, pitch}); };
+        row(0, 12, 0); row(45, 8, 22.5); row(-45, 8, 22.5);
+        t.push({yaw: 0, pitch: 88}); t.push({yaw: 0, pitch: -88});
+        return t.map((x, i) => ({...x, seq: i, done: false}));
+    }
+    let targets = buildTargets();
+    let manual = false, running = false, seqCounter = 0, yawOffset = null;
+    let orient = null, lastOrientAt = 0, steadySince = 0, lastFwd = null, capturing = false;
+    let longFov = 68;
+
+    $('fov').addEventListener('input', (e) => { longFov = Number(e.target.value); $('fov-v').textContent = longFov + '°'; });
+
+    // ---------------------------------------------------------------- vektör yardımcıları
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const scale = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+    const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+    const dirOf = (yaw, pitch) => [Math.sin(yaw * D2R) * Math.cos(pitch * D2R), Math.cos(yaw * D2R) * Math.cos(pitch * D2R), Math.sin(pitch * D2R)];
+
+    // W3C DeviceOrientation: R = Rz(alpha)·Rx(beta)·Ry(gamma) — cihaz → dünya (X doğu, Y kuzey, Z yukarı).
+    function rotMatrix(a, b, g) {
+        a *= D2R; b *= D2R; g *= D2R;
+        const ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b), cg = Math.cos(g), sg = Math.sin(g);
+        return [
+            [ca * cg - sa * sb * sg, -cb * sa, ca * sg + cg * sa * sb],
+            [cg * sa + ca * sb * sg, ca * cb, sa * sg - ca * cg * sb],
+            [-cb * sg, sb, cb * cg],
+        ];
+    }
+    const mul = (R, v) => [dot(R[0], v), dot(R[1], v), dot(R[2], v)];
+
+    /** Kamera tabanı: yaw/pitch/roll (sunucudaki tour_stitch.camera_basis ile aynı sözleşme). */
+    function cameraPose() {
+        if (!orient) return null;
+        const R = rotMatrix(orient.alpha || 0, orient.beta || 0, orient.gamma || 0);
+        const ang = ((screen.orientation && screen.orientation.angle) || window.orientation || 0) * D2R;
+        const sRight = [Math.cos(ang), -Math.sin(ang), 0], sUp = [Math.sin(ang), Math.cos(ang), 0];
+        const fwd = mul(R, [0, 0, -1]), up = mul(R, sUp);
+        let yaw = Math.atan2(fwd[0], fwd[1]) * R2D;
+        const pitch = Math.asin(Math.max(-1, Math.min(1, fwd[2]))) * R2D;
+        const right0 = [Math.cos(yaw * D2R), -Math.sin(yaw * D2R), 0];
+        const up0 = cross(right0, fwd);
+        const roll = Math.atan2(-dot(up, right0), dot(up, up0)) * R2D;
+        // Yaw'ı ilk okumaya göre sıfırla: tur "baktığınız ilk yön"den başlar (pusula kalibrasyonundan bağımsız).
+        if (yawOffset === null) yawOffset = yaw;
+        yaw = ((yaw - yawOffset) % 360 + 540) % 360 - 180;
+        return {yaw, pitch, roll, fwd: dirOf(yaw, pitch)};
+    }
+
+    /** Görüntü boyutundan yatay FOV: uzun kenar = longFov (tipik ana kamera ~68°). */
+    function hfovFor(w, h) {
+        const tl = Math.tan(longFov / 2 * D2R);
+        return w >= h ? longFov : 2 * Math.atan(tl * w / h) * R2D;
+    }
+
+    // ---------------------------------------------------------------- başlat
+    async function startCamera() {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {facingMode: {ideal: 'environment'}, width: {ideal: 1920}, height: {ideal: 1080}},
+        });
+        video.srcObject = stream;
+        await video.play();
+    }
+
+    async function startOrientation() {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            const res = await DeviceOrientationEvent.requestPermission();  // iOS 13+: kullanıcı jesti içinde
+            if (res !== 'granted') throw new Error(I18N.perm);
+        }
+        window.addEventListener('deviceorientation', (e) => {
+            if (e.alpha === null && e.beta === null) return;
+            orient = {alpha: e.alpha, beta: e.beta, gamma: e.gamma}; lastOrientAt = performance.now();
+        });
+        // 1.5 sn içinde veri gelmezse jiroskop yok say.
+        await new Promise(r => setTimeout(r, 1500));
+        return !!orient;
+    }
+
+    async function postForm(url, fd) {
+        const r = await fetch(url, {method: 'POST', headers: {'X-CSRFToken': csrf}, body: fd});
+        const d = await r.json().catch(() => ({ok: false, error: I18N.err}));
+        if (!d.ok) throw new Error(d.error || I18N.err);
+        return d;
+    }
+
+    async function begin(forceManual) {
+        $('start-err').classList.add('hidden');
+        if (!window.isSecureContext) { showStartErr(I18N.insecure); return; }
+        try { await startCamera(); } catch (e) { showStartErr(I18N.noCam + ' ' + (e.message || e)); return; }
+        manual = !!forceManual;
+        if (!manual) {
+            let ok = false;
+            try { ok = await startOrientation(); } catch (e) { showStartErr(e.message); }
+            if (!ok) { manual = true; alert(I18N.noGyro); }
+        }
+        try { await postForm(URLS.reset, new FormData()); } catch (e) { showStartErr(e.message); return; }
+        $('p-start').classList.add('hidden');
+        $('bottom').classList.remove('hidden');
+        $('hint').classList.remove('hidden');
+        $('btn-shutter').classList.toggle('hidden', !manual);
+        running = true;
+        requestAnimationFrame(loop);
+    }
+    function showStartErr(msg) { const el = $('start-err'); el.textContent = msg; el.classList.remove('hidden'); }
+    $('btn-start').addEventListener('click', () => begin(false));
+    $('btn-manual').addEventListener('click', () => begin(true));
+
+    // ---------------------------------------------------------------- yükleme kuyruğu (ağ kopmasına dayanıklı)
+    const queue = []; let uploading = false, uploaded = 0;
+    function updateQueue() { $('queue').textContent = queue.length ? '· ' + queue.length + ' ' + I18N.pending : ''; }
+    async function pump() {
+        if (uploading) return;
+        uploading = true;
+        while (queue.length) {
+            const item = queue[0];
+            const fd = new FormData();
+            fd.append('image', item.blob, 'f' + item.seq + '.jpg');
+            ['seq', 'yaw', 'pitch', 'roll', 'hfov'].forEach(k => fd.append(k, item[k]));
+            fd.append('has_orientation', item.has_orientation ? '1' : '0');
+            try { await postForm(URLS.frame, fd); queue.shift(); uploaded++; }
+            catch (e) { await new Promise(r => setTimeout(r, 2500)); }  // yeniden dene
+            updateQueue();
+        }
+        uploading = false;
+    }
+
+    // ---------------------------------------------------------------- çekim
+    function grab(pose, seq) {
+        const vw = video.videoWidth, vh = video.videoHeight;
+        // Ekranda object-fit:cover olsa da kare tam video karesidir (FOV buna göre).
+        const s = Math.min(1, MAX_PX / Math.max(vw, vh));
+        const c = document.createElement('canvas');
+        c.width = Math.round(vw * s); c.height = Math.round(vh * s);
+        c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+        const flash = $('flash'); flash.classList.add('on'); setTimeout(() => flash.classList.remove('on'), 60);
+        if (navigator.vibrate) navigator.vibrate(40);
+        return new Promise(res => c.toBlob(blob => {
+            queue.push({blob, seq, yaw: pose ? pose.yaw : 0, pitch: pose ? pose.pitch : 0, roll: pose ? pose.roll : 0,
+                hfov: hfovFor(vw, vh), has_orientation: !!pose});
+            updateQueue(); pump(); res();
+        }, 'image/jpeg', 0.88));
+    }
+
+    $('btn-shutter').addEventListener('click', async () => {
+        if (seqCounter >= MAX_FRAMES) return;
+        await grab(manual ? null : cameraPose(), seqCounter++);
+        updateProgress();
+    });
+
+    function updateProgress() {
+        if (manual) {
+            $('prog').textContent = seqCounter;
+            $('btn-finish').disabled = seqCounter < 3;
+            $('hint').textContent = I18N.manualHint;
+        } else {
+            const done = targets.filter(t => t.done).length;
+            $('prog').textContent = done + '/' + targets.length;
+            $('btn-finish').disabled = done < 6;
+        }
+    }
+
+    // ---------------------------------------------------------------- çizim + otomatik çekim döngüsü
+    function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        overlay.width = innerWidth * dpr; overlay.height = innerHeight * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    addEventListener('resize', resize); resize();
+
+    /** Ekranda görünen (object-fit: cover) alanın yatay FOV'u. */
+    function screenProjector(pose) {
+        const vw = video.videoWidth || 1080, vh = video.videoHeight || 1920;
+        const W = innerWidth, H = innerHeight;
+        const coverScale = Math.max(W / vw, H / vh);
+        const fpx = (vw / 2) / Math.tan(hfovFor(vw, vh) / 2 * D2R) * coverScale; // ekran pikseli cinsinden odak
+        const pr = cameraBasis(pose.yaw, pose.pitch, pose.roll);
+        return (dir) => {
+            const z = dot(dir, pr.fwd);
+            if (z <= 0.05) return null;
+            return {x: W / 2 + fpx * dot(dir, pr.right) / z, y: H / 2 - fpx * dot(dir, pr.up) / z, z};
+        };
+    }
+    function cameraBasis(yaw, pitch, roll) {
+        const fwd = dirOf(yaw, pitch);
+        const right0 = [Math.cos(yaw * D2R), -Math.sin(yaw * D2R), 0];
+        const up0 = cross(right0, fwd);
+        const c = Math.cos(roll * D2R), s = Math.sin(roll * D2R);
+        const up = add(scale(up0, c), scale(right0, -s));
+        return {fwd, up, right: cross(fwd, up)};
+    }
+
+    function nextTarget(pose) {
+        let best = null, bestD = 1e9;
+        for (const t of targets) {
+            if (t.done) continue;
+            // Önce orta sıra bitsin: satır önceliği (0 → +45 → -45 → kutuplar).
+            const rowPenalty = t.pitch === 0 ? 0 : (Math.abs(t.pitch) === 45 ? 40 : 80);
+            const d = Math.acos(Math.max(-1, Math.min(1, dot(dirOf(t.yaw, t.pitch), pose.fwd)))) * R2D + rowPenalty;
+            if (d < bestD) { bestD = d; best = t; }
+        }
+        return best;
+    }
+
+    function loop() {
+        if (!running) return;
+        const W = innerWidth, H = innerHeight;
+        ctx.clearRect(0, 0, W, H);
+        // Merkez halka
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.95)';
+        ctx.beginPath(); ctx.arc(W / 2, H / 2, 26, 0, Math.PI * 2); ctx.stroke();
+
+        if (!manual) {
+            const pose = cameraPose();
+            if (pose) {
+                const proj = screenProjector(pose);
+                // Steadiness: önceki karedeki yöne göre açısal hız
+                const now = performance.now();
+                const moved = lastFwd ? Math.acos(Math.max(-1, Math.min(1, dot(lastFwd, pose.fwd)))) * R2D : 99;
+                lastFwd = pose.fwd;
+                if (moved > 0.6) steadySince = now;
+
+                for (const t of targets) {
+                    const p = proj(dirOf(t.yaw, t.pitch));
+                    if (!p) continue;
+                    ctx.beginPath();
+                    if (t.done) { ctx.fillStyle = 'rgba(47,181,116,.85)'; ctx.arc(p.x, p.y, 7, 0, Math.PI * 2); ctx.fill(); }
+                    else { ctx.fillStyle = 'rgba(0,158,247,.9)'; ctx.arc(p.x, p.y, 13, 0, Math.PI * 2); ctx.fill();
+                        ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke(); }
+                }
+                const t = nextTarget(pose);
+                if (!t) {
+                    $('hint').textContent = I18N.allDone;
+                } else {
+                    const tdir = dirOf(t.yaw, t.pitch);
+                    const err = Math.acos(Math.max(-1, Math.min(1, dot(tdir, pose.fwd)))) * R2D;
+                    const p = proj(tdir);
+                    if (Math.abs(pose.roll) > 12) {
+                        $('hint').textContent = I18N.level;
+                    } else if (err < 4) {
+                        $('hint').textContent = I18N.hold;
+                        const held = now - steadySince;
+                        // İlerleme yayı
+                        ctx.lineWidth = 5; ctx.strokeStyle = '#2fb574';
+                        ctx.beginPath(); ctx.arc(W / 2, H / 2, 26, -Math.PI / 2, -Math.PI / 2 + Math.min(1, held / 450) * Math.PI * 2); ctx.stroke();
+                        if (held > 450 && !capturing) {
+                            capturing = true;
+                            t.done = true;
+                            grab(pose, t.seq).then(() => { capturing = false; steadySince = performance.now(); updateProgress(); });
+                        }
+                    } else {
+                        // Yönlendirme: hedefe doğru ok + metin
+                        const pr = cameraBasis(pose.yaw, pose.pitch, pose.roll);
+                        const dx = dot(tdir, pr.right), dy = dot(tdir, pr.up);
+                        const ang = Math.atan2(-dy, dx);
+                        if (!p || p.x < 0 || p.x > W || p.y < 0 || p.y > H) drawArrow(W / 2, H / 2, ang);
+                        else { ctx.setLineDash([6, 6]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.7)';
+                            ctx.beginPath(); ctx.moveTo(W / 2, H / 2); ctx.lineTo(p.x, p.y); ctx.stroke(); ctx.setLineDash([]); }
+                        $('hint').textContent = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? I18N.right : I18N.left) : (dy > 0 ? I18N.up : I18N.down);
+                    }
+                }
+            }
+        }
+        requestAnimationFrame(loop);
+    }
+    function drawArrow(cx, cy, ang) {
+        const r = 95;
+        const x = cx + Math.cos(ang) * r, y = cy + Math.sin(ang) * r;
+        ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+        ctx.fillStyle = 'rgba(0,158,247,.95)'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(22, 0); ctx.lineTo(-12, -16); ctx.lineTo(-4, 0); ctx.lineTo(-12, 16); ctx.closePath();
+        ctx.fill(); ctx.stroke(); ctx.restore();
+    }
+
+    // ---------------------------------------------------------------- yeniden başlat / bitir
+    $('btn-restart').addEventListener('click', async () => {
+        if (!confirm(I18N.restart)) return;
+        queue.length = 0; updateQueue();
+        try { await postForm(URLS.reset, new FormData()); } catch (e) { alert(e.message); return; }
+        targets = buildTargets(); seqCounter = 0; yawOffset = null; uploaded = 0; updateProgress();
+    });
+
+    $('btn-finish').addEventListener('click', async () => {
+        running = false;
+        if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+        $('p-done').classList.remove('hidden');
+        $('done-title').textContent = I18N.pending + '…';
+        while (queue.length || uploading) { await new Promise(r => setTimeout(r, 500)); }
+        try { await postForm(URLS.finish, new FormData()); }
+        catch (e) { $('done-err').textContent = e.message; $('done-err').classList.remove('hidden'); return; }
+        $('done-title').textContent = I18N.stitching; $('done-text').textContent = I18N.stitchText;
+        const timer = setInterval(async () => {
+            const d = await fetch(URLS.status).then(r => r.json()).catch(() => null);
+            if (!d || !d.ok) return;
+            if (d.scene.status === 'ready') {
+                clearInterval(timer);
+                $('done-title').textContent = I18N.ready; $('done-text').textContent = I18N.readyText;
+                $('btn-view').href = URLS.viewer; $('btn-view').classList.remove('hidden');
+            } else if (d.scene.status === 'failed') {
+                clearInterval(timer);
+                $('done-title').textContent = I18N.failed; $('done-text').textContent = '';
+                $('done-err').textContent = d.scene.error; $('done-err').classList.remove('hidden');
+            }
+        }, 3000);
+    });
+
+    if (!window.isSecureContext) showStartErr(I18N.insecure);
+    updateProgress();
+})();
+</script>
+</body>
+</html>

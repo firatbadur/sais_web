@@ -1,0 +1,286 @@
+{% load static i18n %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'tr' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f1420">
+    <title>{{ station.name }} · {% trans "Ekipman Fotoğrafları" %}</title>
+    <link rel="shortcut icon" href="{% static 'images/logo/icon.png' %}">
+    <link href="{% static 'dashboard/plugins/global/plugins.bundle.css' %}" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; background: #0f1420; color: #e6e9ef; font-family: Inter, -apple-system, sans-serif; font-size: 15px;
+            padding-bottom: calc(env(safe-area-inset-bottom) + 24px); }
+        .top { position: sticky; top: 0; z-index: 5; background: #161c2b; padding: calc(env(safe-area-inset-top) + 10px) 14px 12px;
+            border-bottom: 1px solid #263048; }
+        .row { display: flex; align-items: center; gap: 10px; }
+        .top b { font-size: 16px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bar { height: 8px; background: #263048; border-radius: 5px; overflow: hidden; margin-top: 10px; }
+        .bar i { display: block; height: 100%; background: linear-gradient(90deg, #009ef7, #2fb574); width: 0; transition: width .3s; }
+        .muted { color: #8b93a7; font-size: 13px; }
+        .wrap { padding: 14px; max-width: 640px; margin: 0 auto; }
+        .card { background: #161c2b; border: 1px solid #263048; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+        .next .cat { font-size: 12px; color: #7fd3ff; text-transform: uppercase; letter-spacing: .05em; }
+        .next h2 { margin: 4px 0 2px; font-size: 19px; }
+        .next h3 { margin: 0 0 8px; font-size: 16px; color: #ffd36b; font-weight: 600; }
+        .next p { margin: 0 0 14px; color: #c3c9d6; line-height: 1.45; }
+        .btn { border: 0; border-radius: 12px; padding: 13px 16px; font-size: 15px; font-weight: 600; color: #fff;
+            background: #263048; display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; cursor: pointer; }
+        .btn.primary { background: #009ef7; } .btn.success { background: #2fb574; } .btn.block { width: 100%; }
+        .btn.sm { padding: 8px 11px; font-size: 13px; border-radius: 9px; }
+        .btns { display: flex; gap: 8px; margin-top: 10px; } .btns .btn { flex: 1; }
+        .cam { position: relative; overflow: hidden; }
+        .cam input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+        h4.sec { margin: 22px 0 8px; font-size: 13px; color: #8b93a7; text-transform: uppercase; letter-spacing: .05em; }
+        .item { background: #161c2b; border: 1px solid #263048; border-radius: 12px; margin-bottom: 8px; overflow: hidden; }
+        .item .hd { padding: 12px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .item .hd .t { flex: 1; min-width: 0; }
+        .item .hd .t div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pill { font-size: 12px; padding: 3px 8px; border-radius: 20px; background: #263048; color: #c3c9d6; white-space: nowrap; }
+        .pill.ok { background: rgba(47,181,116,.2); color: #5fd69a; }
+        .pill.skip { background: rgba(139,147,167,.15); color: #8b93a7; }
+        .item .bd { display: none; padding: 0 14px 12px; }
+        .item.open .bd { display: block; }
+        .shot { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px dashed #263048; }
+        .shot .t { flex: 1; min-width: 0; }
+        .shot .t small { display: block; color: #8b93a7; font-size: 12px; margin-top: 2px; }
+        .ck { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #3a4560; display: flex; align-items: center; justify-content: center; flex: 0 0 26px; }
+        .ck.ok { background: #2fb574; border-color: #2fb574; }
+        .thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+        .thumbs img { width: 54px; height: 54px; object-fit: cover; border-radius: 7px; border: 1px solid #263048; }
+        .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 20px); transform: translateX(-50%);
+            background: #2fb574; color: #fff; padding: 11px 18px; border-radius: 24px; font-weight: 600; z-index: 20;
+            opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 90vw; }
+        .toast.show { opacity: 1; } .toast.err { background: #e4544c; }
+        .busy { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 15; display: none; align-items: center; justify-content: center;
+            flex-direction: column; gap: 12px; }
+        .busy.show { display: flex; }
+        .spin { width: 42px; height: 42px; border: 4px solid rgba(255,255,255,.25); border-top-color: #fff; border-radius: 50%; animation: sp 0.8s linear infinite; }
+        @keyframes sp { to { transform: rotate(360deg); } }
+        .done-all { text-align: center; padding: 26px 16px; }
+        .done-all .ic { font-size: 46px; color: #2fb574; }
+    </style>
+</head>
+<body>
+{% csrf_token %}
+<div class="top">
+    <div class="row">
+        <a class="btn sm" href="{% url 'dashboard:tour' %}?station={{ station.pk }}&tab=photos"><i class="ki-outline ki-arrow-left fs-3"></i></a>
+        <b>{{ station.name }} — {% trans "Ekipman Fotoğrafları" %}</b>
+        <span class="muted" id="pct">0%</span>
+    </div>
+    <div class="bar"><i id="bar"></i></div>
+</div>
+
+<div class="wrap">
+    <div class="card next" id="next-card"></div>
+
+    <div class="card">
+        <div class="row" style="justify-content:space-between">
+            <div><b>{% trans "Serbest fotoğraf" %}</b><div class="muted">{% trans "Listede olmayan her şey için" %}</div></div>
+            <label class="btn sm cam"><i class="ki-outline ki-camera fs-3"></i>{% trans "Çek" %}
+                <input type="file" accept="image/*" capture="environment" data-free="1"></label>
+        </div>
+    </div>
+
+    <div id="list"></div>
+</div>
+
+<div class="busy" id="busy"><div class="spin"></div><div id="busy-txt">{% trans "Yükleniyor…" %}</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+    const STATION_ID = {{ station.pk }};
+    const AI = {{ ai_enabled|yesno:"true,false" }};
+    const URLS = {
+        state: "{% url 'dashboard:api_tour_photos' %}?station=" + STATION_ID,
+        upload: "{% url 'dashboard:api_tour_photo_upload' %}",
+        aiRead: "{% url 'dashboard:api_tour_photo_ai_read' 0 %}",
+    };
+    const I18N = {
+        next: "{% trans 'Sıradaki çekim' %}", take: "{% trans 'Fotoğraf Çek' %}",
+        skipShot: "{% trans 'Bu adımı atla' %}", notHere: "{% trans 'Bu tesiste yok' %}",
+        allDone: "{% trans 'Çekim listesi tamamlandı!' %}",
+        allDoneText: "{% trans 'Tüm maddelerin fotoğrafları çekildi. İsterseniz ek ekipman veya serbest fotoğraf ekleyebilirsiniz.' %}",
+        saved: "{% trans 'Kaydedildi' %}", err: "{% trans 'Yüklenemedi' %}",
+        addMore: "{% trans 'Ek ekipman ekle' %}", extraName: "{% trans 'Ek ekipmanın adı (ör. Numune Pompası 2):' %}",
+        freeName: "{% trans 'Fotoğraf neyi gösteriyor?' %}",
+        photos: "{% trans 'foto' %}", skipped: "{% trans 'yok olarak işaretli' %}", undo: "{% trans 'Geri al' %}",
+        aiReading: "{% trans 'Etiket AI ile okunuyor…' %}", resizing: "{% trans 'Hazırlanıyor…' %}",
+    };
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const $ = (s) => document.getElementById(s);
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const SKIP_KEY = 'tour-photo-skip-' + STATION_ID;
+
+    let state = null;
+    let skipped = new Set();      // "item" veya "item|shot" — bu tesiste yok / bu oturumda atla
+    try { skipped = new Set(JSON.parse(localStorage.getItem(SKIP_KEY) || '[]')); } catch (e) { /* storage yok */ }
+    const sessionSkip = new Set();
+    const openItems = new Set();
+    function saveSkip() { try { localStorage.setItem(SKIP_KEY, JSON.stringify([...skipped])); } catch (e) { /* yok */ } }
+
+    function toast(msg, isErr) {
+        const t = $('toast'); t.textContent = msg; t.className = 'toast show' + (isErr ? ' err' : '');
+        clearTimeout(toast._t); toast._t = setTimeout(() => t.className = 'toast', 2200);
+    }
+    function busy(on, txt) { $('busy').classList.toggle('show', on); if (txt) $('busy-txt').textContent = txt; }
+
+    async function load() {
+        const d = await fetch(URLS.state).then(r => r.json()).catch(() => null);
+        if (!d || !d.ok) { toast(I18N.err, true); return; }
+        state = d; render();
+    }
+
+    function nextMissing() {
+        for (const it of state.items) {
+            if (skipped.has(it.key)) continue;
+            for (const sh of it.shots) {
+                const k = it.key + '|' + sh.key;
+                if (!sh.count && !sessionSkip.has(k) && !skipped.has(k)) return {it, sh};
+            }
+        }
+        return null;
+    }
+
+    function camButton(item, shot, label, extraAttrs) {
+        return '<label class="btn ' + (extraAttrs && extraAttrs.cls || 'primary block') + ' cam"><i class="ki-outline ki-camera fs-2"></i>' + esc(label) +
+            '<input type="file" accept="image/*" capture="environment" data-item="' + esc(item) + '" data-shot="' + esc(shot || '') + '"' +
+            (extraAttrs && extraAttrs.label ? ' data-label="' + esc(extraAttrs.label) + '"' : '') + '></label>';
+    }
+
+    function render() {
+        const p = state.progress;
+        $('pct').textContent = p.percent + '% · ' + p.done + '/' + p.total;
+        $('bar').style.width = p.percent + '%';
+
+        const n = nextMissing();
+        const nc = $('next-card');
+        if (!n) {
+            nc.innerHTML = '<div class="done-all"><div class="ic"><i class="ki-outline ki-check-circle"></i></div><h2>' + I18N.allDone +
+                '</h2><p class="muted">' + I18N.allDoneText + '</p></div>';
+        } else {
+            nc.innerHTML = '<div class="cat">' + esc(n.it.category_label) + ' · ' + I18N.next + '</div>' +
+                '<h2>' + esc(n.it.title) + '</h2><h3>' + esc(n.sh.label) + '</h3><p>' + esc(n.sh.hint) + '</p>' +
+                camButton(n.it.key, n.sh.key, I18N.take) +
+                '<div class="btns"><button class="btn sm" data-skip-shot="' + esc(n.it.key + '|' + n.sh.key) + '">' + I18N.skipShot + '</button>' +
+                '<button class="btn sm" data-not-here="' + esc(n.it.key) + '">' + I18N.notHere + '</button></div>';
+        }
+
+        // Kategori bazlı tam liste
+        let html = '';
+        for (const cat of state.categories) {
+            const items = state.items.filter(i => i.category === cat.key);
+            if (!items.length) continue;
+            html += '<h4 class="sec">' + esc(cat.label) + '</h4>';
+            for (const it of items) {
+                const isSkip = skipped.has(it.key);
+                const photos = state.photos[it.key] || [];
+                const pill = isSkip ? '<span class="pill skip">' + I18N.skipped + '</span>'
+                    : '<span class="pill' + (it.complete ? ' ok' : '') + '">' + it.done_shots + '/' + it.shots.length + '</span>';
+                html += '<div class="item' + (openItems.has(it.key) ? ' open' : '') + '" data-item="' + esc(it.key) + '">' +
+                    '<div class="hd"><div class="t"><div>' + esc(it.title) + '</div><div class="muted">' + photos.length + ' ' + I18N.photos + '</div></div>' + pill + '</div><div class="bd">';
+                if (isSkip) {
+                    html += '<button class="btn sm" data-unskip="' + esc(it.key) + '">' + I18N.undo + '</button>';
+                } else {
+                    for (const sh of it.shots) {
+                        const shPhotos = photos.filter(ph => ph.shot_key === sh.key);
+                        html += '<div class="shot"><div class="ck' + (sh.count ? ' ok' : '') + '">' + (sh.count ? '<i class="ki-outline ki-check fs-4"></i>' : '') + '</div>' +
+                            '<div class="t">' + esc(sh.label) + '<small>' + esc(sh.hint) + '</small>' +
+                            (shPhotos.length ? '<div class="thumbs">' + shPhotos.map(ph => '<img src="' + ph.thumb_url + '" alt="">').join('') + '</div>' : '') +
+                            '</div>' + camButton(it.key, sh.key, '', {cls: 'sm'}) + '</div>';
+                    }
+                    html += '<div class="btns">';
+                    if (it.multi) html += '<button class="btn sm" data-extra="' + esc(it.key) + '"><i class="ki-outline ki-plus fs-4"></i>' + I18N.addMore + '</button>';
+                    html += '<button class="btn sm" data-not-here="' + esc(it.key) + '">' + I18N.notHere + '</button></div>';
+                }
+                html += '</div></div>';
+            }
+        }
+        $('list').innerHTML = html;
+    }
+
+    // ---- Etkileşimler (delegation) ----
+    document.addEventListener('click', (e) => {
+        const t = e.target.closest('[data-skip-shot],[data-not-here],[data-unskip],[data-extra],.item .hd');
+        if (!t) return;
+        if (t.dataset.skipShot) { sessionSkip.add(t.dataset.skipShot); render(); return; }
+        if (t.dataset.notHere) { skipped.add(t.dataset.notHere); saveSkip(); render(); return; }
+        if (t.dataset.unskip) { skipped.delete(t.dataset.unskip); saveSkip(); render(); return; }
+        if (t.dataset.extra) {
+            const name = prompt(I18N.extraName);
+            if (!name) return;
+            // Ek ekipman: aynı madde altında etiketli; genel görünüm adımıyla başla.
+            const inp = document.createElement('input');
+            inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
+            inp.dataset.item = t.dataset.extra; inp.dataset.shot = 'overview'; inp.dataset.label = name;
+            inp.addEventListener('change', onFile); inp.click();
+            return;
+        }
+        const item = t.closest('.item');
+        if (item) { const k = item.dataset.item; openItems.has(k) ? openItems.delete(k) : openItems.add(k); item.classList.toggle('open'); }
+    });
+    document.addEventListener('change', (e) => {
+        if (e.target.matches('input[type=file]')) onFile(e);
+    });
+
+    /** Telefon fotoğrafını tarayıcıda küçült (12-50 MP yükleme süresini kısaltır). */
+    function downscale(file, maxPx) {
+        return new Promise((resolve) => {
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => {
+                const s = Math.min(1, maxPx / Math.max(img.naturalWidth, img.naturalHeight));
+                if (s >= 1) { URL.revokeObjectURL(url); resolve(file); return; }
+                const c = document.createElement('canvas');
+                c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+                c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                URL.revokeObjectURL(url);
+                c.toBlob(b => resolve(b || file), 'image/jpeg', 0.9);
+            };
+            img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+            img.src = url;
+        });
+    }
+
+    async function onFile(e) {
+        const input = e.target;
+        const file = input.files && input.files[0];
+        if (!file) return;
+        let item = input.dataset.item || 'custom', shot = input.dataset.shot || '', label = input.dataset.label || '';
+        if (input.dataset.free) {
+            label = prompt(I18N.freeName) || '';
+            item = 'custom'; shot = '';
+        }
+        busy(true, I18N.resizing);
+        try {
+            const blob = await downscale(file, {{ max_px|default:1600 }} * 2);
+            busy(true);
+            const fd = new FormData();
+            fd.append('file', blob, 'foto.jpg'); fd.append('station_id', STATION_ID);
+            fd.append('item_key', item); fd.append('shot_key', shot); fd.append('label', label);
+            const r = await fetch(URLS.upload, {method: 'POST', headers: {'X-CSRFToken': csrf}, body: fd});
+            const d = await r.json().catch(() => ({ok: false}));
+            if (!d.ok) throw new Error(d.error || I18N.err);
+            toast(I18N.saved);
+            // Etiket plakası çekimlerinde marka/model/seri no'yu AI arka planda okusun.
+            if (AI && shot === 'nameplate') {
+                fetch(URLS.aiRead.replace(/\/0\//, '/' + d.photo.id + '/'), {method: 'POST', headers: {'X-CSRFToken': csrf}})
+                    .then(() => toast(I18N.aiReading)).catch(() => {});
+            }
+            await load();
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        } catch (err) {
+            toast(err.message || I18N.err, true);
+        } finally {
+            busy(false); input.value = '';
+        }
+    }
+
+    load();
+})();
+</script>
+</body>
+</html>

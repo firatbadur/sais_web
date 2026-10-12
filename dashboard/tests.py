@@ -147,3 +147,7 @@ class MimicSeedTemplateTests(MimicTestCase):
         self.assertTrue(texts, "şablonda metin objesi olmalı")
         missing = [o.get("name") for o in texts if o.get("styles") is None]
         self.assertEqual(missing, [], "tüm metin objelerinde `styles` bulunmalı")
+
+
+# Tesis Sanal Turu testleri ayrı modülde (dosya boyutu); keşif için buraya aktarılır.
+from dashboard.tests_tour import *  # noqa: E402,F401,F403
