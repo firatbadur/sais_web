@@ -160,11 +160,11 @@
                                 <th>{% trans "Sensör" %}</th>
                                 <th>{% trans "Durum" %}</th>
                                 <th class="text-end">{% trans "Son Değişim" %}</th>
-                                {% if can_control %}<th class="text-end">{% trans "Kontrol" %}</th>{% endif %}
+                                {% if can_command %}<th class="text-end">{% trans "Kontrol" %}</th>{% endif %}
                             </tr>
                         </thead>
                         <tbody id="digital-body">
-                            <tr><td colspan="{% if can_control %}4{% else %}3{% endif %}" class="text-center text-muted">{% trans "Yükleniyor..." %}</td></tr>
+                            <tr><td colspan="{% if can_command %}4{% else %}3{% endif %}" class="text-center text-muted">{% trans "Yükleniyor..." %}</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -201,8 +201,10 @@
         events:   "{% url 'dashboard:api_home_events' %}"
     };
 
-    // Dijital output kontrol + sıralama düzenleme (rol 1/2). Sunucu ayrıca doğrular.
+    // Sıralama düzenleme (rol 1/2) + dijital output Start/Stop (rol 1/2/3).
+    // Sunucu ayrıca doğrular.
     const CAN_CONTROL = {{ can_control|yesno:"true,false" }};
+    const CAN_COMMAND = {{ can_command|yesno:"true,false" }};
     const URL_DIGITAL_CMD = "{% url 'dashboard:api_digital_command' %}";
     const URL_SENSORS_REORDER = "{% url 'dashboard:api_sensors_reorder' %}";
 
@@ -478,7 +480,7 @@
     // --- Dijital Kanallar (every 5s) ---
     async function refreshDigital() {
         if (editDigital) return;  // Düzenle modunda DOM'a dokunma
-        const emptyCols = CAN_CONTROL ? 4 : 3;
+        const emptyCols = CAN_COMMAND ? 4 : 3;
         try {
             const data = await fetchJson(URLS.snapshot + '?type=digital');
             const tbody = document.getElementById('digital-body');
@@ -507,7 +509,7 @@
                     // Kontrol hücresi: yalnız yetkili + dijital output (sensor_type=3).
                     // DI (2) için kolon hizası korunsun diye boş hücre.
                     let actionCell = '';
-                    if (CAN_CONTROL) {
+                    if (CAN_COMMAND) {
                         if (r.sensor_type === 3) {
                             // Bekleyen komut: veri beklenen duruma ulaştıysa ya da
                             // güvenlik süresi dolduysa loader'ı kaldır.
@@ -592,7 +594,7 @@
 
     // --- Dijital output Start/Stop (event delegation; tbody 5sn'de yenilenir) ---
     function setupDigitalControl() {
-        if (!CAN_CONTROL) return;
+        if (!CAN_COMMAND) return;
         const tbody = document.getElementById('digital-body');
         if (!tbody) return;
         tbody.addEventListener('click', async (e) => {

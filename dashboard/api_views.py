@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
+from django.http import HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 
 from api.events import EventType, log_event
@@ -406,7 +406,8 @@ def mimic_state(request):
 
 @login_required
 def digital_output_command(request):
-    """Operatör/admin → dijital output (sensor_type=3) sensörüne Start(1)/Stop(0).
+    """Admin/operatör/normal kullanıcı → dijital output (sensor_type=3) sensörüne
+    Start(1)/Stop(0). Bakanlık (rol=4) hariç.
 
     POST JSON: ``{"sensor_id": int, "action": "start"|"stop"}``
     Yanıt: ``{"ok": bool, "message": str|None, "command_id": int|None,
@@ -419,9 +420,9 @@ def digital_output_command(request):
     """
     import json
 
-    denied = _require_operator(request)
-    if denied:
-        return denied
+    user = request.user
+    if not (user.is_superuser or getattr(user, "rol", None) in (1, 2, 3)):
+        return HttpResponseForbidden("forbidden")
 
     if request.method != "POST":
         return JsonResponse({"ok": False, "error": "POST gerekli."}, status=405)

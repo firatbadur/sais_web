@@ -170,10 +170,12 @@ class HomeView(RoleRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        # Dijital output Start/Stop + sıralama düzenleme yetkisi: rol 1 (admin)
-        # + rol 2 (operatör). Client-side bayrak; sunucu endpoint'lerde
-        # _require_operator ile ayrıca doğruluyor.
+        # Sıralama düzenleme yetkisi: rol 1 (admin) + rol 2 (operatör).
+        # Dijital output Start/Stop: rol 1/2/3 (normal kullanıcı da tetik
+        # gönderebilir; Bakanlık rol=4 hariç). Client-side bayraklar; sunucu
+        # endpoint'lerde ayrıca doğruluyor.
         ctx["can_control"] = user_has_role(self.request.user, 1, 2)
+        ctx["can_command"] = user_has_role(self.request.user, 1, 2, 3)
         return ctx
 
 
