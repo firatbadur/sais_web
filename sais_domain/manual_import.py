@@ -78,11 +78,16 @@ def status_quality(code: int) -> str:
 # ---------------------------------------------------------------------------
 # Kolonlar
 # ---------------------------------------------------------------------------
-def template_columns(cabinet) -> list[dict]:
-    """Kabin için şablon kolonları — SİM payload kapsamıyla birebir.
+def template_columns(cabinet, *, include_unsent: bool = False) -> list[dict]:
+    """Kabin için kolonlar.
 
-    İstasyondaki aktif **analog** sensörlerin parametreleri; ``SimChannel``
-    seçimi yapılmışsa yalnız gönderilenler (``build_sim_payload`` ile aynı kural).
+    İstasyondaki aktif **analog** sensörlerin parametreleri. Varsayılan
+    (şablon) yalnız Bakanlık'a gönderilenleri döndürür — ``SimChannel`` seçimi
+    yapılmışsa ``build_sim_payload`` ile aynı kural. ``include_unsent=True``
+    (doğrulama/uygulama) gönderilmeyen kolonları da ``sent=False`` ile ekler:
+    kolon seçimi şablon indirildikten SONRA değişirse dosya yine kabul edilir,
+    o kolonlar yalnız historian'a yazılır (SİM payload'u zaten
+    ``build_sim_payloads_for_times`` içinde ayrıca süzülür).
     Aynı parametreye bağlı birden çok sensör varsa ilki (en küçük id) kullanılır.
     """
     from api.models import Sensor
@@ -107,10 +112,12 @@ def template_columns(cabinet) -> list[dict]:
         code = (p.parameter_name or p.parameter_txt or "").strip()
         if not code or code in cols:
             continue
-        if izinli is not None and code not in izinli:
+        sent = izinli is None or code in izinli
+        if not sent and not include_unsent:
             continue
         cols[code] = {
             "code": code,
+            "sent": sent,
             "text": (p.parameter_txt or p.parameter_name or "").strip(),
             "unit": (p.unit or "").strip(),
             "sensor": sn,
@@ -352,7 +359,7 @@ def parse_workbook(cabinet, data: bytes) -> dict:
         wb.close()
         raise ManualImportError("Dosyada başlık satırı yok.")
 
-    cols = {c["code"]: c for c in template_columns(cabinet)}
+    cols = {c["code"]: c for c in template_columns(cabinet, include_unsent=True)}
     cols_ci = {k.lower(): k for k in cols}
     date_idx = status_idx = None
     value_idx: dict[int, str] = {}
@@ -389,7 +396,15 @@ def parse_workbook(cabinet, data: bytes) -> dict:
             "summary": {"error_total": error_total}, "range_start": None, "range_end": None,
         }
 
-    missing_cols = [c for c in cols if c not in value_idx.values()]
+    unsent_cols = [c for c in value_idx.values() if not cols[c]["sent"]]
+    if unsent_cols:
+        warnings.append(
+            f"Şu kolonlar Bakanlık'a gönderilmiyor (Gönderilecek Veriler sayfası); "
+            f"yalnız sistem geçmişine yazılacak: {', '.join(unsent_cols)}."
+        )
+    missing_cols = [
+        c for c, col in cols.items() if col["sent"] and c not in value_idx.values()
+    ]
     if missing_cols:
         warnings.append(
             f"Şablondaki şu kolonlar dosyada yok, bu parametreler girilmeyecek: "
@@ -611,7 +626,7 @@ def apply_import(record) -> dict:
     from .sim_outbox import accept_window_hours
 
     cabinet = record.cabinet
-    cols = {c["code"]: c for c in template_columns(cabinet)}
+    cols = {c["code"]: c for c in template_columns(cabinet, include_unsent=True)}
     rows = record.rows or []
     if not rows:
         raise ManualImportError("İçe aktarılacak satır yok.")

@@ -817,7 +817,9 @@ ve karşılaşılabilecek hatalar tek bir kullanıcı kılavuzunda toplanır (ku
   **`Durum` satır başına zorunlu** ve tüm parametrelere uygulanır (yıkama/bakım dakikaları geçerli diye
   gitmesin); kod Bakanlık kataloğunda olmalı. Akış: yükle → `parse_workbook` doğrular (bilinmeyen kolon,
   tarih/gelecek/mükerrer dakika, boş/geçersiz Durum, sayı olmayan değer = **hata, onay verilemez**;
-  aralık dışı değer, mevcut okuma, kabul penceresi dışı dakika = uyarı) → `ManualDataImport(staged)`
+  aralık dışı değer, mevcut okuma, kabul penceresi dışı dakika = uyarı; istasyonun Bakanlık'a
+  **gönderilmeyen** analog kolonu (ör. şablon indirildikten sonra `SimChannel`'da kapatılan
+  KabinNem) reddedilmez — uyarıyla yalnız historian'a yazılır) → `ManualDataImport(staged)`
   (satırlar JSON'da, dosya diske yazılmaz; kabin başına tek bekleyen) → onay → Celery
   `sais_domain.tasks.apply_manual_import`: `Reading.bulk_create(origin="manual")` — **o dakikada
   sensörün okuması varsa değer ATLANIR** (mevcut veri korunur); quality `status_quality` (1 good,

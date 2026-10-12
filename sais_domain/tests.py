@@ -796,6 +796,27 @@ class ManualImportTests(TestCase):
         self.assertEqual(entries[0].priority, SimOutboxEntry.PRIORITY_BACKFILL)
         self.assertEqual(entries[0].readtime, timezone.make_aware(b))
 
+    def test_unsent_column_accepted_historian_only(self):
+        """Şablon indirildikten sonra kolon Bakanlık seçiminden çıkarılırsa dosya
+        reddedilmez: kolon historian'a yazılır, SİM payload'una girmez."""
+        from api.models import Reading
+        from sais_domain.models import SimChannel, SimOutboxEntry
+
+        xlsx_rows = [(self.base, 1, 100, 7.0)]
+        data = self._xlsx(xlsx_rows)   # seçim yokken: KOI + pH şablonda
+        SimChannel.objects.create(cabinet=self.cabinet, parameter=self.sensors["KOI"].parameter, is_enabled=True)
+        SimChannel.objects.create(cabinet=self.cabinet, parameter=self.sensors["pH"].parameter, is_enabled=False)
+
+        from sais_domain.manual_import import stage_upload
+        rec = stage_upload(self.cabinet, data, "veri.xlsx")
+        self.assertEqual(rec.errors, [])
+        self.assertTrue(any("pH" in w and "gönderilmiyor" in w for w in rec.warnings))
+        self._apply(rec)
+        self.assertTrue(Reading.objects.filter(sensor=self.sensors["pH"], origin="manual").exists())
+        payload = SimOutboxEntry.objects.get(cabinet=self.cabinet).payload
+        self.assertIn("KOI", payload)
+        self.assertNotIn("pH", payload)
+
     def test_page_upload_and_template_download(self):
         from users.models import CustomUser
 
