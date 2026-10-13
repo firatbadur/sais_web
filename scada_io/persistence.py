@@ -8,6 +8,7 @@ Sensör okuma sonucunu DB'ye yazan tek atomik fonksiyon.
 """
 from __future__ import annotations
 
+import math
 from datetime import timedelta
 from typing import Any
 
@@ -217,6 +218,14 @@ def persist_reading(
         None — save_interval nedeniyle skip edildiyse (sadece snapshot güncellendi).
     """
     now = timestamp or timezone.now()
+    # NaN/±Inf (cihaz float32 için 0xFFFF... döndürünce) geçerli değer değildir:
+    # kaydedilirse JSON'a `NaN` diye yazılır, tarayıcı/Bakanlık parse edemez
+    # (anasayfa analog tablosu "Yükleniyor..."da kalıyordu). Decode hatası say.
+    if isinstance(value, float) and not math.isfinite(value):
+        value = None
+        if status_code == 1:
+            status_code = 4
+        quality = "bad"
     value = _apply_decimals(value, sensor.decimals)
 
     # Caller başarılı okuma diyorsa (status_code=1) ekstra durum kontrolleri:

@@ -12,6 +12,7 @@ ve deterministik — task içinde ayrıca mock'lamadan birim test yazılabilir.
 from __future__ import annotations
 
 import bisect
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Iterable
@@ -27,6 +28,19 @@ from .models import SaisCabinet
 # Bakanlık SendData spec'i ve Envisoft platformu birebir bu formatı bekliyor;
 # ``datetime.now().strftime('%Y-%m-%dT%H:%M:00')`` ile birebir uyumlu.
 _READTIME_FMT = "%Y-%m-%dT%H:%M:00"
+
+
+def _wire_value(value: Any) -> Any:
+    """Payload'a yazılacak değer: yok veya NaN/±Inf ise -9999 (veri yok).
+
+    NaN JSON'a geçerli olmayan `NaN` token'ı olarak yazılır; eski historian
+    kayıtlarında kalmış olabileceği için burada da süzülür.
+    """
+    if value is None:
+        return -9999
+    if isinstance(value, float) and not math.isfinite(value):
+        return -9999
+    return value
 
 
 # ``Sensor.sensor_type`` → Envisoft ``type`` kodu.
@@ -140,7 +154,7 @@ def build_sim_payload(
         # parametreler hiç yazılmaz (bkz. SimChannel).
         if izinli is not None and param_name not in izinli:
             continue
-        value = snap.value if snap.value is not None else -9999
+        value = _wire_value(snap.value)
         if force_status is not None:
             status_code = force_status
         else:
@@ -287,7 +301,7 @@ def build_sim_payloads_for_times(
                 continue
 
             raw_value = values_l[idx]
-            value = raw_value if raw_value is not None else -9999
+            value = _wire_value(raw_value)
             status_code = codes[idx] if codes[idx] is not None else 0
             if blocked and status_code in blocked:
                 status_code = fallback
@@ -365,7 +379,7 @@ def build_envisoft_rows(
                 continue
 
         channel_id = param.channel_number or sensor.id
-        value = snap.value if snap.value is not None else -9999
+        value = _wire_value(snap.value)
         if force_status is not None:
             status_code = force_status
         else:

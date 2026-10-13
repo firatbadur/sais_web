@@ -24,6 +24,7 @@ Cron örneği (her dakika 5dk bucket; her 5 dakikada 15dk; saat başı saatlik; 
 """
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone as dt_timezone
 from typing import Iterable
@@ -135,6 +136,7 @@ def aggregate_rows(bucket: str, readings: list[dict]) -> tuple[int, int]:
             values = [
                 r["value"] for r in rows
                 if r["value"] is not None
+                and math.isfinite(r["value"])  # eski NaN/±Inf kayıtları
                 and r.get("quality") not in EXCLUDED_QUALITIES
             ]
             bad_count = sum(1 for r in rows if r.get("quality") == "bad")

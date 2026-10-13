@@ -1,7 +1,7 @@
 """scada_io decoder/encoder unit testleri."""
 import struct
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
 from .comm_errors import (
     CONN_OPEN,
@@ -564,3 +564,49 @@ class NetDiagTests(SimpleTestCase):
         if Path("/proc/net/tcp").exists():
             self.skipTest("/proc var (Linux) — bu test Windows dev içindir")
         self.assertIsNone(count_sockets("192.168.1.165", 502))
+
+
+class PersistNonFiniteTests(TestCase):
+    """Cihazdan gelen NaN/±Inf kaydedilmemeli — JSON'a `NaN` yazılıp anasayfa
+    analog tablosunu (JSON.parse hatası) kilitliyordu."""
+
+    def setUp(self):
+        from api.models import Connection, Parameter, Sensor, Station, StatusCode
+
+        StatusCode.objects.get_or_create(code=1, defaults={"name": "Geçerli"})
+        StatusCode.objects.get_or_create(code=4, defaults={"name": "Geçersiz Veri"})
+        station = Station.objects.create(name="T", active=True)
+        conn = Connection.objects.create(
+            station=station, name="C", protocol="modbus_tcp", host="127.0.0.1", port=502)
+        param = Parameter.objects.create(parameter_name="KOI", parameter_txt="KOI")
+        self.sensor = Sensor.objects.create(
+            connection=conn, parameter=param, sensor_type=0, is_active=True, decimals=2)
+
+    def test_nan_and_inf_stored_as_invalid(self):
+        from api.models import SensorLatest
+        from .persistence import persist_reading
+
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            reading = persist_reading(self.sensor, value=bad, status_code=1)
+            latest = SensorLatest.objects.get(sensor=self.sensor)
+            self.assertIsNone(latest.value)
+            self.assertEqual(latest.quality, "bad")
+            self.assertEqual(latest.status.code, 4)
+            if reading is not None:
+                self.assertIsNone(reading.value)
+
+    def test_home_snapshot_json_valid_with_legacy_nan(self):
+        import json
+        from django.test import Client
+        from api.models import SensorLatest
+        from users.models import CustomUser
+
+        SensorLatest.objects.create(sensor=self.sensor, value=float("nan"))
+        user = CustomUser.objects.create_user(username="u", password="p", rol=1)
+        client = Client()
+        client.force_login(user)
+        resp = client.get("/dashboard/api/home/snapshot/?type=analog")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode()
+        self.assertNotIn("NaN", body)
+        self.assertIsNone(json.loads(body)["rows"][0]["value"])

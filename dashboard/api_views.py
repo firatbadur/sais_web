@@ -5,6 +5,7 @@ Tüm endpoint'ler login_required; role check client-side değil server-side.
 """
 from __future__ import annotations
 
+import math
 from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
@@ -65,6 +66,14 @@ def _humanize_ago_tr(dt, now=None):
     if months < 12:
         return f"{months} ay önce"
     return f"{days // 365} yıl önce"
+
+
+def _finite(value):
+    """JSON'a güvenli sayı: NaN/±Inf → None (JsonResponse onları geçersiz
+    `NaN` token'ı olarak yazar, tarayıcının JSON.parse'ı tüm yanıtı reddeder)."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
 
 
 @login_required
@@ -215,7 +224,7 @@ def home_snapshot(request):
             "connection": connection.name if connection else None,
             "parameter_name": (parameter.display_name if parameter else None) or "-",
             "unit": (parameter.unit_txt if parameter else "") or (parameter.unit if parameter else "") or "",
-            "value": latest.value,
+            "value": _finite(latest.value),
             "is_active": is_active,
             "quality": latest.quality,
             "status_code": latest.status.code if latest.status else None,
@@ -585,7 +594,8 @@ def home_trend(request):
                 .values("time_iso", "value")[:500]
             )
             points = [
-                {"t": r["time_iso"].isoformat(), "avg": r["value"], "min": r["value"], "max": r["value"]}
+                {"t": r["time_iso"].isoformat(), "avg": _finite(r["value"]),
+                 "min": _finite(r["value"]), "max": _finite(r["value"])}
                 for r in readings if r["time_iso"] is not None
             ]
         else:
@@ -599,9 +609,9 @@ def home_trend(request):
             points = [
                 {
                     "t": b["bucket_start"].isoformat() if b["bucket_start"] else None,
-                    "avg": b["avg_value"],
-                    "min": b["min_value"],
-                    "max": b["max_value"],
+                    "avg": _finite(b["avg_value"]),
+                    "min": _finite(b["min_value"]),
+                    "max": _finite(b["max_value"]),
                 }
                 for b in buckets if b["bucket_start"] is not None
             ]
