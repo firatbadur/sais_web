@@ -44,12 +44,6 @@ MENU = [
         ],
     },
     {
-        "label": _("İnteraktif Kalibrasyon"),
-        "url_name": "dashboard:calibration",
-        "icon": "ki-flask",
-        "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
-    },
-    {
         "label": _("Operatör"),
         "menu_key": "operator",
         "icon": "ki-notification-bing",
@@ -106,6 +100,12 @@ MENU = [
             {"label": _("Dinamik Veri Raporu"), "url_name": "dashboard:admin_sim_data_report",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
         ],
+    },
+    {
+        "label": _("İnteraktif Kalibrasyon"),
+        "url_name": "dashboard:calibration",
+        "icon": "ki-flask",
+        "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
     },
     {
         "label": _("Takvim Hatırlatıcı"),
