@@ -241,6 +241,18 @@ docker-compose.prod.yml --env-file .env up -d`.
 (read:packages PAT) + `pull` + `up -d`; `-FirstRun`/`FIRST_RUN=1` ile bir kez
 `seed_initial_data` + `seed_sais_data` + superuser. Sonra admin'den saha-özel kayıtlar girilir.
 
+**Manuel saha güncellemesi ("Şimdi Güncelle" çalışmıyorsa — token değişti/öldü, eski sürümde takılı):**
+[scripts/update-site.bat](scripts/update-site.bat) (çift tık, kendi yönetici yetkisini ister) →
+[scripts/update-site.ps1](scripts/update-site.ps1). Klasör olarak `update-site.bat` + `.ps1` +
+`fix-redis-persistence.ps1` sahaya kopyalanır. Akış: WSL/Docker + DNS ön kontrolü (ghcr.io çözülmüyorsa
+WSL `resolv.conf` geçici 8.8.8.8) → eski şemayla `backup_database --tier=manual` → token **stdin** ile
+`docker login` → `.env` yedekle + `GHCR_TOKEN`/`IMAGE_TAG=stable` → **yalnız uygulama imajını** retry'lı
+`docker pull` (zayıf ağda postgres/caddy yeniden inmez) → `up -d --pull never` + watchtower
+force-recreate → `APP_VERSION` doğrulama → redis düzeltmesi + `fix_nonfinite_values`. Parametreler:
+`-Token`, `-SkipLogin`, `-SkipBackup`, `-Tag`, `-Distro`. Log `<InstallDir>\logs\update-<zaman>.txt`.
+**PS 5.1 tuzağı:** `wsl ... bash -lc "<komut>"` içinde **çift tırnak kullanılmaz** (native argüman
+aktarımı bozar → bash `syntax error`); iç tırnaklar tek tırnak olmalı.
+
 **Güncelleme sonrası saha açılmıyorsa (teşhis):** [scripts/diagnose-site.ps1](scripts/diagnose-site.ps1)
 — saha makinesinde yönetici PowerShell'de tek komut, **salt okuma**. WSL/Docker durumu + `compose ps -a`
 + restart sayacı/exit kodu + imaj digest & `APP_VERSION` + `.env` anahtar varlığı (değer gizli) +
