@@ -115,11 +115,36 @@ $exitCode = 0
 try {
     # ------------------------------------------------------------ 1) on kontrol
     Write-Step "1/8 On kontrol"
-    $null = Get-Wsl "docker info --format '{{.ServerVersion}}'"
-    if ($script:LastWslExit -ne 0) {
-        throw "WSL '$Distro' icinde Docker'a erisilemiyor. 'wsl -l -v' ile distro adini kontrol edin (-Distro ile verin)."
+    # Probe cmd.exe uzerinden: Windows'un kendi hata mesajlari (or. WSL Store paketi
+    # guncellenirken "Uygulama guncellestirilmekte oldugundan baslatilamiyor") stderr'e
+    # duser; PS 5.1'de native 2>&1 NativeCommandError firlatir, cmd ise OS seviyesinde
+    # birlestirir. <NUL: WSL kurulu degilse cikan "Press any key" prompt'u bloklamasin.
+    # Bash/ic tirnak yok -> PS 5.1 arguman aktarimi tuzagina dusmez.
+    $deadline = (Get-Date).AddMinutes(15)
+    $probeOk = $false
+    $probeOut = ""
+    $attempt = 0
+    while ($true) {
+        $attempt++
+        $probeOut = ((@(cmd.exe /c "wsl.exe -d $Distro -u root -- docker info --format {{.ServerVersion}} 2>&1 <NUL") -join " ") -replace "`0", "").Trim()
+        if ($LASTEXITCODE -eq 0) { $probeOk = $true; break }
+        if ($probeOut -match '(?i)distribution|WSL_E_DISTRO_NOT_FOUND|bulunamad|adl. da..t.m yok') {
+            throw "WSL'de '$Distro' adli distro yok ('wsl -l -v' ile adini bulup -Distro ile verin). Cikti: $probeOut"
+        }
+        if ((Get-Date) -gt $deadline) { break }
+        if ($probeOut -match '(?i)g.ncelle|updat') {
+            Write-Warn "WSL su anda Windows tarafindan guncelleniyor; bitmesi bekleniyor (deneme $attempt, en fazla 15 dk)..."
+        } else {
+            Write-Warn "Docker henuz yanit vermiyor (deneme $attempt): $probeOut"
+        }
+        Start-Sleep -Seconds 20
     }
-    Write-Ok "Docker erisilebilir (distro: $Distro)."
+    if (-not $probeOk) {
+        throw ("WSL '$Distro' icinde Docker'a 15 dk boyunca erisilemedi. Son cikti: $probeOut`n" +
+               "        WSL guncelleniyorsa bitince (gerekirse bilgisayari yeniden baslatip) scripti tekrar calistirin; " +
+               "'wsl --version' ve 'wsl -l -v' ile durumu kontrol edin.")
+    }
+    Write-Ok "Docker erisilebilir (distro: $Distro, surum $probeOut)."
 
     $oldVersion = (Get-Wsl "$Compose exec -T web python -c 'from django.conf import settings; print(settings.APP_VERSION)'" | Select-Object -Last 1)
     $webUp = ($script:LastWslExit -eq 0)

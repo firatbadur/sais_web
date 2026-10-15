@@ -250,7 +250,7 @@ WSL `resolv.conf` geçici 8.8.8.8) → eski şemayla `backup_database --tier=man
 `docker pull` (zayıf ağda postgres/caddy yeniden inmez) → `up -d --pull never` + watchtower
 force-recreate → `APP_VERSION` doğrulama → redis düzeltmesi + `fix_nonfinite_values`. Parametreler:
 `-Token`, `-SkipLogin`, `-SkipBackup`, `-Tag`, `-Distro`. Log `<InstallDir>\logs\update-<zaman>.txt`.
-**PS 5.1 tuzağı:** `wsl ... bash -lc "<komut>"` içinde **çift tırnak kullanılmaz** (native argüman
+**Ön kontrol WSL güncellemesini bekler (saha deneyimi):** WSL Store paketi Windows tarafından güncellenirken `wsl.exe` hiç açılmaz ("Uygulama güncelleştirilmekte olduğundan başlatılamıyor") — script eskiden bunu "distro adı yanlış" diye raporlayıp çıkıyordu; artık probe `cmd /c ... 2>&1 <NUL` ile Windows mesajını da yakalar, 15 dk boyunca 20 sn'de bir yeniden dener, distro gerçekten yoksa (`WSL_E_DISTRO_NOT_FOUND`) hemen çıkar. **PS 5.1 tuzağı:** `wsl ... bash -lc "<komut>"` içinde **çift tırnak kullanılmaz** (native argüman
 aktarımı bozar → bash `syntax error`); iç tırnaklar tek tırnak olmalı.
 
 **Güncelleme sonrası saha açılmıyorsa (teşhis):** [scripts/diagnose-site.ps1](scripts/diagnose-site.ps1)
