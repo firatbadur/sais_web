@@ -38,8 +38,8 @@ urlpatterns = [
     path("operator/sample-trigger/", views.ScenarioBuilderView.as_view(), name="operator_sample"),
     path("operator/scenario-designer/", views.ScenarioDesignerView.as_view(),
          name="operator_scenario_designer"),
-    path("operator/calibration/", views.CalibrationWizardView.as_view(),
-         name="operator_calibration"),
+    path("calibration/", views.CalibrationWizardView.as_view(),
+         name="calibration"),
     path("operator/alarms/", views.AlarmsView.as_view(), name="operator_alarms"),
 
     # --- Sensör Ayarları (operatör + yönetici): Bağlantı → Scan Grubu → Sensör ---

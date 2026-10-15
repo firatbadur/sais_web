@@ -1057,8 +1057,8 @@ class RemindersView(RoleRequiredMixin, TemplateView):
         return ctx
 
 
-class CalibrationWizardView(OperatorRequiredMixin, TemplateView):
-    """Operatör/Yönetici → İnteraktif Kalibrasyon.
+class CalibrationWizardView(RoleRequiredMixin, TemplateView):
+    """İnteraktif Kalibrasyon (ana menü — rol 1/2/3; Bakanlık rol=4 hariç).
 
     3 adımlı sihirbaz: (1) Kal. Adımları — istasyon/parametre/tip/referans/süre
     seçimi, (2) Ölçüm — sensörü solüsyona daldırma animasyonu + canlı değer

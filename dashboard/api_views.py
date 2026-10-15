@@ -960,6 +960,16 @@ def _require_admin(request):
     return HttpResponseForbidden("forbidden")
 
 
+def _require_user(request):
+    """rol ∈ (1,2,3) (veya superuser) değilse 403 döndürür (Bakanlık rol=4 hariç)."""
+    from django.http import HttpResponseForbidden
+
+    user = request.user
+    if user.is_superuser or getattr(user, "rol", None) in (1, 2, 3):
+        return None
+    return HttpResponseForbidden("forbidden")
+
+
 def _require_operator(request):
     """rol ∈ (1,2) (veya superuser) değilse 403 döndürür; değilse None."""
     from django.http import HttpResponseForbidden
@@ -2141,7 +2151,7 @@ def calibration_params(request):
     id'si, birimi ve aralığı (min/max) döner — sihirbaz adım 1 dropdown'u +
     canlı tolerans bandı için.
     """
-    denied = _require_operator(request)
+    denied = _require_user(request)
     if denied:
         return denied
 
@@ -2186,7 +2196,7 @@ def calibration_live(request):
     adım 2 her 1-2 sn'de bunu çağırıp daldırmayı algılar ve süre boyunca
     örnek toplar.
     """
-    denied = _require_operator(request)
+    denied = _require_user(request)
     if denied:
         return denied
 
@@ -2228,7 +2238,7 @@ def calibration_save(request):
     """
     import json
 
-    denied = _require_operator(request)
+    denied = _require_user(request)
     if denied:
         return denied
     if request.method != "POST":
@@ -2286,7 +2296,7 @@ def calibration_send_sim(request):
     """Kaydedilmiş bir kalibrasyonu Bakanlık SAIS ``SendCalibration`` ile gönderir."""
     import json
 
-    denied = _require_operator(request)
+    denied = _require_user(request)
     if denied:
         return denied
     if request.method != "POST":

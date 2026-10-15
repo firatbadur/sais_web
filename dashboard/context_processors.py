@@ -44,14 +44,18 @@ MENU = [
         ],
     },
     {
+        "label": _("İnteraktif Kalibrasyon"),
+        "url_name": "dashboard:calibration",
+        "icon": "ki-flask",
+        "roles": (ROLE_ADMIN, ROLE_OPERATOR, ROLE_USER),
+    },
+    {
         "label": _("Operatör"),
         "menu_key": "operator",
         "icon": "ki-notification-bing",
         "roles": (ROLE_ADMIN, ROLE_OPERATOR),
         "children": [
             {"label": _("Numune Senaryosu"), "url_name": "dashboard:operator_sample",
-             "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
-            {"label": _("İnteraktif Kalibrasyon"), "url_name": "dashboard:operator_calibration",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
             {"label": _("Alarmlar"), "url_name": "dashboard:operator_alarms",
              "roles": (ROLE_ADMIN, ROLE_OPERATOR)},
